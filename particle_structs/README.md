@@ -25,5 +25,8 @@ See the discussion in the hybridpic working document.
 
 ### flat arrays
 
-Testing on flat arrays will establish an upper bound on performance
-one array for each dimension; 'x','y','z'
+Testing on flat arrays will establish an upper bound on performance.
+
+One contiguous array is created for each dimension; 'x','y','z'.
+
+There is no association of particles to elements.  During initialization we will ignore the 'distribution' input.

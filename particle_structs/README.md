@@ -8,10 +8,10 @@ We want to understand the performance of different data structures that store pa
 4) storing the new position in a second particle data structure
 
 The inputs to the test are:
-a) number of mesh elements
-b) number of particles
-c) distribution of particles
-d) number of push operations to perform (steps 3 and 4 above)
+ - number of mesh elements
+ - number of particles
+ - distribution of particles
+ - number of push operations to perform (steps 3 and 4 above)
 
 There will not be any mesh, particles won't leave their initial 'element' in the data structure, and the host code will only run in serial.
 

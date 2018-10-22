@@ -18,7 +18,10 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-
+  for (int i=0;i< ne;i++) {
+    printf("%d ",ptcls_per_elem[i]);
+  }
+  
   SellCSigma* scs = new SellCSigma(ne, np, ptcls_per_elem);
 
   

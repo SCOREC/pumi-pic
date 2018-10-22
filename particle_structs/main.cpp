@@ -3,7 +3,7 @@
 #include <vector>
 #include "SellCSigma.h"
 #include "Distribute.h"
-
+#include <math.h>
 
 int main(int argc, char* argv[]) {
   if (argc != 4) {
@@ -36,6 +36,19 @@ int main(int argc, char* argv[]) {
   int sigma = 10;
   SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
 
+  //Create Coordinates
+  double* xs = new double[np];
+  double* ys = new double[np];
+  double* zs = new double[np];
+  for (int i = 0; i < np; ++i) {
+    xs[i] = 0.125;
+    ys[i] = 5;
+    zs[i] = M_PI;
+  }
+  
+  delete [] xs;
+  delete [] ys;
+  delete [] zs;
   delete scs;
   delete [] ptcls_per_elem;
   return 0;

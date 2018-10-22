@@ -14,8 +14,11 @@ int main(int argc, char* argv[]) {
 
   int* ptcls_per_elem = new int[ne];
 
-  distribute_particles(ne,np,strat,ptcls_per_elem);
-  
+  if (!distribute_particles(ne,np,strat,ptcls_per_elem)) {
+    return 1;
+  }
+
+
   SellCSigma* scs = new SellCSigma(ne, np, ptcls_per_elem);
 
   

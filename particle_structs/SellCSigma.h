@@ -9,10 +9,12 @@ class SellCSigma {
 
 
   //Keep Representation public for usage by kokkos
-  //Horizontal Chunks
+  //Horizontal chunk size
   int C;
-  //Sorting Chunk
+  //Sorting chunk size
   int sigma;
+  //Number of chunks
+  int num_chunks;
   //Total entries
   int num_ents;
   //offsets stores an offset into each chunk of entries in id_list

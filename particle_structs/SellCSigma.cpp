@@ -20,9 +20,11 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
   }
   std::sort(ptcls + i, ptcls + ne, std::greater<pair_t>());
 
+#ifdef DEBUG
   printf("\nSigma Sorted Particle Counts\n");
   for (i = 0; i < ne; ++i)
     printf("Element %d: has %d particles\n", ptcls[i].second, ptcls[i].first);
+#endif
   
   //Create chunks and offsets
   num_chunks = num_ents / C + (num_ents % C != 0);
@@ -36,10 +38,11 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
     offsets[i + 1] += offsets[i];
   }
 
+#ifdef DEBUG
   printf("\nChunk Offsets\n");
   for (i = 0; i < num_chunks + 1; ++i)
     printf("Chunk %d starts at %d\n", i, offsets[i]);
-
+#endif
   
   //Fill the chunks
   id_list = new int[offsets[num_chunks]];
@@ -58,6 +61,7 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
     }
   }
 
+#ifdef DEBUG
   printf("\nChunks\n");
   for (i = 0; i < num_chunks; ++i){
     printf("Chunk %d:", i);
@@ -68,6 +72,7 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
     }
     printf("\n");
   }
+#endif
 
   delete ptcls;
 }

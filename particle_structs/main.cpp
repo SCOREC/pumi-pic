@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[]) {
   if (argc != 4) {
-    printf("Usage: %s <number of elements> <number of particles> <distribution strategy>\n", argv[0]);
+    printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)>\n", argv[0]);
     return 1;
   }
   int ne = atoi(argv[1]);

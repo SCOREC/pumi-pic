@@ -19,15 +19,16 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  printf("Particle Distribution\n");
   for (int i = 0;i < ne; ++i) {
-    printf("%d:",ptcls_per_elem[i]);
+    printf("Element %d: Particles",ptcls_per_elem[i]);
     for (int j = 0; j < ptcls_per_elem[i]; ++j)
       printf(" %d",ids[i][j]);
     printf("\n");
   }
 
-  int C = 4;
-  int sigma = 12;
+  int C = 5;
+  int sigma = 10;
   SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
 
   

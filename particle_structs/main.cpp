@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 
   printf("Particle Distribution\n");
   for (int i = 0;i < ne; ++i) {
-    printf("Element %d: Particles",ptcls_per_elem[i]);
+    printf("Element %d has %d particles:",i, ptcls_per_elem[i]);
     for (int j = 0; j < ptcls_per_elem[i]; ++j)
       printf(" %d",ids[i][j]);
     printf("\n");

@@ -42,9 +42,37 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
 
   
   //Fill the chunks
+  id_list = new int[offsets[num_chunks]];
+  int index = 0;
+  for (i = 0; i < num_chunks; ++i) {
+    int width = (offsets[i + 1] - offsets[i]) / C;
+    for (int j = 0; j < width; ++j) {
+      for (int k = i * C; k < (i + 1) * C; ++k) {
+        if (k < num_ents && ptcls[k].first > j) {
+          int ent_id = ptcls[k].second;
+          id_list[index++] = ids[ent_id][j];
+        }
+        else
+          id_list[index++] = -1;
+      }
+    }
+  }
+
+  printf("\nChunks\n");
+  for (i = 0; i < num_chunks; ++i){
+    printf("Chunk %d:", i);
+    for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
+      printf(" %d", id_list[j]);
+      if (j % C == C - 1)
+        printf(" |");
+    }
+    printf("\n");
+  }
+
   delete ptcls;
 }
 
 SellCSigma::~SellCSigma() {
   delete [] offsets;
+  delete [] id_list;
 }

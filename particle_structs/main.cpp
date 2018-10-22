@@ -6,8 +6,9 @@
 #include <math.h>
 
 int main(int argc, char* argv[]) {
-  if (argc != 4) {
-    printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)>\n", argv[0]);
+  if (argc != 6) {
+    printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)>"
+           "<C> <sigma>\n", argv[0]);
     return 1;
   }
   int ne = atoi(argv[1]);
@@ -32,8 +33,8 @@ int main(int argc, char* argv[]) {
 #endif
 
   //Create the SellCSigma for particles
-  int C = 5;
-  int sigma = 10;
+  int C = atoi(argv[4]);
+  int sigma = atoi(argv[5]);
   SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
 
   //Create Coordinates

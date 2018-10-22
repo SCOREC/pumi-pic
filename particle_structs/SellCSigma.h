@@ -15,8 +15,10 @@ class SellCSigma {
   int sigma;
   //Total entries
   int num_ents;
-  //offsets stores an offset into each
+  //offsets stores an offset into each chunk of entries in id_list
   int* offsets;
+  //id_list lists the ids in chunks as per the sell-c-sigma structure
+  //   -1 represents an empty value
   int* id_list;
  private:
   SellCSigma() {throw 1;}

@@ -1,20 +1,19 @@
 #include "Distribute.h"
 #include <chrono>
 #include <stdio.h>
-#include <time.h>
 #include <random>
 #include <math.h>
 #include <cstdlib>
+void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
 void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
-void random_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
 void gaussian_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
 void exponential_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::vector<int>* ids) {
   if (strat==0) {
-    uniform_distribution(ne,np,ptcls_per_elem,ids);
+    even_distribution(ne,np,ptcls_per_elem,ids);
   }
   else if (strat==1) {
-    random_distribution(ne,np,ptcls_per_elem,ids);
+    uniform_distribution(ne,np,ptcls_per_elem,ids);
   }
   else if (strat==2) {
     gaussian_distribution(ne,np,ptcls_per_elem,ids);
@@ -24,8 +23,8 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::v
   }
   else {
     printf("Unknown distribution strategy. Avaible distributions:\n"
-           "  0 - Uniform\n"
-           "  1 - Random\n"
+           "  0 - Evenly\n"
+           "  1 - Uniform\n"
            "  2 - Gaussian\n"
            "  3 - Exponential\n");
     return false;
@@ -33,7 +32,7 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::v
   return true;
 }
 
-void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
+void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
   int p = np / ne;
   int r = np % ne;
   int index = 0;
@@ -51,16 +50,19 @@ void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>*
 
   }
 }
-void random_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
-  srand(time(NULL));
+void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
   //Set particles to 0
   for (int i = 0; i < ne; ++i) {
     ptcls_per_elem[i] = 0;
   }
+  int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  std::default_random_engine generator(seed);
+  std::uniform_int_distribution<int> distribution(0, ne - 1);
+
   //Randomly assign each particle to an element
   int index = 0;
   for (int i = 0; i < np; ++i) {
-    int elem = rand() % ne;
+    int elem = distribution(generator);
     ptcls_per_elem[elem]++;
     ids[elem].push_back(index++);
   }
@@ -84,7 +86,7 @@ void gaussian_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>
         ptcls_per_elem[elem]++;
         ids[elem].push_back(index++);
       }
-    } while (elem < 0 && elem >= ne);
+    } while (elem < 0 || elem >= ne);
   }
 }
 

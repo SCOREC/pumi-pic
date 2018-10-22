@@ -74,7 +74,7 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
   }
 #endif
 
-  delete ptcls;
+  delete [] ptcls;
 }
 
 SellCSigma::~SellCSigma() {

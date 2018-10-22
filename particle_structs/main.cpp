@@ -50,6 +50,7 @@ int main(int argc, char* argv[]) {
   delete [] ys;
   delete [] zs;
   delete scs;
+  delete [] ids;
   delete [] ptcls_per_elem;
   return 0;
 }

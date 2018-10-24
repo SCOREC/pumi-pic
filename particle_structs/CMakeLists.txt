@@ -54,3 +54,5 @@ endif()
 
 add_executable(pstest main.cpp)
 target_link_libraries(pstest particleStructs) 
+add_executable(pskk pskk.cpp)
+target_link_libraries(pskk particleStructs)

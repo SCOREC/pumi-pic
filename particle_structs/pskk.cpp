@@ -77,7 +77,13 @@ int main(int argc, char* argv[]) {
   double* new_xs1 = new double[np];
   double* new_ys1 = new double[np];
   double* new_zs1 = new double[np];
+  Kokkos::Timer timer;
   push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
+  fprintf(stderr, "serial array push (seconds) %f\n", timer.seconds());
+
+  timer.reset();
+  push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
+  fprintf(stderr, "kokkos array push (seconds) %f\n", timer.seconds());
 
   double* new_xs2 = new double[np];
   double* new_ys2 = new double[np];

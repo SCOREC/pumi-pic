@@ -30,6 +30,8 @@ double randD(double fMin, double fMax)
 }
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc,argv);
+  printf("Kokkos execution space %s\n",
+      typeid (Kokkos::DefaultExecutionSpace::memory_space).name());
   srand(time(NULL));
   if (argc != 6) {
     printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)> "

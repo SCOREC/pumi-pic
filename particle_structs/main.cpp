@@ -84,9 +84,9 @@ int main(int argc, char* argv[]) {
   //Confirm all particles were pushed
   double EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
-    assert(abs(new_xs1[i] - new_xs2[i]) < EPSILON);
-    assert(abs(new_ys1[i] - new_ys2[i]) < EPSILON);
-    assert(abs(new_zs1[i] - new_zs2[i]) < EPSILON);
+    if(abs(new_xs1[i] - new_xs2[i]) > EPSILON) exit(EXIT_FAILURE);
+    if(abs(new_ys1[i] - new_ys2[i]) > EPSILON) exit(EXIT_FAILURE);
+    if(abs(new_zs1[i] - new_zs2[i]) > EPSILON) exit(EXIT_FAILURE);
   }
   
   //Cleanup

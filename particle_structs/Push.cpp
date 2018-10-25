@@ -142,11 +142,20 @@ void push_scs_kk(SellCSigma* scs, int np, double* xs, double* ys, double* zs, do
   hostToDeviceFp(disp_d, disp);
   fprintf(stderr, "kokkos scs host to device transfer %f\n", timer.seconds());
 
+  using Kokkos::TeamPolicy;
+  using Kokkos::TeamThreadRange;
+  using Kokkos::parallel_for;
+  typedef Kokkos::TeamPolicy<> team_policy;
+  typedef typename team_policy::member_type team_member;
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
   timer.reset();
-  Kokkos::parallel_for(scs->num_chunks, KOKKOS_LAMBDA (const int i) {
+  const int league_size = scs->num_chunks;
+  const int team_size = scs->C;
+  const team_policy policy(league_size, team_size);
+  parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
+    const int i = thread.league_rank();
     for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
-      Kokkos::parallel_for(chunksz_d(0), [=] (const int j) {
+      parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
         int id = ids_d(index+j);
         if (id != -1) {
           new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);

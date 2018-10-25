@@ -88,7 +88,13 @@ int main(int argc, char* argv[]) {
   double* new_xs2 = new double[np];
   double* new_ys2 = new double[np];
   double* new_zs2 = new double[np];
+  timer.reset();
   push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  fprintf(stderr, "serial scs push (seconds) %f\n", timer.seconds());
+
+  timer.reset();
+  push_scs_kk(scs, np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  fprintf(stderr, "kokkos scs push (seconds) %f\n", timer.seconds());
 
   //Confirm all particles were pushed
   double EPSILON = 0.0001;

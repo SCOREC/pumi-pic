@@ -10,6 +10,19 @@
 
 #include <Kokkos_Core.hpp>
 
+bool positionsMatch(int np,
+    double* x1, double* y1, double* z1,
+    double* x2, double* y2, double* z2) {
+  //Confirm all particles were pushed
+  double EPSILON = 0.0001;
+  for (int i = 0; i < np; ++i) {
+    if(abs(x1[i] - x2[i]) > EPSILON) return false;
+    if(abs(y1[i] - y2[i]) > EPSILON) return false;
+    if(abs(z1[i] - z2[i]) > EPSILON) return false;
+  }
+  return true;
+}
+
 double randD(double fMin, double fMax)
 {
     double f = (double)rand() / RAND_MAX;
@@ -81,29 +94,31 @@ int main(int argc, char* argv[]) {
   push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
   fprintf(stderr, "serial array push (seconds) %f\n", timer.seconds());
 
-  timer.reset();
-  push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
-  fprintf(stderr, "kokkos array push (seconds) %f\n", timer.seconds());
-
   double* new_xs2 = new double[np];
   double* new_ys2 = new double[np];
   double* new_zs2 = new double[np];
   timer.reset();
-  push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  fprintf(stderr, "kokkos array push (seconds) %f\n", timer.seconds());
+
+  assert( positionsMatch(np,
+      new_xs1, new_ys1, new_zs1,
+      new_xs2, new_ys2, new_zs2)
+  );
+
+  timer.reset();
+  push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
   fprintf(stderr, "serial scs push (seconds) %f\n", timer.seconds());
 
   timer.reset();
   push_scs_kk(scs, np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos scs push (seconds) %f\n", timer.seconds());
 
-  //Confirm all particles were pushed
-  double EPSILON = 0.0001;
-  for (int i = 0; i < np; ++i) {
-    assert(abs(new_xs1[i] - new_xs2[i]) < EPSILON);
-    assert(abs(new_ys1[i] - new_ys2[i]) < EPSILON);
-    assert(abs(new_zs1[i] - new_zs2[i]) < EPSILON);
-  }
-  
+  assert( positionsMatch(np,
+      new_xs1, new_ys1, new_zs1,
+      new_xs2, new_ys2, new_zs2)
+  );
+
   //Cleanup
   delete [] new_xs2;
   delete [] new_ys2;

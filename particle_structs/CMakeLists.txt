@@ -1,6 +1,6 @@
 #Setting Version Number, Project Name
 cmake_minimum_required (VERSION 3.0)
-project(particle_structures VERSION 0.0.1 LANGUAGES CXX C)
+project(particle_structures VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_MODULE_PATH 
    ${CMAKE_MODULE_PATH} 

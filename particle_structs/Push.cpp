@@ -146,7 +146,7 @@ void push_scs_kk(SellCSigma* scs, int np, double* xs, double* ys, double* zs, do
   timer.reset();
   Kokkos::parallel_for(scs->num_chunks, KOKKOS_LAMBDA (const int i) {
     for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
-      Kokkos::parallel_for(chunksz_d(0), KOKKOS_LAMBDA (const int j) {
+      Kokkos::parallel_for(chunksz_d(0), [=] (const int j) {
         int id = ids_d(index+j);
         if (id != -1) {
           new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);

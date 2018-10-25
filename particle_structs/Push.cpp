@@ -34,6 +34,7 @@ void deviceToHost(kkFpView d, fp_t* h) {
 
 void push_array_kk(int np, double* xs, double* ys, double* zs, double distance, double dx,
                 double dy, double dz, double* new_xs, double* new_ys, double* new_zs) {
+  Kokkos::Timer timer;
   kkFpView xs_d("xs_d", np);
   hostToDevice(xs_d, xs);
 
@@ -55,17 +56,23 @@ void push_array_kk(int np, double* xs, double* ys, double* zs, double distance, 
   fp_t disp[4] = {distance,dx,dy,dz};
   kkFpView disp_d("direction_d", 4);
   hostToDevice(disp_d, disp);
+  fprintf(stderr, "array host to device transfer %f\n", timer.seconds());
 
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
+  timer.reset();
   Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
-      // Acesss the View just like a Fortran array.  The layout depends
-      // on the View's memory space, so don't rely on the View's
-      // physical memory layout unless you know what you're doing.
       new_xs_d(i) = xs_d(i) + disp_d(0) * disp_d(1);
       new_ys_d(i) = ys_d(i) + disp_d(0) * disp_d(2);
       new_zs_d(i) = zs_d(i) + disp_d(0) * disp_d(3);
     });
+  fprintf(stderr, "kokkos array push %f\n", timer.seconds());
   #endif
+
+  timer.reset();
+  deviceToHost(new_xs_d,new_xs);
+  deviceToHost(new_ys_d,new_ys);
+  deviceToHost(new_zs_d,new_zs);
+  fprintf(stderr, "array device to host transfer %f\n", timer.seconds());
 }
 #endif //kokkos enabled
 

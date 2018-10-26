@@ -71,16 +71,20 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
   fprintf(stderr, "array host to device transfer (seconds) %f\n", timer.seconds());
 
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-  timer.reset();
-  Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
-      new_xs_d(i) = xs_d(i) + disp_d(0) * disp_d(1);
-      new_ys_d(i) = ys_d(i) + disp_d(0) * disp_d(2);
-      new_zs_d(i) = zs_d(i) + disp_d(0) * disp_d(3);
+  double avgTime = 0;
+  for( int iter=0; iter < NUM_ITERATIONS; iter++) {
+    timer.reset();
+    Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
+        new_xs_d(i) = xs_d(i) + disp_d(0) * disp_d(1);
+        new_ys_d(i) = ys_d(i) + disp_d(0) * disp_d(2);
+        new_zs_d(i) = zs_d(i) + disp_d(0) * disp_d(3);
     });
-  double t = timer.seconds();
-  fprintf(stderr, "kokkos array push (seconds) %f\n", t);
-  fprintf(stderr, "kokkos array push (particles/seconds) %f\n", np/t);
-  fprintf(stderr, "kokkos array push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
+    avgTime += timer.seconds();
+  }
+  avgTime /= NUM_ITERATIONS;
+  fprintf(stderr, "kokkos array push (seconds) %f\n", avgTime);
+  fprintf(stderr, "kokkos array push (particles/seconds) %f\n", np/avgTime);
+  fprintf(stderr, "kokkos array push (TFLOPS) %f\n", (np/avgTime/TERA)*PARTICLE_OPS);
   #endif
 
   timer.reset();
@@ -151,27 +155,32 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
   typedef Kokkos::TeamPolicy<> team_policy;
   typedef typename team_policy::member_type team_member;
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-  timer.reset();
   const int league_size = scs->num_chunks;
   const int team_size = scs->C;
   const team_policy policy(league_size, team_size);
-  parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
-    const int i = thread.league_rank();
-    for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
-      parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-        int id = ids_d(index+j);
-        if (id != -1) {
+
+  double avgTime = 0;
+  for( int iter=0; iter<NUM_ITERATIONS; iter++) {
+    timer.reset();
+    parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
+        const int i = thread.league_rank();
+        for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
+        parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
+          int id = ids_d(index+j);
+          if (id != -1) {
           new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
           new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
           new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
+          }
+          });
         }
-      });
-    }
-  });
-  double t = timer.seconds();
-  fprintf(stderr, "kokkos scs push (seconds) %f\n", t);
-  fprintf(stderr, "kokkos scs push (particles/seconds) %f\n", np/t);
-  fprintf(stderr, "kokkos scs push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
+    });
+    avgTime+=timer.seconds();
+  }
+  avgTime/=NUM_ITERATIONS;
+  fprintf(stderr, "kokkos scs push (seconds) %f\n", avgTime);
+  fprintf(stderr, "kokkos scs push (particles/seconds) %f\n", np/avgTime);
+  fprintf(stderr, "kokkos scs push (TFLOPS) %f\n", (np/avgTime/TERA)*PARTICLE_OPS);
   #endif
 
   timer.reset();

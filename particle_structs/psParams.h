@@ -8,5 +8,5 @@ const double TERA = 1E12;
 //[1] https://docs.nvidia.com/cuda/floating-point/index.html
 const double PARTICLE_OPS = 6; 
 
-const int NUM_ITERATIONS = 3;
+const int NUM_ITERATIONS = 5;
 #endif

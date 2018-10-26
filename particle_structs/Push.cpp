@@ -2,6 +2,12 @@
 #include "psParams.h"
 #include <Kokkos_Core.hpp>
 
+void printTiming(const char* name, int np, double t) {
+  fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
+  fprintf(stderr, "kokkos %s (particles/seconds) %f\n", name, np/t);
+  fprintf(stderr, "kokkos %s (TFLOPS) %f\n", name, (np/t/TERA)*PARTICLE_OPS);
+}
+
 void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
                 fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   for (int i = 0; i < np; ++i) {
@@ -72,6 +78,8 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
 
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
   double avgTime = 0;
+  double max = 0;
+  double min = 1000;
   for( int iter=0; iter < NUM_ITERATIONS; iter++) {
     timer.reset();
     Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
@@ -79,12 +87,15 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
         new_ys_d(i) = ys_d(i) + disp_d(0) * disp_d(2);
         new_zs_d(i) = zs_d(i) + disp_d(0) * disp_d(3);
     });
-    avgTime += timer.seconds();
+    double t = timer.seconds();
+    avgTime+=t;
+    if( t > max ) max = t;
+    if( t < min ) min = t;
   }
   avgTime /= NUM_ITERATIONS;
-  fprintf(stderr, "kokkos array push (seconds) %f\n", avgTime);
-  fprintf(stderr, "kokkos array push (particles/seconds) %f\n", np/avgTime);
-  fprintf(stderr, "kokkos array push (TFLOPS) %f\n", (np/avgTime/TERA)*PARTICLE_OPS);
+  printTiming("array push avg", np, avgTime);
+  printTiming("array push min", np, min);
+  printTiming("array push max", np, max);
   #endif
 
   timer.reset();
@@ -160,6 +171,8 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
   const team_policy policy(league_size, team_size);
 
   double avgTime = 0;
+  double max = 0;
+  double min = 1000;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();
     parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
@@ -175,12 +188,15 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
           });
         }
     });
-    avgTime+=timer.seconds();
+    double t = timer.seconds();
+    avgTime+=t;
+    if( t > max ) max = t;
+    if( t < min ) min = t;
   }
   avgTime/=NUM_ITERATIONS;
-  fprintf(stderr, "kokkos scs push (seconds) %f\n", avgTime);
-  fprintf(stderr, "kokkos scs push (particles/seconds) %f\n", np/avgTime);
-  fprintf(stderr, "kokkos scs push (TFLOPS) %f\n", (np/avgTime/TERA)*PARTICLE_OPS);
+  printTiming("scs push avg", np, avgTime);
+  printTiming("scs push min", np, min);
+  printTiming("scs push max", np, max);
   #endif
 
   timer.reset();

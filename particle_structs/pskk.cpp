@@ -108,29 +108,18 @@ int main(int argc, char* argv[]) {
   fp_t* new_xs1 = new fp_t[np];
   fp_t* new_ys1 = new fp_t[np];
   fp_t* new_zs1 = new fp_t[np];
-  Kokkos::Timer timer;
   push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
-  double t = timer.seconds();
-  fprintf(stderr, "serial array push (seconds) %f\n", t);
-  fprintf(stderr, "serial array push (particles/seconds) %f\n", np/t);
-  fprintf(stderr, "serial array push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
 
   fp_t* new_xs2 = new fp_t[np];
   fp_t* new_ys2 = new fp_t[np];
   fp_t* new_zs2 = new fp_t[np];
-
-  timer.reset();
   push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
-  t = timer.seconds();
-  fprintf(stderr, "serial scs push (seconds) %f\n", t);
-  fprintf(stderr, "serial scs push (particles/seconds) %f\n", np/t);
-  fprintf(stderr, "serial scs push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
 
   checkThenClear(np,
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
-  timer.reset();
+  Kokkos::Timer timer;
   push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
 

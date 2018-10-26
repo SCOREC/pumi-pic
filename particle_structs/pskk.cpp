@@ -39,6 +39,7 @@ fp_t randD(fp_t fMin, fp_t fMax)
 }
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc,argv);
+  printf("floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("Kokkos execution space memory %s name %s\n",
       typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
       typeid (Kokkos::DefaultExecutionSpace).name());

@@ -53,6 +53,8 @@ int main(int argc, char* argv[]) {
   int np = atoi(argv[2]);
   int strat = atoi(argv[3]);
 
+  fprintf(stderr, "distribution %d #elements %d #particles %d\n", strat, ne, np);
+
   //Distribute particles to 'elements'
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];

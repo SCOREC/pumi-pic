@@ -10,6 +10,20 @@ set(CMAKE_MODULE_PATH
 enable_testing()
 include(CTest)
 
+option(FP64 "Use 64bits for floating point values" ON)
+option(FP32 "Use 32bits for floating point values" OFF)
+message(STATUS "FP64: ${FP64}")
+message(STATUS "FP32: ${FP32}")
+if( (FP64 AND FP32) OR (NOT FP64 AND NOT FP32) )
+  message(FATAL_ERROR "Enable either FP64 or FP32, but not both")
+endif()
+if( FP64 )
+  add_definitions(-DFP64)
+endif()
+if( FP32 )
+  add_definitions(-DFP32)
+endif()
+
 option(IS_TESTING "Build for CTest" OFF)
 message(STATUS "IS_TESTING: ${IS_TESTING}")
 

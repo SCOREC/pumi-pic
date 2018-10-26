@@ -1,8 +1,9 @@
 #include "Push.h"
+#include "psParams.h"
 #include <Kokkos_Core.hpp>
 
-void push_array(int np, double* xs, double* ys, double* zs, double distance, double dx,
-                double dy, double dz, double* new_xs, double* new_ys, double* new_zs) {
+void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
+                fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   for (int i = 0; i < np; ++i) {
     new_xs[i] = xs[i] + distance * dx;
     new_ys[i] = ys[i] + distance * dy;
@@ -14,7 +15,6 @@ void push_array(int np, double* xs, double* ys, double* zs, double distance, dou
 typedef Kokkos::DefaultExecutionSpace exe_space;
 
 //TODO Figure out how to template these helper fns
-typedef double fp_t;
 typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view
  */
@@ -44,8 +44,8 @@ void hostToDeviceLid(kkLidView d, lid_t* h) {
   Kokkos::deep_copy(d,hv);
 }
 
-void push_array_kk(int np, double* xs, double* ys, double* zs, double distance, double dx,
-                double dy, double dz, double* new_xs, double* new_ys, double* new_zs) {
+void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
+                fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   Kokkos::Timer timer;
   kkFpView xs_d("xs_d", np);
   hostToDeviceFp(xs_d, xs);
@@ -68,7 +68,7 @@ void push_array_kk(int np, double* xs, double* ys, double* zs, double distance, 
   fp_t disp[4] = {distance,dx,dy,dz};
   kkFpView disp_d("direction_d", 4);
   hostToDeviceFp(disp_d, disp);
-  fprintf(stderr, "array host to device transfer %f\n", timer.seconds());
+  fprintf(stderr, "array host to device transfer (seconds) %f\n", timer.seconds());
 
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
   timer.reset();
@@ -77,19 +77,22 @@ void push_array_kk(int np, double* xs, double* ys, double* zs, double distance, 
       new_ys_d(i) = ys_d(i) + disp_d(0) * disp_d(2);
       new_zs_d(i) = zs_d(i) + disp_d(0) * disp_d(3);
     });
-  fprintf(stderr, "kokkos array push %f\n", timer.seconds());
+  double t = timer.seconds();
+  fprintf(stderr, "kokkos array push (seconds) %f\n", t);
+  fprintf(stderr, "kokkos array push (particles/seconds) %f\n", np/t);
+  fprintf(stderr, "kokkos array push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
   #endif
 
   timer.reset();
   deviceToHostFp(new_xs_d,new_xs);
   deviceToHostFp(new_ys_d,new_ys);
   deviceToHostFp(new_zs_d,new_zs);
-  fprintf(stderr, "array device to host transfer %f\n", timer.seconds());
+  fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
 }
 #endif //kokkos enabled
 
-void push_scs(SellCSigma* scs, double* xs, double* ys, double* zs, double distance, double dx,
-              double dy, double dz, double* new_xs, double* new_ys, double* new_zs) {
+void push_scs(SellCSigma* scs, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
+              fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   for (int i = 0; i < scs->num_chunks; ++i) {
     int index = scs->offsets[i];
     while (index != scs->offsets[i + 1]) {
@@ -107,8 +110,8 @@ void push_scs(SellCSigma* scs, double* xs, double* ys, double* zs, double distan
 }
 
 #ifdef KOKKOS_ENABLED
-void push_scs_kk(SellCSigma* scs, int np, double* xs, double* ys, double* zs, double distance, double dx,
-              double dy, double dz, double* new_xs, double* new_ys, double* new_zs) {
+void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
+              fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   Kokkos::Timer timer;
   kkLidView offsets_d("offsets_d", scs->num_chunks+1);
   hostToDeviceLid(offsets_d, scs->offsets);
@@ -140,7 +143,7 @@ void push_scs_kk(SellCSigma* scs, int np, double* xs, double* ys, double* zs, do
   fp_t disp[4] = {distance,dx,dy,dz};
   kkFpView disp_d("direction_d", 4);
   hostToDeviceFp(disp_d, disp);
-  fprintf(stderr, "kokkos scs host to device transfer %f\n", timer.seconds());
+  fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
 
   using Kokkos::TeamPolicy;
   using Kokkos::TeamThreadRange;
@@ -165,13 +168,16 @@ void push_scs_kk(SellCSigma* scs, int np, double* xs, double* ys, double* zs, do
       });
     }
   });
-  fprintf(stderr, "kokkos scs push %f\n", timer.seconds());
+  double t = timer.seconds();
+  fprintf(stderr, "kokkos scs push (seconds) %f\n", t);
+  fprintf(stderr, "kokkos scs push (particles/seconds) %f\n", np/t);
+  fprintf(stderr, "kokkos scs push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
   #endif
 
   timer.reset();
   deviceToHostFp(new_xs_d,new_xs);
   deviceToHostFp(new_ys_d,new_ys);
   deviceToHostFp(new_zs_d,new_zs);
-  fprintf(stderr, "array device to host transfer %f\n", timer.seconds());
+  fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
 }
 #endif //kokkos enabled

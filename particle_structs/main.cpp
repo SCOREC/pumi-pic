@@ -4,6 +4,7 @@
 #include "SellCSigma.h"
 #include "Distribute.h"
 #include "Push.h"
+#include "psTypes.h"
 #include <math.h>
 #include <time.h>
 #include <cassert>
@@ -52,9 +53,9 @@ int main(int argc, char* argv[]) {
   SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
 
   //Create Coordinates
-  double* xs = new double[np];
-  double* ys = new double[np];
-  double* zs = new double[np];
+  fp_t* xs = new fp_t[np];
+  fp_t* ys = new fp_t[np];
+  fp_t* zs = new fp_t[np];
   for (int i = 0; i < np; ++i) {
     xs[i] = 0.125;
     ys[i] = 5;
@@ -62,27 +63,27 @@ int main(int argc, char* argv[]) {
   }
 
   //Push the particles
-  double distance = M_E;
-  double dx = randD(-10,10);
-  double dy = randD(-10,10);
-  double dz = randD(-10,10);
-  double length = sqrt(dx * dx + dy * dy + dz * dz);
+  fp_t distance = M_E;
+  fp_t dx = randD(-10,10);
+  fp_t dy = randD(-10,10);
+  fp_t dz = randD(-10,10);
+  fp_t length = sqrt(dx * dx + dy * dy + dz * dz);
   dx /= length;
   dy /= length;
   dz /= length;
 
-  double* new_xs1 = new double[np];
-  double* new_ys1 = new double[np];
-  double* new_zs1 = new double[np];
+  fp_t* new_xs1 = new fp_t[np];
+  fp_t* new_ys1 = new fp_t[np];
+  fp_t* new_zs1 = new fp_t[np];
   push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
 
-  double* new_xs2 = new double[np];
-  double* new_ys2 = new double[np];
-  double* new_zs2 = new double[np];
+  fp_t* new_xs2 = new fp_t[np];
+  fp_t* new_ys2 = new fp_t[np];
+  fp_t* new_zs2 = new fp_t[np];
   push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
 
   //Confirm all particles were pushed
-  double EPSILON = 0.0001;
+  fp_t EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
     if(abs(new_xs1[i] - new_xs2[i]) > EPSILON) exit(EXIT_FAILURE);
     if(abs(new_ys1[i] - new_ys2[i]) > EPSILON) exit(EXIT_FAILURE);

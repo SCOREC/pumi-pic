@@ -4,6 +4,8 @@
 #include "SellCSigma.h"
 #include "Distribute.h"
 #include "Push.h"
+#include "psTypes.h"
+#include "psParams.h"
 #include <math.h>
 #include <time.h>
 #include <cassert>
@@ -11,8 +13,8 @@
 #include <Kokkos_Core.hpp>
 
 void positionsMatch(int np,
-    double* x1, double* y1, double* z1,
-    double* x2, double* y2, double* z2) {
+    fp_t* x1, fp_t* y1, fp_t* z1,
+    fp_t* x2, fp_t* y2, fp_t* z2) {
   //Confirm all particles were pushed
   double EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
@@ -23,16 +25,16 @@ void positionsMatch(int np,
 }
 
 void checkThenClear(int np,
-    double* x1, double* y1, double* z1,
-    double* x2, double* y2, double* z2) {
+    fp_t* x1, fp_t* y1, fp_t* z1,
+    fp_t* x2, fp_t* y2, fp_t* z2) {
   positionsMatch(np, x1, y1, z1, x2, y2, z2);
   for(int i=0; i<np; i++)
     x2[i] = y2[i] = z2[i] = 0;
 }
 
-double randD(double fMin, double fMax)
+fp_t randD(fp_t fMin, fp_t fMax)
 {
-    double f = (double)rand() / RAND_MAX;
+    fp_t f = (fp_t)rand() / RAND_MAX;
     return fMin + f * (fMax - fMin);
 }
 int main(int argc, char* argv[]) {
@@ -83,9 +85,9 @@ int main(int argc, char* argv[]) {
   SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
 
   //Create Coordinates
-  double* xs = new double[np];
-  double* ys = new double[np];
-  double* zs = new double[np];
+  fp_t* xs = new fp_t[np];
+  fp_t* ys = new fp_t[np];
+  fp_t* zs = new fp_t[np];
   for (int i = 0; i < np; ++i) {
     xs[i] = 0.125;
     ys[i] = 5;
@@ -93,29 +95,35 @@ int main(int argc, char* argv[]) {
   }
 
   //Push the particles
-  double distance = M_E;
-  double dx = randD(-10,10);
-  double dy = randD(-10,10);
-  double dz = randD(-10,10);
-  double length = sqrt(dx * dx + dy * dy + dz * dz);
+  fp_t distance = M_E;
+  fp_t dx = randD(-10,10);
+  fp_t dy = randD(-10,10);
+  fp_t dz = randD(-10,10);
+  fp_t length = sqrt(dx * dx + dy * dy + dz * dz);
   dx /= length;
   dy /= length;
   dz /= length;
 
-  double* new_xs1 = new double[np];
-  double* new_ys1 = new double[np];
-  double* new_zs1 = new double[np];
+  fp_t* new_xs1 = new fp_t[np];
+  fp_t* new_ys1 = new fp_t[np];
+  fp_t* new_zs1 = new fp_t[np];
   Kokkos::Timer timer;
   push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
-  fprintf(stderr, "serial array push (seconds) %f\n", timer.seconds());
+  double t = timer.seconds();
+  fprintf(stderr, "serial array push (seconds) %f\n", t);
+  fprintf(stderr, "serial array push (particles/seconds) %f\n", np/t);
+  fprintf(stderr, "serial array push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
 
-  double* new_xs2 = new double[np];
-  double* new_ys2 = new double[np];
-  double* new_zs2 = new double[np];
+  fp_t* new_xs2 = new fp_t[np];
+  fp_t* new_ys2 = new fp_t[np];
+  fp_t* new_zs2 = new fp_t[np];
 
   timer.reset();
   push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
-  fprintf(stderr, "serial scs push (seconds) %f\n", timer.seconds());
+  t = timer.seconds();
+  fprintf(stderr, "serial scs push (seconds) %f\n", t);
+  fprintf(stderr, "serial scs push (particles/seconds) %f\n", np/t);
+  fprintf(stderr, "serial scs push (TFLOPS) %f\n", (np/t/TERA)*PARTICLE_OPS);
 
   checkThenClear(np,
       new_xs1, new_ys1, new_zs1,

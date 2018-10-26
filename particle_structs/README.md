@@ -30,3 +30,19 @@ Testing on flat arrays will establish an upper bound on performance.
 One contiguous array is created for each dimension; 'x','y','z'.
 
 There is no association of particles to elements.  During initialization we will ignore the 'distribution' input.
+
+
+## Gather results
+
+```
+  grep 'kokkos array push (seconds)' d*.log | awk '{print $1 "," $5}' > arrayPush.csv
+  grep 'kokkos scs push (seconds)' d*.log | awk '{print $1 "," $5}' > scsPush.csv
+  paste arrayPush.csv scsPush.csv > push.csv
+  sed -i s/.log:kokkos//g push.csv
+  sed -i s/_/,/g push.csv
+  sed -i s/[dep]//g push.csv
+  tr '\t' "," < push.csv > push2.csv
+  echo 'd,e,p,array,d,e,p,scs' > headers.csv
+  cat headers.csv push2.csv > push.csv
+  rm push2.csv
+```

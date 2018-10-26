@@ -10,17 +10,24 @@
 
 #include <Kokkos_Core.hpp>
 
-bool positionsMatch(int np,
+void positionsMatch(int np,
     double* x1, double* y1, double* z1,
     double* x2, double* y2, double* z2) {
   //Confirm all particles were pushed
   double EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
-    if(abs(x1[i] - x2[i]) > EPSILON) return false;
-    if(abs(y1[i] - y2[i]) > EPSILON) return false;
-    if(abs(z1[i] - z2[i]) > EPSILON) return false;
+    if(abs(x1[i] - x2[i]) > EPSILON) exit(EXIT_FAILURE);
+    if(abs(y1[i] - y2[i]) > EPSILON) exit(EXIT_FAILURE);
+    if(abs(z1[i] - z2[i]) > EPSILON) exit(EXIT_FAILURE);
   }
-  return true;
+}
+
+void checkThenClear(int np,
+    double* x1, double* y1, double* z1,
+    double* x2, double* y2, double* z2) {
+  positionsMatch(np, x1, y1, z1, x2, y2, z2);
+  for(int i=0; i<np; i++)
+    x2[i] = y2[i] = z2[i] = 0;
 }
 
 double randD(double fMin, double fMax)
@@ -103,27 +110,30 @@ int main(int argc, char* argv[]) {
   double* new_xs2 = new double[np];
   double* new_ys2 = new double[np];
   double* new_zs2 = new double[np];
+
+  timer.reset();
+  push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  fprintf(stderr, "serial scs push (seconds) %f\n", timer.seconds());
+
+  checkThenClear(np,
+      new_xs1, new_ys1, new_zs1,
+      new_xs2, new_ys2, new_zs2);
+
   timer.reset();
   push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
-  fprintf(stderr, "kokkos array push (seconds) %f\n", timer.seconds());
+  fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
 
-  assert( positionsMatch(np,
+  checkThenClear(np,
       new_xs1, new_ys1, new_zs1,
-      new_xs2, new_ys2, new_zs2)
-  );
-
-  timer.reset();
-  push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
-  fprintf(stderr, "serial scs push (seconds) %f\n", timer.seconds());
+      new_xs2, new_ys2, new_zs2);
 
   timer.reset();
   push_scs_kk(scs, np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
-  fprintf(stderr, "kokkos scs push (seconds) %f\n", timer.seconds());
+  fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
 
-  assert( positionsMatch(np,
+  checkThenClear(np,
       new_xs1, new_ys1, new_zs1,
-      new_xs2, new_ys2, new_zs2)
-  );
+      new_xs2, new_ys2, new_zs2);
 
   //Cleanup
   delete [] new_xs2;

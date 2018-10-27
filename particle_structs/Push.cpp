@@ -161,8 +161,10 @@ void push_scs(SellCSigma* scs, fp_t* xs, fp_t* ys, fp_t* zs,
 }
 
 #ifdef KOKKOS_ENABLED
-void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
-              fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
+void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
+    int* ptcl_to_elem, elemCoords& elems,
+    fp_t distance, fp_t dx, fp_t dy, fp_t dz,
+    fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   Kokkos::Timer timer;
   kkLidView offsets_d("offsets_d", scs->num_chunks+1);
   hostToDeviceLid(offsets_d, scs->offsets);
@@ -172,6 +174,13 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
 
   kkLidView chunksz_d("chunksz_d", 1);
   hostToDeviceLid(chunksz_d, &scs->C);
+
+  kkFpView ex_d("ex_d", elems.num_elems*elems.verts_per_elem);
+  hostToDeviceFp(ex_d, elems.x);
+  kkFpView ey_d("ey_d", elems.num_elems*elems.verts_per_elem);
+  hostToDeviceFp(ey_d, elems.y);
+  kkFpView ez_d("ez_d", elems.num_elems*elems.verts_per_elem);
+  hostToDeviceFp(ez_d, elems.z);
 
   kkFpView xs_d("xs_d", np);
   hostToDeviceFp(xs_d, xs);
@@ -211,16 +220,19 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
   double min = 1000;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();
+    //loop over chunks, one thread team per chunk
     parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
-        const int i = thread.league_rank();
+        const int i = thread.league_rank(); // chunk id
+        //loop over 
         for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
-        parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int id = ids_d(index+j);
-          if (id != -1) {
-          new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
-          new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
-          new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
-          }
+          int index = offsets_d(i);
+          parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
+            int id = ids_d(index+j);
+            if (id != -1) {
+              new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
+              new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
+              new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
+            }
           });
         }
     });

@@ -17,7 +17,9 @@ void push_scs(SellCSigma* scs, fp_t* xs, fp_t* ys, fp_t* zs,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz,
     fp_t* new_xs, fp_t* new_ys, fp_t* new_zs);
 
-void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t distance, fp_t dx,
-              fp_t dy, fp_t dz, fp_t* new_xs, fp_t* new_ys, fp_t* new_zs);
+void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
+    int* ptcl_to_elem, elemCoords& elems,
+    fp_t distance, fp_t dx, fp_t dy, fp_t dz,
+    fp_t* new_xs, fp_t* new_ys, fp_t* new_zs);
 
 #endif

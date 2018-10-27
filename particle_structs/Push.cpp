@@ -229,11 +229,10 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
         const int i = thread.league_rank();
         const int row = thread.team_rank();
         const int rowLen = (offsets_d(i+1)-offsets_d(i))/chunksz_d(0);
-        const int start = offsets_d(i) + (row * rowLen);
+        const int start = offsets_d(i) + row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int e = i * chunksz_d(0) + thread.team_rank();
+          int e = i * chunksz_d(0) + row;
           if( e < num_elems_d(0) ) {
-            printf("team %d thread %d elm %d\n", i, j, e);
             fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
                      ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
                      ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +

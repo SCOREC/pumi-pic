@@ -183,5 +183,6 @@ int main(int argc, char* argv[]) {
   delete [] ptcls_per_elem;
   delete [] ptcl_to_elem;
   Kokkos::finalize();
+  fprintf(stderr,"done\n");
   return 0;
 }

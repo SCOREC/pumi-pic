@@ -177,16 +177,19 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs, fp_t dis
     timer.reset();
     parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
         const int i = thread.league_rank();
-        for( int index = offsets_d(i); index != offsets_d(i+1); index+=chunksz_d(0) ) {
+        const int row = thread.team_rank();
+        const int rowLen = (offsets_d(i+1)-offsets_d(i))/chunksz_d(0);
+        const int start = offsets_d(i) + row * rowLen;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int id = ids_d(index+j);
-          if (id != -1) {
-          new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
-          new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
-          new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
+          for(int p = 0; p < rowLen; p++) {
+            int id = ids_d(start+p);
+            if (id != -1) {
+            new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
+            new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
+            new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
+            }
           }
-          });
-        }
+        });
     });
     double t = timer.seconds();
     avgTime+=t;

@@ -55,6 +55,7 @@ set(PS_SOURCES
   Distribute.cpp
   Push.cpp
   SellCSigma.cpp
+  psTypes.cpp
 )
 
 add_library(particleStructs ${PS_SOURCES})
@@ -66,7 +67,5 @@ if (ENABLE_KOKKOS)
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
 endif()
 
-add_executable(pstest main.cpp)
-target_link_libraries(pstest particleStructs) 
 add_executable(pskk pskk.cpp)
 target_link_libraries(pskk particleStructs)

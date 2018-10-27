@@ -12,15 +12,20 @@
 
 #include <Kokkos_Core.hpp>
 
+void matchFailed(int i) {
+  fprintf(stderr, "position match failed on particle %d\n", i);
+  exit(EXIT_FAILURE);
+}
+
 void positionsMatch(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
     fp_t* x2, fp_t* y2, fp_t* z2) {
   //Confirm all particles were pushed
   double EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
-    if(abs(x1[i] - x2[i]) > EPSILON) exit(EXIT_FAILURE);
-    if(abs(y1[i] - y2[i]) > EPSILON) exit(EXIT_FAILURE);
-    if(abs(z1[i] - z2[i]) > EPSILON) exit(EXIT_FAILURE);
+    if(abs(x1[i] - x2[i]) > EPSILON) matchFailed(i);
+    if(abs(y1[i] - y2[i]) > EPSILON) matchFailed(i);
+    if(abs(z1[i] - z2[i]) > EPSILON) matchFailed(i);
   }
 }
 
@@ -95,14 +100,12 @@ int main(int argc, char* argv[]) {
   // for that information.  This duplication of vertex info eliminates
   // 'jumps' through the vertex arrays and thus improves performance;
   // something a 'real' analysis code may do.
-  fp_t* vtx_x = new fp_t[ne*4];
-  fp_t* vtx_y = new fp_t[ne*4];
-  fp_t* vtx_z = new fp_t[ne*4];
+  elemCoords elems(ne,4);
   //Write something into the coordinate arrays. Does not matter.
   for( int i=0; i<ne; i++ ) {
-    vtx_x[i] = i*0.1;
-    vtx_y[i] = i*0.1;
-    vtx_z[i] = i*0.1;
+    elems.x[i] = i*0.1;
+    elems.y[i] = i*0.1;
+    elems.z[i] = i*0.1;
   }
 
   //Create the SellCSigma for particles
@@ -133,20 +136,23 @@ int main(int argc, char* argv[]) {
   fp_t* new_xs1 = new fp_t[np];
   fp_t* new_ys1 = new fp_t[np];
   fp_t* new_zs1 = new fp_t[np];
-  push_array(np, xs, ys, zs, distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
+  push_array(np, xs, ys, zs, ptcl_to_elem, elems,
+      distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
 
   fp_t* new_xs2 = new fp_t[np];
   fp_t* new_ys2 = new fp_t[np];
   fp_t* new_zs2 = new fp_t[np];
-  push_scs(scs, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  push_scs(scs, xs, ys, zs, ptcl_to_elem, elems,
+      distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
 
+  fprintf(stderr, "done serial\n");
   checkThenClear(np,
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
-
   Kokkos::Timer timer;
-  push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
+      distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np,
@@ -162,9 +168,6 @@ int main(int argc, char* argv[]) {
       new_xs2, new_ys2, new_zs2);
 
   //Cleanup
-  delete [] vtx_x;
-  delete [] vtx_y;
-  delete [] vtx_z;
   delete [] new_xs2;
   delete [] new_ys2;
   delete [] new_zs2;

@@ -8,4 +8,17 @@ typedef double fp_t;
 typedef float fp_t;
 #endif
 
+class elemCoords {
+  public:
+  int num_elems;
+  int verts_per_elem;
+  fp_t* x;
+  fp_t* y;
+  fp_t* z;
+  elemCoords(int ne, int np);
+  ~elemCoords();
+  private:
+    elemCoords() {};
+};
+
 #endif

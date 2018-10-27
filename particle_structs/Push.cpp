@@ -138,9 +138,7 @@ void push_scs(SellCSigma* scs, fp_t* xs, fp_t* ys, fp_t* zs,
     fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
   for (int i = 0; i < scs->num_chunks; ++i) {
     int index = scs->offsets[i];
-    //loop over elements in the chunk
     while (index != scs->offsets[i + 1]) {
-      //loop over rows of the chunk
       for (int j = 0; j < scs->C; ++j) {
         if (scs->id_list[index] != -1) {
           int id = scs->id_list[index];
@@ -172,8 +170,14 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
   kkLidView ids_d("ids_d", scs->offsets[scs->num_chunks]);
   hostToDeviceLid(ids_d, scs->id_list);
 
+  kkLidView num_particles_d("num_particles_d", 1);
+  hostToDeviceLid(num_particles_d, &np);
+
   kkLidView chunksz_d("chunksz_d", 1);
   hostToDeviceLid(chunksz_d, &scs->C);
+
+  kkLidView num_elems_d("num_elems_d", 1);
+  hostToDeviceLid(num_elems_d, &elems.num_elems);
 
   kkFpView ex_d("ex_d", elems.num_elems*elems.verts_per_elem);
   hostToDeviceFp(ex_d, elems.x);
@@ -225,14 +229,34 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
         const int i = thread.league_rank();
         const int row = thread.team_rank();
         const int rowLen = (offsets_d(i+1)-offsets_d(i))/chunksz_d(0);
-        const int start = offsets_d(i) + row * rowLen;
+        const int start = offsets_d(i) + (row * rowLen);
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          for(int p = 0; p < rowLen; p++) {
-            int id = ids_d(start+p);
-            if (id != -1) {
-            new_xs_d(id) = xs_d(id) + disp_d(0) * disp_d(1);
-            new_ys_d(id) = ys_d(id) + disp_d(0) * disp_d(2);
-            new_zs_d(id) = zs_d(id) + disp_d(0) * disp_d(3);
+          int e = i * chunksz_d(0) + thread.team_rank();
+          if( e < num_elems_d(0) ) {
+            printf("team %d thread %d elm %d\n", i, j, e);
+            fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
+                     ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
+                     ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
+                     ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
+            c /= 4; // get schwifty!
+            for(int p = 0; p < rowLen; p++) {
+              // the following will execute, but produces the wrong answer
+              //    int id = ids_d(start+p);
+              // the following will fail with an out of bound mem access - WHY?!
+              //    int id = ids_d( start + (p*chunksz_d(0)) );
+              // id_list has the same size as the chunk array, which is
+              //  stored in offsets[num_chunks], this will be larger than
+              //  the number of particles since the array is padded.
+              // go back to simple_scs branch to resolve the indexing problem
+              int ptcl = start+(p*chunksz_d(0));
+              if ( ptcl < offsets_d(thread.league_size()) ) {
+                int id = ids_d(ptcl);
+                if (id != -1) {
+                  new_xs_d(id) = xs_d(id) + c * disp_d(0) * disp_d(1);
+                  new_ys_d(id) = ys_d(id) + c * disp_d(0) * disp_d(2);
+                  new_zs_d(id) = zs_d(id) + c * disp_d(0) * disp_d(3);
+                }
+              }
             }
           }
         });

@@ -65,6 +65,13 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  //The array based particle container has each particle store
+  // the id of its parent element.
+  int* ptcl_to_elem = new int[np];
+  for (int i = 0;i < ne; ++i)
+    for (int j = 0; j < ptcls_per_elem[i]; ++j)
+      ptcl_to_elem[ ids[i][j] ] = i;
+
 #ifdef DEBUG
   int ps = 0;
   printf("Particle Distribution\n");
@@ -79,6 +86,24 @@ int main(int argc, char* argv[]) {
   }
   assert(ps == np);
 #endif
+
+  //The point of this test is to have the particle push kernels access
+  // mesh information.  We will assume (1) that relevent fields are
+  // stored on mesh vertices and (2) that the vertex information
+  // was preprocessed such that the information for the vertices that
+  // bound each element are stored in a contiguous portion of the array
+  // for that information.  This duplication of vertex info eliminates
+  // 'jumps' through the vertex arrays and thus improves performance;
+  // something a 'real' analysis code may do.
+  fp_t* vtx_x = new fp_t[ne*4];
+  fp_t* vtx_y = new fp_t[ne*4];
+  fp_t* vtx_z = new fp_t[ne*4];
+  //Write something into the coordinate arrays. Does not matter.
+  for( int i=0; i<ne; i++ ) {
+    vtx_x[i] = i*0.1;
+    vtx_y[i] = i*0.1;
+    vtx_z[i] = i*0.1;
+  }
 
   //Create the SellCSigma for particles
   int C = atoi(argv[4]);
@@ -119,6 +144,7 @@ int main(int argc, char* argv[]) {
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
+
   Kokkos::Timer timer;
   push_array_kk(np, xs, ys, zs, distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
@@ -136,6 +162,9 @@ int main(int argc, char* argv[]) {
       new_xs2, new_ys2, new_zs2);
 
   //Cleanup
+  delete [] vtx_x;
+  delete [] vtx_y;
+  delete [] vtx_z;
   delete [] new_xs2;
   delete [] new_ys2;
   delete [] new_zs2;
@@ -148,6 +177,7 @@ int main(int argc, char* argv[]) {
   delete scs;
   delete [] ids;
   delete [] ptcls_per_elem;
+  delete [] ptcl_to_elem;
   Kokkos::finalize();
   return 0;
 }

@@ -18,7 +18,7 @@ void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs,
                elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
                elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
                elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
-    c /= 4; // get schwifty!
+    c /= 4;
     new_xs[i] = xs[i] + c * distance * dx;
     new_ys[i] = ys[i] + c * distance * dy;
     new_zs[i] = zs[i] + c * distance * dz;
@@ -108,7 +108,7 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
                    ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
                    ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
                    ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-        c /= 4; // get schwifty!
+        c /= 4;
         new_xs_d(i) = xs_d(i) + c * disp_d(0) * disp_d(1);
         new_ys_d(i) = ys_d(i) + c * disp_d(0) * disp_d(2);
         new_zs_d(i) = zs_d(i) + c * disp_d(0) * disp_d(3);
@@ -147,7 +147,7 @@ void push_scs(SellCSigma* scs, fp_t* xs, fp_t* ys, fp_t* zs,
                    elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
                    elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
                    elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
-          c /= 4; // get schwifty!
+          c /= 4;
           new_xs[id] = xs[id] + c * distance * dx;
           new_ys[id] = ys[id] + c * distance * dy;
           new_zs[id] = zs[id] + c * distance * dz;
@@ -232,21 +232,15 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
         const int start = offsets_d(i) + row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           int e = i * chunksz_d(0) + row;
+          //need to get rid of this conditional
+          // idea: pad the e[xyz]_d arrays
           if( e < num_elems_d(0) ) {
             fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
                      ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
                      ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
                      ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-            c /= 4; // get schwifty!
+            c /= 4;
             for(int p = 0; p < rowLen; p++) {
-              // the following will execute, but produces the wrong answer
-              //    int id = ids_d(start+p);
-              // the following will fail with an out of bound mem access - WHY?!
-              //    int id = ids_d( start + (p*chunksz_d(0)) );
-              // id_list has the same size as the chunk array, which is
-              //  stored in offsets[num_chunks], this will be larger than
-              //  the number of particles since the array is padded.
-              // go back to simple_scs branch to resolve the indexing problem
               int ptcl = start+(p*chunksz_d(0));
               if ( ptcl < offsets_d(thread.league_size()) ) {
                 int id = ids_d(ptcl);

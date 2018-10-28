@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
   // something a 'real' analysis code may do.
   elemCoords elems(ne,4);
   //Write something into the coordinate arrays. Does not matter.
-  for( int i=0; i<ne; i++ ) {
+  for( int i=0; i<ne*4; i++ ) {
     elems.x[i] = i*0.1;
     elems.y[i] = i*0.1;
     elems.z[i] = i*0.1;

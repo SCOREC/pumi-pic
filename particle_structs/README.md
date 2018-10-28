@@ -35,7 +35,7 @@ There is no association of particles to elements.  During initialization we will
 ## Gather results
 
 ```
-  for key in 'avg' 'max'; do
+  for key in 'min' 'avg' 'max'; do
     grep "kokkos array push $key (seconds)" d*.log | awk '{print $1 "," $6}' > arrayPush.csv
     grep "kokkos scs push $key (seconds)" d*.log | awk '{print $1 "," $6}' > scsPush.csv
     paste arrayPush.csv scsPush.csv > push.csv

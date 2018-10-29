@@ -1,8 +1,8 @@
 #include "SellCSigma.h"
+#include "psAssert.h"
 #include <utility>
 #include <functional>
 #include <algorithm>
-#include <cassert>
 
 SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_elem,
                        std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs) {
@@ -65,7 +65,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   delete [] chunk_widths;
 
 #ifdef DEBUG
-  assert(num_slices == index);
+  ALWAYS_ASSERT(num_slices+1 == index);
   printf("\nSlice Offsets\n");
   for (i = 0; i < num_slices + 1; ++i)
     printf("Slice %d starts at %d\n", i, offsets[i]);
@@ -95,6 +95,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 	  scs_xs[index] = xs[ptcl];
 	  scs_ys[index] = ys[ptcl];
 	  scs_zs[index] = zs[ptcl];
+          ALWAYS_ASSERT(ptcl<np);
           arr_to_scs[ptcl] = index;
           particle_mask[index++] = true;
 

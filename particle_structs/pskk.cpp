@@ -17,16 +17,28 @@ void matchFailed(int i) {
   exit(EXIT_FAILURE);
 }
 
+const double EPSILON = 0.0001;
+
 void positionsMatch(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
     SellCSigma* scs) {
   //Confirm all particles were pushed
-  double EPSILON = 0.0001;
   for (int i = 0; i < np; ++i) {
     const int scsIdx = scs->arr_to_scs[i];
     if(abs(x1[i] - scs->scs_new_xs[scsIdx]) > EPSILON) matchFailed(i);
     if(abs(y1[i] - scs->scs_new_ys[scsIdx]) > EPSILON) matchFailed(i);
     if(abs(z1[i] - scs->scs_new_zs[scsIdx]) > EPSILON) matchFailed(i);
+  }
+}
+
+void positionsMatch(int np,
+    fp_t* x1, fp_t* y1, fp_t* z1,
+    fp_t* x2, fp_t* y2, fp_t* z2) {
+  //Confirm all particles were pushed
+  for (int i = 0; i < np; ++i) {
+    if(abs(x1[i] - x2[i]) > EPSILON) matchFailed(i);
+    if(abs(y1[i] - y2[i]) > EPSILON) matchFailed(i);
+    if(abs(z1[i] - z2[i]) > EPSILON) matchFailed(i);
   }
 }
 
@@ -39,6 +51,14 @@ void checkThenClear(int np,
     scs->scs_new_ys[i] = 0;
     scs->scs_new_zs[i] = 0;
   }
+}
+
+void checkThenClear(int np,
+    fp_t* x1, fp_t* y1, fp_t* z1,
+    fp_t* x2, fp_t* y2, fp_t* z2) {
+  positionsMatch(np, x1, y1, z1, x2, y2, z2);
+  for(int i=0; i<np; i++)
+    x2[i] = y2[i] = z2[i] = 0;
 }
 
 fp_t randD(fp_t fMin, fp_t fMax)
@@ -152,7 +172,9 @@ int main(int argc, char* argv[]) {
   fprintf(stderr, "done serial\n");
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
 
-  /*
+  fp_t* new_xs2 = new fp_t[np];
+  fp_t* new_ys2 = new fp_t[np];
+  fp_t* new_zs2 = new fp_t[np];
   Kokkos::Timer timer;
   push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
       distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
@@ -162,6 +184,7 @@ int main(int argc, char* argv[]) {
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
+  /*
   timer.reset();
   push_scs_kk(scs, np, xs, ys, zs, ptcl_to_elem, elems,
       distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
@@ -176,6 +199,9 @@ int main(int argc, char* argv[]) {
   delete [] new_xs1;
   delete [] new_ys1;
   delete [] new_zs1;
+  delete [] new_xs2;
+  delete [] new_ys2;
+  delete [] new_zs2;
   delete [] xs;
   delete [] ys;
   delete [] zs;

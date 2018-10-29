@@ -108,21 +108,23 @@ int main(int argc, char* argv[]) {
     elems.z[i] = i*0.1;
   }
 
-  //Create the SellCSigma for particles
-  int C = atoi(argv[4]);
-  int sigma = atoi(argv[5]);
-  int V = atoi(argv[6]);
-  SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,ids);
-
   //Create Coordinates
   fp_t* xs = new fp_t[np];
   fp_t* ys = new fp_t[np];
   fp_t* zs = new fp_t[np];
   for (int i = 0; i < np; ++i) {
-    xs[i] = 0.125;
-    ys[i] = 5;
+    xs[i] = i;
+    ys[i] = 0.125;
     zs[i] = M_PI;
   }
+
+  //Create the SellCSigma for particles
+  int C = atoi(argv[4]);
+  int sigma = atoi(argv[5]);
+  int V = atoi(argv[6]);
+  SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,
+				   ids, xs, ys, zs);
+
 
   //Push the particles
   fp_t distance = M_E;

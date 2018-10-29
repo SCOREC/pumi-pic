@@ -1,10 +1,11 @@
 #ifndef SELL_C_SIGMA_H_
 #define SELL_C_SIGMA_H_
 #include <vector>
-
+#include "psTypes.h"
 class SellCSigma {
  public:
-  SellCSigma(int c, int sigma, int v, int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
+  SellCSigma(int c, int sigma, int v, int ne, int np, int* ptcls_per_elem, 
+	     std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs);
   ~SellCSigma();
 
 
@@ -27,9 +28,15 @@ class SellCSigma {
   //  This only matters for vertical slicing so that each slice can determine which row
   //  it is a part of.
   int* slice_to_chunk;
-  //id_list lists the particle ids in chunks as per the sell-c-sigma structure
-  //   -1 represents an empty value
+  //particle_mask true means there is a particle at this location, false otherwise
+  bool* particle_mask;
+
+  //Remains for compiling purposes
   int* id_list;
+  //Particle coordinates reordered and padded to match the SCS structure
+  fp_t* scs_xs;
+  fp_t* scs_ys;
+  fp_t* scs_zs;
  private:
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}

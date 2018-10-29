@@ -5,7 +5,7 @@
 #include <cassert>
 
 SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_elem,
-                       std::vector<int>* ids) {
+                       std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs) {
   C = c;
   sigma = sig;
   V = v;
@@ -72,7 +72,10 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 #endif
   
   //Fill the chunks
-  id_list = new int[offsets[num_slices]];
+  particle_mask = new bool[offsets[num_slices]];
+  scs_xs = new fp_t[offsets[num_slices]];
+  scs_ys = new fp_t[offsets[num_slices]];
+  scs_zs = new fp_t[offsets[num_slices]];
   index = 0;
   int start = 0;
   int old_elem = 0;
@@ -84,14 +87,22 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
     }
     int width = (offsets[i + 1] - offsets[i]) / C;
     for (int j = 0; j < width; ++j) { //for the width of that slice
-
       for (int k = elem * C; k < (elem + 1) * C; ++k) { //for each row in the slice
         if (k < num_ents && ptcls[k].first > start + j) {
           int ent_id = ptcls[k].second;
-          id_list[index++] = ids[ent_id][start + j];
+          int ptcl = ids[ent_id][start + j];
+	  scs_xs[index] = xs[ptcl];
+	  scs_ys[index] = ys[ptcl];
+	  scs_zs[index] = zs[ptcl];
+          particle_mask[index++] = true;
+
         }
-        else
-          id_list[index++] = -1;
+        else {
+	  scs_xs[index] = 0;
+	  scs_ys[index] = 0;
+	  scs_zs[index] = 0;
+          particle_mask[index++] = false;
+	}
       }
     }
     start+=width;
@@ -102,18 +113,28 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   for (i = 0; i < num_slices; ++i){
     printf("Chunk %d:", i);
     for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
-      printf(" %d", id_list[j]);
+      printf(" %d", particle_mask[j]);
       if (j % C == C - 1)
         printf(" |");
     }
     printf("\n");
   }
+  
+  printf("\nX Coordinates\n");
+  for (i = 0; i < offsets[num_slices]; ++i) {
+    printf("%.2f ", scs_xs[i]);
+  }
+  printf("\n");
 #endif
 
   delete [] ptcls;
 }
 
 SellCSigma::~SellCSigma() {
+  delete [] scs_xs;
+  delete [] scs_ys;
+  delete [] scs_zs;
+  delete [] slice_to_chunk;
   delete [] offsets;
-  delete [] id_list;
+  delete [] particle_mask;
 }

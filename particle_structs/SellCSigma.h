@@ -42,6 +42,9 @@ class SellCSigma {
   fp_t* scs_new_ys;
   fp_t* scs_new_zs;
 
+  //map from array particles to scs particles
+  int* arr_to_scs;
+
  private:
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}

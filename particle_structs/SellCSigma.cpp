@@ -72,6 +72,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 #endif
   
   //Fill the chunks
+  arr_to_scs = new int[np];
   particle_mask = new bool[offsets[num_slices]];
   scs_xs = new fp_t[offsets[num_slices]];
   scs_ys = new fp_t[offsets[num_slices]];
@@ -94,6 +95,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 	  scs_xs[index] = xs[ptcl];
 	  scs_ys[index] = ys[ptcl];
 	  scs_zs[index] = zs[ptcl];
+          arr_to_scs[ptcl] = index;
           particle_mask[index++] = true;
 
         }
@@ -144,4 +146,5 @@ SellCSigma::~SellCSigma() {
   delete [] slice_to_chunk;
   delete [] offsets;
   delete [] particle_mask;
+  delete [] arr_to_scs;
 }

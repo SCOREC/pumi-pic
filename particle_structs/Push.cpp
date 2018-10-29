@@ -139,7 +139,6 @@ void push_scs(SellCSigma* scs,
   for (int i = 0; i < scs->num_slices; ++i) {
     int index = scs->offsets[i];
     const int chunk = scs->slice_to_chunk[i];
-    int col=0;
     while (index != scs->offsets[i + 1]) {
       for (int j = 0; j < scs->C; ++j) {
         int id = index++;
@@ -158,16 +157,14 @@ void push_scs(SellCSigma* scs,
 }
 
 #ifdef KOKKOS_ENABLED
-void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
-    int* ptcl_to_elem, elemCoords& elems,
-    fp_t distance, fp_t dx, fp_t dy, fp_t dz,
-    fp_t* new_xs, fp_t* new_ys, fp_t* new_zs) {
+void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
+    fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
-  kkLidView offsets_d("offsets_d", scs->num_chunks+1);
+  kkLidView offsets_d("offsets_d", scs->num_slices+1);
   hostToDeviceLid(offsets_d, scs->offsets);
 
-  kkLidView ids_d("ids_d", scs->offsets[scs->num_chunks]);
-  hostToDeviceLid(ids_d, scs->id_list);
+  kkLidView slice_to_chunk_d("slice_to_chunk_d", scs->num_slices);
+  hostToDeviceLid(slice_to_chunk_d, scs->slice_to_chunk);
 
   kkLidView num_particles_d("num_particles_d", 1);
   hostToDeviceLid(num_particles_d, &np);
@@ -185,23 +182,23 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
   kkFpView ez_d("ez_d", elems.num_elems*elems.verts_per_elem);
   hostToDeviceFp(ez_d, elems.z);
 
-  kkFpView xs_d("xs_d", np);
-  hostToDeviceFp(xs_d, xs);
+  kkFpView xs_d("xs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(xs_d, scs->scs_xs);
 
-  kkFpView ys_d("ys_d", np);
-  hostToDeviceFp(ys_d, ys);
+  kkFpView ys_d("ys_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(ys_d, scs->scs_ys);
 
-  kkFpView zs_d("zs_d", np);
-  hostToDeviceFp(zs_d, zs);
+  kkFpView zs_d("zs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(zs_d, scs->scs_zs);
 
-  kkFpView new_xs_d("new_xs_d", np);
-  hostToDeviceFp(new_xs_d, new_xs);
+  kkFpView new_xs_d("new_xs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(new_xs_d, scs->scs_new_xs);
 
-  kkFpView new_ys_d("new_ys_d", np);
-  hostToDeviceFp(new_ys_d, new_ys);
+  kkFpView new_ys_d("new_ys_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(new_ys_d, scs->scs_new_ys);
 
-  kkFpView new_zs_d("new_zs_d", np);
-  hostToDeviceFp(new_zs_d, new_zs);
+  kkFpView new_zs_d("new_zs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(new_zs_d, scs->scs_new_zs);
 
   fp_t disp[4] = {distance,dx,dy,dz};
   kkFpView disp_d("direction_d", 4);
@@ -214,7 +211,7 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
   typedef Kokkos::TeamPolicy<> team_policy;
   typedef typename team_policy::member_type team_member;
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-  const int league_size = scs->num_chunks;
+  const int league_size = scs->num_slices;
   const int team_size = scs->C;
   const team_policy policy(league_size, team_size);
 
@@ -225,31 +222,22 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
     timer.reset();
     //loop over chunks, one thread team per chunk
     parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
-        const int i = thread.league_rank();
+        const int slice = thread.league_rank();
         const int row = thread.team_rank();
-        const int rowLen = (offsets_d(i+1)-offsets_d(i))/chunksz_d(0);
-        const int start = offsets_d(i) + row;
+        const int rowLen = (offsets_d(slice+1)-offsets_d(slice))/chunksz_d(0);
+        const int start = offsets_d(slice) + row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int e = i * chunksz_d(0) + row;
-          //need to get rid of this conditional
-          // idea: pad the e[xyz]_d arrays
-          if( e < num_elems_d(0) ) {
-            fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
-                     ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
-                     ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
-                     ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-            c /= 4;
-            for(int p = 0; p < rowLen; p++) {
-              int ptcl = start+(p*chunksz_d(0));
-              if ( ptcl < offsets_d(thread.league_size()) ) {
-                int id = ids_d(ptcl);
-                if (id != -1) {
-                  new_xs_d(id) = xs_d(id) + c * disp_d(0) * disp_d(1);
-                  new_ys_d(id) = ys_d(id) + c * disp_d(0) * disp_d(2);
-                  new_zs_d(id) = zs_d(id) + c * disp_d(0) * disp_d(3);
-                }
-              }
-            }
+          int e = slice_to_chunk_d(slice) * chunksz_d(0) + row;
+          fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
+                   ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
+                   ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
+                   ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
+          c /= 4;
+          for(int p = 0; p < rowLen; p++) {
+            int pid = start+(p*chunksz_d(0));
+            new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);
+            new_ys_d(pid) = ys_d(pid) + c * disp_d(0) * disp_d(2);
+            new_zs_d(pid) = zs_d(pid) + c * disp_d(0) * disp_d(3);
           }
         });
     });
@@ -265,9 +253,9 @@ void push_scs_kk(SellCSigma* scs, int np, fp_t* xs, fp_t* ys, fp_t* zs,
   #endif
 
   timer.reset();
-  deviceToHostFp(new_xs_d,new_xs);
-  deviceToHostFp(new_ys_d,new_ys);
-  deviceToHostFp(new_zs_d,new_zs);
+  deviceToHostFp(new_xs_d,scs->scs_new_xs);
+  deviceToHostFp(new_ys_d,scs->scs_new_ys);
+  deviceToHostFp(new_zs_d,scs->scs_new_zs);
   fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
 }
 #endif //kokkos enabled

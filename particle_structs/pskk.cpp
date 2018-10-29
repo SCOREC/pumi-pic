@@ -184,16 +184,11 @@ int main(int argc, char* argv[]) {
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
-  /*
   timer.reset();
-  push_scs_kk(scs, np, xs, ys, zs, ptcl_to_elem, elems,
-      distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  push_scs_kk(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
 
-  checkThenClear(np,
-      new_xs1, new_ys1, new_zs1,
-      new_xs2, new_ys2, new_zs2);
-      */
+  checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
 
   //Cleanup
   delete [] new_xs1;

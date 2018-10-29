@@ -116,6 +116,9 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   scs_new_zs = new fp_t[offsets[num_slices]];
 
   if(debug) {
+    printf("\narr_to_scs\n");
+    for (i = 0; i < np; ++i)
+      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
     printf("\nSlices\n");
     for (i = 0; i < num_slices; ++i){
       printf("Slice %d:", i);

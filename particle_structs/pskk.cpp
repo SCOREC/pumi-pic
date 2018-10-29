@@ -52,9 +52,9 @@ int main(int argc, char* argv[]) {
       typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   srand(time(NULL));
-  if (argc != 6) {
+  if (argc != 7) {
     printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)> "
-           "<C> <sigma>\n", argv[0]);
+           "<C> <sigma> <V>\n", argv[0]);
     return 1;
   }
   int ne = atoi(argv[1]);
@@ -111,7 +111,8 @@ int main(int argc, char* argv[]) {
   //Create the SellCSigma for particles
   int C = atoi(argv[4]);
   int sigma = atoi(argv[5]);
-  SellCSigma* scs = new SellCSigma(C, sigma, ne, np, ptcls_per_elem,ids);
+  int V = atoi(argv[6]);
+  SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,ids);
 
   //Create Coordinates
   fp_t* xs = new fp_t[np];

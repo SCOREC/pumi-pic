@@ -2,10 +2,13 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
-SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
+#include <cassert>
+
+SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_elem,
                        std::vector<int>* ids) {
   C = c;
   sigma = sig;
+  V = v;
   num_ents = ne;
 
   //Make temporary copy of the particle counts for sorting
@@ -26,44 +29,77 @@ SellCSigma::SellCSigma(int c, int sig, int ne, int np, int* ptcls_per_elem,
     printf("Element %d: has %d particles\n", ptcls[i].second, ptcls[i].first);
 #endif
   
-  //Create chunks and offsets
+  //Number of chunks without vertical slicing
   num_chunks = num_ents / C + (num_ents % C != 0);
-  offsets = new int[num_chunks + 1];
-  offsets[0] = 0;
+  num_slices = 0;
+  int* chunk_widths = new int[num_chunks];
+  //Add chunks for vertical slicing
   for (i = 0; i < num_chunks; ++i) {
-    offsets[i + 1] = 0;
+    chunk_widths[i] = 0;
     for (int j = i * C; j < (i + 1) * C && j < num_ents; ++j) 
-      offsets[i + 1] = std::max(offsets[i+1],ptcls[j].first);
-    offsets[i + 1] *= C;
-    offsets[i + 1] += offsets[i];
+      chunk_widths[i] = std::max(chunk_widths[i],ptcls[j].first);
+    int num_vertical_slices = chunk_widths[i] / V + (chunk_widths[i] % V != 0);
+    num_slices += num_vertical_slices;
+  }
+  
+
+  //Create offsets into each chunk/vertical slice
+  offsets = new int[num_slices + 1];
+  slice_to_chunk = new int[num_slices];
+  offsets[0] = 0;
+  int index = 1;
+  for (i = 0; i < num_chunks; ++i) {
+    for (int j = V; j <= chunk_widths[i]; j+=V) {
+      slice_to_chunk[index-1] = i;
+      offsets[index] = offsets[index-1] + V * C;
+      ++index;
+    }
+    int rem = chunk_widths[i] % V;
+    if (rem > 0) {
+      slice_to_chunk[index-1] = i;
+      offsets[index] = offsets[index-1] + rem * C;
+      ++index;
+    }
   }
 
+  delete [] chunk_widths;
+
 #ifdef DEBUG
+  assert(num_slices == index);
   printf("\nChunk Offsets\n");
-  for (i = 0; i < num_chunks + 1; ++i)
+  for (i = 0; i < num_slices + 1; ++i)
     printf("Chunk %d starts at %d\n", i, offsets[i]);
 #endif
   
   //Fill the chunks
-  id_list = new int[offsets[num_chunks]];
-  int index = 0;
-  for (i = 0; i < num_chunks; ++i) {
+  id_list = new int[offsets[num_slices]];
+  index = 0;
+  int start = 0;
+  int old_elem = 0;
+  for (i = 0; i < num_slices; ++i) { //for each slice
+    int elem = slice_to_chunk[i];
+    if (old_elem!=elem) {
+      old_elem = elem;
+      start = 0;
+    }
     int width = (offsets[i + 1] - offsets[i]) / C;
-    for (int j = 0; j < width; ++j) {
-      for (int k = i * C; k < (i + 1) * C; ++k) {
-        if (k < num_ents && ptcls[k].first > j) {
+    for (int j = 0; j < width; ++j) { //for the width of that slice
+
+      for (int k = elem * C; k < (elem + 1) * C; ++k) { //for each row in the slice
+        if (k < num_ents && ptcls[k].first > start + j) {
           int ent_id = ptcls[k].second;
-          id_list[index++] = ids[ent_id][j];
+          id_list[index++] = ids[ent_id][start + j];
         }
         else
           id_list[index++] = -1;
       }
     }
+    start+=width;
   }
 
 #ifdef DEBUG
   printf("\nChunks\n");
-  for (i = 0; i < num_chunks; ++i){
+  for (i = 0; i < num_slices; ++i){
     printf("Chunk %d:", i);
     for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
       printf(" %d", id_list[j]);

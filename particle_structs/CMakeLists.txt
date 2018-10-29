@@ -24,6 +24,12 @@ if( FP32 )
   add_definitions(-DFP32)
 endif()
 
+option(DEBUG "Turn on for debug output" OFF)
+
+if (DEBUG)
+   add_definitions(-DDEBUG)
+endif()
+
 option(IS_TESTING "Build for CTest" OFF)
 message(STATUS "IS_TESTING: ${IS_TESTING}")
 

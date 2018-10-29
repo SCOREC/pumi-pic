@@ -66,9 +66,9 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 
 #ifdef DEBUG
   assert(num_slices == index);
-  printf("\nChunk Offsets\n");
+  printf("\nSlice Offsets\n");
   for (i = 0; i < num_slices + 1; ++i)
-    printf("Chunk %d starts at %d\n", i, offsets[i]);
+    printf("Slice %d starts at %d\n", i, offsets[i]);
 #endif
   
   //Fill the chunks

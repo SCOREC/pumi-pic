@@ -113,9 +113,9 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   scs_new_zs = new fp_t[offsets[num_slices]];
 
 #ifdef DEBUG
-  printf("\nChunks\n");
+  printf("\nSlices\n");
   for (i = 0; i < num_slices; ++i){
-    printf("Chunk %d:", i);
+    printf("Slice %d:", i);
     for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
       printf(" %d", particle_mask[j]);
       if (j % C == C - 1)

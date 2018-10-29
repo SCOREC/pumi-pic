@@ -5,7 +5,7 @@
 class SellCSigma {
  public:
   SellCSigma(int c, int sigma, int v, int ne, int np, int* ptcls_per_elem, 
-	     std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs);
+	     std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs, bool debug=false);
   ~SellCSigma();
 
 

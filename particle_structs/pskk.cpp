@@ -76,9 +76,9 @@ int main(int argc, char* argv[]) {
       typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   srand(time(NULL));
-  if (argc != 7) {
+  if (argc != 8) {
     printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)> "
-           "<C> <sigma> <V>\n", argv[0]);
+           "<C> <sigma> <V> <debug=0|1>\n", argv[0]);
     return 1;
   }
   int ne = atoi(argv[1]);
@@ -146,9 +146,10 @@ int main(int argc, char* argv[]) {
   int C = atoi(argv[4]);
   int sigma = atoi(argv[5]);
   int V = atoi(argv[6]);
+  bool debug = atoi(argv[7]);
   fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", C, V, sigma);
   SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,
-				   ids, xs, ys, zs);
+				   ids, xs, ys, zs, debug);
 
 
   //Push the particles

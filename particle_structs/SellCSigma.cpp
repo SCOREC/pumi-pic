@@ -5,7 +5,7 @@
 #include <algorithm>
 
 SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_elem,
-                       std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs) {
+                       std::vector<int>* ids, fp_t* xs, fp_t* ys, fp_t* zs, bool debug) {
   C = c;
   sigma = sig;
   V = v;
@@ -23,11 +23,11 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   }
   std::sort(ptcls + i, ptcls + ne, std::greater<pair_t>());
 
-#ifdef DEBUG
-  printf("\nSigma Sorted Particle Counts\n");
-  for (i = 0; i < ne; ++i)
-    printf("Element %d: has %d particles\n", ptcls[i].second, ptcls[i].first);
-#endif
+  if(debug) {
+    printf("\nSigma Sorted Particle Counts\n");
+    for (i = 0; i < ne; ++i)
+      printf("Element %d: has %d particles\n", ptcls[i].second, ptcls[i].first);
+  }
   
   //Number of chunks without vertical slicing
   num_chunks = num_ents / C + (num_ents % C != 0);
@@ -64,12 +64,12 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 
   delete [] chunk_widths;
 
-#ifdef DEBUG
-  ALWAYS_ASSERT(num_slices+1 == index);
-  printf("\nSlice Offsets\n");
-  for (i = 0; i < num_slices + 1; ++i)
-    printf("Slice %d starts at %d\n", i, offsets[i]);
-#endif
+  if(debug) {
+    ALWAYS_ASSERT(num_slices+1 == index);
+    printf("\nSlice Offsets\n");
+    for (i = 0; i < num_slices + 1; ++i)
+      printf("Slice %d starts at %d\n", i, offsets[i]);
+  }
   
   //Fill the chunks
   arr_to_scs = new int[np];
@@ -115,24 +115,24 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   scs_new_ys = new fp_t[offsets[num_slices]];
   scs_new_zs = new fp_t[offsets[num_slices]];
 
-#ifdef DEBUG
-  printf("\nSlices\n");
-  for (i = 0; i < num_slices; ++i){
-    printf("Slice %d:", i);
-    for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
-      printf(" %d", particle_mask[j]);
-      if (j % C == C - 1)
-        printf(" |");
+  if(debug) {
+    printf("\nSlices\n");
+    for (i = 0; i < num_slices; ++i){
+      printf("Slice %d:", i);
+      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
+        printf(" %d", particle_mask[j]);
+        if (j % C == C - 1)
+          printf(" |");
+      }
+      printf("\n");
+    }
+
+    printf("\nX Coordinates\n");
+    for (i = 0; i < offsets[num_slices]; ++i) {
+      printf("%.2f ", scs_xs[i]);
     }
     printf("\n");
   }
-  
-  printf("\nX Coordinates\n");
-  for (i = 0; i < offsets[num_slices]; ++i) {
-    printf("%.2f ", scs_xs[i]);
-  }
-  printf("\n");
-#endif
 
   delete [] ptcls;
 }

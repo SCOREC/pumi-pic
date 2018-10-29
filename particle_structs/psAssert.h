@@ -14,9 +14,6 @@
     }                                             \
   } while (0)
 
-void Assert_Fail(const char* msg) {
-    fprintf(stderr, "%s", msg);
-      abort();
-}
+void Assert_Fail(const char* msg);
 
 #endif

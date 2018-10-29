@@ -62,6 +62,7 @@ set(PS_SOURCES
   Push.cpp
   SellCSigma.cpp
   psTypes.cpp
+  psAssert.cpp
 )
 
 add_library(particleStructs ${PS_SOURCES})

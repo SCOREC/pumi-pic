@@ -136,18 +136,14 @@ void push_scs(SellCSigma* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
 
-  printf("chunks %d slices %d\n", scs->num_chunks, scs->num_slices);
   for (int i = 0; i < scs->num_slices; ++i) {
     int index = scs->offsets[i];
     const int chunk = scs->slice_to_chunk[i];
-    printf("slice %d chunk %d index %d\n", i, chunk, index);
     int col=0;
     while (index != scs->offsets[i + 1]) {
-      printf("column %d\n", col++);
       for (int j = 0; j < scs->C; ++j) {
         int id = index++;
         int e = chunk * scs->C + j;
-        printf("id %d e %d\n", id, e);
         fp_t c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
                  elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
                  elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +

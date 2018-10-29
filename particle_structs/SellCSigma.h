@@ -37,6 +37,11 @@ class SellCSigma {
   fp_t* scs_xs;
   fp_t* scs_ys;
   fp_t* scs_zs;
+  //New particle coordinate locations that are padded to match the SCS structure
+  fp_t* scs_new_xs;
+  fp_t* scs_new_ys;
+  fp_t* scs_new_zs;
+
  private:
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}

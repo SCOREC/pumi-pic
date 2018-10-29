@@ -108,6 +108,10 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
     start+=width;
   }
 
+  scs_new_xs = new fp_t[offsets[num_slices]];
+  scs_new_ys = new fp_t[offsets[num_slices]];
+  scs_new_zs = new fp_t[offsets[num_slices]];
+
 #ifdef DEBUG
   printf("\nChunks\n");
   for (i = 0; i < num_slices; ++i){
@@ -131,6 +135,9 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 }
 
 SellCSigma::~SellCSigma() {
+  delete [] scs_new_xs;
+  delete [] scs_new_ys;
+  delete [] scs_new_zs;
   delete [] scs_xs;
   delete [] scs_ys;
   delete [] scs_zs;

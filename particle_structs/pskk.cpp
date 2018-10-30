@@ -89,7 +89,8 @@ int main(int argc, char* argv[]) {
   int np = atoi(argv[2]);
   int strat = atoi(argv[3]);
 
-  fprintf(stderr, "distribution %d #elements %d #particles %d\n", strat, ne, np);
+  fprintf(stderr, "distribution %d-%s #elements %d #particles %d\n",
+      strat, distribute_name(strat), ne, np);
 
   //Distribute particles to 'elements'
   int* ptcls_per_elem = new int[ne];

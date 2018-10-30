@@ -25,7 +25,11 @@ void positionsMatch(int np,
   //Confirm all particles were pushed
   for (int i = 0; i < np; ++i) {
     const int scsIdx = scs->arr_to_scs[i];
-    if(abs(x1[i] - scs->scs_new_xs[scsIdx]) > EPSILON) matchFailed(i);
+    if(abs(x1[i] - scs->scs_new_xs[scsIdx]) > EPSILON) {
+      fprintf(stderr, "(%.2f) x[%d] != scs_x[%d] (%.2f)\n",
+          x1[i], i, scsIdx, scs->scs_new_xs[scsIdx]);
+      matchFailed(i);
+    }
     if(abs(y1[i] - scs->scs_new_ys[scsIdx]) > EPSILON) matchFailed(i);
     if(abs(z1[i] - scs->scs_new_zs[scsIdx]) > EPSILON) matchFailed(i);
   }

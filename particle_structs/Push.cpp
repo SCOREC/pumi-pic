@@ -1,5 +1,6 @@
 #include "Push.h"
 #include "psParams.h"
+#include "psAssert.h"
 #include <Kokkos_Core.hpp>
 
 void printTiming(const char* name, int np, double t) {
@@ -141,13 +142,18 @@ void push_scs(SellCSigma* scs,
     const int chunk = scs->slice_to_chunk[i];
     while (index != scs->offsets[i + 1]) {
       for (int j = 0; j < scs->C; ++j) {
+        int row = chunk * scs->C + j;
+        fp_t c = 1;
+        if(row < elems.num_elems) {
+          int e = scs->row_to_element[row];
+          printf("slice %3d chunk %3d j %3d row %3d e %d\n", i, chunk, j, row, e);
+          c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
+              elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
+              elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
+              elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
+          c /= 4;
+        }
         int id = index++;
-        int e = chunk * scs->C + j;
-        fp_t c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
-                 elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
-                 elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
-                 elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
-        c /= 4;
         scs->scs_new_xs[id] = scs->scs_xs[id] + c * distance * dx;
         scs->scs_new_ys[id] = scs->scs_ys[id] + c * distance * dy;
         scs->scs_new_zs[id] = scs->scs_zs[id] + c * distance * dz;

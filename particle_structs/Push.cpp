@@ -181,6 +181,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
   kkLidView num_elems_d("num_elems_d", 1);
   hostToDeviceLid(num_elems_d, &elems.num_elems);
 
+  kkLidView row_to_element_d("row_to_element_d", elems.num_elems);
+  hostToDeviceLid(row_to_element_d, scs->row_to_element);
+
   kkFpView ex_d("ex_d", elems.num_elems*elems.verts_per_elem);
   hostToDeviceFp(ex_d, elems.x);
   kkFpView ey_d("ey_d", elems.num_elems*elems.verts_per_elem);
@@ -229,16 +232,20 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
     //loop over chunks, one thread team per chunk
     parallel_for(policy, KOKKOS_LAMBDA(const team_member& thread) {
         const int slice = thread.league_rank();
-        const int row = thread.team_rank();
+        const int slice_row = thread.team_rank();
         const int rowLen = (offsets_d(slice+1)-offsets_d(slice))/chunksz_d(0);
-        const int start = offsets_d(slice) + row;
+        const int start = offsets_d(slice) + slice_row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int e = slice_to_chunk_d(slice) * chunksz_d(0) + row;
-          fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
-                   ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
-                   ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
-                   ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-          c /= 4;
+          int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
+          fp_t c = 1;
+          if ( row < num_elems_d(0) ) {
+            int e = row_to_element_d(row);
+            c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
+                ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
+                ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
+                ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
+            c /= 4;
+          }
           for(int p = 0; p < rowLen; p++) {
             int pid = start+(p*chunksz_d(0));
             new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);

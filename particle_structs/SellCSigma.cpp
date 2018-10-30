@@ -153,6 +153,7 @@ SellCSigma::~SellCSigma() {
   delete [] scs_ys;
   delete [] scs_zs;
   delete [] slice_to_chunk;
+  delete [] row_to_element;
   delete [] offsets;
   delete [] particle_mask;
   delete [] arr_to_scs;

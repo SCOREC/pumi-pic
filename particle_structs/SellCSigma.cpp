@@ -29,7 +29,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   num_chunks = num_ents / C + (num_ents % C != 0);
   num_slices = 0;
   int* chunk_widths = new int[num_chunks];
-  int* row_to_element = new int[ne];
+  row_to_element = new int[ne];
   //Add chunks for vertical slicing
   for (i = 0; i < num_chunks; ++i) {
     chunk_widths[i] = 0;

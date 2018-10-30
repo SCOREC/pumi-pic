@@ -9,31 +9,31 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   C = c;
   sigma = sig;
   V = v;
-  num_ents = ne;
+  num_elems = ne;
 
   //Make temporary copy of the particle counts for sorting
   // Pair consists of <ptcl count, elem id>
   typedef std::pair<int,int> pair_t;
-  pair_t* ptcls = new pair_t[ne];
-  for (int i = 0; i < ne; ++i)
+  pair_t* ptcls = new pair_t[num_elems];
+  for (int i = 0; i < num_elems; ++i)
     ptcls[i] = std::make_pair(ptcls_per_elem[i], i);
 
   //Sort the entries with sigma sorting
   int i;
-  for (i = 0; i < ne - sigma; i+=sigma) {
+  for (i = 0; i < num_elems - sigma; i+=sigma) {
     std::sort(ptcls + i, ptcls + i + sigma, std::greater<pair_t>());
   }
-  std::sort(ptcls + i, ptcls + ne, std::greater<pair_t>());
+  std::sort(ptcls + i, ptcls + num_elems, std::greater<pair_t>());
   
   //Number of chunks without vertical slicing
-  num_chunks = num_ents / C + (num_ents % C != 0);
+  num_chunks = num_elems / C + (num_elems % C != 0);
   num_slices = 0;
   int* chunk_widths = new int[num_chunks];
-  row_to_element = new int[ne];
+  row_to_element = new int[num_elems];
   //Add chunks for vertical slicing
   for (i = 0; i < num_chunks; ++i) {
     chunk_widths[i] = 0;
-    for (int j = i * C; j < (i + 1) * C && j < num_ents; ++j)  {
+    for (int j = i * C; j < (i + 1) * C && j < num_elems; ++j)  {
       row_to_element[j] = ptcls[j].second;
       chunk_widths[i] = std::max(chunk_widths[i],ptcls[j].first);
     }
@@ -43,7 +43,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
 
   if(debug) {
     printf("\nSigma Sorted Particle Counts\n");
-    for (i = 0; i < ne; ++i)
+    for (i = 0; i < num_elems; ++i)
       printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
   }
   
@@ -94,7 +94,7 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
     int width = (offsets[i + 1] - offsets[i]) / C;
     for (int j = 0; j < width; ++j) { //for the width of that slice
       for (int k = elem * C; k < (elem + 1) * C; ++k) { //for each row in the slice
-        if (k < num_ents && ptcls[k].first > start + j) {
+        if (k < num_elems && ptcls[k].first > start + j) {
           int ent_id = ptcls[k].second;
           int ptcl = ids[ent_id][start + j];
 	  scs_xs[index] = xs[ptcl];

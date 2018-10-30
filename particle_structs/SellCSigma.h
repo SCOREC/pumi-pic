@@ -21,7 +21,7 @@ class SellCSigma {
   //Number of slices
   int num_slices;
   //Total entries
-  int num_ents;
+  int num_elems;
   //offsets stores an offset into each chunk of entries in id_list
   int* offsets;
   //chunk_element stores the id of the first row in the chunk

@@ -146,7 +146,6 @@ void push_scs(SellCSigma* scs,
         fp_t c = 1;
         if(row < elems.num_elems) {
           int e = scs->row_to_element[row];
-          printf("slice %3d chunk %3d j %3d row %3d e %d\n", i, chunk, j, row, e);
           c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
               elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
               elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +

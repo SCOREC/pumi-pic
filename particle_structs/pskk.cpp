@@ -177,6 +177,7 @@ int main(int argc, char* argv[]) {
   fprintf(stderr, "done serial\n");
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
 
+  fprintf(stderr, "\n");
   fp_t* new_xs2 = new fp_t[np];
   fp_t* new_ys2 = new fp_t[np];
   fp_t* new_zs2 = new fp_t[np];
@@ -189,6 +190,7 @@ int main(int argc, char* argv[]) {
       new_xs1, new_ys1, new_zs1,
       new_xs2, new_ys2, new_zs2);
 
+  fprintf(stderr, "\n");
   timer.reset();
   push_scs_kk(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
@@ -210,6 +212,6 @@ int main(int argc, char* argv[]) {
   delete [] ptcls_per_elem;
   delete [] ptcl_to_elem;
   Kokkos::finalize();
-  fprintf(stderr,"done\n");
+  fprintf(stderr,"\ndone\n");
   return 0;
 }

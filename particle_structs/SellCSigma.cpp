@@ -12,34 +12,39 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   num_ents = ne;
 
   //Make temporary copy of the particle counts for sorting
+  // Pair consists of <ptcl count, elem id>
   typedef std::pair<int,int> pair_t;
   pair_t* ptcls = new pair_t[ne];
   for (int i = 0; i < ne; ++i)
     ptcls[i] = std::make_pair(ptcls_per_elem[i], i);
+
   //Sort the entries with sigma sorting
   int i;
   for (i = 0; i < ne - sigma; i+=sigma) {
     std::sort(ptcls + i, ptcls + i + sigma, std::greater<pair_t>());
   }
   std::sort(ptcls + i, ptcls + ne, std::greater<pair_t>());
-
-  if(debug) {
-    printf("\nSigma Sorted Particle Counts\n");
-    for (i = 0; i < ne; ++i)
-      printf("Element %d: has %d particles\n", ptcls[i].second, ptcls[i].first);
-  }
   
   //Number of chunks without vertical slicing
   num_chunks = num_ents / C + (num_ents % C != 0);
   num_slices = 0;
   int* chunk_widths = new int[num_chunks];
+  int* row_to_element = new int[ne];
   //Add chunks for vertical slicing
   for (i = 0; i < num_chunks; ++i) {
     chunk_widths[i] = 0;
-    for (int j = i * C; j < (i + 1) * C && j < num_ents; ++j) 
+    for (int j = i * C; j < (i + 1) * C && j < num_ents; ++j)  {
+      row_to_element[j] = ptcls[j].second;
       chunk_widths[i] = std::max(chunk_widths[i],ptcls[j].first);
+    }
     int num_vertical_slices = chunk_widths[i] / V + (chunk_widths[i] % V != 0);
     num_slices += num_vertical_slices;
+  }
+
+  if(debug) {
+    printf("\nSigma Sorted Particle Counts\n");
+    for (i = 0; i < ne; ++i)
+      printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
   }
   
 

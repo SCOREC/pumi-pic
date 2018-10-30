@@ -42,6 +42,10 @@ class SellCSigma {
   fp_t* scs_new_ys;
   fp_t* scs_new_zs;
 
+  //map from row to element
+  // row = slice_to_chunk[slice] + row_in_chunk
+  int* row_to_element;
+
   //map from array particles to scs particles
   int* arr_to_scs;
 

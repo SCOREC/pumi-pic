@@ -29,7 +29,8 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
   num_chunks = num_elems / C + (num_elems % C != 0);
   num_slices = 0;
   int* chunk_widths = new int[num_chunks];
-  row_to_element = new int[num_elems];
+  row_to_element = new int[num_chunks * C];
+
   //Add chunks for vertical slicing
   for (i = 0; i < num_chunks; ++i) {
     chunk_widths[i] = 0;
@@ -39,6 +40,11 @@ SellCSigma::SellCSigma(int c, int sig, int v, int ne, int np, int* ptcls_per_ele
     }
     int num_vertical_slices = chunk_widths[i] / V + (chunk_widths[i] % V != 0);
     num_slices += num_vertical_slices;
+  }
+
+  //Set the padded row_to_element values
+  for (i = num_elems; i < num_chunks * C; ++i) {
+    row_to_element[i] = i;
   }
 
   if(debug) {

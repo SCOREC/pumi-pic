@@ -3,10 +3,8 @@
 #include "psAssert.h"
 #include <Kokkos_Core.hpp>
 
-void printTiming(const char* name, int np, double t) {
+void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
-  fprintf(stderr, "kokkos %s (particles/seconds) %f\n", name, np/t);
-  fprintf(stderr, "kokkos %s (TFLOPS) %f\n", name, (np/t/TERA)*PARTICLE_OPS);
 }
 
 void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs,
@@ -98,9 +96,7 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
   fprintf(stderr, "array host to device transfer (seconds) %f\n", timer.seconds());
 
   #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-  double avgTime = 0;
-  double max = 0;
-  double min = 1000;
+  double totTime = 0;
   for( int iter=0; iter < NUM_ITERATIONS; iter++) {
     timer.reset();
     Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
@@ -114,15 +110,9 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
         new_ys_d(i) = ys_d(i) + c * disp_d(0) * disp_d(2);
         new_zs_d(i) = zs_d(i) + c * disp_d(0) * disp_d(3);
     });
-    double t = timer.seconds();
-    avgTime+=t;
-    if( t > max ) max = t;
-    if( t < min ) min = t;
+    totTime += timer.seconds();
   }
-  avgTime /= NUM_ITERATIONS;
-  printTiming("array push avg", np, avgTime);
-  printTiming("array push min", np, min);
-  printTiming("array push max", np, max);
+  printTiming("array push", totTime);
   #endif
 
   timer.reset();
@@ -223,9 +213,7 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
   const int team_size = scs->C;
   const team_policy policy(league_size, team_size);
 
-  double avgTime = 0;
-  double max = 0;
-  double min = 1000;
+  double totTime = 0;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();
     //loop over chunks, one thread team per chunk
@@ -253,15 +241,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
           }
         });
     });
-    double t = timer.seconds();
-    avgTime+=t;
-    if( t > max ) max = t;
-    if( t < min ) min = t;
+    totTime += timer.seconds();
   }
-  avgTime/=NUM_ITERATIONS;
-  printTiming("scs push avg", np, avgTime);
-  printTiming("scs push min", np, min);
-  printTiming("scs push max", np, max);
+  printTiming("scs push", totTime);
   #endif
 
   timer.reset();

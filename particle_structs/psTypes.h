@@ -12,10 +12,11 @@ class elemCoords {
   public:
   int num_elems;
   int verts_per_elem;
+  int size;
   fp_t* x;
   fp_t* y;
   fp_t* z;
-  elemCoords(int ne, int np);
+  elemCoords(int ne, int np, int size);
   ~elemCoords();
   private:
     elemCoords() {};

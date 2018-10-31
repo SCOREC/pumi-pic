@@ -133,15 +133,12 @@ void push_scs(SellCSigma* scs,
     while (index != scs->offsets[i + 1]) {
       for (int j = 0; j < scs->C; ++j) {
         int row = chunk * scs->C + j;
-        fp_t c = 1;
-        if(row < elems.num_elems) {
-          int e = scs->row_to_element[row];
-          c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
-              elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
-              elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
-              elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
-          c /= 4;
-        }
+        int e = scs->row_to_element[row];
+        fp_t c = elems.x[e]   + elems.y[e]   + elems.z[e]   +
+                 elems.x[e+1] + elems.y[e+1] + elems.z[e+1] +
+                 elems.x[e+2] + elems.y[e+2] + elems.z[e+2] +
+                 elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
+        c /= 4;
         int id = index++;
         scs->scs_new_xs[id] = scs->scs_xs[id] + c * distance * dx;
         scs->scs_new_ys[id] = scs->scs_ys[id] + c * distance * dy;
@@ -170,14 +167,14 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
   kkLidView num_elems_d("num_elems_d", 1);
   hostToDeviceLid(num_elems_d, &elems.num_elems);
 
-  kkLidView row_to_element_d("row_to_element_d", elems.num_elems);
+  kkLidView row_to_element_d("row_to_element_d", elems.size);
   hostToDeviceLid(row_to_element_d, scs->row_to_element);
 
-  kkFpView ex_d("ex_d", elems.num_elems*elems.verts_per_elem);
+  kkFpView ex_d("ex_d", elems.size);
   hostToDeviceFp(ex_d, elems.x);
-  kkFpView ey_d("ey_d", elems.num_elems*elems.verts_per_elem);
+  kkFpView ey_d("ey_d", elems.size);
   hostToDeviceFp(ey_d, elems.y);
-  kkFpView ez_d("ez_d", elems.num_elems*elems.verts_per_elem);
+  kkFpView ez_d("ez_d", elems.size);
   hostToDeviceFp(ez_d, elems.z);
 
   kkFpView xs_d("xs_d", scs->offsets[scs->num_slices]);
@@ -224,15 +221,12 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
         const int start = offsets_d(slice) + slice_row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
-          fp_t c = 1;
-          if ( row < num_elems_d(0) ) {
-            int e = row_to_element_d(row);
-            c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
-                ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
-                ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
-                ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-            c /= 4;
-          }
+          int e = row_to_element_d(row);
+          fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
+                   ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
+                   ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
+                   ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
+          c /= 4;
           for(int p = 0; p < rowLen; p++) {
             int pid = start+(p*chunksz_d(0));
             new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);

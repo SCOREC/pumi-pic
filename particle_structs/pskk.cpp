@@ -130,22 +130,6 @@ int main(int argc, char* argv[]) {
   assert(ps == np);
 #endif
 
-  //The point of this test is to have the particle push kernels access
-  // mesh information.  We will assume (1) that relevent fields are
-  // stored on mesh vertices and (2) that the vertex information
-  // was preprocessed such that the information for the vertices that
-  // bound each element are stored in a contiguous portion of the array
-  // for that information.  This duplication of vertex info eliminates
-  // 'jumps' through the vertex arrays and thus improves performance;
-  // something a 'real' analysis code may do.
-  elemCoords elems(ne,4);
-  //Write something into the coordinate arrays. Does not matter.
-  for( int i=0; i<ne*4; i++ ) {
-    elems.x[i] = i*0.1;
-    elems.y[i] = i*0.1;
-    elems.z[i] = i*0.1;
-  }
-
   //Create Coordinates
   fp_t* xs = new fp_t[np];
   fp_t* ys = new fp_t[np];
@@ -165,6 +149,21 @@ int main(int argc, char* argv[]) {
   SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,
 				   ids, xs, ys, zs, debug);
 
+  //The point of this test is to have the particle push kernels access
+  // mesh information.  We will assume (1) that relevent fields are
+  // stored on mesh vertices and (2) that the vertex information
+  // was preprocessed such that the information for the vertices that
+  // bound each element are stored in a contiguous portion of the array
+  // for that information.  This duplication of vertex info eliminates
+  // 'jumps' through the vertex arrays and thus improves performance;
+  // something a 'real' analysis code may do.
+  elemCoords elems(ne, 4, scs->C*scs->num_chunks);
+  //Write something into the coordinate arrays. Does not matter.
+  for( int i=0; i<elems.size; i++ ) {
+    elems.x[i] = i*0.1;
+    elems.y[i] = i*0.1;
+    elems.z[i] = i*0.1;
+  }
 
   //Push the particles
   fp_t distance = M_E;

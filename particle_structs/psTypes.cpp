@@ -1,11 +1,12 @@
 #include "psTypes.h"
 
-elemCoords::elemCoords(int ne, int np) {
+elemCoords::elemCoords(int ne, int np, int s) {
   num_elems = ne;
   verts_per_elem = np;
-  x = new fp_t[ne*np];
-  y = new fp_t[ne*np];
-  z = new fp_t[ne*np];
+  size = s;
+  x = new fp_t[s*np];
+  y = new fp_t[s*np];
+  z = new fp_t[s*np];
 };
 
 elemCoords::~elemCoords() {

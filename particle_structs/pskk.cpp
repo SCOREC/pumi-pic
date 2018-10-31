@@ -160,9 +160,9 @@ int main(int argc, char* argv[]) {
   elemCoords elems(ne, 4, scs->C*scs->num_chunks);
   //Write something into the coordinate arrays. Does not matter.
   for( int i=0; i<elems.size; i++ ) {
-    elems.x[i] = i*0.1;
-    elems.y[i] = i*0.1;
-    elems.z[i] = i*0.1;
+    elems.x[i] = i;
+    elems.y[i] = i;
+    elems.z[i] = i;
   }
 
   //Push the particles

@@ -230,6 +230,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
           fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
           fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
           parallel_for(ThreadVectorRange(thread, slicesz_d(0)), [&] (int& p) {
+            if( x[0] != ex_d(e) || y[0] != ey_d(e) || z[0] != ez_d(e) ) {
+              printf("xyz fail! %d,%d,%d\n", slice,slice_row,p);
+            }
             int pid = start+(p*chunksz_d(0));
             fp_t c = x[0] + y[0] + z[0] +
                      x[1] + y[1] + z[1] +

@@ -222,13 +222,16 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
           int e = row_to_element_d(row);
-          fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
-                   ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
-                   ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
-                   ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
-          c /= 4;
+          fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
+          fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
+          fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
           for(int p = 0; p < rowLen; p++) {
             int pid = start+(p*chunksz_d(0));
+            fp_t c = x[0] + y[0] + z[0] +
+                     x[1] + y[1] + z[1] +
+                     x[2] + y[2] + z[2] +
+                     x[3] + y[3] + z[3];
+            c /= 4;
             new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);
             new_ys_d(pid) = ys_d(pid) + c * disp_d(0) * disp_d(2);
             new_zs_d(pid) = zs_d(pid) + c * disp_d(0) * disp_d(3);

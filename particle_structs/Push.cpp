@@ -164,6 +164,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
   kkLidView chunksz_d("chunksz_d", 1);
   hostToDeviceLid(chunksz_d, &scs->C);
 
+  kkLidView slicesz_d("slicesz_d", 1);
+  hostToDeviceLid(slicesz_d, &scs->V);
+
   kkLidView num_elems_d("num_elems_d", 1);
   hostToDeviceLid(num_elems_d, &elems.num_elems);
 
@@ -202,6 +205,7 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
 
   using Kokkos::TeamPolicy;
   using Kokkos::TeamThreadRange;
+  using Kokkos::ThreadVectorRange;
   using Kokkos::parallel_for;
   typedef Kokkos::TeamPolicy<> team_policy;
   typedef typename team_policy::member_type team_member;
@@ -225,7 +229,7 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
           fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
           fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
           fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
-          for(int p = 0; p < rowLen; p++) {
+          parallel_for(ThreadVectorRange(thread, slicesz_d(0)), [&] (int& p) {
             int pid = start+(p*chunksz_d(0));
             fp_t c = x[0] + y[0] + z[0] +
                      x[1] + y[1] + z[1] +
@@ -235,7 +239,7 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
             new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);
             new_ys_d(pid) = ys_d(pid) + c * disp_d(0) * disp_d(2);
             new_zs_d(pid) = zs_d(pid) + c * disp_d(0) * disp_d(3);
-          }
+          });
         });
     });
     totTime += timer.seconds();

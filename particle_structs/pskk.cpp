@@ -9,8 +9,16 @@
 #include <math.h>
 #include <time.h>
 #include <cassert>
+#include <chrono>
+#include <thread>
 
 #include <Kokkos_Core.hpp>
+
+void printTimerResolution() {
+  Kokkos::Timer timer;
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
+}
 
 void matchFailed(int i) {
   fprintf(stderr, "position match failed on particle %d\n", i);
@@ -79,6 +87,7 @@ int main(int argc, char* argv[]) {
   printf("Kokkos host execution space %s name %s\n",
       typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
       typeid (Kokkos::DefaultHostExecutionSpace).name());
+  printTimerResolution();
   srand(time(NULL));
   if (argc != 8) {
     printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)> "

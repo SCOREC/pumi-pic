@@ -35,17 +35,15 @@ There is no association of particles to elements.  During initialization we will
 ## Gather results
 
 ```
-  for key in 'min' 'avg' 'max'; do
-    grep "kokkos array push $key (seconds)" d*.log | awk '{print $1 "," $6}' > arrayPush.csv
-    grep "kokkos scs push $key (seconds)" d*.log | awk '{print $1 "," $6}' > scsPush.csv
+    grep "kokkos array push (seconds)" d*.log | awk '{print $1 "," $5}' > arrayPush.csv
+    grep "kokkos scs push (seconds)" d*.log | awk '{print $1 "," $5}' > scsPush.csv
     paste arrayPush.csv scsPush.csv > push.csv
     sed -i s/.log:kokkos//g push.csv
     sed -i s/_sorted//g push.csv
     sed -i s/_/,/g push.csv
     sed -i s/[depCV]//g push.csv
     tr '\t' "," < push.csv > push2.csv
-    echo 'd,e,p,C,V,array,d,e,p,scs' > headers.csv
-    cat headers.csv push2.csv > push${key}.csv
+    echo 'd,e,p,C,V,array,d,e,p,C,V,scs' > headers.csv
+    cat headers.csv push2.csv > push.csv
     rm push2.csv
-  done
 ```

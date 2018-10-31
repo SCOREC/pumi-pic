@@ -224,13 +224,13 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
         const int rowLen = (offsets_d(slice+1)-offsets_d(slice))/chunksz_d(0);
         const int start = offsets_d(slice) + slice_row;
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
-          int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
-          int e = row_to_element_d(row);
-          fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
-          fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
-          fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
+          const int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
+          const int e = row_to_element_d(row);
+          const fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
+          const fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
+          const fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
           parallel_for(ThreadVectorRange(thread, rowLen), [&] (int& p) {
-            int pid = start+(p*chunksz_d(0));
+            const int pid = start+(p*chunksz_d(0));
             fp_t c = 0;
             for(int ei = 0; ei<4; ei++) 
               c += x[ei] + y[ei] + z[ei];

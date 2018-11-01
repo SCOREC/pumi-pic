@@ -100,15 +100,18 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
   for( int iter=0; iter < NUM_ITERATIONS; iter++) {
     timer.reset();
     Kokkos::parallel_for (np, KOKKOS_LAMBDA (const int i) {
+        const fp_t dir[3] = {disp_d(0)*disp_d(1),
+                             disp_d(0)*disp_d(2),
+                             disp_d(0)*disp_d(3)};
         int e = ptcl_to_elem_d(i);
         fp_t c = ex_d(e)   + ey_d(e)   + ez_d(e)   +
                    ex_d(e+1) + ey_d(e+1) + ez_d(e+1) +
                    ex_d(e+2) + ey_d(e+2) + ez_d(e+2) +
                    ex_d(e+3) + ey_d(e+3) + ez_d(e+3);
         c /= 4;
-        new_xs_d(i) = xs_d(i) + c * disp_d(0) * disp_d(1);
-        new_ys_d(i) = ys_d(i) + c * disp_d(0) * disp_d(2);
-        new_zs_d(i) = zs_d(i) + c * disp_d(0) * disp_d(3);
+        new_xs_d(i) = xs_d(i) + c * dir[0];
+        new_ys_d(i) = ys_d(i) + c * dir[1];
+        new_zs_d(i) = zs_d(i) + c * dir[2];
     });
     totTime += timer.seconds();
   }
@@ -223,6 +226,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
         const int slice_row = thread.team_rank();
         const int rowLen = (offsets_d(slice+1)-offsets_d(slice))/chunksz_d(0);
         const int start = offsets_d(slice) + slice_row;
+        const fp_t dir[3] = {disp_d(0)*disp_d(1),
+                             disp_d(0)*disp_d(2),
+                             disp_d(0)*disp_d(3)};
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           const int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
           const int e = row_to_element_d(row);
@@ -235,9 +241,9 @@ void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
             for(int ei = 0; ei<4; ei++) 
               c += x[ei] + y[ei] + z[ei];
             c /= 4;
-            new_xs_d(pid) = xs_d(pid) + c * disp_d(0) * disp_d(1);
-            new_ys_d(pid) = ys_d(pid) + c * disp_d(0) * disp_d(2);
-            new_zs_d(pid) = zs_d(pid) + c * disp_d(0) * disp_d(3);
+            new_xs_d(pid) = xs_d(pid) + c * dir[0];
+            new_ys_d(pid) = ys_d(pid) + c * dir[1];
+            new_zs_d(pid) = zs_d(pid) + c * dir[2];
           });
         });
     });

@@ -31,26 +31,26 @@
 
 namespace GITRm{
 
-  Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b, 
-           Omega_h::Vector<3> c, Omega_h::Vector<3> d, Omega_h::Vector<3> p )
-  {
-      Omega_h::Vector<3> bp = b - p;
-      Omega_h::Vector<3> bd = b - d;
-      Omega_h::Vector<3> bc = b - c;
-      Omega_h::Vector<3> ap = a - p;
-      Omega_h::Vector<3> ac = a - c;
-      Omega_h::Vector<3> ad = a - d;
-      Omega_h::Vector<3> ab = a - b;
-     /* Omega_h::Real u = Omega_h::dot(bp, Omega_h::cross(bd, bc));
-      Omega_h::Real v = Omega_h::dot(ap, Omega_h::cross(ac, ad));
-      Omega_h::Real w = Omega_h::dot(ap, Omega_h::cross(ad, ab));
-      Omega_h::Real inv_vol = 1.0/Omega_h::dot(ad, Omega_h::cross(ac, ab));   
-      u = inv_vol * u;
-      v = inv_vol * v;
-      w = inv_vol * w;         
-      Omega_h::Real x = 1.0 - u - v - w;
-      return Omega_h::Reals(u, v, w, x);
-   
+Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b, 
+     Omega_h::Vector<3> c, Omega_h::Vector<3> d, Omega_h::Vector<3> p )
+{
+  Omega_h::Vector<3> bp = b - p;
+  Omega_h::Vector<3> bd = b - d;
+  Omega_h::Vector<3> bc = b - c;
+  Omega_h::Vector<3> ap = a - p;
+  Omega_h::Vector<3> ac = a - c;
+  Omega_h::Vector<3> ad = a - d;
+  Omega_h::Vector<3> ab = a - b;
+  /* Omega_h::Real u = Omega_h::dot(bp, Omega_h::cross(bd, bc));
+  Omega_h::Real v = Omega_h::dot(ap, Omega_h::cross(ac, ad));
+  Omega_h::Real w = Omega_h::dot(ap, Omega_h::cross(ad, ab));
+  Omega_h::Real inv_vol = 1.0/Omega_h::dot(ad, Omega_h::cross(ac, ab));   
+  u = inv_vol * u;
+  v = inv_vol * v;
+  w = inv_vol * w;         
+  Omega_h::Real x = 1.0 - u - v - w;
+  return Omega_h::Reals(u, v, w, x);
+
       
     \State  $u \gets \|B-P, B-D, B-C\|$ \label{alg:bcctet:tripleStart}
     \State  $v \gets \|A-P, A-C, A-D\|$
@@ -60,7 +60,7 @@ namespace GITRm{
     \State  $x \gets 1.0 - u - v - w$
     \State \Return $1/V*[u,v,w,x]$
   */
-  }
+}
 } //namespace
 
 void test_unit(Omega_h::Library *lib);

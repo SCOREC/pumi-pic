@@ -1,7 +1,4 @@
 
-project(gitrm VERSION 0.0.1 LANGUAGES C CXX)
-
-
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Debug)
 endif(NOT CMAKE_BUILD_TYPE)

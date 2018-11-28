@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 
 project(gitrm LANGUAGES CXX)
-add_subdirectory(GITRm)
+add_subdirectory(src)
 
 #RPATH
 SET(CMAKE_SKIP_BUILD_RPATH  FALSE)

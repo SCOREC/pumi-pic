@@ -14,6 +14,8 @@
 #include "Omega_h_shape.hpp"
 #include "Omega_h_build.hpp"
 
+#include <any>
+#include <utility>
 
 #include "Omega_h_align.hpp"
 #include "Omega_h_array_ops.hpp"
@@ -31,8 +33,14 @@
 
 namespace GITRm{
 
-Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b, 
-     Omega_h::Vector<3> c, Omega_h::Vector<3> d, Omega_h::Vector<3> p )
+
+OMEGA_H_INLINE Omega_h::Real dot(Omega_h::Vector<3> a, Omega_h::Vector<3> b) OMEGA_H_NOEXCEPT 
+{
+  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
+}
+
+OMEGA_H_INLINE Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b, 
+     Omega_h::Vector<3> c, Omega_h::Vector<3> d, Omega_h::Vector<3> p ) OMEGA_H_NOEXCEPT 
 {
   Omega_h::Vector<3> bp = b - p;
   Omega_h::Vector<3> bd = b - d;
@@ -41,17 +49,19 @@ Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b,
   Omega_h::Vector<3> ac = a - c;
   Omega_h::Vector<3> ad = a - d;
   Omega_h::Vector<3> ab = a - b;
-  /* Omega_h::Real u = Omega_h::dot(bp, Omega_h::cross(bd, bc));
-  Omega_h::Real v = Omega_h::dot(ap, Omega_h::cross(ac, ad));
-  Omega_h::Real w = Omega_h::dot(ap, Omega_h::cross(ad, ab));
-  Omega_h::Real inv_vol = 1.0/Omega_h::dot(ad, Omega_h::cross(ac, ab));   
+  Omega_h::Real u = dot(bp, Omega_h::cross(bd, bc));
+  Omega_h::Real v = dot(ap, Omega_h::cross(ac, ad));
+  Omega_h::Real w = dot(ap, Omega_h::cross(ad, ab));
+  Omega_h::Real inv_vol = 1.0/dot(ad, Omega_h::cross(ac, ab));   
   u = inv_vol * u;
   v = inv_vol * v;
   w = inv_vol * w;         
   Omega_h::Real x = 1.0 - u - v - w;
-  return Omega_h::Reals(u, v, w, x);
+  Omega_h::Reals res(4, static_cast<Omega_h::Real>(u,v,w,x)); //wrong, only last 'x' is used
 
-      
+  return res;
+
+ /*     
     \State  $u \gets \|B-P, B-D, B-C\|$ \label{alg:bcctet:tripleStart}
     \State  $v \gets \|A-P, A-C, A-D\|$
     \State  $w \gets \|A-P, A-D, A-B\|$
@@ -134,8 +144,7 @@ int main(int argc, char** argv) {
      }
   */          
  
- 
- 
+
 
   return 0;
 }

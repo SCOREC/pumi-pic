@@ -9,7 +9,6 @@ cmake \
 -DOmega_h_ENABLE_Kokkos=ON \
 -DKokkos_PREFIX=$KOKKOS \
 -DCMAKE_BUILD_TYPE=Debug \
-..
+`dirname "$(readlink -f "$0")"`
 
-#-DCMAKE_C_FLAGS="-Wall" \
-#-DCMAKE_CXX_FLAGS="-Wall" \
+#-DCMAKE_CXX_FLAGS="-std=c++11 -Wall -Wextra" \

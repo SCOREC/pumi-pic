@@ -33,61 +33,57 @@
 
 namespace GITRm{
 
-
-OMEGA_H_INLINE Omega_h::Real dot(Omega_h::Vector<3> a, Omega_h::Vector<3> b) OMEGA_H_NOEXCEPT 
+//OMEGA_H_INLINE needed ?
+OMEGA_H_INLINE Omega_h::Real dot(const Omega_h::Vector<3> &a, 
+         const Omega_h::Vector<3> &b) OMEGA_H_NOEXCEPT 
 {
+  //std::cout << "DOT_a,b:"  << a[0] << " " << a[1] << " " << a[2] << " ; " 
+  //          << b[0] << " " << b[1] << " " << b[2] <<  "\n";
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
 
-OMEGA_H_INLINE Omega_h::Reals get_barycentric(Omega_h::Vector<3> a, Omega_h::Vector<3> b, 
-     Omega_h::Vector<3> c, Omega_h::Vector<3> d, Omega_h::Vector<3> p ) OMEGA_H_NOEXCEPT 
+
+OMEGA_H_INLINE bool find_barycentric(const Omega_h::Vector<3> &a, 
+     const Omega_h::Vector<3> &b, const Omega_h::Vector<3> &c, 
+     const Omega_h::Vector<3> &d,  const Omega_h::Vector<3> &p, 
+     Omega_h::Write<Omega_h::Real> &bcoords ) OMEGA_H_NOEXCEPT 
 {
-  Omega_h::Vector<3> bp = b - p;
-  Omega_h::Vector<3> bd = b - d;
-  Omega_h::Vector<3> bc = b - c;
-  Omega_h::Vector<3> ap = a - p;
-  Omega_h::Vector<3> ac = a - c;
-  Omega_h::Vector<3> ad = a - d;
-  Omega_h::Vector<3> ab = a - b;
-  Omega_h::Real u = dot(bp, Omega_h::cross(bd, bc));
-  Omega_h::Real v = dot(ap, Omega_h::cross(ac, ad));
-  Omega_h::Real w = dot(ap, Omega_h::cross(ad, ab));
-  Omega_h::Real inv_vol = 1.0/dot(ad, Omega_h::cross(ac, ab));   
-  u = inv_vol * u;
-  v = inv_vol * v;
-  w = inv_vol * w;         
-  Omega_h::Real x = 1.0 - u - v - w;
-  Omega_h::Reals res(4, static_cast<Omega_h::Real>(u,v,w,x)); //wrong, only last 'x' is used
+  //Omega_h::Write<Omega_h::Real> bc(4, 0);
+  Omega_h::Real u = dot(b-p, Omega_h::cross(b-d, b-c));
+  Omega_h::Real v = dot(a-p, Omega_h::cross(a-c, a-d));
+  Omega_h::Real w = dot(a-p, Omega_h::cross(a-d, a-b));
+  Omega_h::Real vol = dot(a-d, Omega_h::cross(a-c, a-b)); 
+  Omega_h::Real inv_vol = 0.0;
+  if(std::abs(vol) > 0)
+    inv_vol = 1.0/vol;    
+  else
+    return 0;
+  bcoords[0] = inv_vol * u;
+  bcoords[1] = inv_vol * v;
+  bcoords[2] = inv_vol * w;         
+  bcoords[3] = 1.0 - bcoords[0] - bcoords[1] - bcoords[2];
+  //std::cout << "BC_u,v,w,inv:" << u << " " << v << " " << w <<" "<< inv_vol << "\n";
 
-  return res;
-
- /*     
-    \State  $u \gets \|B-P, B-D, B-C\|$ \label{alg:bcctet:tripleStart}
-    \State  $v \gets \|A-P, A-C, A-D\|$
-    \State  $w \gets \|A-P, A-D, A-B\|$
-    \State  $V \gets \|A-D, A-C, A-B\|$
-      \label{alg:bcctet:tripleEnd}
-    \State  $x \gets 1.0 - u - v - w$
-    \State \Return $1/V*[u,v,w,x]$
-  */
+  return 1; // ?
 }
+
+
+
 } //namespace
 
 void test_unit(Omega_h::Library *lib);
-void print_mesh_stat(Omega_h::Mesh mesh);
+void print_mesh_stat(Omega_h::Mesh &mesh);
 
-
+namespace g = GITRm;
 int main(int argc, char** argv) {
+
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
-  test_unit(&lib);
+  //test_unit(&lib); 
   
-
   auto mesh = Omega_h::gmsh::read(argv[1], world); 
-  const auto mesh2verts = mesh.ask_elem_verts(); //same_as ask_verts_of(REGION), not coords
-  const auto coords = mesh.coords();
   const auto dim = mesh.dim();
-  print_mesh_stat(mesh);
+  //print_mesh_stat(mesh);
 
 
   //adjacent element
@@ -102,72 +98,79 @@ int main(int argc, char** argv) {
   
   //Omega_h::Write<Omega_h::LO> elem_elem2elem(nelems*nsides_per_elem);
 
-  //  auto fill = OMEGA_H_LAMBDA(LO elem) { //to be used
-  Omega_h::LO ielem = 201; //some element 
-  
-  auto dface_ind = dual_elems[ielem];
-  
-  auto begin = ielem * nsides_per_elem;
-  auto end = begin + nsides_per_elem;
-  std::cout << "Downs:adj for elID " << ielem << "\n";
-
-  for(auto iface = begin; iface < end; ++iface) //faceIDs in order ?
+  const auto test = OMEGA_H_LAMBDA(Omega_h::LO ielem)
   {
-    std::cout << downs[iface] << " ";
-    Omega_h::LO faceID = downs[iface];
-    if(!side_is_exposed[faceID]) 
-    {
-       auto adj_elem  = dual_faces[dface_ind];
-       std::cout << adj_elem << "\n";
-       ++dface_ind;
-    }
-  }
-  //} lambda
-  
+    //Omega_h::LO ielem = 201; //some element 
     
+    auto dface_ind = dual_elems[ielem];
+    
+    auto begin = ielem * nsides_per_elem;
+    auto end = begin + nsides_per_elem;
+    std::cout << "Downs:adj for elID " << ielem << "\n";
+
+    for(auto iface = begin; iface < end; ++iface) //faceIDs in order ?
+    {
+      std::cout << downs[iface] << " ";
+      Omega_h::LO faceID = downs[iface];
+      if(!side_is_exposed[faceID]) 
+      {
+         auto adj_elem  = dual_faces[dface_ind];
+         std::cout << adj_elem << "\n";
+         ++dface_ind;
+      }
+    }
+  };
+  Omega_h::parallel_for(2, test, "adj");
+  
   //get coordinate values
+  const auto mesh2verts = mesh.ask_elem_verts(); 
+  const auto coords = mesh.coords();  
+  
+  //barycentric    
+  auto bc_fun = OMEGA_H_LAMBDA(Omega_h::LO ielem) 
+  {
+    auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
+    auto ttv2x = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
+    const auto M = Omega_h::simplex_basis<3, 3>(ttv2x);  // ??
+    
+    Omega_h::Write<Omega_h::Real> bc(4, -1.0);
+    const Omega_h::Vector<3> p{1,2,3};
 
-  //Omega_h_confined.cpp 99
-  auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, 3);
-  auto ttv2x = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
-/*     for (Omega_h::Int tte = 0; tte < 3; ++tte) 
-     {
-        //if (tte2b[tte]) continue;
-        auto opp = Omega_h::simplex_opposite_template(Omega_h::REGION, Omega_h::EDGE, tte);
-        //if (tte2b[opp]) continue;
-        // at this point we have edge-edge nearness
-        auto a = ttv2x[Omega_h::simplex_down_template(Omega_h::REGION, Omega_h::EDGE, tte, 0)];
-        auto b = ttv2x[Omega_h::simplex_down_template(Omega_h::REGION, Omega_h::EDGE, tte, 1)];
-        auto c = ttv2x[Omega_h::simplex_down_template(Omega_h::REGION, Omega_h::EDGE, opp, 0)];
-        auto d = ttv2x[Omega_h::simplex_down_template(Omega_h::REGION, Omega_h::EDGE, opp, 1)];
-        std::cout << " : " << a-b << "\n";
-     }
-  */          
+     auto a = M[0]; 
+     auto b = M[1];
+     auto c = M[2];
+     //auto d = M[3]; //crash ????
+     const Omega_h::Vector<3> d{0.2,0.5,1};  
+    //bool res = g::find_barycentric(M[0], M[1], M[2], M[3], p, bc);
  
+     bool res = g::find_barycentric(a,b,c,d,p,bc);
+     std::cout << "TESTBC "  << res << " " << bc[0] << " " << bc[1] << " "<< bc[2] << " " << bc[3] << "\n";  
+  };
+  Omega_h::parallel_for(10, bc_fun, "bc");
 
 
+
+
+    
   return 0;
 }
 
 
-
-
-
-void print_mesh_stat(Omega_h::Mesh mesh)
+void print_mesh_stat(Omega_h::Mesh &m)
 {
-  //std::cout <<"Mesh #coords " << mesh.coords().size()  << "\n"; //3*nverts
-  std::cout << "Mesh #elements " << mesh.nelems() 
-            << " #faces " << mesh.nfaces() 
-            << " #edges " << mesh.nedges() 
-            << " #verts " << mesh.nverts() 
+  //std::cout <<"Mesh #coords " << m.coords().size()  << "\n"; //3*nverts
+  std::cout << "Mesh #elements " << m.nelems() 
+            << " #faces " << m.nfaces() 
+            << " #edges " << m.nedges() 
+            << " #verts " << m.nverts() 
             << "\n";
-  std::cout << "\t#elem_verts: " << mesh.ask_elem_verts().size() << "\n";
+  std::cout << "\t#elem_verts: " << m.ask_elem_verts().size() << "\n";
   
-  std::cout << "\tdown(3,2): #ab2b " << mesh.ask_down(3, 2).ab2b.size() << "\n";
-  std::cout << "\tup(2,3): #a2ab " << mesh.ask_up(2,3).a2ab.size() //NOTE: size is +1 ???
-            << " ; #ab2b " << mesh.ask_up(2,3).ab2b.size() << "\n";
+  std::cout << "\tdown(3,2): #ab2b " << m.ask_down(3, 2).ab2b.size() << "\n";
+  std::cout << "\tup(2,3): #a2ab " << m.ask_up(2,3).a2ab.size() //NOTE: size is +1 ???
+            << " ; #ab2b " << m.ask_up(2,3).ab2b.size() << "\n";
 
-  const auto dual = mesh.ask_dual();
+  const auto dual = m.ask_dual();
   std::cout << "\tdual: #a2ab " << dual.a2ab.size() //last is size=end_index+1 ?
             << " ; #ab2b " << dual.ab2b.size() ;
   std::cout << " ; dual.a2ab[0,1]:" << dual.a2ab[0] << "," << dual.a2ab[1] << "\n";
@@ -196,7 +199,7 @@ void print_mesh_stat(Omega_h::Mesh mesh)
   std::cout <<  "\n";
   
   //exposed
-  auto side_is_exposed = mark_exposed_sides(&mesh);
+  auto side_is_exposed = mark_exposed_sides(&m);
   std::cout << "size exposed faces: "<< side_is_exposed.size() <<"\n";
   std::cout <<  "Exposed:\n";
   for(int i=0; i<side_is_exposed.size() && i<10; ++i)
@@ -219,8 +222,7 @@ void print_mesh_stat(Omega_h::Mesh mesh)
          std::cout << 0 << " : ";   
      }
   }
-  std::cout <<  "\n";
-    
+  std::cout << "\n";
 }
 
 void test_unit(Omega_h::Library *lib)
@@ -251,7 +253,7 @@ void test_unit(Omega_h::Library *lib)
       std::cout << " " << down20.ab2b[i];
     }
     //const auto coords = m.coords(); //no tag_base for coords
-   
+
     std::cout <<  "\n----------------\n";
 }
 

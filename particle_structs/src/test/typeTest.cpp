@@ -1,9 +1,10 @@
-#include <cassert>
+
 #include <stdio.h>
 
-#include "MemberTypes.h"
-#include "SellCSigma.h"
-#include "../Distribute.h"
+#include <MemberTypes.h>
+#include <SellCSigma.h>
+#include <Distribute.h>
+#include <psAssert.h>
 int main() {
 
   typedef MemberTypes<int> Type1;
@@ -11,14 +12,14 @@ int main() {
   typedef MemberTypes<int[3],double[2],char> Type3;
   
   printf("Type1: %lu\n",Type1::memsize);
-  assert(Type1::memsize == sizeof(int));
+  ALWAYS_ASSERT(Type1::memsize == sizeof(int));
   printf("Type2: %lu\n",Type2::memsize);
-  assert(Type2::memsize == sizeof(int) + sizeof(double));
+  ALWAYS_ASSERT(Type2::memsize == sizeof(int) + sizeof(double));
   printf("Type3: %lu\n",Type3::memsize);
-  assert(Type3::memsize == 3*sizeof(int) + 2*sizeof(double) + sizeof(char));
+  ALWAYS_ASSERT(Type3::memsize == 3*sizeof(int) + 2*sizeof(double) + sizeof(char));
 
   printf("Type3 start of doubles: %lu\n",Type3::sizeToIndex<1>());
-  assert(Type3::sizeToIndex<1>() == 3*sizeof(int));
+  ALWAYS_ASSERT(Type3::sizeToIndex<1>() == 3*sizeof(int));
 
 
   int ne = 5;

@@ -4,7 +4,7 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
-#include "../psAssert.h"
+#include "psAssert.h"
 #include "MemberTypes.h"
 
 template<class DataTypes, int C /*=Impl::PerformanceTraits<
@@ -18,7 +18,6 @@ class SellCSigma {
 
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
-  
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -43,7 +42,6 @@ class SellCSigma {
   //offsets into the scs structure
   int* offsets;
 
-
   //map from row to element
   // row = slice_to_chunk[slice] + row_in_chunk
   int* row_to_element;
@@ -59,7 +57,6 @@ class SellCSigma {
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}
   SellCSigma& operator=(const SellCSigma&) {throw 1;}
-  
 };
 
 //Implementation to construct SCS arrays of different types
@@ -78,7 +75,6 @@ struct CreateSCSArraysImpl<T,Types...> {
     CreateSCSArraysImpl<Types...>(scs_data+1,size);
   }
 };
-
 
 //Call to construct SCS arrays of different types
 template <typename... Types>

@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <vector>
-#include "SellCSigma.h"
-#include "Distribute.h"
-#include "Push.h"
-#include "psTypes.h"
-#include "psParams.h"
+#include <MemberTypes.h>
+#include <SellCSigma.h>
+#include <Distribute.h>
+//#include <Push.h>
+#include <psTypes.h>
+#include <psParams.h>
 #include <math.h>
 #include <time.h>
 #include <cassert>
@@ -13,6 +14,8 @@
 #include <thread>
 
 #include <Kokkos_Core.hpp>
+
+#define VectorLength 16
 
 void printTimerResolution() {
   Kokkos::Timer timer;
@@ -29,17 +32,19 @@ const double EPSILON = 0.0001;
 
 void positionsMatch(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
-    SellCSigma* scs) {
+                    SellCSigma<Particle,VectorLength>* scs) {
+
+  fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
   //Confirm all particles were pushed
   for (int i = 0; i < np; ++i) {
     const int scsIdx = scs->arr_to_scs[i];
-    if(abs(x1[i] - scs->scs_new_xs[scsIdx]) > EPSILON) {
+    if(abs(x1[i] - pushed_position_vector[scsIdx][0]) > EPSILON) {
       fprintf(stderr, "(%.2f) x[%d] != scs_x[%d] (%.2f)\n",
-          x1[i], i, scsIdx, scs->scs_new_xs[scsIdx]);
+          x1[i], i, scsIdx, pushed_position_vector[scsIdx][0]);
       matchFailed(i);
     }
-    if(abs(y1[i] - scs->scs_new_ys[scsIdx]) > EPSILON) matchFailed(i);
-    if(abs(z1[i] - scs->scs_new_zs[scsIdx]) > EPSILON) matchFailed(i);
+    if(abs(y1[i] - pushed_position_vector[scsIdx][1]) > EPSILON) matchFailed(i);
+    if(abs(z1[i] - pushed_position_vector[scsIdx][2]) > EPSILON) matchFailed(i);
   }
 }
 
@@ -56,12 +61,14 @@ void positionsMatch(int np,
 
 void checkThenClear(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
-    SellCSigma* scs) {
+                    SellCSigma<Particle,VectorLength>* scs) {
   positionsMatch(np, x1, y1, z1, scs);
+  fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
+  //GD: Does this touch every particle? Or just the first np entries in the scs?
   for(int i=0; i<np; i++) {
-    scs->scs_new_xs[i] = 0;
-    scs->scs_new_ys[i] = 0;
-    scs->scs_new_zs[i] = 0;
+    pushed_position_vector[i][0] = 0;
+    pushed_position_vector[i][1] = 0;
+    pushed_position_vector[i][2] = 0;
   }
 }
 
@@ -89,9 +96,9 @@ int main(int argc, char* argv[]) {
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
   srand(time(NULL));
-  if (argc != 8) {
+  if (argc != 7) {
     printf("Usage: %s <number of elements> <number of particles> <distribution strategy (0-3)> "
-           "<C> <sigma> <V> <debug=0|1>\n", argv[0]);
+           "<sigma> <V> <debug=0|1>\n", argv[0]);
     return 1;
   }
   int ne = atoi(argv[1]);
@@ -141,13 +148,27 @@ int main(int argc, char* argv[]) {
   }
 
   //Create the SellCSigma for particles
-  int C = atoi(argv[4]);
-  int sigma = atoi(argv[5]);
-  int V = atoi(argv[6]);
-  bool debug = atoi(argv[7]);
-  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", C, V, sigma);
-  SellCSigma* scs = new SellCSigma(C, sigma, V, ne, np, ptcls_per_elem,
-				   ids, xs, ys, zs, debug);
+  int sigma = atoi(argv[4]);
+  int V = atoi(argv[5]);
+  bool debug = atoi(argv[6]);
+  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", VectorLength, V, sigma);
+  SellCSigma<Particle,VectorLength>* scs = new SellCSigma<Particle,VectorLength>(sigma, V, ne, np,
+                                                                                 ptcls_per_elem,
+                                                                                 ids, debug);
+
+  //Set initial positions and 0 out future position
+  fp_t (*initial_position_scs)[3] = scs->getSCS<0>();
+  fp_t (*pushed_position_scs)[3] = scs->getSCS<1>();
+
+  for (int i = 0; i < np; ++i) {
+    int scs_index = scs->arr_to_scs[i];
+    initial_position_scs[scs_index][0] = xs[i];
+    initial_position_scs[scs_index][1] = ys[i];
+    initial_position_scs[scs_index][2] = zs[i];
+    pushed_position_scs[scs_index][0] = 0;
+    pushed_position_scs[scs_index][1] = 0;
+    pushed_position_scs[scs_index][2] = 0;
+  }
 
   //The point of this test is to have the particle push kernels access
   // mesh information.  We will assume (1) that relevent fields are
@@ -178,10 +199,10 @@ int main(int argc, char* argv[]) {
   fp_t* new_xs1 = new fp_t[np];
   fp_t* new_ys1 = new fp_t[np];
   fp_t* new_zs1 = new fp_t[np];
-  push_array(np, xs, ys, zs, ptcl_to_elem, elems,
-      distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
+  //push_array(np, xs, ys, zs, ptcl_to_elem, elems,
+  //    distance, dx, dy, dz, new_xs1, new_ys1, new_zs1);
 
-  push_scs(scs, ptcl_to_elem, elems, distance, dx, dy, dz);
+  //push_scs(scs, ptcl_to_elem, elems, distance, dx, dy, dz);
 
   fprintf(stderr, "done serial\n");
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
@@ -191,8 +212,8 @@ int main(int argc, char* argv[]) {
   fp_t* new_ys2 = new fp_t[np];
   fp_t* new_zs2 = new fp_t[np];
   Kokkos::Timer timer;
-  push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
-      distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  //push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
+  //    distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np,
@@ -201,7 +222,7 @@ int main(int argc, char* argv[]) {
 
   fprintf(stderr, "\n");
   timer.reset();
-  push_scs_kk(scs, np, elems, distance, dx, dy, dz);
+  //push_scs_kk(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);

@@ -79,5 +79,5 @@ endif()
 add_executable(typeTest test/typeTest.cpp)
 target_link_libraries(typeTest particleStructs)
 
-#add_executable(pskk pskk.cpp)
-#target_link_libraries(pskk particleStructs)
+add_executable(pskk test/pskk.cpp)
+target_link_libraries(pskk particleStructs)

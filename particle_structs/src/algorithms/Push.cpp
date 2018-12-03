@@ -126,7 +126,8 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
 }
 #endif //kokkos enabled
 
-void push_scs(SellCSigma* scs,
+template <Particle>
+void push_scs(SellCSigma<Particle>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
 
@@ -152,7 +153,8 @@ void push_scs(SellCSigma* scs,
 }
 
 #ifdef KOKKOS_ENABLED
-void push_scs_kk(SellCSigma* scs, int np, elemCoords& elems,
+template <Particle>
+void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
   kkLidView offsets_d("offsets_d", scs->num_slices+1);

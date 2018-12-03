@@ -6,9 +6,9 @@
 #include <algorithm>
 #include "psAssert.h"
 #include "MemberTypes.h"
+#include <Kokkos_Core.hpp>
 
-template<class DataTypes, int C /*=Impl::PerformanceTraits<
-                                  typename MemorySpace::kokkos_execution_space>::vector_length*/>
+template<class DataTypes, int VectorLength/* = Kokkos::Impl::CudaTraits::WarpSize*/>
 class SellCSigma {
  public:
   SellCSigma(int sigma, int vertical_chunk_size, int num_elements, int num_particles,
@@ -22,6 +22,7 @@ class SellCSigma {
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
 
+  int C;
   //Vertical slice size
   int V;
   //Sorting chunk size
@@ -117,10 +118,11 @@ struct DestroySCSArrays<MemberTypes<Types...> > {
 };
 
 
-template<class DataTypes, int C>
-SellCSigma<DataTypes,C>::SellCSigma(int sig, int v, int ne, int np,
+template<class DataTypes, int VectorLength>
+SellCSigma<DataTypes,VectorLength>::SellCSigma(int sig, int v, int ne, int np,
                                     int* ptcls_per_elem, std::vector<int>* ids,
                                     bool debug) {
+  C = VectorLength;
   sigma = sig;
   V = v;
   num_elems = ne;
@@ -246,8 +248,8 @@ SellCSigma<DataTypes,C>::SellCSigma(int sig, int v, int ne, int np,
   delete [] ptcls;
 }
 
-template<class DataTypes, int C>
-SellCSigma<DataTypes,C>::~SellCSigma() {
+template<class DataTypes, int VectorLength>
+SellCSigma<DataTypes,VectorLength>::~SellCSigma() {
 
   DestroySCSArrays<DataTypes>((scs_data), 0);
   
@@ -259,9 +261,9 @@ SellCSigma<DataTypes,C>::~SellCSigma() {
 }
 
 
-template<class DataTypes, int C>
+template<class DataTypes, int VectorLength>
 template <std::size_t N>
-typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,C>::getSCS() {
+typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,VectorLength>::getSCS() {
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
 }
 

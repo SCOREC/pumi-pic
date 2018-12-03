@@ -7,7 +7,7 @@ elemCoords::elemCoords(int ne, int np, int s) {
   x = new fp_t[s*np];
   y = new fp_t[s*np];
   z = new fp_t[s*np];
-};
+}
 
 elemCoords::~elemCoords() {
   delete [] x;

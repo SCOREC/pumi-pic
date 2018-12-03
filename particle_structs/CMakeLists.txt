@@ -57,12 +57,14 @@ if (ENABLE_KOKKOS)
   message(STATUS "Kokkos CMAKE_FORTRAN_FLAGS ${KokkosCore_FORTRAN_FLAGS}")
 endif()
 
+include_directories(support)
+include_directories(algorithms)
+
 set(PS_SOURCES 
-  Distribute.cpp
-  Push.cpp
-  SellCSigma.cpp
-  psTypes.cpp
-  psAssert.cpp
+  algorithms/Distribute.cpp
+#  algorithms/Push.cpp
+  algorithms/psTypes.cpp
+  support/psAssert.cpp
 )
 
 add_library(particleStructs ${PS_SOURCES})
@@ -74,5 +76,8 @@ if (ENABLE_KOKKOS)
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
 endif()
 
-add_executable(pskk pskk.cpp)
+add_executable(typeTest test/typeTest.cpp)
+target_link_libraries(typeTest particleStructs)
+
+add_executable(pskk test/pskk.cpp)
 target_link_libraries(pskk particleStructs)

@@ -126,11 +126,11 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
 }
 #endif //kokkos enabled
 
-template <Particle>
-void push_scs(SellCSigma<Particle>* scs,
+void push_scs(SellCSigma<Particle, 16>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
-
+  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
+  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();
   for (int i = 0; i < scs->num_slices; ++i) {
     int index = scs->offsets[i];
     const int chunk = scs->slice_to_chunk[i];
@@ -144,17 +144,17 @@ void push_scs(SellCSigma<Particle>* scs,
                  elems.x[e+3] + elems.y[e+3] + elems.z[e+3];
         c /= 4;
         int id = index++;
-        scs->scs_new_xs[id] = scs->scs_xs[id] + c * distance * dx;
-        scs->scs_new_ys[id] = scs->scs_ys[id] + c * distance * dy;
-        scs->scs_new_zs[id] = scs->scs_zs[id] + c * distance * dz;
+        scs_pushed_position[id][0] = scs_initial_position[id][0] + c * distance * dx;
+        scs_pushed_position[id][1] = scs_initial_position[id][1] + c * distance * dy;
+        scs_pushed_position[id][2] = scs_initial_position[id][2] + c * distance * dz;
       } // end for
     } // end while
   }
 }
 
 #ifdef KOKKOS_ENABLED
-template <Particle>
-void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
+/*
+void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
   kkLidView offsets_d("offsets_d", scs->num_slices+1);
@@ -260,4 +260,5 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   deviceToHostFp(new_zs_d,scs->scs_new_zs);
   fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
 }
+*/
 #endif //kokkos enabled

@@ -13,13 +13,12 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz,
     fp_t* new_xs, fp_t* new_ys, fp_t* new_zs);
 
-template <std::size_t N>
-void push_scs(SellCSigm<Particle,N>* scs,
+void push_scs(SellCSigma<Particle,16>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz);
 
-template <std::size_t N>
-void push_scs_kk(SellCSigma<Particle,N>* scs, int np, elemCoords& elems,
+/*
+void push_scs_kk(SellCSigma<Particle,16>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz);
-
+*/
 #endif

@@ -46,6 +46,31 @@ void deviceToHostFp(kkFpView d, fp_t* h) {
     h[i] = hv(i);
 }
 
+typedef Kokkos::View<fp_t(*)[3], exe_space::device_type> kkFp3View;
+/** \brief helper function to transfer a host array to a device view
+ */
+void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
+  kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
+  printf("%lu\n", hv.size());
+  for (size_t i=0; i<hv.size()/3; ++i) {
+    hv(i,0) = h[i][0];
+    hv(i,1) = h[i][1];
+    hv(i,2) = h[i][2];
+  }
+  Kokkos::deep_copy(d,hv);
+}
+/** \brief helper function to transfer a device view to a host array
+ */
+void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
+  kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
+  Kokkos::deep_copy(hv,d);
+  for(size_t i=0; i<hv.size()/3; ++i) {
+    h[i][0] = hv(i,0);
+    h[i][1] = hv(i,1);
+    h[i][2] = hv(i,2);
+  }
+}
+
 typedef int lid_t;
 typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
 /** \brief helper function to transfer a host array to a device view
@@ -153,10 +178,14 @@ void push_scs(SellCSigma<Particle, 16>* scs,
 }
 
 #ifdef KOKKOS_ENABLED
-/*
+
 void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
+
+  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
+  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();  
+  
   kkLidView offsets_d("offsets_d", scs->num_slices+1);
   hostToDeviceLid(offsets_d, scs->offsets);
 
@@ -185,24 +214,12 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
   kkFpView ez_d("ez_d", elems.size);
   hostToDeviceFp(ez_d, elems.z);
 
-  kkFpView xs_d("xs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(xs_d, scs->scs_xs);
 
-  kkFpView ys_d("ys_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(ys_d, scs->scs_ys);
-
-  kkFpView zs_d("zs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(zs_d, scs->scs_zs);
-
-  kkFpView new_xs_d("new_xs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(new_xs_d, scs->scs_new_xs);
-
-  kkFpView new_ys_d("new_ys_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(new_ys_d, scs->scs_new_ys);
-
-  kkFpView new_zs_d("new_zs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(new_zs_d, scs->scs_new_zs);
-
+  kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(position_d, scs_initial_position);
+  kkFp3View new_position_d("new_position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(new_position_d, scs_pushed_position);
+  
   fp_t disp[4] = {distance,dx,dy,dz};
   kkFpView disp_d("direction_d", 4);
   hostToDeviceFp(disp_d, disp);
@@ -231,6 +248,7 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
         const fp_t dir[3] = {disp_d(0)*disp_d(1),
                              disp_d(0)*disp_d(2),
                              disp_d(0)*disp_d(3)};
+        printf("SLICE: %d\n",slice);
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           const int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
           const int e = row_to_element_d(row);
@@ -243,9 +261,11 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
             for(int ei = 0; ei<4; ei++) 
               c += x[ei] + y[ei] + z[ei];
             c /= 4;
-            new_xs_d(pid) = xs_d(pid) + c * dir[0];
-            new_ys_d(pid) = ys_d(pid) + c * dir[1];
-            new_zs_d(pid) = zs_d(pid) + c * dir[2];
+            
+            new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
+            new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
+            new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
+            
           });
         });
     });
@@ -255,10 +275,10 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
   #endif
 
   timer.reset();
-  deviceToHostFp(new_xs_d,scs->scs_new_xs);
-  deviceToHostFp(new_ys_d,scs->scs_new_ys);
-  deviceToHostFp(new_zs_d,scs->scs_new_zs);
+  
+  deviceToHostFp(new_position_d,scs_pushed_position);
+  
   fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
 }
-*/
+
 #endif //kokkos enabled

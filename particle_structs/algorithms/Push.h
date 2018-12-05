@@ -17,8 +17,8 @@ void push_scs(SellCSigma<Particle,16>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz);
 
-/*
+
 void push_scs_kk(SellCSigma<Particle,16>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz);
-*/
+
 #endif

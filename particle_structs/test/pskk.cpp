@@ -212,8 +212,8 @@ int main(int argc, char* argv[]) {
   fp_t* new_ys2 = new fp_t[np];
   fp_t* new_zs2 = new fp_t[np];
   Kokkos::Timer timer;
-  //push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
-  //    distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
+  push_array_kk(np, xs, ys, zs, ptcl_to_elem, elems,
+      distance, dx, dy, dz, new_xs2, new_ys2, new_zs2);
   fprintf(stderr, "kokkos array push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np,
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
 
   fprintf(stderr, "\n");
   timer.reset();
-  //push_scs_kk(scs, np, elems, distance, dx, dy, dz);
+  push_scs_kk(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);

@@ -51,7 +51,6 @@ typedef Kokkos::View<fp_t(*)[3], exe_space::device_type> kkFp3View;
  */
 void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
   kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
-  printf("%lu\n", hv.size());
   for (size_t i=0; i<hv.size()/3; ++i) {
     hv(i,0) = h[i][0];
     hv(i,1) = h[i][1];
@@ -248,7 +247,6 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
         const fp_t dir[3] = {disp_d(0)*disp_d(1),
                              disp_d(0)*disp_d(2),
                              disp_d(0)*disp_d(3)};
-        printf("SLICE: %d\n",slice);
         parallel_for(TeamThreadRange(thread, chunksz_d(0)), [=] (int& j) {
           const int row = slice_to_chunk_d(slice) * chunksz_d(0) + slice_row;
           const int e = row_to_element_d(row);

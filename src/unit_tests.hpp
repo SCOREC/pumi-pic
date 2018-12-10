@@ -30,12 +30,12 @@
 namespace g = GITRm;
 
 //static in separate file if not in class
-void test_barycentric2(const Omega_h::Vector<3>a, const Omega_h::Vector<3>b,
+void test_barycentric_(const Omega_h::Vector<3>a, const Omega_h::Vector<3>b,
     const Omega_h::Vector<3> c, const Omega_h::Vector<3> d,
     const Omega_h::Vector<3>p, double* v, int pos=-1, bool intent=0)
 {
   Omega_h::Write<Omega_h::Real> bc(4, -1.0);
-  bool res = g::find_barycentric(a, b, c, d, p, bc);
+  bool res = g::find_barycentric({a, b, c, d}, p, bc);
   if(pos == -1)
   {
     //assumes size of v is 4 :)
@@ -65,29 +65,33 @@ void test_barycentric2(const Omega_h::Vector<3>a, const Omega_h::Vector<3>b,
               << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bc[pos] << " success :)\n";
   }
   else
-    Omega_h_fail("Barycentric test failed for (%0.6f, %0.6f, %0.6f): %0.6f != %0.6f \n",
-        p[0], p[1], p[2], v[0], bc[pos]);
+  {
+    g::print_matrix({a, b, c, d});
+    g::print_osh_vector(p, "p");
+    Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bc[pos]);
+  }
 }
 
 
-bool test_barycentric_(Omega_h::Mesh &mesh)
+bool test_barycentric1(Omega_h::Mesh &mesh)
 {
   const Omega_h::Vector<3> p1{0.0,1.0,0.0}, p2{1.0, 1.0, 0.0},
-      p3{0.5,0.5,0.0}, p4{0.5,0.5,1.0};
+      p3{0.5,1.0,0.5}, p4{0.5,0.5,0.0};
 
   double val = 1.0;
+  //face_vert:0,2,1(a,c,b); 0,1,3(a,b,d); 1,2,3(b,c,d); 2,0,3(c,a,d)
   std::cout << "Barycentric test :  u \n";
-  test_barycentric2(p1, p2, p3, p4, p1, &val, 0);
+  test_barycentric_(p1, p2, p3, p4, p4, &val, 0); //d
   std::cout << "Barycentric test :  v \n";
-  test_barycentric2(p1, p2, p3, p4, p2, &val, 1);
+  test_barycentric_(p1, p2, p3, p4, p3, &val, 1); //c
   std::cout << "Barycentric test :  w \n";
-  test_barycentric2(p1, p2, p3, p4, p3, &val, 2);
+  test_barycentric_(p1, p2, p3, p4, p1, &val, 2); //a
    std::cout << "Barycentric test :  x \n";
-  test_barycentric2(p1, p2, p3, p4, p4, &val, 3);
-  test_barycentric2(p1, p2, p3, p4, p4, &val, 2, 1);
+  test_barycentric_(p1, p2, p3, p4, p2, &val, 3); //b
+  test_barycentric_(p1, p2, p3, p4, p2, &val, 2, 1);
 }
 
-bool test_barycentric(Omega_h::Mesh &mesh)
+bool test_barycentric2(Omega_h::Mesh &mesh)
 {
   //const Omega_h::Matrix<3,4> M{{9.0,1.0,1.0}, {9.5,0.5,1.0},
   //  {9.5,0.0,0.5}, {9.5,0.5,0.0}};//good
@@ -96,32 +100,26 @@ bool test_barycentric(Omega_h::Mesh &mesh)
       p3{0.5,0.5,0.0}, p4{0.5,0.25,1.0};
 
   double val = 1.0;
-  test_barycentric2(p1, p2, p3, p4, p1, &val, 0);
-  test_barycentric2(p1, p2, p3, p4, p2, &val, 1);
-  test_barycentric2(p1, p2, p3, p4, p3, &val, 2);
-  test_barycentric2(p1, p2, p3, p4, p4, &val, 3);
-  test_barycentric2(p1, p2, p3, p4, p4, &val, 2, 1);
-
   const Omega_h::Vector<3> p{0.2, 0.1, 0.1};
-  double vals[] = {0.675000, 0.075000, 0.150000, 0.100000};
+  double vals[] = {0.1, 0.15, 0.675, 0.075};
 
-  test_barycentric2(p1, p2, p3, p4, p, vals);
+  test_barycentric_(p1, p2, p3, p4, p, vals);
 
-  val = -0.625000;
+  val = 0.1;
   const Omega_h::Vector<3> pt1{1.5, 0.1, 0.1};
-  test_barycentric2(p1, p2, p3, p4, pt1, &val, 0);
+  test_barycentric_(p1, p2, p3, p4, pt1, &val, 0);
 
-  val = -0.125000;
+  val = 0.35;
   const Omega_h::Vector<3> pt2{0.1, 0.2, 0.1};
-  test_barycentric2(p1, p2, p3, p4, pt2, &val, 1);
+  test_barycentric_(p1, p2, p3, p4, pt2, &val, 1);
 
-  val = -0.450000;
+  val = 1.075;
   const Omega_h::Vector<3> pt3{0.1, -0.2, 0.1};
-  test_barycentric2(p1, p2, p3, p4, pt3, &val, 2);
+  test_barycentric_(p1, p2, p3, p4, pt3, &val, 2);
 
-  val = -0.100000;
+  val = 0.325;
   const Omega_h::Vector<3> pt4{0.1, -0.2, -0.1};
-  test_barycentric2(p1, p2, p3, p4, pt4, &val, 3);
+  test_barycentric_(p1, p2, p3, p4, pt4, &val, 3);
 }
 
 

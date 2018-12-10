@@ -24,7 +24,7 @@
 
 #include "gitrm_utils.hpp"
 
-//#define DEBUG 1
+//  #define DEBUG 1
 
 namespace GITRm{
 
@@ -47,6 +47,7 @@ OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<3, 4> &M,
               << Omega_h::simplex_down_template(3, 2, iface, 2) << ":Mindex "
               << iface << " :iface\n";
 #endif // DEBUG
+   //face_vert:0,2,1=a,c,b; 0,1,3; 1,2,3; 2,0,3
     abc[0] = M[Omega_h::simplex_down_template(3, 2, iface, 0)];
     abc[1] = M[Omega_h::simplex_down_template(3, 2, iface, 1)];
     abc[2] = M[Omega_h::simplex_down_template(3, 2, iface, 2)];
@@ -99,13 +100,13 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<3, 4> &M,
 }
 
 
-OMEGA_H_INLINE bool find_barycentric_m( const Omega_h::Matrix<3, 4> &M,
+OMEGA_H_INLINE bool find_barycentric( const Omega_h::Matrix<3, 4> &M,
      const Omega_h::Vector<3> &p, Omega_h::Write<Omega_h::Real> &bc) OMEGA_H_NOEXCEPT
 {
   Omega_h::Real vals[4];
   for(Omega_h::LO iface=0; iface<4; ++iface)
   {
-    Omega_h::Vector<3> a, b, c;
+    Omega_h::Vector<3> a, b, c; //TODO pass it in instead of Matrix
     Omega_h::Few<Omega_h::Vector<3>, 3> abc;
     get_face_coords( M, iface, abc);
     a = abc[0];
@@ -116,10 +117,11 @@ OMEGA_H_INLINE bool find_barycentric_m( const Omega_h::Matrix<3, 4> &M,
     auto ac = c - a;
     auto ap = p - a;
     vals[iface] = oh_dot(ap, Omega_h::cross(ac, ab)); //ab,ac
-    //delete Vectors?
 
 #ifdef DEBUG
     std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
+    //print_matrix({a,b,c});  //FIX this
+    //print_osh_vector(p, "p"); //FIX this
     print_arrayp(a.data(),3);print_arrayp(b.data(),3);print_arrayp(c.data(),3);print_arrayp(p.data(),3);
     std::cout << "\n";
 #endif // DEBUG
@@ -139,12 +141,60 @@ OMEGA_H_INLINE bool find_barycentric_m( const Omega_h::Matrix<3, 4> &M,
   return 1;
 }
 
+
+
+OMEGA_H_INLINE bool line_triangle_intx(const Omega_h::Matrix<3, 4> &M,
+    const Omega_h::Few<Omega_h::Vector<3>, 3>& face, const Omega_h::LO faceid,
+    const Omega_h::Vector<3> origin, const Omega_h::Vector<3> dest, Omega_h::Vector<3> &xpoint )
+{
+  const Omega_h::Vector<3> dir = dest - origin; //normalize ??
+
+  const Omega_h::Real tol = 1e-10; //macro ?
+  Omega_h::Few<Omega_h::Vector<3>, 3> abc;
+  get_face_coords( M, faceid, abc);
+
+  const Omega_h::Vector<3> edge1 = abc[1] - abc[0];
+  const Omega_h::Vector<3> edge2 = abc[2] - abc[1];
+  const Omega_h::Vector<3> dir_x_edge2 = cross(dir, edge2);
+  Omega_h::Real det = oh_dot(edge1, dir_x_edge2);
+  if(det < tol)  //back facing
+    return false;
+
+  if(det > -tol && det < tol) // line parallel to triangle.
+    return false;
+
+  const Omega_h::Vector<3> a2orig = origin - abc[0];
+  const Omega_h::Real param_u = oh_dot(a2orig, dir_x_edge2);
+  if(param_u < 0 || param_u > det)
+    return false;
+
+  Omega_h::Vector<3> orig_x_edge1 = cross(a2orig, edge1);
+  const Omega_h::Real param_v = oh_dot(dir , orig_x_edge1);
+  if(param_v < 0 || param_u + param_v >det)
+    return false;
+
+  const Omega_h::Real param = 1/det * oh_dot(edge2, orig_x_edge1); //parameter t of x point
+  const Omega_h::Real pvec_len = oh_dot(dest-origin, dest-origin);
+  const Omega_h::Real orig2xpt = oh_dot(param*dir, param*dir);
+
+  if(param > tol && orig2xpt <= pvec_len)
+  {
+     xpoint = origin + param*dir;
+     return true;
+  }
+  else
+    return false; //skip this ?
+
+  return false;
+}
+
+
 /*
    TO be deleted
    simplex_down_template(dim=3, face_dim=2, which_face=fn, face_vertn=vn)
    Tet- face:vertexes => 0:0,2,1; 1:0,1,3; 2:1,2,3; 3:2,0,3
 */
-OMEGA_H_INLINE bool find_barycentric( const Omega_h::Vector<3> &a,
+OMEGA_H_INLINE bool find_barycentric2( const Omega_h::Vector<3> &a,
      const Omega_h::Vector<3> &b, const Omega_h::Vector<3> &c,
      const Omega_h::Vector<3> &d,  const Omega_h::Vector<3> &p,
      Omega_h::Write<Omega_h::Real> &bc) OMEGA_H_NOEXCEPT
@@ -156,7 +206,7 @@ OMEGA_H_INLINE bool find_barycentric( const Omega_h::Vector<3> &a,
   sp[1] = p[simplex_down_template(3, 2, iface, 1)];
   sp[2] = p[simplex_down_template(3, 2, iface, 2)];
   */
-
+//face_vert:0,2,1=a,c,b; 0,1,3; 1,2,3; 2,0,3
   Omega_h::Real u = oh_dot(p-a, Omega_h::cross(b-a, c-a)); //face_vert:0,2,1=a,c,b
   Omega_h::Real v = oh_dot(p-b, Omega_h::cross(a-b, d-b)); //0,1,3
   Omega_h::Real w = oh_dot(p-c, Omega_h::cross(b-c, d-c)); //1,2,3
@@ -179,5 +229,8 @@ OMEGA_H_INLINE bool find_barycentric( const Omega_h::Vector<3> &a,
 
 
 } //namespace
+#ifdef DEBUG
+#undef DEBUG
+#endif // DEBUG
 #endif //define
 

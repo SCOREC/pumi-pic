@@ -25,8 +25,8 @@
 
 namespace g = GITRm;
 
-#define DEBUG
-#define DO_TEST 0
+//#define DEBUG 1
+// #define DO_TEST 1
 int main(int argc, char** argv) {
 
   auto lib = Omega_h::Library(&argc, &argv);
@@ -36,8 +36,10 @@ int main(int argc, char** argv) {
 
 #if DO_TEST==1
   test_unit(&lib);
-  //print_mesh_stat(mesh);
-  //test_barycentric_(mesh);
+  print_mesh_stat(mesh);
+  test_barycentric1(mesh);
+  test_barycentric2(mesh);
+
 #endif
 
   //adjacent element
@@ -60,21 +62,23 @@ int main(int argc, char** argv) {
   //barycentric
   auto bc_fun = OMEGA_H_LAMBDA(Omega_h::LO ielem)
   {
-  //ielem = 148; //166
+  //ielem = 32 ; //166
     auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
     const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
     Omega_h::Write<Omega_h::Real> bc(4, -1.0);
-    const Omega_h::Vector<3> p{9.8,0.9,0.5}; //{12,0.2,0.2};
+    const Omega_h::Vector<3> dest{9.8,-0.3,0.5}; //{12,0.2,0.2};
+    const Omega_h::Vector<3> orig{9.8,0.9,0.5}; //{12,0.2,0.2};
 
-    bool res = g::find_barycentric_m(M, p, bc);
 
-    //if(ielem == 166)
-    {
+    bool res = g::find_barycentric(M, dest, bc);
+
+#ifdef DEBUG
         std::cout << "-------\n elem " << ielem << " \n";
         g::print_matrix(M);
-        g::print_osh_vector(p, "point");
+        g::print_osh_vector(dest, "point");
         g::print_array(bc.data(), 4, "BCoords");
     }
+#endif // DEBUG
 
     if(g::all_positive(bc.data(), 4))
     {
@@ -95,9 +99,9 @@ int main(int argc, char** argv) {
       {
         Omega_h::LO faceID = downs[iface];
 
-#ifdef DEBUG
         auto fv2v = Omega_h::gather_verts<3>(face_verts, faceID);
         const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+#ifdef DEBUG
         g::check_face(M, face, indf);
         ++indf;
 #endif // DEBUG
@@ -108,8 +112,10 @@ int main(int argc, char** argv) {
            auto adj_elem  = dual_faces[dface_ind];
            if(fIndex == neg)
            {
+#ifdef DEBUG
              std::cout << "=====> For el|faceID=" << ielem << "," << downs[iface]
                         << " :ADJ elem= " << adj_elem << "\n";
+#endif // DEBUG
              break;
            }
            ++dface_ind;
@@ -117,6 +123,20 @@ int main(int argc, char** argv) {
         else if(fIndex == neg)
         {
           std::cout << "Call Wall collision for el|faceID " << ielem << "," << downs[iface] << "\n";
+          Omega_h::Vector<3> xpoint;
+          bool res = g::line_triangle_intx(M, face, indf, orig, dest,   xpoint);
+
+          {
+            std::cout << "-------\n collision out " << ielem << " \n";
+            g::print_matrix(M);
+            g::print_osh_vector(dest, "point");
+            g::print_array(bc.data(), 4, "BCoords");
+          }
+          if(res)
+          {
+            std::cout << "FOUND \n";
+            g::print_osh_vector(xpoint, "COLLISION POINT");
+          }
         }
         ++fIndex;
       }
@@ -124,7 +144,7 @@ int main(int argc, char** argv) {
     }
   };
 
-  Omega_h::parallel_for(2, bc_fun, "bc");//mesh.nelems()
+  Omega_h::parallel_for(204, bc_fun, "bc");//mesh.nelems()
   Omega_h::vtk::write_parallel("cube", &mesh);
 
   return 0;

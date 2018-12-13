@@ -8,7 +8,7 @@
 #include "MemberTypes.h"
 #include <Kokkos_Core.hpp>
 
-template<class DataTypes, int VectorLength/* = Kokkos::Impl::CudaTraits::WarpSize*/>
+template<class DataTypes, int VectorLength = Kokkos::Impl::CudaTraits::WarpSize>
 class SellCSigma {
  public:
   SellCSigma(int sigma, int vertical_chunk_size, int num_elements, int num_particles,

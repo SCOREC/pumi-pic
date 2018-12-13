@@ -2,7 +2,7 @@
 #include <psParams.h>
 #include <psAssert.h>
 #include <Kokkos_Core.hpp>
-
+#include <SCS_Macros.h>
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
 }
@@ -150,7 +150,7 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
 }
 #endif //kokkos enabled
 
-void push_scs(SellCSigma<Particle, 16>* scs,
+void push_scs(SellCSigma<Particle>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
@@ -178,7 +178,7 @@ void push_scs(SellCSigma<Particle, 16>* scs,
 
 #ifdef KOKKOS_ENABLED
 
-void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
+void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
 
@@ -267,6 +267,101 @@ void push_scs_kk(SellCSigma<Particle, 16>* scs, int np, elemCoords& elems,
           });
         });
     });
+    totTime += timer.seconds();
+  }
+  printTiming("scs push", totTime);
+  #endif
+
+  timer.reset();
+  
+  deviceToHostFp(new_position_d,scs_pushed_position);
+  
+  fprintf(stderr, "array device to host transfer (seconds) %f\n", timer.seconds());
+}
+
+void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
+			fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
+  Kokkos::Timer timer;
+
+  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
+  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();  
+  
+  kkLidView offsets_d("offsets_d", scs->num_slices+1);
+  hostToDeviceLid(offsets_d, scs->offsets);
+
+  kkLidView slice_to_chunk_d("slice_to_chunk_d", scs->num_slices);
+  hostToDeviceLid(slice_to_chunk_d, scs->slice_to_chunk);
+
+  kkLidView num_particles_d("num_particles_d", 1);
+  hostToDeviceLid(num_particles_d, &np);
+
+  kkLidView chunksz_d("chunksz_d", 1);
+  hostToDeviceLid(chunksz_d, &scs->C);
+
+  kkLidView slicesz_d("slicesz_d", 1);
+  hostToDeviceLid(slicesz_d, &scs->V);
+
+  kkLidView num_elems_d("num_elems_d", 1);
+  hostToDeviceLid(num_elems_d, &elems.num_elems);
+
+  kkLidView row_to_element_d("row_to_element_d", elems.size);
+  hostToDeviceLid(row_to_element_d, scs->row_to_element);
+
+  kkFpView ex_d("ex_d", elems.size);
+  hostToDeviceFp(ex_d, elems.x);
+  kkFpView ey_d("ey_d", elems.size);
+  hostToDeviceFp(ey_d, elems.y);
+  kkFpView ez_d("ez_d", elems.size);
+  hostToDeviceFp(ez_d, elems.z);
+
+
+  kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(position_d, scs_initial_position);
+  kkFp3View new_position_d("new_position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(new_position_d, scs_pushed_position);
+  
+  fp_t disp[4] = {distance,dx,dy,dz};
+  kkFpView disp_d("direction_d", 4);
+  hostToDeviceFp(disp_d, disp);
+  fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
+
+  using Kokkos::TeamPolicy;
+  using Kokkos::TeamThreadRange;
+  using Kokkos::ThreadVectorRange;
+  using Kokkos::parallel_for;
+  typedef Kokkos::TeamPolicy<> team_policy;
+  typedef typename team_policy::member_type team_member;
+#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
+  const int league_size = scs->num_slices;
+  const int team_size = scs->C;
+  const team_policy policy(league_size, team_size);
+  
+  double totTime = 0;
+  for( int iter=0; iter<NUM_ITERATIONS; iter++) {
+    timer.reset();
+    //loop over chunks, one thread team per chunk
+    PARALLEL_FOR_ELEMENTS(scs, offsets_d, chunksz_d, slice_to_chunk_d, 
+                          row_to_element_d, thread, e) {
+      const fp_t dir[3] = {disp_d(0)*disp_d(1),
+                           disp_d(0)*disp_d(2),
+                           disp_d(0)*disp_d(3)};
+      const fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
+      const fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
+      const fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
+      PARALLEL_FOR_PARTICLES(scs, thread, chunksz_d, pid) {
+        fp_t c= 0;
+        c += x[0] + y[0] + z[0];
+        c += x[1] + y[1] + z[1];
+        c += x[2] + y[2] + z[2];
+        c += x[3] + y[3] + z[3];
+        c/=4;
+	new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
+	new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
+	new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
+      }
+      END_PARALLEL_FOR_PARTICLES;
+    }
+    END_PARALLEL_FOR_ELEMENTS;
     totTime += timer.seconds();
   }
   printTiming("scs push", totTime);

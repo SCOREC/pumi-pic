@@ -15,7 +15,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#define VectorLength 16
+
 
 void printTimerResolution() {
   Kokkos::Timer timer;
@@ -32,7 +32,7 @@ const double EPSILON = 0.0001;
 
 void positionsMatch(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
-                    SellCSigma<Particle,VectorLength>* scs) {
+                    SellCSigma<Particle>* scs) {
 
   fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
   //Confirm all particles were pushed
@@ -61,7 +61,7 @@ void positionsMatch(int np,
 
 void checkThenClear(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
-                    SellCSigma<Particle,VectorLength>* scs) {
+                    SellCSigma<Particle>* scs) {
   positionsMatch(np, x1, y1, z1, scs);
   fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
   //GD: Does this touch every particle? Or just the first np entries in the scs?
@@ -151,10 +151,10 @@ int main(int argc, char* argv[]) {
   int sigma = atoi(argv[4]);
   int V = atoi(argv[5]);
   bool debug = atoi(argv[6]);
-  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", VectorLength, V, sigma);
-  SellCSigma<Particle,VectorLength>* scs = new SellCSigma<Particle,VectorLength>(sigma, V, ne, np,
-                                                                                 ptcls_per_elem,
-                                                                                 ids, debug);
+  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", Kokkos::Impl::CudaTraits::WarpSize, V, sigma);
+  SellCSigma<Particle>* scs = new SellCSigma<Particle>(sigma, V, ne, np,
+						       ptcls_per_elem,
+						       ids, debug);
 
   //Set initial positions and 0 out future position
   fp_t (*initial_position_scs)[3] = scs->getSCS<0>();
@@ -224,6 +224,13 @@ int main(int argc, char* argv[]) {
   timer.reset();
   push_scs_kk(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs push and transfer (seconds) %f\n", timer.seconds());
+
+  checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
+
+  fprintf(stderr, "\n");
+  timer.reset();
+  push_scs_kk_macros(scs, np, elems, distance, dx, dy, dz);
+  fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
 

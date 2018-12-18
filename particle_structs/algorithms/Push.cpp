@@ -26,7 +26,6 @@ void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs,
 
 #ifdef KOKKOS_ENABLED
 typedef Kokkos::DefaultExecutionSpace exe_space;
-
 //TODO Figure out how to template these helper fns
 typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view
@@ -280,32 +279,14 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
 }
 
 void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
-			fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
+                        fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
 
   fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
   fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();  
-  
-  kkLidView offsets_d("offsets_d", scs->num_slices+1);
-  hostToDeviceLid(offsets_d, scs->offsets);
 
-  kkLidView slice_to_chunk_d("slice_to_chunk_d", scs->num_slices);
-  hostToDeviceLid(slice_to_chunk_d, scs->slice_to_chunk);
-
-  kkLidView num_particles_d("num_particles_d", 1);
-  hostToDeviceLid(num_particles_d, &np);
-
-  kkLidView chunksz_d("chunksz_d", 1);
-  hostToDeviceLid(chunksz_d, &scs->C);
-
-  kkLidView slicesz_d("slicesz_d", 1);
-  hostToDeviceLid(slicesz_d, &scs->V);
-
-  kkLidView num_elems_d("num_elems_d", 1);
-  hostToDeviceLid(num_elems_d, &elems.num_elems);
-
-  kkLidView row_to_element_d("row_to_element_d", elems.size);
-  hostToDeviceLid(row_to_element_d, scs->row_to_element);
+  //Move SCS data to the device
+  scs->transferToDevice();
 
   kkFpView ex_d("ex_d", elems.size);
   hostToDeviceFp(ex_d, elems.x);
@@ -339,29 +320,39 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   double totTime = 0;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();
-    //loop over chunks, one thread team per chunk
-    PARALLEL_FOR_ELEMENTS(scs, offsets_d, chunksz_d, slice_to_chunk_d, 
-                          row_to_element_d, thread, e) {
-      const fp_t dir[3] = {disp_d(0)*disp_d(1),
-                           disp_d(0)*disp_d(2),
-                           disp_d(0)*disp_d(3)};
-      const fp_t x[4] = {ex_d(e),ex_d(e+1),ex_d(e+2),ex_d(e+3)};
-      const fp_t y[4] = {ey_d(e),ey_d(e+1),ey_d(e+2),ey_d(e+3)};
-      const fp_t z[4] = {ez_d(e),ez_d(e+1),ez_d(e+2),ez_d(e+3)};
-      PARALLEL_FOR_PARTICLES(scs, thread, chunksz_d, pid) {
+    PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+      //Can't used const construction of arrays because they require unprotected commas
+      fp_t dir[3];
+      dir[0] = disp_d(0)*disp_d(1);
+      dir[1] = disp_d(0)*disp_d(2);
+      dir[2] = disp_d(0)*disp_d(3);
+      fp_t x[4];
+      x[0] = ex_d(e);
+      x[1] = ex_d(e+1);
+      x[2] = ex_d(e+2);
+      x[3] = ex_d(e+3);
+      fp_t y[4];
+      y[0] = ey_d(e);
+      y[1] = ey_d(e+1);
+      y[2] = ey_d(e+2);
+      y[3] = ey_d(e+3);
+      fp_t z[4];
+      z[0] = ez_d(e);
+      z[1] = ez_d(e+1);
+      z[2] = ez_d(e+2);
+      z[3] = ez_d(e+3);
+      PARALLEL_FOR_PARTICLES(scs, thread, pid, {
         fp_t c= 0;
         c += x[0] + y[0] + z[0];
         c += x[1] + y[1] + z[1];
         c += x[2] + y[2] + z[2];
         c += x[3] + y[3] + z[3];
         c/=4;
-	new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
-	new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
-	new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
-      }
-      END_PARALLEL_FOR_PARTICLES;
-    }
-    END_PARALLEL_FOR_ELEMENTS;
+        new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
+        new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
+        new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
+      });
+    });
     totTime += timer.seconds();
   }
   printTiming("scs push", totTime);

@@ -33,6 +33,8 @@ class SellCSigma {
   int num_slices;
   //Total entries
   int num_elems;
+  //Total particles
+  int num_ptcls;
   //chunk_element stores the id of the first row in the chunk
   //  This only matters for vertical slicing so that each slice can determine which row
   //  it is a part of.
@@ -50,6 +52,22 @@ class SellCSigma {
   //map from array particles to scs particles
   int* arr_to_scs;
 
+ //Kokkos Views
+#ifdef KOKKOS_ENABLED
+ void transferToDevice();
+
+ typedef Kokkos::DefaultExecutionSpace exe_space;
+ typedef Kokkos::View<int*, exe_space::device_type> kkLidView;
+
+ kkLidView offsets_d;
+ kkLidView slice_to_chunk_d;
+ kkLidView num_particles_d;
+ kkLidView chunksz_d;
+ kkLidView slicesz_d;
+ kkLidView num_elems_d;
+ kkLidView row_to_element_d;
+
+#endif
  private: 
   //Pointers to the start of each SCS for each data type
   void* scs_data[num_types];
@@ -126,6 +144,7 @@ SellCSigma<DataTypes,VectorLength>::SellCSigma(int sig, int v, int ne, int np,
   sigma = sig;
   V = v;
   num_elems = ne;
+  num_ptcls = np;
 
   //Make temporary copy of the particle counts for sorting
   // Pair consists of <ptcl count, elem id>
@@ -265,6 +284,35 @@ template<class DataTypes, int VectorLength>
 template <std::size_t N>
 typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,VectorLength>::getSCS() {
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
+}
+
+
+
+template <class T>
+void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> view, T* data) {
+  typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror hv = 
+    Kokkos::create_mirror_view(view);
+  for (size_t i = 0; i < hv.size(); ++i)
+    hv(i) = data[i];
+  Kokkos::deep_copy(view, hv);
+}
+
+template <class DataTypes, int VectorLength>
+void SellCSigma<DataTypes,VectorLength>::transferToDevice() {
+  offsets_d = kkLidView("offsets_d",num_slices+1);
+  hostToDevice(offsets_d,offsets);
+
+  slice_to_chunk_d = kkLidView("slice_to_dhunk_d",num_slices);
+  hostToDevice(slice_to_chunk_d,slice_to_chunk);
+
+  num_particles_d = kkLidView("num_particles_d",1);
+  hostToDevice(num_particles_d, &num_ptcls);
+
+  chunksz_d = kkLidView("chunksz_d",1);
+  hostToDevice(chunksz_d,&C);
+
+  row_to_element_d = kkLidView("row_to_element_d", num_elems);
+  hostToDevice(row_to_element_d,row_to_element);
 }
 
 #endif

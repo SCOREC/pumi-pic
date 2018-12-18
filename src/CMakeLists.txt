@@ -9,8 +9,9 @@ set(SOURCES
   gitrm.cpp
   )
 set(HEADERS
+  gitrm_adjacency.hpp
+  gitrm_utils.hpp
   )
 
-
-add_executable(gitrm "${SOURCES}")
+add_executable(gitrm "${SOURCES}" "${HEADERS}")
 target_link_libraries(gitrm Omega_h::omega_h)

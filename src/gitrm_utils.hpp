@@ -25,43 +25,35 @@
 #include "gitrm_adjacency.hpp"
 
 
-
 namespace GITRm{
 
-/* //not delcared other files?
-OMEGA_H_INLINE Omega_h::Real dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b) OMEGA_H_NOEXCEPT
-{
-  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
-}
-*/
 
-template <typename T>
-OMEGA_H_INLINE bool almost_equal(const T &a, const T &b,
+bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
 {
   return std::abs(a-b) <= tol;
 }
 
-extern template bool almost_equal(const Omega_h::Real &a, const Omega_h::Real &b, Omega_h::Real tol=1e-10);
 
 template <typename T>
-OMEGA_H_INLINE bool all_positive(const T* a, Omega_h::LO n=1,
+bool all_positive(const T a, Omega_h::LO n=1,
   Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
-    if(! (almost_equal(a[i], 0.0) || a[i] >tol) )
+    if(a[i] < 0.0) //tol) // TODO optimize. if val=0, then <=0 detects on both elements; <0 neither
      return false;
   }
   return true;
 }
 
-extern template bool all_positive(const double* a, Omega_h::LO n=1,
-  Omega_h::Real tol=1e-10);
+extern template bool all_positive(const Omega_h::Real* a, Omega_h::LO n=1, Omega_h::Real tol=1e-10);
+
+
+
 
 template <typename T>
-OMEGA_H_INLINE Omega_h::LO most_negative_index(const T* a, Omega_h::LO n,
+Omega_h::LO most_negative_index(const T* a, Omega_h::LO n,
   Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
 {
   Omega_h::LO ind=0;
@@ -80,36 +72,7 @@ OMEGA_H_INLINE Omega_h::LO most_negative_index(const T* a, Omega_h::LO n,
 extern template Omega_h::LO most_negative_index(const  Omega_h::LO * a, Omega_h::LO n,
   Omega_h::Real tol);
 
-template <typename T>
-OMEGA_H_INLINE bool compare_array(const T &a, const T &b, Omega_h::LO n,
-  Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
-{
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(! almost_equal(a[i], b[i]))
-    {
-      return false;
-    }
-  }
-  return true;
-}
 
-extern template bool compare_array(const Omega_h::Real &a, const Omega_h::Real &b,
-   Omega_h::LO n, Omega_h::Real tol=1e-10);
-
-
-
-
-template <typename T>
-void print_array(const T& a, int n, std::string name=" ")
-{
-  std::cout << name << ": ";
-  for(int i=0; i<n; ++i)
-    std::cout << a[i] << ", ";
-  std::cout <<"\n";
-}
-
-extern template void print_array(const double &a, int n, std::string name=" ");
 
 void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
 {

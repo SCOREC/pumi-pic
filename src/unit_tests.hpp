@@ -30,72 +30,76 @@
 namespace g = GITRm;
 
 //static in separate file if not in class
-void test_barycentric_(const Omega_h::Vector<3>a, const Omega_h::Vector<3>b,
-    const Omega_h::Vector<3> c, const Omega_h::Vector<3> d,
-    const Omega_h::Vector<3>p, double* v, int pos=-1, bool intent=0)
+void test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
+    const Omega_h::Vector<3> &p, const double *v, int pos=-1, bool intent=0)
 {
-  Omega_h::Write<Omega_h::Real> bc(4, -1.0);
-  bool res = g::find_barycentric({a, b, c, d}, p, bc);
+  Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
+  bool res = g::find_barycentric_tet(M, p, bcc);
   if(pos == -1)
   {
     //assumes size of v is 4 :)
     for(int i=0; i<4; ++i)
     {
-      if(std::abs(bc[i]- v[i]) > 1e-10)
+      if(std::abs(bcc[i]- v[i]) > 1e-10)
           Omega_h_fail("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
                        " bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
-                    p[0], p[1], p[2], bc[0], bc[1], bc[2], bc[3], bc[i], v[i]);
+                    p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
     }
     std::cout << "Barycentric test passed for p=";
-    g::print_osh_vector(a, "", false);
-    g::print_osh_vector(b, "", false);
-    g::print_osh_vector(c, "", false);
-    g::print_osh_vector(d, "", false);
+    g::print_osh_vector(M[0], "", false);
+    g::print_osh_vector(M[1], "", false);
+    g::print_osh_vector(M[2], "", false);
+    g::print_osh_vector(M[3], "", false);
     g::print_osh_vector(p);
     //print_osh_vectoor(bc.data());
     return;
   }
-  //else, v has size=1
-  if(g::almost_equal(bc[pos], v[0])) //    OMEGA_H_CHECK(bc[pos]== v);
-    std::cout << "Barycentric test passed for (" << p[0] << ","
-              << p[1] << "," << p[2]<< ") => " << v[0] << "==" << bc[pos] << "\n";
-  else if(intent)
+  else  //, v has size=1
   {
-    std::cout << "Barycentric test intented to fail (" << p[0] << ","
-              << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bc[pos] << " success :)\n";
-  }
-  else
-  {
-    g::print_matrix({a, b, c, d});
-    g::print_osh_vector(p, "p");
-    Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bc[pos]);
+    if(g::almost_equal(bcc[pos], v[0])) //    OMEGA_H_CHECK(bc[pos]== v);
+      std::cout << "Barycentric test passed for (" << p[0] << ","
+                << p[1] << "," << p[2]<< ") => " << v[0] << "==" << bcc[pos] << "\n";
+    else if(intent)
+    {
+      std::cout << "Barycentric test intented to fail (" << p[0] << ","
+                << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bcc[pos] << " success :)\n";
+    }
+    else
+    {
+      g::print_matrix(M );
+      g::print_osh_vector(p, "p");
+      Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bcc[pos]);
+    }
   }
 }
 
 
-bool test_barycentric1(Omega_h::Mesh &mesh)
+void test_barycentric1()
 {
-  const Omega_h::Vector<3> p1{0.0,1.0,0.0}, p2{1.0, 1.0, 0.0},
-      p3{0.5,1.0,0.5}, p4{0.5,0.5,0.0};
+  const Omega_h::Vector<3> p1{0.0,1.0,0.0}, p2{0.5, 0.0, 0.0},
+      p3{1.0,1.0,0.0}, p4{0.5,1.0,0.5};
+  const Omega_h::Matrix<3, 4> M{p1, p2, p3, p4};
+  //face_vert:0,2,1(a,c,b); 0,1,3(a,b,d); 1,2,3(b,c,d); 2,0,3(c,a,d)
+  const Omega_h::Vector<4> bcc1{1.0, 0.0, 0.0, 0.0};
+  const Omega_h::Vector<4> bcc2{0.0, 1.0, 0.0, 0.0};
+  const Omega_h::Vector<4> bcc3{0.0, 0.0, 1.0, 0.0};
+  const Omega_h::Vector<4> bcc4{0.0, 0.0, 0.0, 1.0};
+  const Omega_h::Matrix<4, 4> bcc_mat{bcc1, bcc2, bcc3, bcc4};
+  std::string bcname[] = {"u", "v", "w", "x"};
+  int index = -1;
+  for(int i=0; i<4; ++i)
+  {
+    std::cout << "Barycentric test : " << bcname[i] <<  " \n";
+    index = Omega_h::simplex_opposite_template(3, 2, i);
+    test_barycentric_tet(M, M[index], bcc_mat[i].data());
+  }
 
   double val = 1.0;
-  //face_vert:0,2,1(a,c,b); 0,1,3(a,b,d); 1,2,3(b,c,d); 2,0,3(c,a,d)
-  std::cout << "Barycentric test :  u \n";
-  test_barycentric_(p1, p2, p3, p4, p4, &val, 0); //d
-  std::cout << "Barycentric test :  v \n";
-  test_barycentric_(p1, p2, p3, p4, p3, &val, 1); //c
-  std::cout << "Barycentric test :  w \n";
-  test_barycentric_(p1, p2, p3, p4, p1, &val, 2); //a
-   std::cout << "Barycentric test :  x \n";
-  test_barycentric_(p1, p2, p3, p4, p2, &val, 3); //b
-  test_barycentric_(p1, p2, p3, p4, p2, &val, 2, 1);
+  test_barycentric_tet(M, p2, &val, 2, 1);
 }
 
-bool test_barycentric2(Omega_h::Mesh &mesh)
+void test_barycentric2()
 {
-  //const Omega_h::Matrix<3,4> M{{9.0,1.0,1.0}, {9.5,0.5,1.0},
-  //  {9.5,0.0,0.5}, {9.5,0.5,0.0}};//good
-
   const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{1.0, 0.0, 0.0},
       p3{0.5,0.5,0.0}, p4{0.5,0.25,1.0};
 
@@ -103,26 +107,90 @@ bool test_barycentric2(Omega_h::Mesh &mesh)
   const Omega_h::Vector<3> p{0.2, 0.1, 0.1};
   double vals[] = {0.1, 0.15, 0.675, 0.075};
 
-  test_barycentric_(p1, p2, p3, p4, p, vals);
+  test_barycentric_tet({p1, p2, p3, p4}, p, vals);
 
   val = 0.1;
   const Omega_h::Vector<3> pt1{1.5, 0.1, 0.1};
-  test_barycentric_(p1, p2, p3, p4, pt1, &val, 0);
+  test_barycentric_tet({p1, p2, p3, p4}, pt1, &val, 0);
 
   val = 0.35;
   const Omega_h::Vector<3> pt2{0.1, 0.2, 0.1};
-  test_barycentric_(p1, p2, p3, p4, pt2, &val, 1);
+  test_barycentric_tet({p1, p2, p3, p4}, pt2, &val, 1);
 
   val = 1.075;
   const Omega_h::Vector<3> pt3{0.1, -0.2, 0.1};
-  test_barycentric_(p1, p2, p3, p4, pt3, &val, 2);
+  test_barycentric_tet({p1, p2, p3, p4}, pt3, &val, 2);
 
   val = 0.325;
   const Omega_h::Vector<3> pt4{0.1, -0.2, -0.1};
-  test_barycentric_(p1, p2, p3, p4, pt4, &val, 3);
+  test_barycentric_tet({p1, p2, p3, p4}, pt4, &val, 3);
+
 }
 
+void test_barycentric_tri()
+{
+  const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{2.0, 0.0, 0.0}, p3{1.0,1.0,0.0};
+  const Omega_h::Matrix<3, 3> M{p1, p2, p3};
+  Omega_h::Write<Omega_h::Real> bc{-1, -1, -1};
 
+  const Omega_h::Vector<3> bcc1{1.0, 0.0, 0.0};
+  const Omega_h::Vector<3> bcc2{0.0, 1.0, 0.0};
+  const Omega_h::Vector<3> bcc3{0.0, 0.0, 1.0};
+  const Omega_h::Matrix<3, 3> bcc_mat{bcc1, bcc2, bcc3};
+  std::string bcname[] = {"u", "v", "w"};
+  int index = -1;
+  for(int i=0; i<3; ++i)
+  {
+    std::cout << "Barycentric test : " << bcname[i] <<  " \n";
+    index = Omega_h::simplex_opposite_template(2, 1, i);
+    g::find_barycentric_tri_simple(M, M[index], bc);
+    bool res = g::compare_array(bc.data(), bcc_mat[i].data(), 3);
+    g::print_array(bc.data(), 3, "BC_tri");
+
+    if(!res)
+      Omega_h_fail("find_barycentric_tri failed"); //TODO add values
+
+  }
+  const Omega_h::Vector<3> xp1{0.0, -0.5, 0.0};
+  const Omega_h::Vector<3> xp2{2.0, 0.5, 0.0};
+  const Omega_h::Vector<3> xp3{0.0, 0.2, 0.0};
+
+  const Omega_h::Few<Omega_h::Vector<3>, 3>& xpoints{xp1, xp2, xp3};
+  for(int i=0; i<3; ++i)
+  {
+    g::find_barycentric_tri_simple(M, xpoints[i], bc);
+    g::print_array(bc.data(), 3, "BC_tri");
+
+    if(bc[i] >= 0)
+      Omega_h_fail("BC coords expected -ve\n");
+  }
+}
+
+void test_line_tri_intx()
+{
+  Omega_h::Vector<3> xpoint{0, 0, 0};
+  const Omega_h::Vector<3> a{0.0, 0.0, 0.0};
+  const Omega_h::Vector<3> b{2.0, 0.0, 0.0};
+  const Omega_h::Vector<3> c{1.0, 1.0, 0.0};
+  const Omega_h::Vector<3> d{1.0, 0.0, 1.0};
+
+  const Omega_h::Vector<3> orig{1.0, 0.5, 0.5};
+  const Omega_h::Vector<3> dest{1.0, -0.2, 0.5};
+
+  const Omega_h::Matrix<3, 4> M{a,b,c,d};
+
+  Omega_h::Few<Omega_h::Vector<3>, 3> face{a,b,d};
+
+  for(int i=0; i<4; ++i)
+  {
+    g::get_face_coords( M, i, face);
+
+    bool res = g::line_triangle_intx(face, orig, dest, xpoint);
+    std::string status = res? "Found": "No";
+    g::print_array(xpoint.data(), 3, "XPT:");
+    std::cout << "--------\n";
+  }
+}
 
 void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
 {
@@ -241,6 +309,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
 
 }
 
+//TODO add checks
 void test_unit(Omega_h::Library *lib)
 {
     Omega_h::Mesh m(lib);

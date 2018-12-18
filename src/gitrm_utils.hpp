@@ -27,7 +27,6 @@
 
 namespace GITRm{
 
-
 bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
 {
@@ -88,6 +87,17 @@ void print_matrix(const Omega_h::Matrix<3, 4> &M)
   std::cout << "M3  " << M[3].data()[0] << ", " << M[3].data()[1] << ", " << M[3].data()[2] <<"\n";
 }
 
+
+void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
+     Omega_h::Write<Omega_h::Real> &bcc)
+{
+    //std::cout << "FOUND \n";
+    //print_matrix(M);  //include file problem ?
+    print_osh_vector(dest, "point");
+    print_array(bcc.data(), 4, "BCoords");
+    Omega_h::Real dist = find_dist_to_surface(M, dest, bcc);
+    //std::cout << "Dist_to_closest_face " << dist <<  "\n";
+}
 } //namespace
 #endif
 

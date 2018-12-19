@@ -106,7 +106,7 @@ OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
   return true;
 }
 
-OMEGA_H_INLINE bool match_vectors_direction(const Omega_h::Vector<DIM> &va,
+OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
      const Omega_h::Vector<DIM> &vb) OMEGA_H_NOEXCEPT
 {
   for(Omega_h::LO i=0; i<DIM; ++i)
@@ -187,7 +187,7 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   return 1; //success
 }
 
-//for debugging
+//TODO for debugging
 OMEGA_H_INLINE Omega_h::Real find_dist_to_surface( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &ptp, const Omega_h::Write<Omega_h::Real> &bcc) OMEGA_H_NOEXCEPT
 {
@@ -302,11 +302,11 @@ OMEGA_H_INLINE bool line_triangle_intx(const Omega_h::Few<Omega_h::Vector<DIM>, 
   Omega_h::Real det = -1.0 * osh_dot(line, norm);
 
 #ifdef DEBUG
-  //For testing. Only find intersection point
+  //For testing. Only find intersection point. Wrong for orig {1,0.2,0.2} to dest{12,-0.2,0.2}
   Omega_h::Real planed = osh_dot(norm, abc[0]);
-  Omega_h::Real t = (planed - osh_dot(norm, origin)) / osh_dot(norm, line);
-  if (t >= 0.0 && t <= 1.0) {
-    Omega_h::Vector<DIM> q = origin + t * line;
+  Omega_h::Real par_t = (planed - osh_dot(norm, origin)) / osh_dot(norm, line);
+  if (par_t >= 0.0 && par_t <= 1.0) {
+    Omega_h::Vector<DIM> q = origin + par_t * line;
     print_array(q.data(), 3, ">>Tcalc: xpt ");
   }
   std::cout << ">> det:" << det<< "\n";
@@ -337,7 +337,7 @@ OMEGA_H_INLINE bool line_triangle_intx(const Omega_h::Few<Omega_h::Vector<DIM>, 
   if(bcu < 0 || bcv < 0 || bcu+bcv > 1.0)
     return false;
 
-  if(! match_vectors_direction(norm, line))
+  if(! compare_vector_directions(norm, line))
   {
     std::cout << "*** Line OPOSITE to element face normal \n";
   }

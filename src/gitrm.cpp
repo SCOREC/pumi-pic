@@ -44,9 +44,6 @@ int main(int argc, char** argv) {
   test_line_tri_intx();
 #endif
 
-//Kokkos::View<int*> a("a" , 100);
-//Kokkos::View<int*, Kokkos::MemoryTraits<Atomic> > a_atomic = a;
-//a_atomic(1) += 1;
 
   //adjacent element
   const auto dual = mesh.ask_dual();
@@ -65,38 +62,78 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
 
-  const Omega_h::Few< Omega_h::Vector<3>, 2> dest{{0.10,0.3,0.1}, {12,0.2,0.2}};
-  const Omega_h::Few< Omega_h::Vector<3>, 2> orig{{9.8,0.3,0.7}, {12,0.2,0.2}};
-
   Omega_h::LO nptcl = 2;
 
-  Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1);
-  Omega_h::Write<Omega_h::LO> elemIds(nptcl);
+  //Simple particle data
+  Omega_h::Few< Omega_h::Vector<3>, 2> dest{{0.9,0.1,0.5}, {0.26,0.2,0.12}};
+  Omega_h::Few< Omega_h::Vector<3>, 2> orig{{0.8,0.3,0.7}, {0.15,0.1,0.2}};
+  Omega_h::Write<Omega_h::Real> bccs(4*nptcl, -1.0);
 
-nptcl=1; //error for 2 !
+  Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1); // found or not
+  //To store adj_elem for subsequent searches. Once ptcl is found/crossed, this is reset.
+  Omega_h::Write<Omega_h::LO> elemIds(nptcl); //next element to search for
 
-  elemIds[0] = 24; // begin with
-  elemIds[1] = 150;
+  //Which particle belongs to which element ?
+  elemIds[0] = 26; //173{0.15,0.1,0.2}; 26{0.8,0.3,0.7}//temporary
+  elemIds[1] = 150; //temporary
 
-  //adjacency + boundary crossing search
+nptcl=1;
+
+// Particle ownership is not yet here.
+
+/*
+Process  all particles in an element (and all elements) in parallel, from a while loop.
+All particles in an element start off with the element's closure data or state.
+When elements are called in parallel, each element's lambda function splits the calls 
+into that for particles. All the particles are running in parallel for a single step, asynchronously.
+Adjacent element IDs are stored for further search of particles. 
+Wait for the completion of the step. 
+At this stage, particles are to be associated with these adjacent elements, but the particle data
+are still with the source elements. 
+Next step is a parallel reduction  per element, which  checks if all particles are found, or collision is detected. 
+If any particle remains in any element, next parallel call starts processing all elements irrespective
+of particles in it are all done or not.  But in the search kernel, only remaining particles are processed. 
+Omega_h::Write data set are to be updated during the run. These will be replaced by 'particle_structures',
+along with the for loop inside the lambda function distributing particles. 
+Omega_h::parallel_reduce doesn't work. Kokkos functions to be used when Omega_h doesn't provide it.
+*/
+  //particle search: adjacency + boundary crossing
   auto search_ptcl = OMEGA_H_LAMBDA( Omega_h::LO ielem)
   {
-    if(!(ielem == elemIds[0])) return; //Assume all other elements are empty
+    //temporary
+    if(!(ielem == elemIds[0] || ielem == elemIds[1])) return; //Assume all other elements are empty
 
-     //Replace by particle parallel_for loop for all the remaining particles in this element
+    std::cout << "----------\n elem " << ielem << " \n";
+
+    const auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
+    const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
+
+    //Replace by particle parallel_for loop for all the remaining particles in this element
     for(Omega_h::LO iptcl = 0; iptcl < nptcl; ++iptcl)
     {
-      auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
-      const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
-      Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
+      //temporary
+      std::cout << "Elem " << ielem << " part:" << iptcl << "\n";
+      if(elemIds[iptcl] != ielem) continue;
 
-      bool res = g::find_barycentric_tet(M, dest[iptcl], bcc);
-      std::cout << "-------\n elem " << ielem << " \n";
+      Omega_h::Write<Omega_h::Real> bcc(4*nptcl, -1.0);
+
+
+      //To be DELETED. check particle origin containment in this element
+      std::cout << " flag " << iptcl << " " << part_flags.data()[iptcl] << "\n";
+      const bool test_res = g::find_barycentric_tet(M, orig[iptcl], bcc);
+      if(g::all_positive(bcc.data(), 4))
+      {
+        std::cout << "ORIGIN ********detected in " << ielem << " \n";
+      }
+      //#end DELETE
+
+      const bool res = g::find_barycentric_tet(M, dest[iptcl], bcc);
 
       if(g::all_positive(bcc.data(), 4))
       {
         part_flags.data()[iptcl] = 0;
         elemIds[iptcl] = ielem;
+        for(Omega_h::LO i=0; i<4; ++i) bccs[4*nptcl+i] = bcc[i];
 
         std::cout << "********found in " << ielem << " \n";
         g::print_matrix(M);
@@ -124,27 +161,35 @@ nptcl=1; //error for 2 !
          //g::get_face_coords( M, fIndex, abc);
           g::check_face(M, face, fIndex);
 
-          if(!side_is_exposed[faceID])
+          if(!side_is_exposed[faceID]) //if most_neg but not exposed, for almost ||l to surface ???
           {
              //OMEGA_H_CHECK(side2side_elems[side + 1] - side2side_elems[side] == 2);
              auto adj_elem  = dual_faces[dface_ind];
-             if(fIndex == most_neg)
+             std::cout << "el " << ielem << " adj " << adj_elem << "\n";
+             if(fIndex == most_neg) // Use elemIds[iptcl] to skip last elem, if it is set per ptcl loop
              {
                elemIds[iptcl] = adj_elem;
                std::cout << "=====> For el|faceID=" << ielem << "," << downs[iface]  << " :ADJ elem= " << adj_elem << "\n";
 
-               break;
+               // Test if element is interior, if so break. For adj search crossing surface not needed.
+               // If on bdry, there could be a crossing face not yet found.
+               //if(element != on_boundary) break;
+
              }
              ++dface_ind;
           }
-          else if(bcc[fIndex] < 0) //fIndex == most_neg)
+          else if(bcc[fIndex] < 0) //fIndex == most_neg) TODO test this
           {
-            std::cout << "-------\n Call Wall collision for el,faceID " << ielem << "," << downs[iface] << "\n";
+            std::cout << "********* \n Call Wall collision for el,faceID " << ielem << "," << downs[iface] << "\n";
             Omega_h::Vector<3> xpoint;
-            bool res = g::line_triangle_intx(face, orig[iptcl], dest[iptcl],   xpoint);
+            const bool res = g::line_triangle_intx(face, orig[iptcl], dest[iptcl],   xpoint);
 
             if(res)
             {
+              //reset adjacent element to avoid wrong use.
+              elemIds[iptcl] = -1;
+              part_flags.data()[iptcl] = 0;
+
               g::print_matrix(M);
               g::print_data(M, dest[iptcl], bcc);
               g::print_osh_vector(xpoint, "COLLISION POINT");
@@ -156,25 +201,28 @@ nptcl=1; //error for 2 !
     }
   };
 
-  /*
-  auto search_reduce = OMEGA_H_LAMBDA(Omega_h::LO ielem)
+
+  auto search_reduce = OMEGA_H_LAMBDA(int ielem)
   {
+    // elements[ielem].nptcl
+    {
+      //if(part_flags[i])
+        return 1;
+     }
+  };
 
-    return 1;
-  };*/
-
-
-  bool done = false;
-  while(!done )
+  bool found = false;
+  while(!found)
   {
     Omega_h::parallel_for(mesh.nelems(),  search_ptcl, "search_ptcl");//mesh.nelems()
-    // synchronize
-    //done = Omega_h::parallel_reduce(nptcl, search_reduce, "search_reduce");
-    //TODO replace by parallel_reduce or..
-    done = true;
-    for(int i=0; i<nptcl; ++i){ if(part_flags[i]) {done = false; break;} }
+    found = true;
 
-    //remain = true;
+    // synchronize
+
+   // int res = Omega_h::parallel_reduce<int>(mesh.nelems(), search_reduce, "search_reduce");
+
+    //TODO replace with the above
+    for(int i=0; i<nptcl; ++i){ if(part_flags[i]) {found = false; break;} }
   }
 
   Omega_h::vtk::write_parallel("cube", &mesh);

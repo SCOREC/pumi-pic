@@ -76,8 +76,4 @@ if (ENABLE_KOKKOS)
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
 endif()
 
-add_executable(typeTest test/typeTest.cpp)
-target_link_libraries(typeTest particleStructs)
-
-add_executable(pskk test/pskk.cpp)
-target_link_libraries(pskk particleStructs)
+add_subdirectory(test)

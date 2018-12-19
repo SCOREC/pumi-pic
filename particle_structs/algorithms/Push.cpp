@@ -295,7 +295,6 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   kkFpView ez_d("ez_d", elems.size);
   hostToDeviceFp(ez_d, elems.z);
 
-
   kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(position_d, scs_initial_position);
   kkFp3View new_position_d("new_position_d", scs->offsets[scs->num_slices]);

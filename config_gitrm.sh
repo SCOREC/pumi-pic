@@ -1,15 +1,14 @@
 #!/bin/bash
 
-OMEGA_H=/home/gp/Programs/omega_h_install/
+OMEGA_H=/home/gp/Programs/omega_h_install
 KOKKOS=/home/gp/Programs/kokkos_install
 
 #-DCMAKE_CXX_FLAGS="-std=c++11 -Wall -Wextra" \
 
+export CMAKE_PREFIX_PATH=$OMEGA_H:$CMAKE_PREFIX_PATH
+
 cmake \
--DCMAKE_PREFIX_PATH=$OMEGA_H \
--DOMEGA_H_PREFIX=$OMEGA_H \
--DOmega_h_ENABLE_Kokkos=ON \
--DKokkos_PREFIX=$KOKKOS \
--DCMAKE_BUILD_TYPE=Debug \
-`dirname "$(readlink -f "$0")"`
+ -DOMEGA_H_PREFIX=$OMEGA_H \
+ -DCMAKE_BUILD_TYPE=Debug \
+ $1
 

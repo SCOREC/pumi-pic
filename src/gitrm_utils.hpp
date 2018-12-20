@@ -28,7 +28,7 @@
 namespace GITRm{
 
 bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
+    Omega_h::Real tol=1e-10) //OMEGA_H_NOEXCEPT
 {
   return std::abs(a-b) <= tol;
 }
@@ -36,7 +36,7 @@ bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
 
 template <typename T>
 bool all_positive(const T a, Omega_h::LO n=1,
-  Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
+  Omega_h::Real tol=1e-10) //OMEGA_H_NOEXCEPT
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
@@ -53,7 +53,7 @@ extern template bool all_positive(const Omega_h::Real* a, Omega_h::LO n=1, Omega
 
 template <typename T>
 Omega_h::LO most_negative_index(const T* a, Omega_h::LO n,
-  Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
+  Omega_h::Real tol=1e-10) //OMEGA_H_NOEXCEPT
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];

@@ -34,7 +34,7 @@ const Omega_h::LO FDIM = 2; //mesh face DIM
 
 
 Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b) OMEGA_H_NOEXCEPT
+   const Omega_h::Vector<3> &b)// OMEGA_H_NOEXCEPT
 {
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
@@ -94,7 +94,7 @@ void print_array(const double* a, int n=3, std::string name=" ")
 //TODO merge with or move to gitrm_utils::compare_array
 template <typename T>
 OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
-  Omega_h::Real tol=1e-10) OMEGA_H_NOEXCEPT
+  Omega_h::Real tol=1e-10) //OMEGA_H_NOEXCEPT
 {
   for(Omega_h::LO i=0; i<n-1; ++i)
   {
@@ -107,7 +107,7 @@ OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
 }
 
 OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
-     const Omega_h::Vector<DIM> &vb) OMEGA_H_NOEXCEPT
+     const Omega_h::Vector<DIM> &vb) //OMEGA_H_NOEXCEPT
 {
   for(Omega_h::LO i=0; i<DIM; ++i)
   {
@@ -144,7 +144,7 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
 //  corresp. to vertex obtained from simplex_opposite_template(DIM, 2, iface)
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
-     const Omega_h::Vector<DIM> &ptp, Omega_h::Write<Omega_h::Real> &bcc) OMEGA_H_NOEXCEPT
+     const Omega_h::Vector<DIM> &ptp, Omega_h::Write<Omega_h::Real> &bcc) //OMEGA_H_NOEXCEPT
 {
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
@@ -189,7 +189,7 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
 
 //TODO for debugging
 OMEGA_H_INLINE Omega_h::Real find_dist_to_surface( const Omega_h::Matrix<DIM, 4> &Mat,
-     const Omega_h::Vector<DIM> &ptp, const Omega_h::Write<Omega_h::Real> &bcc) OMEGA_H_NOEXCEPT
+     const Omega_h::Vector<DIM> &ptp, const Omega_h::Write<Omega_h::Real> &bcc) //OMEGA_H_NOEXCEPT
 {
   Omega_h::Real dist = 0;
 
@@ -203,7 +203,7 @@ OMEGA_H_INLINE Omega_h::Real find_dist_to_surface( const Omega_h::Matrix<DIM, 4>
 OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
     const Omega_h::Few<Omega_h::Vector<3>, 3> &face, const Omega_h::LO face_id,
     const Omega_h::Vector<3> &origin, const Omega_h::Vector<3> &dest,
-    Omega_h::Vector<3> &xpoint) OMEGA_H_NOEXCEPT
+    Omega_h::Vector<3> &xpoint) //OMEGA_H_NOEXCEPT
 {
   const Omega_h::Vector<3> dir = dest - origin; //Omega_h::normalize(dest - origin) ??
 
@@ -263,7 +263,7 @@ OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 //  corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge)
 OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-     const Omega_h::Vector<3> &xpoint, Omega_h::Write<Omega_h::Real> &bc) OMEGA_H_NOEXCEPT
+     const Omega_h::Vector<3> &xpoint, Omega_h::Write<Omega_h::Real> &bc) //OMEGA_H_NOEXCEPT
 {
   Omega_h::Vector<DIM> a = abc[0];
   Omega_h::Vector<DIM> b = abc[1];
@@ -289,7 +289,7 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
 //en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
 OMEGA_H_INLINE bool line_triangle_intx(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
   const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-  Omega_h::Vector<DIM> &xpoint )OMEGA_H_NOEXCEPT
+  Omega_h::Vector<DIM> &xpoint ) //OMEGA_H_NOEXCEPT
 {
   const Omega_h::Vector<DIM> line = dest - origin; //Iab
 

@@ -1,11 +1,10 @@
 # particle_structures
 sandbox to test performance of particle data structures
 
-# cdash
+CDash https://my.cdash.org/index.php?project=particle_structures
 
-https://my.cdash.org/index.php?project=particle_structures
+# Goals and design
 
-# design
 We want to understand the performance of different data structures that store particles for a PIC code.  The performance test will entail:
 1) loading particles into the data structure following a gaussian, exponential, or uniform distribution across mesh elements
 2) setting an initial position for the particles that is != 0 and != 1 - they can all be the same
@@ -28,7 +27,7 @@ Kokkos will be used for GPU parallelization of the push  operation (steps 3 and 
 
 See the discussion in the hybridpic working document.
 
-### flat arrays
+### Flat arrays
 
 Testing on flat arrays will establish an upper bound on performance.
 

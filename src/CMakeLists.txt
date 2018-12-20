@@ -4,7 +4,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif(NOT CMAKE_BUILD_TYPE)
 message("CMAKE_BUILD_TYPE = ${CMAKE_BUILD_TYPE}")
 
-find_package(Omega_h REQUIRED 8.2.0 PATHS ${OMEGA_H_PREFIX})
+find_package(Omega_h REQUIRED 8.2.0)
+message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(SOURCES
   gitrm.cpp
   )

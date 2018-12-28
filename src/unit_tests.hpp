@@ -184,8 +184,8 @@ void test_line_tri_intx()
   for(int i=0; i<4; ++i)
   {
     g::get_face_coords( M, i, face);
-
-    bool res = g::line_triangle_intx(face, orig, dest, xpoint);
+    Omega_h::LO neg = -1;
+    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, &neg);
     std::string status = res? "Found": "No";
     g::print_array(xpoint.data(), 3, "XPT:");
     std::cout << "--------\n";
@@ -235,6 +235,13 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
    }
   std::cout << "; \n";
 
+
+  std::cout << "ask_down(2,1): " <<  m.ask_down(2,1).ab2b.size();
+  for(int i=0; i<20 && i<m.ask_down(2,1).ab2b.size(); ++i)
+       std::cout << " " << m.ask_down(2,1).ab2b[i];
+  std::cout << "\n";
+
+
   const auto ups = m.ask_up(2,3);
   std::cout << "#up(2,3): #a2ab " << ups.a2ab.size() //NOTE: size is +1 ???
             << " ; #ab2b " << ups.ab2b.size() << "\n";
@@ -252,6 +259,19 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
    std::cout << "; \n";
 
 
+  auto up12 = m.ask_up(1, 2);
+  std::cout << "\nask_up(1, 2):a2ab " <<  up12.a2ab.size();
+  for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
+     std::cout << " " << up12.a2ab[i];
+  std::cout << "\n";
+  std::cout << "\nask_up(1, 2):ab2b " <<  up12.ab2b.size();
+  for(int i=0; i<20 && i<up12.ab2b.size(); ++i)
+     std::cout << " " << up12.ab2b[i]; //12 :0 1 ;0 2; 1 2; 0 3; 1 3; 2 3
+  std::cout << "\n Entries";
+  for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
+     std::cout << " " << up12.ab2b[up12.a2ab[i]];
+  std::cout << "\n";
+
 
   const auto dual = m.ask_dual();
   std::cout << "#dual: #a2ab " << dual.a2ab.size() //last is size=end_index+1 ?
@@ -262,7 +282,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   std::cout <<  "  Duals:\n\t";
   for(int i=0; i<dual.a2ab.size()-1 && i<5; ++i)
   {
-     std::cout << dual.a2ab[i] << ", ";
+     std::cout << dual.a2ab[i] << ": ";
      for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
         std::cout << dual.ab2b[j] <<", ";
      std::cout << "; ";
@@ -273,7 +293,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
      std::cout <<  ".......";
      for(int i=dual.a2ab.size()-5; i<dual.a2ab.size()-1; ++i)
      {
-       std::cout << dual.a2ab[i] << ", ";
+       std::cout << dual.a2ab[i] << ": ";
        for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
           std::cout << dual.ab2b[j] <<", ";
        std::cout << "; ";
@@ -325,10 +345,24 @@ void test_unit(Omega_h::Library *lib)
      }
     std::cout <<  "\n";
 
+    auto up12 = m.ask_up(1, 2);
+    std::cout << "\nask_up(1, 2):a2ab " <<  up12.a2ab.size();
+    for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
+       std::cout << " " << up12.a2ab[i];
+    std::cout << "\n";
+    std::cout << "\nask_up(1, 2):ab2b " <<  up12.ab2b.size();
+    for(int i=0; i<20 && i<up12.ab2b.size(); ++i)
+       std::cout << " " << up12.ab2b[i]; //12 :0 1 ;0 2; 1 2; 0 3; 1 3; 2 3
+    std::cout << "\n Entries";
+    for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
+       std::cout << " " << up12.ab2b[up12.a2ab[i]];
+    std::cout << "\n";
+
+
     OMEGA_H_CHECK(m.ask_down(3, 0).ab2b == Omega_h::LOs({0, 1, 2, 3})); //AdjPtr[][]
     auto down32 = m.ask_down(3, 2);  // 0 1 3 2
     auto down31 = m.ask_down(3, 1);  // 0 3 1 2 4 5
-    auto down21 = m.ask_down(2, 1);  //1 3 0 0 4 2 1 2 5 3 5 4 (size=12)
+    auto down21 = m.ask_down(2, 1);  //1 3 0 ;0 4 2; 1 2 5; 3 5 4 (size=12)
     auto down20 = m.ask_down(2, 0);  //  0 2 1 0 1 3 2 0 3 1 2 3
     auto down10 = m.ask_down(1, 0); // 0 1 2 0 0 3 1 2 1 3 2 3
 
@@ -337,6 +371,12 @@ void test_unit(Omega_h::Library *lib)
     {
       std::cout << " " << down20.ab2b[i];
     }
+    std::cout <<  "\nDown(2,1).ab2b:\n";
+    for(int i=0; i<down21.ab2b.size() && i<20; ++i)
+    {
+      std::cout << " " << down21.ab2b[i];
+    }
+
     std::cout <<  "\n----------------\n";
     //const auto coords = m.coords(); //no tag_base for coords
 }

@@ -1,6 +1,8 @@
 #include <iostream>
 #include <cmath>
 #include <utility>
+#include <cstdlib>
+#include <sstream>
 
 #include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
@@ -29,21 +31,14 @@ namespace g = GITRm;
 #define DO_TEST 0
 int main(int argc, char** argv) {
 
+  //TODO set points here X={0, 0.416667, 0.25}
+  Omega_h::Vector<3> orig{2, 0.5,0.3};
+  Omega_h::Vector<3> dest{-1.1,0,0};
+
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::gmsh::read(argv[1], world);
 
-#if DO_TEST==1
-  test_unit(&lib);
-  print_mesh_stat(mesh);
-  test_barycentric1();
-  test_barycentric2();
-  test_barycentric_tri();
-  test_line_tri_intx();
-#endif
-
-  // common mesh data
-  // dual, up, down are Adj ~ Graph{arrays:LOs a2ab,ab2b}
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto down_f2e = mesh.ask_down(2,1);
@@ -58,41 +53,48 @@ int main(int argc, char** argv) {
   const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
-
-  Omega_h::LO nptcl = 2; //total
-
-  //Simple particle data
-  Omega_h::Few< Omega_h::Vector<3>, 3> dest{ {1.8,1.0,0.5}, {0.26,0.2,0.12}};
-  Omega_h::Few< Omega_h::Vector<3>, 3> orig{ {0.8,0.3,0.7}, {0.15,0.1,0.2}};
+  Omega_h::LO nptcl = 1;
   Omega_h::Write<Omega_h::Real> bccs(4*nptcl, -1.0);
-  Omega_h::Write<Omega_h::Real> xpoints(3*nptcl, -1.0); //use sparse ?
-
+  Omega_h::Write<Omega_h::Real> xpoints(3*nptcl, -1.0);
   Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1); // found or not
   //To store adj_elem for subsequent searches. Once ptcl is found/crossed, this is reset.
   Omega_h::Write<Omega_h::LO> elem_ids(nptcl); //next element to search for
-
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(nptcl, -1);
-  // Particle ownership is not yet here.
-
   //Which particle belongs to which element ?
-  elem_ids[0] = 26; //173{0.15,0.1,0.2}; 26{0.8,0.3,0.7}
-  elem_ids[1] = 150; //temporary
+  elem_ids[0] =0;
 
   Omega_h::LO ptcls=1; //per group
   Omega_h::LO loops = 0;
 
   //.data() returns read only ?
-  g::search_mesh(ptcls, nelems, orig.data(), dest.data(), dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
+  g::search_mesh(ptcls, nelems, &orig, &dest, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
      coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
 
+  std::string print = (part_flags[0])? "false" :"true";
   g::print_array(&xpoints[0], 3, "XPOINT");
   g::print_array(&bccs[0], 3, "BCCS");
-  Omega_h::vtk::write_parallel("cube", &mesh);
-  std::cout << "LOOPS " << loops << "\n";
+
+  std::cout << "Element ID of Particle1 " << elem_ids[0] << " ;Xface " << coll_adj_face_ids[0] << " ;LOOPS " << loops << "\n";
+  std::cout << "Found? " << print << "\n";
+
+  //for collision cross-check test non-containment in any element
+  Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
+  int found_in = -1;
+  for(int ielem =0; ielem<nelems; ++ielem)
+  {
+    bcc= {-1,-1,-1,-1};
+    const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
+    const auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+    const bool res = g::find_barycentric_tet(M, dest, bcc);
+    if(g::all_positive(bcc.data(), 4))
+      found_in = ielem;
+  }
+  std::cout << "Found? " << found_in << "\n";
+
+  OMEGA_H_CHECK(found_in == -1);
+
   return 0;
 }
-//LO a....
-//a.get(i)
-
-
-
+//origin: (0 0 0); dest: (-1 1 1); starts off on surface, not part of boundary, collision not detected
+//-1,1,1 0,0,0  found in 144 !
+// 0.1,0.1,0 11,1,-1 no xpt

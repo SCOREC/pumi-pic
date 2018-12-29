@@ -98,7 +98,6 @@ int main(int argc, char** argv) {
   int found_in = -1;
   for(int ielem =0; ielem<nelems; ++ielem)
   {
-    bcc= {-1,-1,-1,-1};
     const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
     const auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
     const bool res = g::find_barycentric_tet(M, dest, bcc);

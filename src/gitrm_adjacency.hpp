@@ -205,6 +205,8 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Write<Omega_h::Real> &bcc)
 {
+  for(Omega_h::LO i=0; i<3; ++i) bcc[i] = -1;
+
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
   for(Omega_h::LO iface=0; iface<4; ++iface)
@@ -693,7 +695,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
       {
         Omega_h::LO adj_elem_id=-1, adj_face_id=-1, cross_edge = -1;
         bool next_elem = false;
-        Omega_h::Vector<3>  xpoint{0,0,0};
+        Omega_h::Vector<3> xpoint{0,0,0};
         Omega_h::LO face_id = continue_coll? coll_adj_face_ids[iptcl]:coll_face_id;
         auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
         const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);

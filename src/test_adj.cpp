@@ -31,10 +31,11 @@ namespace g = GITRm;
 #define DO_TEST 0
 int main(int argc, char** argv) {
 
+  //Unexpected results: all on surface. origin: (0 0 0); dest: (-1 1 1); -1,1,1  0,0,0;  0.1,0.1,0  11,1,-1
 
   if(argc != 4)
   {
-    std::cout << "Usage: ./search mesh init final\n";
+    std::cout << "Usage: ./search mesh init final\n Example: ./search cube.msh 2,0.5,0.2  4,0.9,0.3 \n";
     exit(1);
   }
   std::stringstream ss1(argv[2]);
@@ -43,7 +44,6 @@ int main(int argc, char** argv) {
   Omega_h::Vector<3> orig{0,0,0};
   Omega_h::Vector<3> dest{0,0,0};
 
-  std::cout << "Origin: " << argv[2] << " Final " << argv[3] << "\n";
   int i=0;
   while(ss1.good())
   {
@@ -78,11 +78,11 @@ int main(int argc, char** argv) {
   const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
+  //only one particle is handled
   Omega_h::LO nptcl = 1;
   Omega_h::Write<Omega_h::Real> bccs(4*nptcl, -1.0);
   Omega_h::Write<Omega_h::Real> xpoints(3*nptcl, -1.0);
   Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1); // found or not
-  //To store adj_elem for subsequent searches. Once ptcl is found/crossed, this is reset.
   Omega_h::Write<Omega_h::LO> elem_ids(nptcl); //next element to search for
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(nptcl, -1);
   //Which particle belongs to which element ?
@@ -91,16 +91,8 @@ int main(int argc, char** argv) {
   Omega_h::LO ptcls=1; //per group
   Omega_h::LO loops = 0;
 
-  //.data() returns read only ?
   g::search_mesh(ptcls, nelems, &orig, &dest, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
      coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
-
-  g::print_array(&xpoints[0], 3, "XPOINT");
-  g::print_array(&bccs[0], 3, "BCCS");
-
-  std::cout << "Element ID of Particle1 " << elem_ids[0] << " ;Xface " << coll_adj_face_ids[0] << " ;LOOPS " << loops << "\n";
-
-  //search this particle in all elements in serial and compare with the above result
 
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
   int found_in = -1;
@@ -113,10 +105,12 @@ int main(int argc, char** argv) {
     if(g::all_positive(bcc.data(), 4))
       found_in = ielem;
   }
+#ifdef DEBUG
+  std::cout << "Passed adjacency search test: origin: " << orig[0] << "," << orig[1] << "," << orig[2]
+            <<  " Dest: " << dest[0] << "," << dest[1] << "," << dest[2] << ". Dest. element: "
+            << elem_ids[0] << " found_in " << found_in << " #loops: " << loops << "\n";
+#endif // DEBUG
 
-  OMEGA_H_CHECK(found_in == elem_ids[0]);
-  return 0;
+  int status = (found_in == elem_ids[0])?0:1;
+  return status;
 }
-//origin: (0 0 0); dest: (-1 1 1); starts off on surface, not part of boundary, collision not detected
-//-1,1,1 0,0,0  found in 144 !
-// 0.1,0.1,0 11,1,-1 no xpt

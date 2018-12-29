@@ -24,7 +24,7 @@
 
 #include "gitrm_utils.hpp"
 
-const static Omega_h::Real EPSILON = 1e-10;
+const static Omega_h::Real EPSILON = 1e-6;
 
 //#define DEBUG 1
 
@@ -49,12 +49,26 @@ void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool li
 }
 
 bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=1e-10)
+    Omega_h::Real tol=1e-6)
 {
   return std::abs(a-b) <= tol;
 }
 
-bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=1e-10)
+bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
+    Omega_h::Real tol=1e-6)
+{
+  for(Omega_h::LO i=0; i<n; ++i)
+  {
+    if(!almost_equal(a[i],b[i]))
+    {
+      std::cout <<i << " " << a[i] << " " << b[i] << " "<< std::abs(a[i]-b[i]) << " False \n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=1e-6)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
@@ -64,7 +78,7 @@ bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=1e-
   return true;
 }
 
-Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-10)
+Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -140,7 +154,7 @@ void print_array(const double* a, int n=3, std::string name=" ")
 //TODO merge with or move to gitrm_utils::compare_array
 template <typename T>
 OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
-  Omega_h::Real tol=1e-10)
+  Omega_h::Real tol=1e-6)
 {
   for(Omega_h::LO i=0; i<n-1; ++i)
   {
@@ -293,7 +307,7 @@ OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
 }
 
 //TODO Fix, this defined in utils not found here
-Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=1e-10)
+Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=1e-6)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -319,14 +333,14 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
   Omega_h::Vector<DIM> cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
   Omega_h::Vector<DIM> norm = Omega_h::normalize(cross);
   Omega_h::Real area = osh_dot(norm, cross);
-  if(std::abs(area) < 1e-10)
+  if(std::abs(area) < 1e-6)
     return 0;
 
   bc[0] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
   bc[1] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
   bc[2] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
 
-  OMEGA_H_CHECK(std::abs(1.0 - bc[0] - bc[1] - bc[2]) <= 1e-10);
+  OMEGA_H_CHECK(std::abs(1.0 - bc[0] - bc[1] - bc[2]) <= 1e-6);
 
   return 1;
 }
@@ -376,7 +390,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
       if(find_barycentric_tri_simple(abc, xpoint, bcc))
       {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0)
-          *edge = min_index_(bcc, 3, 1e-10);
+          *edge = min_index_(bcc, 3, 1e-6);
         else if(compare_vector_directions(normv, line))
           found = true;
       }
@@ -515,7 +529,7 @@ OMEGA_H_INLINE bool line_triangle_intx_combined(const Omega_h::Few<Omega_h::Vect
 
     // Edges ordered as e0, e1, e2 as counter-clockwise on a face; e0=v0_to_v1
     const Omega_h::Reals bcc{bcu, 1.0-(bcu+bcv), bcv}; //works .TODO check how ???
-    edge = min_index_(bcc, 3, 1e-10);
+    edge = min_index_(bcc, 3, 1e-6);
 #ifdef DEBUG
     std::cout<<"\n minEDGE "<<edge<<" bcoords:"<<bcc.data()[0]<<" "<<bcc.data()[1]<<" "<<bcc.data()[2]<<"\n";
 #endif // DEBUG

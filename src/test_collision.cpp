@@ -32,8 +32,10 @@ namespace g = GITRm;
 int main(int argc, char** argv) {
 
   //TODO set points here X={0, 0.416667, 0.25}
+  //Unexpected results : all on surface. origin: (0 0 0); dest: (-1 1 1); 0.1,0.1,0  11,1,-1
+
   Omega_h::Vector<3> orig{2, 0.5,0.3};
-  Omega_h::Vector<3> dest{-1.1,0,0};
+  Omega_h::Vector<3> dest{1.1,50,0};
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
@@ -57,7 +59,6 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::Real> bccs(4*nptcl, -1.0);
   Omega_h::Write<Omega_h::Real> xpoints(3*nptcl, -1.0);
   Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1); // found or not
-  //To store adj_elem for subsequent searches. Once ptcl is found/crossed, this is reset.
   Omega_h::Write<Omega_h::LO> elem_ids(nptcl); //next element to search for
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(nptcl, -1);
   //Which particle belongs to which element ?
@@ -69,13 +70,6 @@ int main(int argc, char** argv) {
   //.data() returns read only ?
   g::search_mesh(ptcls, nelems, &orig, &dest, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
      coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
-
-  std::string print = (part_flags[0])? "false" :"true";
-  g::print_array(&xpoints[0], 3, "XPOINT");
-  g::print_array(&bccs[0], 3, "BCCS");
-
-  std::cout << "Element ID of Particle1 " << elem_ids[0] << " ;Xface " << coll_adj_face_ids[0] << " ;LOOPS " << loops << "\n";
-  std::cout << "Found? " << print << "\n";
 
   //for collision cross-check test non-containment in any element
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
@@ -89,12 +83,19 @@ int main(int argc, char** argv) {
     if(g::all_positive(bcc.data(), 4))
       found_in = ielem;
   }
-  std::cout << "Found? " << found_in << "\n";
+#ifdef DEBUG
+    std::cout << "Collision test: origin: " << orig[0] << "," << orig[1] << "," << orig[2]
+            << " Dest: " << dest[0] << "," << dest[1] << "," << dest[2]
+            << ". Xpt: " << xpoints[0] << "," << xpoints[1] << "," << xpoints[2]
+            << " #loops: " << loops << " Element_id: " << found_in << "\n";
+#endif // DEBUG
 
-  OMEGA_H_CHECK(found_in == -1);
+  Omega_h::Write<Omega_h::Real> res(3);
+  res = {1.99091,1,0.29697};
 
-  return 0;
+  int status = 1;
+  if(g::almost_equal(xpoints.data(), res.data()) && found_in == -1)
+    status = 0;
+
+  return status;
 }
-//origin: (0 0 0); dest: (-1 1 1); starts off on surface, not part of boundary, collision not detected
-//-1,1,1 0,0,0  found in 144 !
-// 0.1,0.1,0 11,1,-1 no xpt

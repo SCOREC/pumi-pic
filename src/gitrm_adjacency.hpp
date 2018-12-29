@@ -95,7 +95,7 @@ Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
 
 
 Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b)// OMEGA_H_NOEXCEPT
+   const Omega_h::Vector<3> &b)
 {
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }

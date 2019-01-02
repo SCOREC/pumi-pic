@@ -2,27 +2,11 @@
 #define GITRM_ADJACENCY_HPP
 
 #include <iostream>
-#include <cmath>
-#include <utility>
 
 #include "Omega_h_for.hpp"
-#include "Omega_h_file.hpp"  //gmsh
-#include "Omega_h_tag.hpp"
-#include "Omega_h_adj.hpp"
-//#include "Omega_h_array.hpp"
-#include "Omega_h_array_ops.hpp"
-#include "Omega_h_element.hpp"
-#include "Omega_h_scalar.hpp" //divide
-#include "Omega_h_mark.hpp"
 #include "Omega_h_fail.hpp" //assert
-
-#include "Omega_h_mesh.hpp"
-#include "Omega_h_shape.hpp"
-#include "Omega_h_build.hpp"
-#include "Omega_h_compare.hpp"
-#include "Omega_h_int_scan.hpp" //offset
-
-#include "gitrm_utils.hpp"
+#include "Omega_h_adj.hpp"
+#include "Omega_h_array_ops.hpp"
 
 const static Omega_h::Real EPSILON = 1e-6;
 
@@ -31,8 +15,8 @@ const static Omega_h::Real EPSILON = 1e-6;
 namespace GITRm
 {
 
-const Omega_h::LO DIM = 3; // mesh DIM. Other DIMs will cause error
-const Omega_h::LO FDIM = 2; //mesh face DIM
+const Omega_h::LO DIM = 3; // mesh dimension. Only 3D mesh
+const Omega_h::LO FDIM = 2; //mesh face dimension
 
 void print_matrix(const Omega_h::Matrix<3, 4> &M)
 {
@@ -48,13 +32,13 @@ void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool li
   std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
 }
 
-bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=1e-6)
 {
   return std::abs(a-b) <= tol;
 }
 
-bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
     Omega_h::Real tol=1e-6)
 {
   for(Omega_h::LO i=0; i<n; ++i)
@@ -68,17 +52,17 @@ bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=
   return true;
 }
 
-bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=1e-6)
+OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=0)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
-    if(a[i] < 0.0) //tol) // TODO optimize. if val=0, then <=0 detects on both elements; <0 neither
+    if(a[i] < tol) // TODO set default the right tolerance
      return false;
   }
   return true;
 }
 
-Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
+OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -94,7 +78,7 @@ Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
 }
 
 
-Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
+OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
    const Omega_h::Vector<3> &b)
 {
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
@@ -113,11 +97,12 @@ Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
             \ | /
               1
 */
-//retrieve face for bcc and adj the same way
+//retrieve face coords in the Omega_h order
 OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
           const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc)
 {
    //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
+    OMEGA_H_CHECK(iface<4 && iface>=0);
     abc[0] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 0)];
     abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
     abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
@@ -200,7 +185,6 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 }
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
-//  corresp. to vertex obtained from simplex_opposite_template(DIM, 2, iface) ?
 //TODO Warning: Check opposite_template use in this before using
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Write<Omega_h::Real> &bcc)
@@ -209,20 +193,16 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
-  for(Omega_h::LO iface=0; iface<4; ++iface)
+  for(Omega_h::LO iface=0; iface<4; ++iface) // TODO last not needed
   {
     get_face_coords(Mat, iface, abc);
-
     auto vab = abc[1] - abc[0]; //b - a;
     auto vac = abc[2] - abc[0]; //c - a;
     auto vap = pos - abc[0]; // p - a;
-    //associate opposite vertex
     vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
 
 #ifdef DEBUG
     std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
-    //print_matrix({abc[0],abc[1],abc[2]});  //FIX this
-    //print_osh_vector(pos, "pos"); //FIX this
     print_array(abc[0].data(),3);
     print_array(abc[1].data(),3);
     print_array(abc[2].data(),3);
@@ -230,17 +210,20 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
     std::cout << "\n";
 #endif // DEBUG
   }
-  get_face_coords(Mat, 0, abc); // bottom face, iface=0
-  OMEGA_H_CHECK(3 == Omega_h::simplex_opposite_template(DIM, FDIM, 0)); //iface=0 ?
+  //volume using bottom face=0
+  get_face_coords(Mat, 0, abc);
+  auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
+  OMEGA_H_CHECK(3 == vtx3);
+  // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
   Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
-  Omega_h::Real vol6 = osh_dot(Mat[3]-Mat[0], cross_ac_ab);
+  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
   Omega_h::Real inv_vol = 0.0;
-  if(vol6 > 1e-10) // TODO include delta
+  if(vol6 > 1e-10) // TODO tolerance
     inv_vol = 1.0/vol6;
   else
     return 0;
 
-  bcc[0] = inv_vol * vals[0]; //cooresp. to vtx != 0, but opp. to face 0.
+  bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
   bcc[1] = inv_vol * vals[1];
   bcc[2] = inv_vol * vals[2];
   bcc[3] = inv_vol * vals[3]; // 1-others
@@ -380,6 +363,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   const Omega_h::Vector<DIM> snorm_unit = Omega_h::normalize(normv);
   const Omega_h::Real dist2plane = osh_dot(abc[0] - origin, snorm_unit);
   const Omega_h::Real proj_lined =  osh_dot(line, snorm_unit);
+  const Omega_h::Vector<DIM> surf2dest = dest - abc[0];
 
   if(std::abs(proj_lined >0))
   {
@@ -389,12 +373,26 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     {
       xpoint = origin + par_t * line;
       Omega_h::Write<Omega_h::Real> bcc{0, 0, 0};
-      if(find_barycentric_tri_simple(abc, xpoint, bcc))
+      bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
+      if(res)
       {
-        if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0)
-          *edge = min_index_(bcc, 3, 1e-6);
-        else if(compare_vector_directions(normv, line))
-          found = true;
+        if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
+          *edge = min_index_(bcc, 3, 1e-6); //TODO test tolerance
+        else
+        {
+          const Omega_h::Real proj = osh_dot(snorm_unit, surf2dest);
+          if(proj >0) found = true;
+#ifdef DEBUG
+          else if(proj<0)
+          {
+            std::cout << "Particle Entering surface\n";
+          }
+          else if(almost_equal(proj,0.0)) //TODO use tol
+          {
+            std::cout << "Particle path is on surface\n";
+          }
+#endif // DEBUG
+        }
       }
 #ifdef DEBUG
       print_array(bcc.data(), 3, "BCC");
@@ -422,8 +420,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   return found;
 }
 
-
-//TODO pass base Adj and use its members a2ab ab2b, instead of passing the member ref.
+// TODO update if to be used
+// TODO pass base Adj and use its members a2ab ab2b, instead of passing the member ref.
 OMEGA_H_INLINE bool wall_collision_search(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &face, const Omega_h::LO fid,
   const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest, const Omega_h::LOs &down_f2es,
   const Omega_h::LOs &up_e2f_edges, const Omega_h::LOs &up_e2f_faces, Omega_h::Read<Omega_h::I8> &side_is_exposed,
@@ -516,10 +514,21 @@ OMEGA_H_INLINE bool line_triangle_intx_combined(const Omega_h::Few<Omega_h::Vect
   // 0= self intersection with originating face
   bool validt = (paramt < bound_intol || paramt >1.0)? false : true;
   bool valid_uv = (bcu < 0 || bcv < 0 || bcu+bcv > 1.0)? false : true;
-  bool match_dir = compare_vector_directions(normv, line);
+  const Omega_h::Vector<DIM> surf2dest = dest - abc[0];
 
+  const Omega_h::Real match_dir = osh_dot(normv, surf2dest);
+#ifdef DEBUG
+  if(match_dir<0)
+  {
+     std::cout << "Particle Entering surface\n";
+  }
+  else if(almost_equal(match_dir,0.0))
+  {
+     std::cout << "Particle path is on surface\n";
+  }
+#endif // DEBUG
   //found
-  if(validt && valid_uv && match_dir)
+  if(validt && valid_uv && match_dir>0)
   {
       xpoint = origin + paramt*line;
       status = true;
@@ -624,6 +633,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
           elem_ids[iptcl] = ielem;
           for(Omega_h::LO i=0; i<4; ++i) bccs[4*iptcl+i] = bcc[i];
           OMEGA_H_CHECK(almost_equal(bcc[0] + bcc[1] + bcc[2] +bcc[3], 1.0)); //?
+          // TODO interpolate Fields to ptcl position, and store them, for push
 #ifdef DEBUG
           std::cout << "********found in " << ielem << " \n";
           print_matrix(M);

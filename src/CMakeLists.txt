@@ -8,13 +8,14 @@ find_package(Omega_h REQUIRED 8.2.0)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(SOURCES
   #test_collision.cpp
-  test_adj.cpp
+  #test_adj.cpp
+  test_barycentric.cpp
   #gitrm.cpp
   )
 
 set(HEADERS
   gitrm_adjacency.hpp
-  gitrm_utils.hpp
+  #gitrm_utils.hpp
   )
 
 add_executable(gitrm "${SOURCES}" "${HEADERS}")

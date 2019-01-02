@@ -1,27 +1,4 @@
-#include <iostream>
-#include <cmath>
-#include <utility>
-#include <cstdlib>
-#include <sstream>
 
-#include "Omega_h_for.hpp"
-#include "Omega_h_file.hpp"  //gmsh
-#include "Omega_h_tag.hpp"
-#include "Omega_h_adj.hpp"
-//#include "Omega_h_array.hpp"
-#include "Omega_h_array_ops.hpp"
-#include "Omega_h_element.hpp"
-#include "Omega_h_scalar.hpp" //divide
-#include "Omega_h_mark.hpp"
-#include "Omega_h_fail.hpp" //assert
-
-#include "Omega_h_mesh.hpp"
-#include "Omega_h_shape.hpp"
-#include "Omega_h_build.hpp"
-#include "Omega_h_compare.hpp"
-#include "Omega_h_reduce.hpp"
-
-#include "gitrm_utils.hpp"
 #include "gitrm_adjacency.hpp"
 #include "unit_tests.hpp"
 

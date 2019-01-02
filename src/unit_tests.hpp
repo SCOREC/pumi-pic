@@ -6,6 +6,7 @@
 #include <utility>
 #include <exception>
 #include <typeinfo>
+#include <sstream>
 
 #include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
@@ -24,57 +25,77 @@
 #include "Omega_h_compare.hpp"
 
 #include "gitrm_adjacency.hpp"
-#include "gitrm_utils.hpp"
 
+//#define DEBUG 1
 
 namespace g = GITRm;
 
 //static in separate file if not in class
-void test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
+bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
     const Omega_h::Vector<3> &p, const double *v, int pos=-1, bool intent=0)
 {
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
   bool res = g::find_barycentric_tet(M, p, bcc);
   if(pos == -1)
   {
-    //assumes size of v is 4 :)
-    for(int i=0; i<4; ++i)
-    {
-      if(std::abs(bcc[i]- v[i]) > 1e-10)
-          Omega_h_fail("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
-                       " bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
-                    p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
-    }
-    std::cout << "Barycentric test passed for p=";
+  #ifdef DEBUG
     g::print_osh_vector(M[0], "", false);
     g::print_osh_vector(M[1], "", false);
     g::print_osh_vector(M[2], "", false);
     g::print_osh_vector(M[3], "", false);
-    g::print_osh_vector(p);
-    //print_osh_vectoor(bc.data());
-    return;
+    g::print_osh_vector(p, " P");
+    g::print_array(bcc.data(), 4, "BCC");
+#endif // DEBUG
+
+    //assumes size of v is 4
+    for(int i=0; i<4; ++i)
+    {
+      if(std::abs(bcc[i]- v[i]) > 1e-10)
+      {
+#ifdef DEBUG
+          //Omega_h_fail format
+          printf("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
+                       " calculated_bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
+                    p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
+#endif // DEBUG
+        return 0;
+      }
+    }
+#ifdef DEBUG
+    std::cout << "Barycentric test passed \n";
+#endif // DEBUG
   }
   else  //, v has size=1
   {
-    if(g::almost_equal(bcc[pos], v[0])) //    OMEGA_H_CHECK(bc[pos]== v);
+    if(g::almost_equal(bcc[pos], v[0]))
+    {
+#ifdef DEBUG
       std::cout << "Barycentric test passed for (" << p[0] << ","
                 << p[1] << "," << p[2]<< ") => " << v[0] << "==" << bcc[pos] << "\n";
+#endif // DEBUG
+    }
     else if(intent)
     {
+#ifdef DEBUG
       std::cout << "Barycentric test intented to fail (" << p[0] << ","
                 << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bcc[pos] << " success :)\n";
+#endif // DEBUG
     }
     else
     {
+#ifdef DEBUG
       g::print_matrix(M );
       g::print_osh_vector(p, "p");
       Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bcc[pos]);
+#endif // DEBUG
+      return 0;
     }
   }
+  return 1;
 }
 
 
-void test_barycentric1()
+bool test_barycentric1()
 {
   const Omega_h::Vector<3> p1{0.0,1.0,0.0}, p2{0.5, 0.0, 0.0},
       p3{1.0,1.0,0.0}, p4{0.5,1.0,0.5};
@@ -89,16 +110,33 @@ void test_barycentric1()
   int index = -1;
   for(int i=0; i<4; ++i)
   {
+#ifdef DEBUG
     std::cout << "Barycentric test : " << bcname[i] <<  " \n";
+#endif // DEBUG
     index = Omega_h::simplex_opposite_template(3, 2, i);
-    test_barycentric_tet(M, M[index], bcc_mat[i].data());
+    if(test_barycentric_tet(M, M[index], bcc_mat[i].data()))
+    {
+#ifdef DEBUG
+      std::cout << "Passed \n";
+#endif // DEBUG
+    }
+    else
+    {
+#ifdef DEBUG
+      std::cout << "Failed \n";
+#endif // DEBUG
+      return 0;
+    }
   }
 
   double val = 1.0;
-  test_barycentric_tet(M, p2, &val, 2, 1);
+  if(!test_barycentric_tet(M, p2, &val, 2, 1))
+    return 0;
+
+  return 1;
 }
 
-void test_barycentric2()
+bool test_barycentric2()
 {
   const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{1.0, 0.0, 0.0},
       p3{0.5,0.5,0.0}, p4{0.5,0.25,1.0};
@@ -107,27 +145,34 @@ void test_barycentric2()
   const Omega_h::Vector<3> p{0.2, 0.1, 0.1};
   double vals[] = {0.1, 0.15, 0.675, 0.075};
 
-  test_barycentric_tet({p1, p2, p3, p4}, p, vals);
+  if( !test_barycentric_tet({p1, p2, p3, p4}, p, vals))
+    return 0;
 
   val = 0.1;
   const Omega_h::Vector<3> pt1{1.5, 0.1, 0.1};
-  test_barycentric_tet({p1, p2, p3, p4}, pt1, &val, 0);
+  if( !test_barycentric_tet({p1, p2, p3, p4}, pt1, &val, 0))
+    return 0;
 
   val = 0.35;
   const Omega_h::Vector<3> pt2{0.1, 0.2, 0.1};
-  test_barycentric_tet({p1, p2, p3, p4}, pt2, &val, 1);
+  if( !test_barycentric_tet({p1, p2, p3, p4}, pt2, &val, 1))
+     return 0;
 
   val = 1.075;
   const Omega_h::Vector<3> pt3{0.1, -0.2, 0.1};
-  test_barycentric_tet({p1, p2, p3, p4}, pt3, &val, 2);
+  if( !test_barycentric_tet({p1, p2, p3, p4}, pt3, &val, 2))
+     return 0;
 
   val = 0.325;
   const Omega_h::Vector<3> pt4{0.1, -0.2, -0.1};
-  test_barycentric_tet({p1, p2, p3, p4}, pt4, &val, 3);
 
+  if( !test_barycentric_tet({p1, p2, p3, p4}, pt4, &val, 3))
+     return 0;
+
+  return 1;
 }
 
-void test_barycentric_tri()
+bool test_barycentric_tri()
 {
   const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{2.0, 0.0, 0.0}, p3{1.0,1.0,0.0};
   const Omega_h::Matrix<3, 3> M{p1, p2, p3};
@@ -141,14 +186,22 @@ void test_barycentric_tri()
   int index = -1;
   for(int i=0; i<3; ++i)
   {
+#ifdef DEBUG
     std::cout << "Barycentric test : " << bcname[i] <<  " \n";
+#endif // DEBUG
     index = Omega_h::simplex_opposite_template(2, 1, i);
     g::find_barycentric_tri_simple(M, M[index], bc);
     bool res = g::compare_array(bc.data(), bcc_mat[i].data(), 3);
+#ifdef DEBUG
     g::print_array(bc.data(), 3, "BC_tri");
-
+#endif // DEBUG
     if(!res)
-      Omega_h_fail("find_barycentric_tri failed"); //TODO add values
+    {
+#ifdef DEBUG
+      std::cout << "Failed \n";
+#endif // DEBUG
+       return 0;
+    }
 
   }
   const Omega_h::Vector<3> xp1{0.0, -0.5, 0.0};
@@ -159,11 +212,18 @@ void test_barycentric_tri()
   for(int i=0; i<3; ++i)
   {
     g::find_barycentric_tri_simple(M, xpoints[i], bc);
+#ifdef DEBUG
     g::print_array(bc.data(), 3, "BC_tri");
-
+#endif // DEBUG
     if(bc[i] >= 0)
-      Omega_h_fail("BC coords expected -ve\n");
+    {
+#ifdef DEBUG
+      std::cout << "Failed: BC coords expected -ve \n";
+#endif // DEBUG
+      return 0;
+    }
   }
+  return 1;
 }
 
 void test_line_tri_intx()

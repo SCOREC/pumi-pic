@@ -6,7 +6,7 @@
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
 #include "Omega_h_adj.hpp"
-//#include "Omega_h_array.hpp"
+#include "Omega_h_array.hpp"
 #include "Omega_h_array_ops.hpp"
 #include "Omega_h_element.hpp"
 #include "Omega_h_scalar.hpp" //divide
@@ -19,14 +19,13 @@
 #include "Omega_h_compare.hpp"
 #include "Omega_h_reduce.hpp"
 
-#include "gitrm_utils.hpp"
 #include "gitrm_adjacency.hpp"
 #include "unit_tests.hpp"
 
 namespace o = Omega_h;
 namespace g = GITRm;
 
-#define DO_TEST 0
+#define DO_TEST 1
 int main(int argc, char** argv) {
 
   auto lib = Omega_h::Library(&argc, &argv);
@@ -34,7 +33,7 @@ int main(int argc, char** argv) {
   auto mesh = Omega_h::gmsh::read(argv[1], world);
 
 #if DO_TEST==1
-  test_unit(&lib);
+  //test_unit(&lib);
   print_mesh_stat(mesh);
   test_barycentric1();
   test_barycentric2();
@@ -60,6 +59,11 @@ int main(int argc, char** argv) {
 
 
   Omega_h::LO nptcl = 2; //total
+
+  Omega_h::Write<Omega_h::Real> eFieldsPre(3*nptcl,0.1);
+  Omega_h::Write<Omega_h::Real> bFieldsPre(3*nptcl,0.1);
+  //mesh.add_tag(0, "EField", 3);
+
 
   //Simple particle data
   Omega_h::Few< Omega_h::Vector<3>, 3> dest{ {1.8,1.0,0.5}, {0.26,0.2,0.12}};

@@ -26,6 +26,8 @@ OMEGA_H_INLINE void doPushBoris( gitrmPtcls &ptcls, Omega_h::Write<Omega_h::Real
 
 }
 
+// Option to select various EFields removed, since it can be done while writing them in
+// previous step, in the search routine.
 OMEGA_H_INLINE void pushBoris( gitrmPtcls &ptcls, Omega_h::Real timeSpan)
 {
   Omega_h::Real dt = timeSpan;
@@ -40,8 +42,6 @@ OMEGA_H_INLINE void pushBoris( gitrmPtcls &ptcls, Omega_h::Real timeSpan)
 
   for (int s=0; s<nsteps; s++ )
   {
-// #if USESHEATHEFIELD > 0 Won't work
-
     // TODO OMEGA_H_CHECK(ptcls.eFieldsPre.size() > index); indx and array_size
 
     for(Omega_h::LO i=0; i<3; ++i)

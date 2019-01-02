@@ -8,8 +8,9 @@ find_package(Omega_h REQUIRED 8.2.0)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(SOURCES
   #test_collision.cpp
-  #test_adj.cpp
-  test_barycentric.cpp
+  test_adj.cpp
+  #test_barycentric.cpp
+  #test_linetri_intersection.cpp
   #gitrm.cpp
   )
 

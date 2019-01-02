@@ -8,13 +8,12 @@
 #include "Omega_h_adj.hpp"
 #include "Omega_h_array_ops.hpp"
 
-const static Omega_h::Real EPSILON = 1e-6;
-
 //#define DEBUG 1
 
 namespace GITRm
 {
-
+const static Omega_h::Real SURFACE_EXCLUDE = 1e-10;
+const static Omega_h::Real EPSILON = 1e-10;
 const Omega_h::LO DIM = 3; // mesh dimension. Only 3D mesh
 const Omega_h::LO FDIM = 2; //mesh face dimension
 
@@ -33,13 +32,13 @@ void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool li
 }
 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=1e-6)
+    Omega_h::Real tol=EPSILON)
 {
   return std::abs(a-b) <= tol;
 }
 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
-    Omega_h::Real tol=1e-6)
+    Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
@@ -52,7 +51,7 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   return true;
 }
 
-OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=0)
+OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
@@ -62,7 +61,7 @@ OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_
   return true;
 }
 
-OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=1e-6)
+OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -139,7 +138,7 @@ void print_array(const double* a, int n=3, std::string name=" ")
 //TODO merge with or move to gitrm_utils::compare_array
 template <typename T>
 OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
-  Omega_h::Real tol=1e-6)
+  Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n-1; ++i)
   {
@@ -218,7 +217,7 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
   Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
   Omega_h::Real inv_vol = 0.0;
-  if(vol6 > 1e-10) // TODO tolerance
+  if(vol6 > EPSILON) // TODO tolerance
     inv_vol = 1.0/vol6;
   else
     return 0;
@@ -239,7 +238,7 @@ OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
 {
   const Omega_h::Vector<3> dir = dest - origin; //Omega_h::normalize(dest - origin) ??
 
-  const Omega_h::Real tol = 1e-10; //macro ?
+  const Omega_h::Real tol = EPSILON;
   Omega_h::Few<Omega_h::Vector<3>, 3> abc;
   get_face_coords( M, face_id, abc);
 
@@ -292,7 +291,7 @@ OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
 }
 
 //TODO Fix, this defined in utils not found here
-Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=1e-6)
+Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -347,13 +346,13 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
 //TODO use tolerence
 OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
     const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, Omega_h::LO *edge=nullptr)
+    Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge)
 {
-  *edge = -1;
+  edge = -1;
   xpoint = {0, 0, 0};
 
   //Boundary exclusion. Don't set it globally and change randomnly.
-  const Omega_h::Real bound_intol = 1e-10; //TODO optimum value ?
+  const Omega_h::Real bound_intol = SURFACE_EXCLUDE; //TODO optimum value ?
 
   bool found = false;
   const Omega_h::Vector<DIM> line = dest - origin;
@@ -377,7 +376,9 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
       if(res)
       {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
-          *edge = min_index_(bcc, 3, 1e-6); //TODO test tolerance
+        {
+          edge = min_index_(bcc, 3, EPSILON); //TODO test tolerance
+        }
         else
         {
           const Omega_h::Real proj = osh_dot(snorm_unit, surf2dest);
@@ -429,7 +430,7 @@ OMEGA_H_INLINE bool wall_collision_search(const Omega_h::Few<Omega_h::Vector<DIM
   Omega_h::Vector<DIM> &xpoint)
 {
   Omega_h::LO edge = -1;
-  bool detected = line_triangle_intx_simple(face, origin, dest, xpoint, &edge);
+  bool detected = line_triangle_intx_simple(face, origin, dest, xpoint, edge);
   if(detected) return true;
   //one check on a face, then follow min_entry edge to next exposed face
   auto edge_id = down_f2es[fid*3 + edge];
@@ -471,7 +472,7 @@ OMEGA_H_INLINE bool line_triangle_intx_combined(const Omega_h::Few<Omega_h::Vect
   const Omega_h::Vector<DIM> line = dest - origin;
 
   //Boundary exclusion. Don't set it globally and change randomnly.
-  const Omega_h::Real bound_intol = 1e-10; //TODO optimum value ?
+  const Omega_h::Real bound_intol = SURFACE_EXCLUDE; //TODO optimum value ?
 
   Omega_h::LO edgev[6];
   //Needed ?
@@ -571,7 +572,9 @@ Continue while loop until all particles are done.
 Omega_h::Write data set are to be updated during the run. These will be replaced by 'particle_structures'.
 Kokkos functions to be used when Omega_h doesn't provide it.
 */
-//#define DEBUG 1
+// TODO Change if needed. Adjacency search excludes particle if on surface of an element by SURFACE_EXCLUDE. Because,
+// a point on boundary surface should be intersection, which is searched for only if adjacency search does not find it.
+// TODO pack global mesh derived data in a class and pass the object.
 OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Omega_h::Vector<3> *orig, const Omega_h::Vector<3> *dest,
    const Omega_h::Adj &dual, const Omega_h::Adj &down_r2f, const Omega_h::Adj &down_f2e, const Omega_h::Adj &up_e2f, const Omega_h::Adj &up_f2r,
    const Omega_h::Read<Omega_h::I8> &side_is_exposed, const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, const Omega_h::LOs &face_verts,
@@ -627,7 +630,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 
         const bool res = find_barycentric_tet(M, dest[iptcl], bcc);
 
-        if(all_positive(bcc.data(), 4))
+        if(all_positive(bcc.data(), 4, SURFACE_EXCLUDE))
         {
           part_flags.data()[iptcl] = 0;
           elem_ids[iptcl] = ielem;
@@ -713,7 +716,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 #ifdef DEBUG
         std::cout << "********* \n Call Wall collision for el,face_id " << ielem << "," << face_id << "\n";
 #endif //DEBUG
-        bool detected = line_triangle_intx_simple(face, orig[iptcl], dest[iptcl], xpoint, &cross_edge);
+        bool detected = line_triangle_intx_simple(face, orig[iptcl], dest[iptcl], xpoint, cross_edge);
 
         if(detected)
         {

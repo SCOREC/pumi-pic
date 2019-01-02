@@ -26,7 +26,7 @@
 
 #include "gitrm_adjacency.hpp"
 
-//#define DEBUG 1
+#define DEBUG 0
 
 namespace g = GITRm;
 
@@ -239,16 +239,20 @@ void test_line_tri_intx()
 
   const Omega_h::Matrix<3, 4> M{a,b,c,d};
 
-  Omega_h::Few<Omega_h::Vector<3>, 3> face{a,b,d};
+  Omega_h::Few<Omega_h::Vector<3>, 3> face; //{a,b,d};
 
   for(int i=0; i<4; ++i)
   {
     g::get_face_coords( M, i, face);
-    Omega_h::LO neg = -1;
-    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, &neg);
-    std::string status = res? "Found": "No";
-    g::print_array(xpoint.data(), 3, "XPT:");
-    std::cout << "--------\n";
+    Omega_h::LO edge = -1;
+    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, edge);
+    if(res)
+    {
+#if DEBUG>0
+      g::print_array(xpoint.data(), 3, "FoundXPT:");
+      std::cout << "--------\n";
+#endif // DEBUG
+    }
   }
 }
 

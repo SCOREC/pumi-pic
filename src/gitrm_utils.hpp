@@ -22,31 +22,142 @@
 #include "Omega_h_build.hpp"
 #include "Omega_h_compare.hpp"
 
-#include "gitrm_adjacency.hpp"
-
+#include "gitrm_constants.hpp"
 
 namespace GITRm{
 
 
-//TODO use it as library ?. Problem: functions defined here are not available in other headers !
-//many of them moved until it is fixed.
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
+    Omega_h::Real tol=EPSILON)
+{
+  return std::abs(a-b) <= tol;
+}
 
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
+    Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<n; ++i)
+  {
+    if(!almost_equal(a[i],b[i]))
+    {
+      std::cout <<i << " " << a[i] << " " << b[i] << " "<< std::abs(a[i]-b[i]) << " False \n";
+      return false;
+    }
+  }
+  return true;
+}
+
+OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<n; ++i)
+  {
+    if(a[i] < tol) // TODO set default the right tolerance
+     return false;
+  }
+  return true;
+}
+
+OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+{
+  Omega_h::LO ind=0;
+  Omega_h::Real min = a[0];
+  for(Omega_h::LO i=0; i<n-1; ++i)
+  {
+    if(min > a[i+1])
+    {
+      min = a[i+1];
+      ind = i+1;
+    }
+  }
+  return ind;
+}
+
+
+OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
+   const Omega_h::Vector<3> &b)
+{
+  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
+}
 
 OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
 {
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
+template <typename T>
+OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
+  Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<n-1; ++i)
+  {
+    if(std::abs(a[i]-b[i]) > tol)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
+     const Omega_h::Vector<DIM> &vb)
+{
+  for(Omega_h::LO i=0; i<DIM; ++i)
+  {
+    if((va.data()[i] < 0 && vb.data()[i] > 0) ||
+       (va.data()[i] > 0 && vb.data()[i] < 0))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+
+Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+{
+  Omega_h::LO ind=0;
+  Omega_h::Real min = a[0];
+  for(Omega_h::LO i=0; i<n-1; ++i)
+  {
+    if(min > a[i+1])
+    {
+      min = a[i+1];
+      ind = i+1;
+    }
+  }
+  return ind;
+}
+
+void print_matrix(const Omega_h::Matrix<3, 4> &M)
+{
+  std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
+  std::cout << "M1  " << M[1].data()[0] << ", " << M[1].data()[1] << ", " << M[1].data()[2] <<"\n";
+  std::cout << "M2  " << M[2].data()[0] << ", " << M[2].data()[1] << ", " << M[2].data()[2] <<"\n";
+  std::cout << "M3  " << M[3].data()[0] << ", " << M[3].data()[1] << ", " << M[3].data()[2] <<"\n";
+}
+
+
+void print_array(const double* a, int n=3, std::string name=" ")
+{
+  if(name!=" ")
+    std::cout << name << ": ";
+  for(int i=0; i<n; ++i)
+    std::cout << a[i] << ", ";
+  std::cout <<"\n";
+}
+
+void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
+{
+  std::string str = line_break ? ")\n" : "); ";
+  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
+}
 
 void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
      Omega_h::Write<Omega_h::Real> &bcc)
 {
-    //std::cout << "FOUND \n";
-    //print_matrix(M);  //include file problem ?
+    print_matrix(M);  //include file problem ?
     print_osh_vector(dest, "point");
     print_array(bcc.data(), 4, "BCoords");
-    //Omega_h::Real dist = find_smallest_dist2face(M, dest, bcc);
-    //std::cout << "Dist_to_closest_face " << dist <<  "\n";
 }
 } //namespace
 #endif

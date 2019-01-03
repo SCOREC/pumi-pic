@@ -7,81 +7,12 @@
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
 
+#include "gitrm_utils.hpp"
+#include "gitrm_constants.hpp"
 
-//#define DEBUG 1
 
 namespace GITRm
 {
-const static Omega_h::Real SURFACE_EXCLUDE = 1e-10;
-const static Omega_h::Real EPSILON = 1e-10;
-const Omega_h::LO DIM = 3; // mesh dimension. Only 3D mesh
-const Omega_h::LO FDIM = 2; //mesh face dimension
-
-void print_matrix(const Omega_h::Matrix<3, 4> &M)
-{
-  std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
-  std::cout << "M1  " << M[1].data()[0] << ", " << M[1].data()[1] << ", " << M[1].data()[2] <<"\n";
-  std::cout << "M2  " << M[2].data()[0] << ", " << M[2].data()[1] << ", " << M[2].data()[2] <<"\n";
-  std::cout << "M3  " << M[3].data()[0] << ", " << M[3].data()[1] << ", " << M[3].data()[2] <<"\n";
-}
-
-void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
-{
-  std::string str = line_break ? ")\n" : "); ";
-  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
-}
-
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=EPSILON)
-{
-  return std::abs(a-b) <= tol;
-}
-
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
-    Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(!almost_equal(a[i],b[i]))
-    {
-      std::cout <<i << " " << a[i] << " " << b[i] << " "<< std::abs(a[i]-b[i]) << " False \n";
-      return false;
-    }
-  }
-  return true;
-}
-
-OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(a[i] < tol) // TODO set default the right tolerance
-     return false;
-  }
-  return true;
-}
-
-OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  Omega_h::LO ind=0;
-  Omega_h::Real min = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(min > a[i+1])
-    {
-      min = a[i+1];
-      ind = i+1;
-    }
-  }
-  return ind;
-}
-
-
-OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b)
-{
-  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
-}
 
 /*
    see description: Omega_h_simplex.hpp, Omega_h_refine_topology.hpp line 26
@@ -111,7 +42,6 @@ OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
 #endif // DEBUG
 }
 
-
 OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
           const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<DIM>, 2> &ab)
 {
@@ -122,46 +52,6 @@ OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> 
     std::cout << "abc_index " << ab[0].data() << ", " << ab[1].data()
               << " iedge:" << iedge << "\n";
 #endif // DEBUG
-}
-
-//Merge with that in gitrm_utils
-void print_array(const double* a, int n=3, std::string name=" ")
-{
-  if(name!=" ")
-    std::cout << name << ": ";
-  for(int i=0; i<n; ++i)
-    std::cout << a[i] << ", ";
-  std::cout <<"\n";
-}
-
-
-//TODO merge with or move to gitrm_utils::compare_array
-template <typename T>
-OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
-  Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(std::abs(a[i]-b[i]) > tol)
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
-OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
-     const Omega_h::Vector<DIM> &vb)
-{
-  for(Omega_h::LO i=0; i<DIM; ++i)
-  {
-    if((va.data()[i] < 0 && vb.data()[i] > 0) ||
-       (va.data()[i] > 0 && vb.data()[i] < 0))
-    {
-      return false;
-    }
-  }
-  return true;
 }
 
 OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
@@ -230,81 +120,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   return 1; //success
 }
 
-
-OMEGA_H_INLINE bool line_triangle_intx_moller(const Omega_h::Matrix<3, 4> &M,
-    const Omega_h::Few<Omega_h::Vector<3>, 3> &face, const Omega_h::LO face_id,
-    const Omega_h::Vector<3> &origin, const Omega_h::Vector<3> &dest,
-    Omega_h::Vector<3> &xpoint)
-{
-  const Omega_h::Vector<3> dir = dest - origin; //Omega_h::normalize(dest - origin) ??
-
-  const Omega_h::Real tol = EPSILON;
-  Omega_h::Few<Omega_h::Vector<3>, 3> abc;
-  get_face_coords( M, face_id, abc);
-
-  print_array(origin.data(), 3, "orig");
-  print_array(dest.data(), 3, "dest");
-  print_array(dir.data(), 3, "dir");
-  print_array(abc[0].data(),3,"facea");print_array(abc[1].data(),3,"faceb");print_array(abc[2].data(),3,"facec");
-
-
-  const Omega_h::Vector<3> edge0 = abc[1] - abc[0];
-  const Omega_h::Vector<3> edge1 = abc[2] - abc[1];
-  const Omega_h::Vector<3> dir_x_edge1 = cross(dir, edge1);
-  const Omega_h::Real det = osh_dot(edge0, dir_x_edge1);
-  if(det < tol)  //back facing
-    return false;
-
-  std::cout << "Front facing..\n";
-
-  if(det > -tol && det < tol) // line parallel to triangle.
-    return false;
-
-  std::cout << "NOT ||l to triangle..\n";
-
-  const Omega_h::Vector<3> a2orig = origin - abc[0];
-  const Omega_h::Real param_u = osh_dot(a2orig, dir_x_edge1);
-  if(param_u < 0 || param_u > det)
-    return false;
-
-  std::cout << "u range is valid..\n";
-
-  Omega_h::Vector<3> orig_x_edge0 = cross(a2orig, edge0);
-  const Omega_h::Real param_v = osh_dot(dir , orig_x_edge0);
-  if(param_v < 0 || param_u + param_v >det)
-    return false;
-
-   std::cout << "v range is valid..\n";
-
-  const Omega_h::Real param = 1/det * osh_dot(edge1, orig_x_edge0); //parameter t of x point
-  const Omega_h::Real pvec_len = osh_dot(dest-origin, dest-origin);
-  const Omega_h::Real orig2xpt = osh_dot(param*dir, param*dir);
-
-  if(param > tol && orig2xpt <= pvec_len)
-  {
-     xpoint = origin + param*dir;
-     return true;
-  }
-  std::cout << "FALSE: orig2xpt " <<  orig2xpt << " pvec_len " << pvec_len << " param  " << param << "\n";
-
-  return false;
-}
-
-//TODO Fix, this defined in utils not found here
-Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  Omega_h::LO ind=0;
-  Omega_h::Real min = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(min > a[i+1])
-    {
-      min = a[i+1];
-      ind = i+1;
-    }
-  }
-  return ind;
-}
 
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 // corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge) ?
@@ -419,143 +234,6 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
 #endif // DEBUG
   }
   return found;
-}
-
-// TODO update if to be used
-// TODO pass base Adj and use its members a2ab ab2b, instead of passing the member ref.
-OMEGA_H_INLINE bool wall_collision_search(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &face, const Omega_h::LO fid,
-  const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest, const Omega_h::LOs &down_f2es,
-  const Omega_h::LOs &up_e2f_edges, const Omega_h::LOs &up_e2f_faces, Omega_h::Read<Omega_h::I8> &side_is_exposed,
-  const Omega_h::LOs &up_f2r_faces, const Omega_h::LOs &up_f2r_reg, Omega_h::LO &adj_face_id, Omega_h::LO &adj_elem_id,
-  Omega_h::Vector<DIM> &xpoint)
-{
-  Omega_h::LO edge = -1;
-  bool detected = line_triangle_intx_simple(face, origin, dest, xpoint, edge);
-  if(detected) return true;
-  //one check on a face, then follow min_entry edge to next exposed face
-  auto edge_id = down_f2es[fid*3 + edge];
-
-  auto fstart = up_e2f_edges[edge_id];
-  auto fend = up_e2f_edges[edge_id+1];
-  for(Omega_h::LO fp=fstart; fp<fend; ++fp)
-  {
-    auto afid = up_e2f_faces[fp];
-    if(side_is_exposed[afid] && afid != fid)
-    {
-      adj_face_id = afid;
-      break;
-    }
-  }
-  //find element id of adj_face_id. only 1 region for exposed face
-  if(up_f2r_faces[adj_face_id+1] == 1+up_f2r_faces[adj_face_id])
-  {
-    adj_elem_id = up_f2r_reg[up_f2r_faces[adj_face_id]];
-    //elem_ids[iptcl] = adj_elem;
-    //part_flags.data()[iptcl] = 2; //collision
-  }
-  else
-  {
-    return false; //Error, not an exposed face
-  }
-}
-
-
-
-// en.wikipedia.org/wiki/Line%E2%80%93plane_intersection
-OMEGA_H_INLINE bool line_triangle_intx_combined(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-  const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-  Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge)
-{
-  bool status = false;
-  edge = -1;
-  xpoint = {0, 0, 0};
-  const Omega_h::Vector<DIM> line = dest - origin;
-
-  //Boundary exclusion. Don't set it globally and change randomnly.
-  const Omega_h::Real bound_intol = SURFACE_EXCLUDE; //TODO optimum value ?
-
-  Omega_h::LO edgev[6];
-  //Needed ?
-  for(Omega_h::LO ie=0; ie<3; ++ie)
-  {
-    //down template has last edge 2_0
-    edgev[2*ie] = Omega_h::simplex_down_template(FDIM, 1, ie, 0); //1=edge
-    edgev[2*ie+1] = Omega_h::simplex_down_template(FDIM, 1, ie, 1);
-#ifdef DEBUG
-    std::cout << "...\n LINE_TRI_edgev "  << edgev[2*ie] << " " <<  edgev[2*ie+1] << "\n";
-#endif // DEBUG
-  }
-
-  const Omega_h::Vector<DIM> edge0 = abc[1] - abc[0];//abc[edgev[1]] - abc[edgev[0]]; //v0=a;v1=b
-  const Omega_h::Vector<DIM> edge2 = abc[2] - abc[0];//abc[edgev[4]] - abc[edgev[5]]; //v5=a;v4=c
-  Omega_h::Vector<DIM> normv = Omega_h::cross(edge0, edge2);
-  Omega_h::Vector<DIM> a2origin = origin - abc[0];// abc[edgev[0]];
-  // line.normv=0 => line is ||l to plane, either touching or away in ||l or perp dir.
-  Omega_h::Real det = -1.0 * osh_dot(line, normv);
-
-  if(std::abs(det) < bound_intol)
-  {
-    return false;
-  }
-
-  //If (p0 - l0).n =0, line is ||l to plane, either touching or line is away, but not away perp.
-  Omega_h::Real tnumer = osh_dot(normv, a2origin);
-  Omega_h::Real paramt = tnumer/det;
-
-  Omega_h::Vector<DIM> cross_e2_mline = -1.0 * Omega_h::cross(edge2, line);
-  Omega_h::Real unumer = osh_dot(cross_e2_mline, a2origin);
-  //attach to edge0 or vertc
-  Omega_h::Real bcu = unumer/det;
-
-  Omega_h::Vector<DIM> cross_mline_e0 = -1.0 * Omega_h::cross(line, edge0);
-  Omega_h::Real vnumer = osh_dot(cross_mline_e0, a2origin);
-  //attach to edge2 or vertb
-  Omega_h::Real bcv = vnumer/det;
-
-  // 0= self intersection with originating face
-  bool validt = (paramt < bound_intol || paramt >1.0)? false : true;
-  bool valid_uv = (bcu < 0 || bcv < 0 || bcu+bcv > 1.0)? false : true;
-  const Omega_h::Vector<DIM> surf2dest = dest - abc[0];
-
-  const Omega_h::Real match_dir = osh_dot(normv, surf2dest);
-#ifdef DEBUG
-  if(match_dir<0)
-  {
-     std::cout << "Particle Entering surface\n";
-  }
-  else if(almost_equal(match_dir,0.0))
-  {
-     std::cout << "Particle path is on surface\n";
-  }
-#endif // DEBUG
-  //found
-  if(validt && valid_uv && match_dir>0)
-  {
-      xpoint = origin + paramt*line;
-      status = true;
-  }
-  else //not found.
-  {
-    //order  face-to-edge clockwise ac,bc,ab ?
-    //order: ab(edge0), bc(edge1), ac(edge2) /ERROR in ordering
-
-    // Edges ordered as e0, e1, e2 as counter-clockwise on a face; e0=v0_to_v1
-    const Omega_h::Reals bcc{bcu, 1.0-(bcu+bcv), bcv}; //works .TODO check how ???
-    edge = min_index_(bcc, 3, 1e-6);
-#ifdef DEBUG
-    std::cout<<"\n minEDGE "<<edge<<" bcoords:"<<bcc.data()[0]<<" "<<bcc.data()[1]<<" "<<bcc.data()[2]<<"\n";
-#endif // DEBUG
-  }
-
-  //TODO handle this case
-  if(! match_dir)
-  {
-#ifdef DEBUG
-      std::cout << "*** Line dir OPOSITE to element face normal \n";
-#endif // DEBUG
-  }
-
-  return status;
 }
 
 /*
@@ -803,12 +481,6 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
   std::cout << "While loop nums " << loops << "\n";
 #endif //DEBUG
 } //search_mesh
-
-
-//void interpolateFields(Omega_h::Write<Omega_h::Real> &bcc, gitrmParticles &ptcls);
-//{
-// need field (=tag) arrays, pass them or  pass mesh ?
-//}
 
 
 } //namespace

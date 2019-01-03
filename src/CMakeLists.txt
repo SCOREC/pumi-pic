@@ -11,14 +11,13 @@ set(SOURCES
   test_adj.cpp
   #test_barycentric.cpp
   #test_linetri_intersection.cpp
-  #gitrm.cpp
   )
 
 set(HEADERS
   gitrm_adjacency.hpp
   gitrm_push.hpp
-
-  #gitrm_utils.hpp
+  gitrm_utils.hpp
+  gitrm_constants.hpp
   )
 
 add_executable(gitrm "${SOURCES}" "${HEADERS}")

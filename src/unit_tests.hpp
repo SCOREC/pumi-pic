@@ -26,8 +26,6 @@
 
 #include "gitrm_adjacency.hpp"
 
-#define DEBUG 0
-
 namespace g = GITRm;
 
 //static in separate file if not in class

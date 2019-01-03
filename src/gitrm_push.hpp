@@ -8,16 +8,15 @@
 #include "Omega_h_adj.hpp"
 #include "Omega_h_array_ops.hpp"
 #include "Omega_h_scalar.hpp" //divide
-#include "Omega_h_fail.hpp" //assert
+#include "Omega_h_fail.hpp"
 
 #include "gitrm_utils.hpp"
-//#include "gitrmParticles.hpp" //it is here now !
-
-//#define DEBUG 1
+#include "gitrm_constants.hpp"
 
 namespace GITRm
 {
 
+//Temporary particle data. See how it is used in particle push in pushBoris(..)
 class gitrmParticles
 {
   public:

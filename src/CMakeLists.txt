@@ -16,6 +16,8 @@ set(SOURCES
 
 set(HEADERS
   gitrm_adjacency.hpp
+  gitrm_push.hpp
+
   #gitrm_utils.hpp
   )
 

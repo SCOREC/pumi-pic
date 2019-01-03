@@ -4,9 +4,9 @@
 #include <iostream>
 
 #include "Omega_h_for.hpp"
-#include "Omega_h_fail.hpp" //assert
 #include "Omega_h_adj.hpp"
-#include "Omega_h_array_ops.hpp"
+#include "Omega_h_element.hpp"
+
 
 //#define DEBUG 1
 
@@ -386,11 +386,11 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
 #ifdef DEBUG
           else if(proj<0)
           {
-            std::cout << "Particle Entering surface\n";
+            std::cout << "Particle Entering domain\n";
           }
           else if(almost_equal(proj,0.0)) //TODO use tol
           {
-            std::cout << "Particle path is on surface\n";
+            std::cout << "Particle path on surface\n";
           }
 #endif // DEBUG
         }
@@ -637,6 +637,9 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
           for(Omega_h::LO i=0; i<4; ++i) bccs[4*iptcl+i] = bcc[i];
           OMEGA_H_CHECK(almost_equal(bcc[0] + bcc[1] + bcc[2] +bcc[3], 1.0)); //?
           // TODO interpolate Fields to ptcl position, and store them, for push
+
+          //interpolateFields(bcc, ptcls);
+
 #ifdef DEBUG
           std::cout << "********found in " << ielem << " \n";
           print_matrix(M);
@@ -802,6 +805,10 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 } //search_mesh
 
 
+//void interpolateFields(Omega_h::Write<Omega_h::Real> &bcc, gitrmParticles &ptcls);
+//{
+// need field (=tag) arrays, pass them or  pass mesh ?
+//}
 
 
 } //namespace

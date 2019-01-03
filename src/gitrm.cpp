@@ -21,11 +21,13 @@
 
 #include "gitrm_adjacency.hpp"
 #include "unit_tests.hpp"
+#include "gitrm_push.hpp"
+
 
 namespace o = Omega_h;
 namespace g = GITRm;
 
-#define DO_TEST 1
+#define DO_TEST 0
 int main(int argc, char** argv) {
 
   auto lib = Omega_h::Library(&argc, &argv);
@@ -64,7 +66,6 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::Real> bFieldsPre(3*nptcl,0.1);
   //mesh.add_tag(0, "EField", 3);
 
-
   //Simple particle data
   Omega_h::Few< Omega_h::Vector<3>, 3> dest{ {1.8,1.0,0.5}, {0.26,0.2,0.12}};
   Omega_h::Few< Omega_h::Vector<3>, 3> orig{ {0.8,0.3,0.7}, {0.15,0.1,0.2}};
@@ -85,14 +86,23 @@ int main(int argc, char** argv) {
   Omega_h::LO ptcls=1; //per group
   Omega_h::LO loops = 0;
 
-  //.data() returns read only ?
-  g::search_mesh(ptcls, nelems, orig.data(), dest.data(), dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
-     coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
+  Omega_h::Real dt = 1e-6;
+  for(int it=0; it<1; ++it)
+  {
+    //push
+    g::gitrmParticles ptcl(ptcls);
+    g::pushBoris(nelems, ptcl, dt);
 
-  g::print_array(&xpoints[0], 3, "XPOINT");
-  g::print_array(&bccs[0], 3, "BCCS");
-  Omega_h::vtk::write_parallel("cube", &mesh);
-  std::cout << "LOOPS " << loops << "\n";
+    //search
+    g::search_mesh(ptcls, nelems, orig.data(), dest.data(), dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
+       coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
+
+    g::print_array(&xpoints[0], 3, "XPOINT");
+    g::print_array(&bccs[0], 3, "BCCS");
+    Omega_h::vtk::write_parallel("cube", &mesh);
+    std::cout << "LOOPS " << loops << "\n";
+  }
+
   return 0;
 }
 //LO a....

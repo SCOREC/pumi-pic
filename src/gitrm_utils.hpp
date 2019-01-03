@@ -28,8 +28,14 @@
 namespace GITRm{
 
 
-//Problem: functions defined here are not available in other headers !
+//TODO use it as library ?. Problem: functions defined here are not available in other headers !
 //many of them moved until it is fixed.
+
+
+OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
+{
+  return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+}
 
 
 void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,

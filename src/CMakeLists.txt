@@ -1,18 +1,3 @@
-
-if(NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Release)
-endif(NOT CMAKE_BUILD_TYPE)
-message("CMAKE_BUILD_TYPE = ${CMAKE_BUILD_TYPE}")
-
-find_package(Omega_h REQUIRED 8.2.0)
-message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
-set(SOURCES
-  #test_collision.cpp
-  test_adj.cpp
-  #test_barycentric.cpp
-  #test_linetri_intersection.cpp
-  )
-
 set(HEADERS
   gitrm_adjacency.hpp
   gitrm_push.hpp
@@ -20,5 +5,11 @@ set(HEADERS
   gitrm_constants.hpp
   )
 
-add_executable(gitrm "${SOURCES}" "${HEADERS}")
-target_link_libraries(gitrm Omega_h::omega_h)
+add_library(pumipic INTERFACE)
+target_include_directories(pumipic INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+pumipic_export_lib(pumipic "${HEADERS}")
+
+bob_end_subdir()

@@ -1,3 +1,8 @@
 #!/bin/bash
+[ $# -ne 1 ] && echo "Usage: $0 <path to source>" && exit 1
+src=$1
 
-cmake $1 -DCMAKE_BUILD_TYPE=Debug
+cmake $src \
+-DIS_TESTING=ON \
+-DTEST_DATA_DIR=$src/pumipic-data \
+-DCMAKE_INSTALL_PREFIX=$PWD/install

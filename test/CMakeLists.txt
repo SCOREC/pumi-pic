@@ -1,0 +1,13 @@
+function(make_test exename srcname)
+  add_executable(${exename} ${srcname})
+  target_link_libraries(${exename} pumipic Omega_h::omega_h)
+endfunction(make_test)
+
+make_test(collision test_collision.cpp)
+make_test(adj test_adj.cpp)
+make_test(barycentric test_barycentric.cpp)
+make_test(linetri_intersection test_linetri_intersection.cpp)
+
+include(testing.cmake)
+
+bob_end_subdir()

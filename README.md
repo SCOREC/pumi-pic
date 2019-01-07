@@ -1,12 +1,29 @@
 ## GITRm
 
-Steps in SCOREC RHEL:
+### Setup
 
-    Source GITRm/envRhel7Openmp.sh
-    run GITRm/doConfig.sh
-    make #create gitrm in ./src
-    ./src/gitrm ../GITRm/test_data/cube.msh 2,0.5,0.2  4,0.9,0.3
+```
+git clone git@github.com:SCOREC/gitrm.git
+```
 
+### Build on SCOREC RHEL7
+
+```
+mkdir build
+cd !$
+source ../gitrm/envRhel7Openmp.sh
+../doConfig.sh ../gitrm
+make
+```
+
+### Run
+
+```
+./src/gitrm ../gitrm/test_data/cube.msh 2,0.5,0.2  4,0.9,0.3
+```
+
+
+### Test Description
 
 Search test routines : test_adj, test_collision
 

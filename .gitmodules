@@ -1,0 +1,3 @@
+[submodule "pumipic-data"]
+	path = pumipic-data
+	url = git@github.com:SCOREC/pumipic-data

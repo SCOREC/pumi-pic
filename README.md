@@ -6,6 +6,14 @@
 git clone git@github.com:SCOREC/gitrm.git
 ```
 
+Developers and users who want to run `ctest` will also need to initialize
+submodules for test data.
+
+```
+git submodule init
+git submodule update
+```
+
 ### Build on SCOREC RHEL7
 
 ```
@@ -19,7 +27,8 @@ make
 ### Run
 
 ```
-./src/gitrm ../gitrm/test_data/cube.msh 2,0.5,0.2  4,0.9,0.3
+cd build
+./src/gitrm ../gitrm/pumipic-data/cube.msh 2,0.5,0.2  4,0.9,0.3
 ```
 
 

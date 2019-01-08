@@ -1,5 +1,7 @@
 ## GITRm
 
+CDash: https://my.cdash.org/index.php?project=pumi-pic
+
 ### Setup
 
 ```
@@ -28,9 +30,8 @@ make
 
 ```
 cd build
-./src/gitrm ../gitrm/pumipic-data/cube.msh 2,0.5,0.2  4,0.9,0.3
+ctest
 ```
-
 
 ### Test Description
 

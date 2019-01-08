@@ -10,7 +10,6 @@ module load gcc/7.3.0-bt47fwr mpich/3.2.1-niuhmad cmake/3.13.1-ovasnmm omega-h/9
 d=/fasttmp/cwsmith/nightlyBuilds
 cd $d/repos/pumipic
 git pull
-cd $d
 git submodule init
 git submodule update
 #remove old compilation

@@ -105,7 +105,7 @@ endmacro(setup_repo)
 
 SET(CONFIGURE_MASTER
   "-DIS_TESTING=ON"
-  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumi-pic/pumipic-data")
+  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
 
 message(STATUS "configure options ${CONFIGURE_MASTER}")
 build_subproject(pumipic-master "${CONFIGURE_MASTER}")

@@ -1,5 +1,5 @@
-#ifndef GITRM_PUSH_HPP_INCLUDED
-#define GITRM_PUSH_HPP_INCLUDED
+#ifndef PUMIPIC_PUSH_HPP_INCLUDED
+#define PUMIPIC_PUSH_HPP_INCLUDED
 
 #include <iostream>
 #include <cmath>
@@ -10,18 +10,18 @@
 #include "Omega_h_scalar.hpp" //divide
 #include "Omega_h_fail.hpp"
 
-#include "gitrm_utils.hpp"
-#include "gitrm_constants.hpp"
+#include "pumipic_utils.hpp"
+#include "pumipic_constants.hpp"
 
-namespace GITRm
+namespace pumipic
 {
 
 //Temporary particle data. See how it is used in particle push in pushBoris(..)
-class gitrmParticles
+class pumipicParticles
 {
   public:
     Omega_h::LO np;
-    gitrmParticles(Omega_h::LO np_):
+    pumipicParticles(Omega_h::LO np_):
       np(np_), x(np,0), y(np,0), z(np,0), xpre(np,0), ypre(np,0), zpre(np,0),
       vx(np,0), vy(np,0), vz(np,0), eFieldsxPre(np,0), eFieldsyPre(np,0),
       eFieldszPre(np,0), bFieldsrPre(np,0), bFieldstPre(np,0), bFieldszPre(np,0),
@@ -40,7 +40,7 @@ class gitrmParticles
 // TODO what is nsteps ?
 // Option to select various EFields removed, since it can be done while writing them in
 // previous step, in the search routine.
-OMEGA_H_INLINE void pushBoris(Omega_h::LO nelems, gitrmParticles &ptcl, Omega_h::Real dt)
+OMEGA_H_INLINE void pushBoris(Omega_h::LO nelems, pumipicParticles &ptcl, Omega_h::Real dt)
 {
 
   auto pushPtcl = OMEGA_H_LAMBDA( Omega_h::LO elID)
@@ -110,4 +110,4 @@ OMEGA_H_INLINE void pushBoris(Omega_h::LO nelems, gitrmParticles &ptcl, Omega_h:
 
 
 } //namespace
-#endif // GITRM_PUSH_HPP_INCLUDED
+#endif // PUMIPIC_PUSH_HPP_INCLUDED

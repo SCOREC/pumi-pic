@@ -1,5 +1,5 @@
-#ifndef GITRM_ADJACENCY_HPP
-#define GITRM_ADJACENCY_HPP
+#ifndef PUMIPIC_ADJACENCY_HPP
+#define PUMIPIC_ADJACENCY_HPP
 
 #include <iostream>
 
@@ -7,11 +7,11 @@
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
 
-#include "gitrm_utils.hpp"
-#include "gitrm_constants.hpp"
+#include "pumipic_utils.hpp"
+#include "pumipic_constants.hpp"
 
 
-namespace GITRm
+namespace pumipic
 {
 
 /*

@@ -1,11 +1,11 @@
-## GITRm
+## PUMI-PIC
 
 CDash: https://my.cdash.org/index.php?project=pumi-pic
 
 ### Setup
 
 ```
-git clone git@github.com:SCOREC/gitrm.git
+git clone git@github.com:SCOREC/pumi-pic.git
 ```
 
 Developers and users who want to run `ctest` will also need to initialize
@@ -21,8 +21,8 @@ git submodule update
 ```
 mkdir build
 cd !$
-source ../gitrm/envRhel7Openmp.sh
-../doConfig.sh ../gitrm
+source ../pumi-pic/envRhel7Openmp.sh
+../doConfig.sh ../pumi-pic
 make
 ```
 

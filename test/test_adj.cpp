@@ -1,9 +1,9 @@
 
-#include "gitrm_adjacency.hpp"
+#include "pumipic_adjacency.hpp"
 #include "unit_tests.hpp"
 
 namespace o = Omega_h;
-namespace g = GITRm;
+namespace g = pumipic;
 
 #define DO_TEST 0
 int main(int argc, char** argv) {

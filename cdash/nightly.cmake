@@ -63,7 +63,7 @@ macro(build_subproject subproject_name config_opts)
   set_property(GLOBAL PROPERTY SubProject ${subproject_name})
   set_property(GLOBAL PROPERTY Label ${subproject_name})
 
-  setup_repo(${subproject_name} "git@github.com:SCOREC/gitrm.git")
+  setup_repo(${subproject_name} "git@github.com:SCOREC/pumi-pic.git")
 
   if(NOT EXISTS "${CTEST_BINARY_DIRECTORY}/${subproject_name}")
     file(MAKE_DIRECTORY ${CTEST_BINARY_DIRECTORY}/${subproject_name})
@@ -105,7 +105,7 @@ endmacro(setup_repo)
 
 SET(CONFIGURE_MASTER
   "-DIS_TESTING=ON"
-  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/gitrm/pumipic-data")
+  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumi-pic/pumipic-data")
 
 message(STATUS "configure options ${CONFIGURE_MASTER}")
 build_subproject(pumipic-master "${CONFIGURE_MASTER}")

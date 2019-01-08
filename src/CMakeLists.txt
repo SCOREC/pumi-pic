@@ -1,8 +1,8 @@
 set(HEADERS
-  gitrm_adjacency.hpp
-  gitrm_push.hpp
-  gitrm_utils.hpp
-  gitrm_constants.hpp
+  pumipic_adjacency.hpp
+  pumipic_push.hpp
+  pumipic_utils.hpp
+  pumipic_constants.hpp
   )
 
 add_library(pumipic INTERFACE)

@@ -1,5 +1,5 @@
-#ifndef GITRM_UTILS_HPP
-#define GITRM_UTILS_HPP
+#ifndef PUMIPIC_UTILS_HPP
+#define PUMIPIC_UTILS_HPP
 
 #include <iostream>
 #include <cmath>
@@ -22,9 +22,9 @@
 #include "Omega_h_build.hpp"
 #include "Omega_h_compare.hpp"
 
-#include "gitrm_constants.hpp"
+#include "pumipic_constants.hpp"
 
-namespace GITRm{
+namespace pumipic{
 
 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,

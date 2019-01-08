@@ -1,6 +1,6 @@
 
 #include "unit_tests.hpp" //=> cpp
-#include "gitrm_adjacency.hpp"
+#include "pumipic_adjacency.hpp"
 
 namespace o = Omega_h;
 

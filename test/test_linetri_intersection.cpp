@@ -1,6 +1,6 @@
 
 #include "unit_tests.hpp" //=> cpp
-#include "gitrm_adjacency.hpp"
+#include "pumipic_adjacency.hpp"
 
 #define DEBUG 0
 
@@ -86,11 +86,11 @@ int main(int argc, char** argv) {
 
   Omega_h::Vector<3> xpoint;
   Omega_h::LO edge=0;
-  bool res = GITRm::line_triangle_intx_simple(tri, orig, dest, xpoint, edge);
+  bool res = pumipic::line_triangle_intx_simple(tri, orig, dest, xpoint, edge);
 
 #if DEBUG>0
   if(res)
-    GITRm::print_array(xpoint.data(), 3, "FoundXPT:");
+    pumipic::print_array(xpoint.data(), 3, "FoundXPT:");
   else
     std::cout << "No Intersection\n";
 #endif // DEBUG

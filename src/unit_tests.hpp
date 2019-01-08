@@ -1,5 +1,5 @@
-#ifndef GITRM_UNIT_TESTS_HPP
-#define GITRM_UNIT_TESTS_HPP
+#ifndef PUMIPIC_UNIT_TESTS_HPP
+#define PUMIPIC_UNIT_TESTS_HPP
 
 #include <iostream>
 #include <cmath>
@@ -24,9 +24,9 @@
 #include "Omega_h_build.hpp"
 #include "Omega_h_compare.hpp"
 
-#include "gitrm_adjacency.hpp"
+#include "pumipic_adjacency.hpp"
 
-namespace g = GITRm;
+namespace g = pumipic;
 
 //static in separate file if not in class
 bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,

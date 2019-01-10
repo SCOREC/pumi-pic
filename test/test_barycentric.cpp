@@ -1,3 +1,4 @@
+#include <string>
 
 #include "unit_tests.hpp" //=> cpp
 #include "pumipic_adjacency.hpp"
@@ -5,16 +6,38 @@
 namespace o = Omega_h;
 
 //Barycentric coords associate to the opposite vertex of any face.
-//#define DEBUG
+
 #define DO_TEST 0
 int main(int argc, char** argv) {
 
   if(!(argc==2 || argc==4))
   {
-    std::cout << "Usage: ./barycentric tet_points [point bcoods] \n If no point, then all vertices are used in turn \n"
-              << "Example: ./barycentric \"0.0,1.0,0.0;0.5,0.0,0.0;1.0,1.0,0.0;0.5,1.0,0.5\" \n"
-              << "Example: ./barycentric \"0.0,1.0,0.0;0.5,0.0,0.0;1.0,1.0,0.0;0.5,1.0,0.5\"   0.5,0.6,0  0,0.3,0.3,0.4 \n";
+    std::cout << "Usage: ./barycentric tet_points [point bcoods] \n If no point given, then all vertices are used in turn \n"
+              << "Example: ./barycentric  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0:0.5,1.0,0.5  \n"
+              << "Example: ./barycentric  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0:0.5,1.0,0.5  0.5,0.6,0  0,0.3,0.3,0.4 \n"
+              << "Example: ./barycentric test1\n"
+              << "Example: ./barycentric test2\n"
+              << "Example: ./barycentric test3\n";
     exit(1);
+  }
+
+  if(std::string(argv[1]) =="test1")
+  {
+    if(test_barycentric1()) return 0;
+    else 
+      return 1;
+  }
+  else if(std::string(argv[1]) == "test2")
+  {
+    if(test_barycentric2()) return 0;
+    else 
+      return 1;
+  }  
+  else if(std::string(argv[1]) == "test3")
+  {
+    if(test_barycentric_tri()) return 0;
+    else 
+      return 1;
   }
 
   Omega_h::Matrix<3, 4> tet;
@@ -26,7 +49,7 @@ int main(int argc, char** argv) {
   std::vector<std::string> vtxs;
   std::string stemp;
 
-  while(getline(ss1, stemp, ';'))
+  while(getline(ss1, stemp, ':'))
     vtxs.push_back(stemp);
 
   int i=0, j=0;
@@ -74,6 +97,7 @@ int main(int argc, char** argv) {
     {
   #ifdef DEBUG
       std::cout << "Barycentric test : " << bcname[i] <<  " \n";
+      pumipic::print_matrix(tet);
   #endif // DEBUG
       index = Omega_h::simplex_opposite_template(3, 2, i);
       bool res = test_barycentric_tet(tet, tet[index], bcc_mat[i].data());
@@ -85,12 +109,6 @@ int main(int argc, char** argv) {
          return 1;
       }
     }
-
-    // Some more tests
-    if(!test_barycentric1()) return 1;
-    if(!test_barycentric2()) return 1;
-    if(!test_barycentric_tri()) return 1;
-
   }
   else
   {

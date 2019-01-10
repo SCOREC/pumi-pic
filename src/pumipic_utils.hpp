@@ -40,7 +40,6 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   {
     if(!almost_equal(a[i],b[i]))
     {
-      std::cout <<i << " " << a[i] << " " << b[i] << " "<< std::abs(a[i]-b[i]) << " False \n";
       return false;
     }
   }
@@ -51,7 +50,7 @@ OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
-    if(a[i] < tol) // TODO set default the right tolerance
+    if(a[i] < -tol) // TODO set default the right tolerance
      return false;
   }
   return true;
@@ -84,11 +83,11 @@ OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
-template <typename T>
-OMEGA_H_INLINE bool compare_array(const T *a, const T *b, const Omega_h::LO n,
-  Omega_h::Real tol=EPSILON)
+
+OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
+ const Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
-  for(Omega_h::LO i=0; i<n-1; ++i)
+  for(Omega_h::LO i=0; i<n; ++i)
   {
     if(std::abs(a[i]-b[i]) > tol)
     {
@@ -110,22 +109,6 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
     }
   }
   return true;
-}
-
-
-Omega_h::LO min_index_(const Omega_h::Reals &a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  Omega_h::LO ind=0;
-  Omega_h::Real min = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(min > a[i+1])
-    {
-      min = a[i+1];
-      ind = i+1;
-    }
-  }
-  return ind;
 }
 
 void print_matrix(const Omega_h::Matrix<3, 4> &M)

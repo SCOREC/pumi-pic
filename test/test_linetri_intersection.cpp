@@ -2,15 +2,13 @@
 #include "unit_tests.hpp" //=> cpp
 #include "pumipic_adjacency.hpp"
 
-#define DEBUG 0
-
 int main(int argc, char** argv) {
 
   if(!(argc==1||argc==4))
   {
     std::cout << "Usage: ./line_tri_intx [tri_points lstart lend] \n If no arguments, then test hard coded values \n"
               << "Example: ./line_tri_intx  \n"
-              << "Example: ./line_tri_intx \"0.0,1.0,0.0;0.5,0.0,0.0;1.0,1.0,0.0\"   0.5,0.6,-2  0.5,0.6,2 \n";
+              << "Example: ./line_tri_intx  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 \n";
     exit(1);
   }
 
@@ -53,7 +51,7 @@ int main(int argc, char** argv) {
   std::vector<std::string> vtxs;
   std::string stemp;
 
-  while(getline(ss1, stemp, ';'))
+  while(getline(ss1, stemp, ':'))
     vtxs.push_back(stemp);
 
   int i=0, j=0;

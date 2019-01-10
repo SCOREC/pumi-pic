@@ -11,6 +11,7 @@
 #include "pumipic_constants.hpp"
 
 
+//TODO use .get() to access data ?
 namespace pumipic
 {
 
@@ -37,8 +38,8 @@ OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
     abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
     abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
 
-#ifdef DEBUG
-    print_osh_vector(*abc.data(), "Mat_index ");
+#if DEBUG >2
+    std::cout << "face " << iface << ": \n"; 
 #endif // DEBUG
 }
 
@@ -90,12 +91,12 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
     auto vap = pos - abc[0]; // p - a;
     vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
 
-#ifdef DEBUG
+#if DEBUG >2
     std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
     print_array(abc[0].data(),3);
     print_array(abc[1].data(),3);
     print_array(abc[2].data(),3);
-    print_array(pos.data(),3);
+    print_array(pos.data(),3, "point");
     std::cout << "\n";
 #endif // DEBUG
   }
@@ -110,8 +111,12 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   if(vol6 > EPSILON) // TODO tolerance
     inv_vol = 1.0/vol6;
   else
+  {
+#if DEBUG >0  
+    std::cout << vol6 << "too low \n";
+#endif 
     return 0;
-
+  }
   bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
   bcc[1] = inv_vol * vals[1];
   bcc[2] = inv_vol * vals[2];
@@ -132,14 +137,13 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
   Omega_h::Vector<DIM> cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
   Omega_h::Vector<DIM> norm = Omega_h::normalize(cross);
   Omega_h::Real area = osh_dot(norm, cross);
-  if(std::abs(area) < 1e-6)
+
+  if(std::abs(area) < 1e-6)  //TODO
     return 0;
-
-  bc[0] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
-  bc[1] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
-  bc[2] = 1/area * 1/2.0 * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
-
-  OMEGA_H_CHECK(std::abs(1.0 - bc[0] - bc[1] - bc[2]) <= 1e-6);
+  Omega_h::Real fac = 1/(area*2.0);
+  bc[0] = fac * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
+  bc[1] = fac * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
+  bc[2] = fac * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
 
   return 1;
 }
@@ -186,13 +190,14 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     if (par_t > bound_intol && par_t <= 1.0) //TODO test tol value
     {
       xpoint = origin + par_t * line;
-      Omega_h::Write<Omega_h::Real> bcc{0, 0, 0};
+      Omega_h::Write<Omega_h::Real> bcc{3,0};
       bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
+
       if(res)
       {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
         {
-          edge = min_index_(bcc, 3, EPSILON); //TODO test tolerance
+          edge = min_index(bcc.data(), 3, EPSILON); //TODO test tolerance
         }
         else
         {
@@ -210,7 +215,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
 #endif // DEBUG
         }
       }
-#ifdef DEBUG
+#if DEBUG >1
       print_array(bcc.data(), 3, "BCC");
 #endif // DEBUG
     }
@@ -252,12 +257,18 @@ Kokkos functions to be used when Omega_h doesn't provide it.
 */
 // TODO Change if needed. Adjacency search excludes particle if on surface of an element by SURFACE_EXCLUDE. Because,
 // a point on boundary surface should be intersection, which is searched for only if adjacency search does not find it.
-// TODO pack global mesh derived data in a class and pass the object.
-OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Omega_h::Vector<3> *orig, const Omega_h::Vector<3> *dest,
-   const Omega_h::Adj &dual, const Omega_h::Adj &down_r2f, const Omega_h::Adj &down_f2e, const Omega_h::Adj &up_e2f, const Omega_h::Adj &up_f2r,
-   const Omega_h::Read<Omega_h::I8> &side_is_exposed, const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, const Omega_h::LOs &face_verts,
-   Omega_h::Write<Omega_h::LO> &part_flags, Omega_h::Write<Omega_h::LO> &elem_ids, Omega_h::Write<Omega_h::LO> &coll_adj_face_ids,
-   Omega_h::Write<Omega_h::Real> &bccs, Omega_h::Write<Omega_h::Real> &xpoints, Omega_h::LO &loops)
+//TODO Avoid passing object Adj ?
+
+OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,
+ const Omega_h::Write<Omega_h::Real> &y0, const Omega_h::Write<Omega_h::Real> &z0, 
+ const Omega_h::Write<Omega_h::Real> &x, const Omega_h::Write<Omega_h::Real> &y, 
+ const Omega_h::Write<Omega_h::Real> &z, const Omega_h::Adj &dual, const Omega_h::Adj &down_r2f,
+ const Omega_h::Adj &down_f2e, const Omega_h::Adj &up_e2f, const Omega_h::Adj &up_f2r,
+ const Omega_h::Read<Omega_h::I8> &side_is_exposed, const Omega_h::LOs &mesh2verts, 
+ const Omega_h::Reals &coords, const Omega_h::LOs &face_verts, Omega_h::Write<Omega_h::LO> &part_flags,
+ Omega_h::Write<Omega_h::LO> &elem_ids, Omega_h::Write<Omega_h::LO> &coll_adj_face_ids, 
+ Omega_h::Write<Omega_h::Real> &bccs, Omega_h::Write<Omega_h::Real> &xpoints, Omega_h::LO &loops, 
+ Omega_h::LO limit=0)
 {
   const auto up_e2f_edges = &up_e2f.a2ab;
   const auto up_e2f_faces = &up_e2f.ab2b;
@@ -282,37 +293,37 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     //......
 
     // Each group of particles inside the parallel_for.
-    // TODO Change ntpcl, iptcl start and limit. Update global(?) indices inside.
-    for(Omega_h::LO iptcl = 0; iptcl < nptcl; ++iptcl)
+    // TODO Change ntpcl, ip start and limit. Update global(?) indices inside.
+    for(Omega_h::LO ip = 0; ip < nptcl; ++ip)
     {
-#ifdef DEBUG
-      std::cout << "Elem " << ielem << " part:" << iptcl << "\n";
+#if DEBUG >1
+      std::cout << "Elem " << ielem << " ptcl:" << ip << "\n";
 #endif //DEBUG
       //temporary
-      if(elem_ids[iptcl] != ielem) continue;
-      bool continue_coll = (coll_adj_face_ids[iptcl] !=-1) ? true:false;
+      if(elem_ids[ip] != ielem) continue; //or part_flags[ip]<=0 continue
+      bool continue_coll = (coll_adj_face_ids[ip] !=-1) ? true:false;
       Omega_h::LO coll_face_id = -1;
 
-
+      const Omega_h::Vector<3> orig{x0[ip], y0[ip], z0[ip]};
+      const Omega_h::Vector<3> dest{x[ip], y[ip], z[ip]};
       bool do_collision = false;
       if(!continue_coll)
       {
         Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
 
         //TESTING. Check particle origin containment in current element
-        bool test_res = find_barycentric_tet(M, orig[iptcl], bcc);
-#ifdef DEBUG
+        bool test_res = find_barycentric_tet(M, orig, bcc);
+#if DEBUG >1
         if(!(all_positive(bcc.data(), 4)))
           std::cout << "ORIGIN ********NOT in elemet_id " << ielem << " \n";
 #endif //DEBUG
+        const bool res = find_barycentric_tet(M, dest, bcc);
 
-        const bool res = find_barycentric_tet(M, dest[iptcl], bcc);
-
-        if(all_positive(bcc.data(), 4, SURFACE_EXCLUDE))
+        if(all_positive(bcc.data(), 4, 0)) //SURFACE_EXCLUDE)) TODO
         {
-          part_flags.data()[iptcl] = 0;
-          elem_ids[iptcl] = ielem;
-          for(Omega_h::LO i=0; i<4; ++i) bccs[4*iptcl+i] = bcc[i];
+          part_flags.data()[ip] = 0;
+          elem_ids[ip] = ielem;
+          for(Omega_h::LO i=0; i<4; ++i) bccs[4*ip+i] = bcc[i];
           OMEGA_H_CHECK(almost_equal(bcc[0] + bcc[1] + bcc[2] +bcc[3], 1.0)); //?
           // TODO interpolate Fields to ptcl position, and store them, for push
 
@@ -321,7 +332,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 #ifdef DEBUG
           std::cout << "********found in " << ielem << " \n";
           print_matrix(M);
-          //print_data(M, dest[iptcl], bcc);
+          //print_data(M, dest[ip], bcc);
 #endif //DEBUG
         }
         else
@@ -339,11 +350,11 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 
             const auto face_id = (*down_r2fs)[iface];
 
-#ifdef DEBUG
+#if DEBUG >2
             auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
             const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
             Omega_h::Few<Omega_h::Vector<3>, 3> abc;
-            get_face_coords( M, f_index, abc);
+            //get_face_coords( M, f_index, abc);
             //check_face(M, face, f_index); //TODO fix this
 #endif //DEBUG
 
@@ -352,16 +363,16 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
             {
                //OMEGA_H_CHECK(side2side_elems[side + 1] - side2side_elems[side] == 2);
                auto adj_elem  = (*dual_faces)[dface_ind];
-#ifdef DEBUG
+#if DEBUG >1
                std::cout << "el " << ielem << " adj " << adj_elem << " face " << f_index << "\n";
 #endif //DEBUG
                // DON't merge it with the above if().
                if(f_index == min_entry)
                {
-#ifdef DEBUG
+#if DEBUG >1
                  std::cout << "=====> For el|face_id=" << ielem << "," << (*down_r2fs)[iface]  << " :ADJ elem= " << adj_elem << "\n";
 #endif //DEBUG
-                 elem_ids[iptcl] = adj_elem;
+                 elem_ids[ip] = adj_elem;
                  break;
                }
                ++dface_ind;
@@ -370,11 +381,14 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
             {
               coll_face_id = face_id;
               do_collision = true;
-#ifdef DEBUG
+#if DEBUG >1
               std::cout << "To_search_coll for face " << coll_face_id << " faceind:" << f_index << "\n";
 #endif //DEBUG
               break;
             }
+#if DEBUG >1
+              std::cout << "faceind " << f_index << "\n";
+#endif //DEBUG
             ++f_index;
           } //faces
         } //not found
@@ -390,28 +404,28 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
         Omega_h::LO adj_elem_id=-1, adj_face_id=-1, cross_edge = -1;
         bool next_elem = false;
         Omega_h::Vector<3> xpoint{0,0,0};
-        Omega_h::LO face_id = continue_coll? coll_adj_face_ids[iptcl]:coll_face_id;
+        Omega_h::LO face_id = continue_coll? coll_adj_face_ids[ip]:coll_face_id;
         auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
         const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
 
-#ifdef DEBUG
+#if DEBUG>1
         std::cout << "********* \n Call Wall collision for el,face_id " << ielem << "," << face_id << "\n";
 #endif //DEBUG
-        bool detected = line_triangle_intx_simple(face, orig[iptcl], dest[iptcl], xpoint, cross_edge);
+        bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, cross_edge);
 
         if(detected)
         {
-          //elem_ids[iptcl] = -1;
-          //coll_adj_face_ids[iptcl] = -1;
-          part_flags.data()[iptcl] = 0;
-          for(Omega_h::LO i=0; i<3; ++i)xpoints[iptcl*3+i] = xpoint.data()[i];
+          //elem_ids[ip] = -1;
+          //coll_adj_face_ids[ip] = -1;
+          part_flags.data()[ip] = -1;
+          for(Omega_h::LO i=0; i<3; ++i)xpoints[ip*3+i] = xpoint.data()[i];
           //store current face_id and element_ids
 #ifdef DEBUG
           print_osh_vector(xpoint, "COLLISION POINT");
 #endif //DEBUG
           break;
         }
-#ifdef DEBUG
+#if DEBUG >1
         std::cout << "edge " << cross_edge << "\n";
 #endif //DEBUG
         if(cross_edge >= 0)
@@ -434,12 +448,12 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
           if((*up_f2r_faces)[adj_face_id+1] == 1+(*up_f2r_faces)[adj_face_id])
           {
             adj_elem_id = (*up_f2r_reg)[(*up_f2r_faces)[adj_face_id]];
-            elem_ids[iptcl] = adj_elem_id;
-            coll_adj_face_ids[iptcl] = adj_face_id;
-            //part_flags.data()[iptcl] = 2; //collision
+            elem_ids[ip] = adj_elem_id;
+            coll_adj_face_ids[ip] = adj_face_id;
+            //part_flags.data()[ip] = 2; //collision
             next_elem = true;
           }
-#ifdef DEBUG
+#if DEBUG >2
         //std::cout << "adj_face_id " << adj_face_id << " el " << adj_elem_id << " "<< (*up_f2r_faces)[adj_face_id ]
         //          << " " << (*up_f2r_faces)[adj_face_id+1] << "\n";
 #endif //DEBUG
@@ -447,20 +461,20 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 
         if(cross_edge <0 || !next_elem)
         {
-          elem_ids[iptcl] = ielem; //current element
-#ifdef DEBUG
+          elem_ids[ip] = ielem; //current element
+#if DEBUG >1
           std::cout << "Collision tracking lost.\n";
 #endif //DEBUG
           //Error stop
-          part_flags.data()[iptcl] = -1;
+          part_flags.data()[ip] = -2;
         }
 
       } //do_collision
-    }//iptcl
+    }//ip
   };
 
   bool found = false;
-
+  loops = 0;
   while(!found)
   {
     //TODO check if particle is on boundary and remove from list if so.
@@ -476,8 +490,11 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     for(int i=0; i<nptcl; ++i){ if(part_flags[i] > 0) {found = false; break;} }
     //Copy particle data from previous to next (adjacent) element
     ++loops;
+
+    if(limit && loops>limit) break;
   }
-#ifdef DEBUG
+
+#if DEBUG >1
   std::cout << "While loop nums " << loops << "\n";
 #endif //DEBUG
 } //search_mesh

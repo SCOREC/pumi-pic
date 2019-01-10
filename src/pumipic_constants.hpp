@@ -1,7 +1,7 @@
 #ifndef PUMIPIC_CONSTANTS_HPP_INCLUDED
 #define PUMIPIC_CONSTANTS_HPP_INCLUDED
 
-#define DEBUG 1
+//#define DEBUG 2
 
 const static Omega_h::Real EPSILON = 1e-10;
 const static Omega_h::Real SURFACE_EXCLUDE = 1e-10;

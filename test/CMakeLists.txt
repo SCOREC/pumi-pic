@@ -7,6 +7,7 @@ make_test(collision test_collision.cpp)
 make_test(adj test_adj.cpp)
 make_test(barycentric test_barycentric.cpp)
 make_test(linetri_intersection test_linetri_intersection.cpp)
+make_test(push_and_search test_push_and_search.cpp)
 
 include(testing.cmake)
 

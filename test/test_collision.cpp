@@ -3,7 +3,7 @@
 #include "unit_tests.hpp"
 
 namespace o = Omega_h;
-namespace g = pumipic;
+namespace p = pumipic;
 
 #define DO_TEST 0
 int main(int argc, char** argv) {
@@ -13,6 +13,10 @@ int main(int argc, char** argv) {
 
   Omega_h::Vector<3> orig{2, 0.5,0.3};
   Omega_h::Vector<3> dest{1.1,50,0};
+  Omega_h::Write<Omega_h::Real> res(3,0);
+  res[0] = 1.99091;
+  res[1] = 1;
+  res[2] = 0.29697;
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
@@ -32,21 +36,40 @@ int main(int argc, char** argv) {
   const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
-  Omega_h::LO nptcl = 1;
-  Omega_h::Write<Omega_h::Real> bccs(4*nptcl, -1.0);
-  Omega_h::Write<Omega_h::Real> xpoints(3*nptcl, -1.0);
-  Omega_h::Write<Omega_h::LO> part_flags(nptcl, 1); // found or not
-  Omega_h::Write<Omega_h::LO> elem_ids(nptcl); //next element to search for
-  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(nptcl, -1);
-  //Which particle belongs to which element ?
-  elem_ids[0] =0;
 
-  Omega_h::LO ptcls=1; //per group
+  const Omega_h::LO np = 1; 
+
+  //Particle data
+  Omega_h::Write<Omega_h::Real> x(np,0);
+  Omega_h::Write<Omega_h::Real> y(np,0);
+  Omega_h::Write<Omega_h::Real> z(np,0);
+  Omega_h::Write<Omega_h::Real> xp(np,0);
+  Omega_h::Write<Omega_h::Real> yp(np,0);
+  Omega_h::Write<Omega_h::Real> zp(np,0);
+  Omega_h::Write<Omega_h::Real> x0(np,0);
+  Omega_h::Write<Omega_h::Real> y0(np,0);
+  Omega_h::Write<Omega_h::Real> z0(np,0);
+
+  Omega_h::Write<Omega_h::Real> bccs(4*np, -1.0);
+  Omega_h::Write<Omega_h::Real> xpoints(3*np, -1.0);
+  Omega_h::Write<Omega_h::LO> part_flags(np, 1); // to do or not
+  Omega_h::Write<Omega_h::LO> elem_ids(np); //next element to search for
+  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(np, -1);
+
+  elem_ids[0] = 87;
+  x0[0] = orig[0];
+  y0[0] = orig[1];
+  z0[0] = orig[2];
+  x[0] = dest[0];
+  y[0] = dest[1];
+  z[0] = dest[2];
+
+  Omega_h::LO gpSize=1; //per group
   Omega_h::LO loops = 0;
 
-  //.data() returns read only ?
-  g::search_mesh(ptcls, nelems, &orig, &dest, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed, mesh2verts,
-     coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
+  p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed,
+       mesh2verts, coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
+
 
   //for collision cross-check test non-containment in any element
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
@@ -59,21 +82,17 @@ int main(int argc, char** argv) {
     if(g::all_positive(bcc.data(), 4))
       found_in = ielem;
   }
-#ifdef DEBUG
-    std::cout << "Collision test: origin: " << orig[0] << "," << orig[1] << "," << orig[2]
-            << " Dest: " << dest[0] << "," << dest[1] << "," << dest[2]
-            << ". Xpt: " << xpoints[0] << "," << xpoints[1] << "," << xpoints[2]
-            << " #loops: " << loops << " Element_id: " << found_in << "\n";
-#endif // DEBUG
-
-  Omega_h::Write<Omega_h::Real> res(3);
-  res[0] = 1.99091;
-  res[1] = 1;
-  res[2] = 0.29697;
 
   int status = 1;
-  if(g::almost_equal(xpoints.data(), res.data()) && found_in == -1)
+  if(g::almost_equal(xpoints.data(), res.data(), 0) && found_in == -1)
     status = 0;
+    
+#if DEBUG>0
+      std::cout << "Collision test: origin: " << orig[0] << "," << orig[1] << "," << orig[2]
+            << " Dest: " << dest[0] << "," << dest[1] << "," << dest[2]
+            << ". Xpt: " << xpoints[0] << "," << xpoints[1] << "," << xpoints[2]
+            << " #loops: " << loops << " Element_id: " << found_in << " status " << status << "\n";
+#endif // DEBUG
 
   return status;
 }

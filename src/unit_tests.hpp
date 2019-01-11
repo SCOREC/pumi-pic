@@ -113,7 +113,7 @@ bool test_barycentric1()
     std::cout << "Barycentric test : " << bcname[i] <<  " \n";
 #endif // DEBUG
     index = Omega_h::simplex_opposite_template(3, 2, i);
-    std::cout <<"index " << index << "\n";
+
     if(test_barycentric_tet(M, M[index], bcc_mat[i].data()))
     {
 #ifdef DEBUG

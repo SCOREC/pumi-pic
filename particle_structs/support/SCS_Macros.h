@@ -12,7 +12,7 @@
   const int team_size = SCS->C; \
   typedef Kokkos::TeamPolicy<> team_policy; \
   const team_policy policy(league_size, team_size); \
-  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const typename team_policy::member_type& thread) { \
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) { \
     const int slice = thread.league_rank(); \
     const int slice_row = thread.team_rank(); \
     const int rowLen = (offsets(slice+1)-offsets(slice))/chunk_size(0); \

@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <Kokkos_Core.hpp>
 
 #include <MemberTypes.h>
 #include <SellCSigma.h>
@@ -27,7 +28,8 @@ int main() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne,np, 0, ptcls_per_elem, ids);
-  SellCSigma<Type2,4>* scs = new SellCSigma<Type2, 4>(1, 10000, ne, np, ptcls_per_elem,ids, NULL);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1000, Kokkos::AUTO);
+  SellCSigma<Type2>* scs = new SellCSigma<Type2>(policy, 1, 10000, ne, np, ptcls_per_elem,ids, NULL);
 
   int* scs_first = scs->getSCS<0>();
   double* scs_second = scs->getSCS<1>();
@@ -55,5 +57,7 @@ int main() {
   delete scs;
   delete [] ptcls_per_elem;
   delete [] ids;
+
+  printf("All tests passed\n");
   return 0;
 }

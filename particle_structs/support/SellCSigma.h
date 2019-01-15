@@ -8,10 +8,11 @@
 #include "MemberTypes.h"
 #include <Kokkos_Core.hpp>
 
-template<class DataTypes, int VectorLength = Kokkos::Impl::CudaTraits::WarpSize>
+template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
-  SellCSigma(int sigma, int vertical_chunk_size, int num_elements, int num_particles,
+  SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
+	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
              int* particles_per_element, std::vector<int>* particle_id_bins,
              bool debug=false);
   ~SellCSigma();
@@ -21,7 +22,11 @@ class SellCSigma {
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
+  typedef ExecSpace ExecutionSpace;
 
+  //The User defined kokkos policy
+  Kokkos::TeamPolicy<ExecutionSpace> policy;
+  //Chunk size
   int C;
   //Vertical slice size
   int V;
@@ -136,11 +141,12 @@ struct DestroySCSArrays<MemberTypes<Types...> > {
 };
 
 
-template<class DataTypes, int VectorLength>
-SellCSigma<DataTypes,VectorLength>::SellCSigma(int sig, int v, int ne, int np,
-                                    int* ptcls_per_elem, std::vector<int>* ids,
-                                    bool debug) {
-  C = VectorLength;
+template<class DataTypes, typename ExecSpace>
+  SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
+					       int sig, int v, int ne, int np,
+					       int* ptcls_per_elem, std::vector<int>* ids,
+					       bool debug)  : policy(p) {
+  C = policy.team_size();
   sigma = sig;
   V = v;
   num_elems = ne;
@@ -267,8 +273,8 @@ SellCSigma<DataTypes,VectorLength>::SellCSigma(int sig, int v, int ne, int np,
   delete [] ptcls;
 }
 
-template<class DataTypes, int VectorLength>
-SellCSigma<DataTypes,VectorLength>::~SellCSigma() {
+template<class DataTypes, typename ExecSpace>
+  SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
 
   DestroySCSArrays<DataTypes>((scs_data), 0);
   
@@ -280,9 +286,9 @@ SellCSigma<DataTypes,VectorLength>::~SellCSigma() {
 }
 
 
-template<class DataTypes, int VectorLength>
+template<class DataTypes, typename ExecSpace>
 template <std::size_t N>
-typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,VectorLength>::getSCS() {
+  typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,ExecSpace>::getSCS() {
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
 }
 
@@ -297,8 +303,8 @@ void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> v
   Kokkos::deep_copy(view, hv);
 }
 
-template <class DataTypes, int VectorLength>
-void SellCSigma<DataTypes,VectorLength>::transferToDevice() {
+template <class DataTypes, typename ExecSpace>
+  void SellCSigma<DataTypes, ExecSpace>::transferToDevice() {
   offsets_d = kkLidView("offsets_d",num_slices+1);
   hostToDevice(offsets_d,offsets);
 

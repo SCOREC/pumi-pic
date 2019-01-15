@@ -35,7 +35,6 @@ message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if (ENABLE_KOKKOS)
   find_package(KokkosCore REQUIRED)
-  find_package(KokkosKernels REQUIRED)
   add_definitions(-DKOKKOS_ENABLED)
   set(KOKKOS_ENABLED true)
   include_directories(${KokkosCore_INCLUDE_DIRS})

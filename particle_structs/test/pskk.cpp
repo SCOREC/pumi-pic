@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
   int sigma = atoi(argv[4]);
   int V = atoi(argv[5]);
   bool debug = atoi(argv[6]);
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, Kokkos::AUTO);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
   fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", policy.team_size(), V, sigma);
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, np,
 						       ptcls_per_elem,

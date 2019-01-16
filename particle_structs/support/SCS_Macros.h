@@ -17,7 +17,7 @@
     const int slice_row = thread.team_rank(); \
     const int rowLen = (offsets(slice+1)-offsets(slice))/chunk_size(0); \
     const int start = offsets(slice) + slice_row; \
-    parallel_for(TeamThreadRange(thread, chunk_size(0)), [=] (int& j) { \
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, chunk_size(0)), [=] (int& j) { \
         const int row = slice_to_chunk(slice) * chunk_size(0) + slice_row; \
         const int element_id = row_to_element(row); \
         ALGORITHM \
@@ -25,7 +25,7 @@
   });
 
 #define PARALLEL_FOR_PARTICLES(SCS, thread, particle_id, ALGORITHM) \
-  Kokkos::parallel_for(ThreadVectorRange(thread, rowLen), [&] (int& p) { \
+  Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) { \
     const int particle_id = start+(p*chunk_size(0)); \
     ALGORITHM \
   });

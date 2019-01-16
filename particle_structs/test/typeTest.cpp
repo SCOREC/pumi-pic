@@ -6,8 +6,9 @@
 #include <SellCSigma.h>
 #include <Distribute.h>
 #include <psAssert.h>
-int main() {
+int main(int argc, char** argv) {
 
+  Kokkos::initialize(argc,argv);
   typedef MemberTypes<int> Type1;
   typedef MemberTypes<int,double> Type2;
   typedef MemberTypes<int[3],double[2],char> Type3;
@@ -28,8 +29,9 @@ int main() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne,np, 0, ptcls_per_elem, ids);
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(1000, Kokkos::AUTO);
-  SellCSigma<Type2>* scs = new SellCSigma<Type2>(policy, 1, 10000, ne, np, ptcls_per_elem,ids, NULL);
+  Kokkos::TeamPolicy<Kokkos::OpenMP> po(128, 1);
+  int ts = po.team_size();
+  SellCSigma<Type2, Kokkos::OpenMP>* scs = new SellCSigma<Type2, Kokkos::OpenMP>(po, 1, 10000, ne, np, ptcls_per_elem, ids, 1);
 
   int* scs_first = scs->getSCS<0>();
   double* scs_second = scs->getSCS<1>();
@@ -41,7 +43,7 @@ int main() {
     //loop through slice horizontally
     for (int j = start_id; j< end_id; j+=4) {
       //Loop through slice vertically (C)
-      for (int k=0; k < 4; ++k) {
+      for (int k=0; k < ts; ++k) {
         if (scs->particle_mask[j+k]) {
           scs_first[j+k] = scs->slice_to_chunk[i];
           scs_second[j+k] = 1.0;
@@ -58,6 +60,7 @@ int main() {
   delete [] ptcls_per_elem;
   delete [] ids;
 
+  Kokkos::finalize();
   printf("All tests passed\n");
   return 0;
 }

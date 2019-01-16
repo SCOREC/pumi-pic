@@ -152,6 +152,7 @@ template<class DataTypes, typename ExecSpace>
   num_elems = ne;
   num_ptcls = np;
 
+  printf("Building SCS with C: %d sigma: %d V: %d\n",C,sigma,V);
   //Make temporary copy of the particle counts for sorting
   // Pair consists of <ptcl count, elem id>
   typedef std::pair<int,int> pair_t;
@@ -161,11 +162,12 @@ template<class DataTypes, typename ExecSpace>
 
   //Sort the entries with sigma sorting
   int i;
-  for (i = 0; i < num_elems - sigma; i+=sigma) {
-    std::sort(ptcls + i, ptcls + i + sigma, std::greater<pair_t>());
+  if (sigma > 1) {
+    for (i = 0; i < num_elems - sigma; i+=sigma) {
+      std::sort(ptcls + i, ptcls + i + sigma, std::greater<pair_t>());
+    }
+    std::sort(ptcls + i, ptcls + num_elems, std::greater<pair_t>());
   }
-  std::sort(ptcls + i, ptcls + num_elems, std::greater<pair_t>());
-  
   //Number of chunks without vertical slicing
   num_chunks = num_elems / C + (num_elems % C != 0);
   num_slices = 0;
@@ -193,7 +195,6 @@ template<class DataTypes, typename ExecSpace>
     for (i = 0; i < num_elems; ++i)
       printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
   }
-  
 
   //Create offsets into each chunk/vertical slice
   offsets = new int[num_slices + 1];
@@ -270,6 +271,7 @@ template<class DataTypes, typename ExecSpace>
       printf("\n");
     }
   }
+
   delete [] ptcls;
 }
 

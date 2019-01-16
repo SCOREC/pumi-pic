@@ -305,17 +305,7 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   hostToDeviceFp(disp_d, disp);
   fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
 
-  using Kokkos::TeamPolicy;
-  using Kokkos::TeamThreadRange;
-  using Kokkos::ThreadVectorRange;
-  using Kokkos::parallel_for;
-  typedef Kokkos::TeamPolicy<> team_policy;
-  typedef typename team_policy::member_type team_member;
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-  const int league_size = scs->num_slices;
-  const int team_size = scs->C;
-  const team_policy policy(league_size, team_size);
-  
+#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)  
   double totTime = 0;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();

@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne,np, 0, ptcls_per_elem, ids);
-  Kokkos::TeamPolicy<Kokkos::OpenMP> po(128, 1);
+  Kokkos::TeamPolicy<Kokkos::OpenMP> po(128, 4);
   int ts = po.team_size();
   SellCSigma<Type2, Kokkos::OpenMP>* scs = new SellCSigma<Type2, Kokkos::OpenMP>(po, 1, 10000, ne, np, ptcls_per_elem, ids, 1);
 

@@ -1,6 +1,9 @@
 #!/bin/bash
-[ $# -ne 1 ] && echo "Usage: $0 <path to source>" && exit 1
+[ $# -ne 2 ] && echo "Usage: $0 <path to source> <path to particle structures install >" && exit 1
 src=$1
+ps=$2
+
+export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$ps
 
 cmake $src \
 -DIS_TESTING=ON \

@@ -88,6 +88,12 @@ if (ENABLE_KOKKOS)
     ${KokkosCore_INCLUDE_DIRS} DIRECTORY CACHE)
   bob_public_dep(KokkosCore)
   # }
+  target_include_directories(particleStructs INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
+    $<INSTALL_INTERFACE:include>)
+  target_include_directories(particleStructs INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/algorithms>
+    $<INSTALL_INTERFACE:include>)
   target_include_directories(particleStructs PRIVATE ${KokkosCore_INCLUDE_DIRS})
   target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
   target_link_libraries(particleStructs PRIVATE

@@ -3,6 +3,7 @@
 #include <psAssert.h>
 #include <Kokkos_Core.hpp>
 #include <SCS_Macros.h>
+
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
 }
@@ -45,7 +46,7 @@ void deviceToHostFp(kkFpView d, fp_t* h) {
     h[i] = hv(i);
 }
 
-typedef Kokkos::View<fp_t(*)[3], exe_space::device_type> kkFp3View;
+typedef Kokkos::View<Vector3d*, exe_space::device_type> kkFp3View;
 /** \brief helper function to transfer a host array to a device view
  */
 void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
@@ -152,8 +153,8 @@ void push_array_kk(int np, fp_t* xs, fp_t* ys, fp_t* zs,
 void push_scs(SellCSigma<Particle>* scs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
-  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
-  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();
+  Vector3d *scs_initial_position = scs->getSCS<0>();
+  Vector3d *scs_pushed_position = scs->getSCS<1>();
   for (int i = 0; i < scs->num_slices; ++i) {
     int index = scs->offsets[i];
     const int chunk = scs->slice_to_chunk[i];
@@ -181,8 +182,8 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
 
-  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
-  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();  
+  Vector3d *scs_initial_position = scs->getSCS<0>();
+  Vector3d *scs_pushed_position = scs->getSCS<1>();  
   
   kkLidView offsets_d("offsets_d", scs->num_slices+1);
   hostToDeviceLid(offsets_d, scs->offsets);
@@ -202,7 +203,7 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   kkLidView num_elems_d("num_elems_d", 1);
   hostToDeviceLid(num_elems_d, &elems.num_elems);
 
-  kkLidView row_to_element_d("row_to_element_d", elems.size);
+  kkLidView row_to_element_d("row_to_element_d", scs->num_chunks * scs->C);
   hostToDeviceLid(row_to_element_d, scs->row_to_element);
 
   kkFpView ex_d("ex_d", elems.size);
@@ -258,11 +259,9 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
             for(int ei = 0; ei<4; ei++) 
               c += x[ei] + y[ei] + z[ei];
             c /= 4;
-            
             new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
             new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
             new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
-            
           });
         });
     });
@@ -282,8 +281,8 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
                         fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
 
-  fp_t (*scs_initial_position)[3] = scs->getSCS<0>();
-  fp_t (*scs_pushed_position)[3] = scs->getSCS<1>();  
+  Vector3d *scs_initial_position = scs->getSCS<0>();
+  Vector3d *scs_pushed_position = scs->getSCS<1>();
 
   //Move SCS data to the device
   scs->transferToDevice();

@@ -10,8 +10,10 @@ typedef double fp_t;
 typedef float fp_t;
 #endif
 
+typedef fp_t Vector3d[3];
+
 //Particle = <current position vector, pushed position vector>
-typedef MemberTypes<fp_t[3], fp_t[3]> Particle;
+typedef MemberTypes<Vector3d, Vector3d> Particle;
 
 class elemCoords {
   public:

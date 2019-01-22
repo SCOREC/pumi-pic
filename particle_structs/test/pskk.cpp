@@ -15,8 +15,6 @@
 
 #include <Kokkos_Core.hpp>
 
-
-
 void printTimerResolution() {
   Kokkos::Timer timer;
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -31,10 +29,9 @@ void matchFailed(int i) {
 const double EPSILON = 0.0001;
 
 void positionsMatch(int np,
-    fp_t* x1, fp_t* y1, fp_t* z1,
+		    fp_t* x1, fp_t* y1, fp_t* z1,
                     SellCSigma<Particle>* scs) {
-
-  fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
+  Vector3d *pushed_position_vector = scs->getSCS<1>();
   //Confirm all particles were pushed
   for (int i = 0; i < np; ++i) {
     const int scsIdx = scs->arr_to_scs[i];
@@ -63,12 +60,12 @@ void checkThenClear(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
                     SellCSigma<Particle>* scs) {
   positionsMatch(np, x1, y1, z1, scs);
-  fp_t (*pushed_position_vector)[3] = scs->getSCS<1>();
-  //GD: Does this touch every particle? Or just the first np entries in the scs?
+  Vector3d *pushed_position_vector = scs->getSCS<1>();
   for(int i=0; i<np; i++) {
-    pushed_position_vector[i][0] = 0;
-    pushed_position_vector[i][1] = 0;
-    pushed_position_vector[i][2] = 0;
+    int scs_index = scs->arr_to_scs[i];
+    pushed_position_vector[scs_index][0] = 0;
+    pushed_position_vector[scs_index][1] = 0;
+    pushed_position_vector[scs_index][2] = 0;
   }
 }
 
@@ -156,10 +153,9 @@ int main(int argc, char* argv[]) {
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, np,
 						       ptcls_per_elem,
 						       ids, debug);
-
   //Set initial positions and 0 out future position
-  fp_t (*initial_position_scs)[3] = scs->getSCS<0>();
-  fp_t (*pushed_position_scs)[3] = scs->getSCS<1>();
+  Vector3d *initial_position_scs = scs->getSCS<0>();
+  Vector3d *pushed_position_scs = scs->getSCS<1>();
 
   for (int i = 0; i < np; ++i) {
     int scs_index = scs->arr_to_scs[i];
@@ -179,7 +175,7 @@ int main(int argc, char* argv[]) {
   // for that information.  This duplication of vertex info eliminates
   // 'jumps' through the vertex arrays and thus improves performance;
   // something a 'real' analysis code may do.
-  elemCoords elems(ne, 4, scs->C*scs->num_chunks);
+  elemCoords elems(ne, 4, scs->C * scs->num_chunks);
   //Write something into the coordinate arrays. Does not matter.
   for( int i=0; i<elems.size; i++ ) {
     elems.x[i] = i;
@@ -207,7 +203,7 @@ int main(int argc, char* argv[]) {
 
   fprintf(stderr, "done serial\n");
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
-
+  
   fprintf(stderr, "\n");
   fp_t* new_xs2 = new fp_t[np];
   fp_t* new_ys2 = new fp_t[np];
@@ -228,13 +224,15 @@ int main(int argc, char* argv[]) {
 
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
 
+  scs->zeroSCSArray<1>(3);
+
   fprintf(stderr, "\n");
   timer.reset();
   push_scs_kk_macros(scs, np, elems, distance, dx, dy, dz);
   fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
 
   checkThenClear(np, new_xs1, new_ys1, new_zs1, scs);
-
+  
   //Cleanup
   delete [] new_xs1;
   delete [] new_ys1;

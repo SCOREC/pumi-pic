@@ -20,6 +20,13 @@ class SellCSigma {
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
+  template <std::size_t N>
+  void zeroSCS();
+
+  template <std::size_t N>
+  void zeroSCSArray(int size);
+ 
+
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
   typedef ExecSpace ExecutionSpace;
@@ -83,6 +90,21 @@ class SellCSigma {
   SellCSigma& operator=(const SellCSigma&) {throw 1;}
 };
 
+template <class T>
+struct InitializeType {
+  InitializeType(T *scs_data, int size) {
+    for (int i =0; i < size; ++i)
+      scs_data[i] = 0;
+  }
+};
+template <class T, int N>
+struct InitializeType<T[N]> {
+  InitializeType(T (*scs_data)[N], int size) {
+    for (int i =0; i < size; ++i)
+      for (int j =0; j < N; ++j)
+        scs_data[i][j] = 0;
+  }
+};
 //Implementation to construct SCS arrays of different types
 template <typename... Types>
 struct CreateSCSArraysImpl;
@@ -96,6 +118,7 @@ template <typename T, typename... Types>
 struct CreateSCSArraysImpl<T,Types...> {
   CreateSCSArraysImpl(void* scs_data[], int size) {
     scs_data[0] = new T[size];
+    InitializeType<T>(static_cast<T*>(scs_data[0]),size);
     CreateSCSArraysImpl<Types...>(scs_data+1,size);
   }
 };
@@ -294,6 +317,24 @@ template <std::size_t N>
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
 }
 
+template<class DataTypes, typename ExecSpace>
+template <std::size_t N>
+  void SellCSigma<DataTypes,ExecSpace>::zeroSCS() {
+  typename MemberTypeAtIndex<N,DataTypes>::type* scs = getSCS<N>();
+  for (int i =0; i < offsets[num_slices]; ++i)
+    scs[i] = 0;
+}
+
+template<class DataTypes, typename ExecSpace>
+template <std::size_t N>
+  void SellCSigma<DataTypes,ExecSpace>::zeroSCSArray(int size) {
+  typename MemberTypeAtIndex<N,DataTypes>::type* scs = getSCS<N>();
+  for (int i =0; i < offsets[num_slices]; ++i)
+    for (int j=0; j < size; ++j)
+      scs[i][j] = 0;
+}
+
+
 
 
 template <class T>
@@ -319,7 +360,7 @@ template <class DataTypes, typename ExecSpace>
   chunksz_d = kkLidView("chunksz_d",1);
   hostToDevice(chunksz_d,&C);
 
-  row_to_element_d = kkLidView("row_to_element_d", num_elems);
+  row_to_element_d = kkLidView("row_to_element_d", C * num_chunks);
   hostToDevice(row_to_element_d,row_to_element);
 }
 

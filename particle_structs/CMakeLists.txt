@@ -2,6 +2,9 @@
 cmake_minimum_required (VERSION 3.0)
 project(particle_structures VERSION 0.0.1 LANGUAGES CXX)
 
+include(cmake/bob.cmake)
+bob_begin_package()
+
 set(CMAKE_MODULE_PATH 
    ${CMAKE_MODULE_PATH} 
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
@@ -66,13 +69,32 @@ set(PS_SOURCES
   support/psAssert.cpp
 )
 
+set(PS_HEADERS
+  support/SCS_Macros.h
+  support/SellCSigma.h
+  support/MemberTypes.h
+  algorithms/psParams.h
+  algorithms/psTypes.h
+)
+
 add_library(particleStructs ${PS_SOURCES})
+install(FILES ${PS_HEADERS} DESTINATION include)
+bob_export_target(particleStructs)
 
 if (ENABLE_KOKKOS)
+  # bob package creation {
+  set(particle_structures_USE_KokkosCore_DEFAULT ON)
+  get_filename_component(KokkosCore_PREFIX
+    ${KokkosCore_INCLUDE_DIRS} DIRECTORY CACHE)
+  bob_public_dep(KokkosCore)
+  # }
   target_include_directories(particleStructs PRIVATE ${KokkosCore_INCLUDE_DIRS})
   target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
   target_link_libraries(particleStructs PRIVATE
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
 endif()
 
+
 add_subdirectory(test)
+
+bob_end_package()

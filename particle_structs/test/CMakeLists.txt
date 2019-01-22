@@ -6,3 +6,5 @@ target_link_libraries(pskk particleStructs)
 
 
 include(testing.cmake)
+
+bob_end_subdir()

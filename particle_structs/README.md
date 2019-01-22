@@ -51,3 +51,20 @@ There is no association of particles to elements.  During initialization we will
     cat headers.csv push2.csv > push.csv
     rm push2.csv
 ```
+
+# Dependencies
+
+- Kokkos
+
+# Building on SCOREC RHEL7
+
+## Kokkos with OpenMP
+
+```
+module load gcc/7.3.0-bt47fwr mpich/3.2.1-niuhmad cmake/3.13.1-ovasnmm trilinos/develop-2zim243
+cmake /path/to/particle_structures/source/dir -DENABLE_KOKKOS=ON
+make
+```
+
+Debug symbols can be added by appending `-DCMAKE_BUILD_TYPE=DEBUG` to the cmake
+command.

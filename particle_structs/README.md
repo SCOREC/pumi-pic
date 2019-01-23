@@ -62,7 +62,7 @@ There is no association of particles to elements.  During initialization we will
 
 ```
 module load gcc/7.3.0-bt47fwr mpich/3.2.1-niuhmad cmake/3.13.1-ovasnmm trilinos/develop-debug-openmp-ackkufk
-cmake /path/to/particle_structures/source/dir -DENABLE_KOKKOS=ON
+cmake /path/to/particle_structures/source/dir -DENABLE_KOKKOS=ON -DCMAKE_INSTALL_PREFIX=$PWD/install
 make
 make install
 ```

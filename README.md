@@ -21,7 +21,7 @@ git submodule update
 ```
 mkdir build
 cd !$
-source ../pumi-pic/envRhel7Openmp.sh
+source ../pumi-pic/envRhel7Serial.sh
 ../doConfig.sh ../pumi-pic
 make
 ```

@@ -2,6 +2,12 @@
 
 CDash: https://my.cdash.org/index.php?project=pumi-pic
 
+### Dependencies
+
+- Kokkos https://github.com/kokkos/kokkos
+- Omega_h https://github.com/SNLComputation/omega_h
+- particle_structures https://github.com/SCOREC/particle_structures
+
 ### Setup
 
 ```
@@ -22,7 +28,7 @@ git submodule update
 mkdir build
 cd !$
 source ../pumi-pic/envRhel7Openmp.sh
-../doConfig.sh ../pumi-pic
+../doConfig.sh ../pumi-pic /path/to/particle_structures/install/dir
 make
 ```
 

@@ -17,15 +17,27 @@ class SellCSigma {
              bool debug=false);
   ~SellCSigma();
 
+ //Gets the Nth member type SCS
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
+ //Zeroes the values of the member type N
   template <std::size_t N>
   void zeroSCS();
 
+ //Zeroes the values of the member type N that is an array with size entries
   template <std::size_t N>
   void zeroSCSArray(int size);
- 
+
+  /*
+    Reshuffles the scs values to the element in new_element[i]
+    Calls rebuildSCS if there is not enough space for the shuffle
+  */
+  void reshuffleSCS(int* new_element);
+  /*
+    Rebuilds a new SCS where particles move to the element in new_element[i]
+  */
+  void rebuildSCS(int* new_element);
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -84,10 +96,12 @@ class SellCSigma {
   //Pointers to the start of each SCS for each data type
   void* scs_data[num_types];
 
- private:
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}
   SellCSigma& operator=(const SellCSigma&) {throw 1;}
+
+ void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, int*& row_element);
+ void constructOffsets(int nChunks, int nSlices, int* chunk_widths, int*& offs, int*& s2e);
 };
 
 template <class T>
@@ -163,68 +177,43 @@ struct DestroySCSArrays<MemberTypes<Types...> > {
   }
 };
 
+void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, std::pair<int, int>*& ptcl_pairs);
 
 template<class DataTypes, typename ExecSpace>
-  SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
-					       int sig, int v, int ne, int np,
-					       int* ptcls_per_elem, std::vector<int>* ids,
-					       bool debug)  : policy(p) {
-  C = policy.team_size();
-  sigma = sig;
-  V = v;
-  num_elems = ne;
-  num_ptcls = np;
-
-  printf("Building SCS with C: %d sigma: %d V: %d\n",C,sigma,V);
-  //Make temporary copy of the particle counts for sorting
-  // Pair consists of <ptcl count, elem id>
-  typedef std::pair<int,int> pair_t;
-  pair_t* ptcls = new pair_t[num_elems];
-  for (int i = 0; i < num_elems; ++i)
-    ptcls[i] = std::make_pair(ptcls_per_elem[i], i);
-
-  //Sort the entries with sigma sorting
-  int i;
-  if (sigma > 1) {
-    for (i = 0; i < num_elems - sigma; i+=sigma) {
-      std::sort(ptcls + i, ptcls + i + sigma, std::greater<pair_t>());
-    }
-    std::sort(ptcls + i, ptcls + num_elems, std::greater<pair_t>());
-  }
-  //Number of chunks without vertical slicing
-  num_chunks = num_elems / C + (num_elems % C != 0);
-  num_slices = 0;
-  int* chunk_widths = new int[num_chunks];
-  row_to_element = new int[num_chunks * C];
+  void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls, int& nchunks, 
+							 int& nslices, int*& chunk_widths, 
+							 int*& row_element) {
+  nchunks = num_elems / C + (num_elems % C != 0);
+  nslices = 0;
+  chunk_widths = new int[nchunks];
+  row_element = new int[nchunks * C];
 
   //Add chunks for vertical slicing
-  for (i = 0; i < num_chunks; ++i) {
+  int i;
+  for (i = 0; i < nchunks; ++i) {
     chunk_widths[i] = 0;
     for (int j = i * C; j < (i + 1) * C && j < num_elems; ++j)  {
-      row_to_element[j] = ptcls[j].second;
+      row_element[j] = ptcls[j].second;
       chunk_widths[i] = std::max(chunk_widths[i],ptcls[j].first);
     }
     int num_vertical_slices = chunk_widths[i] / V + (chunk_widths[i] % V != 0);
-    num_slices += num_vertical_slices;
+    nslices += num_vertical_slices;
   }
 
   //Set the padded row_to_element values
-  for (i = num_elems; i < num_chunks * C; ++i) {
-    row_to_element[i] = i;
+  for (i = num_elems; i < nchunks * C; ++i) {
+    row_element[i] = i;
   }
+}
 
-  if(debug) {
-    printf("\nSigma Sorted Particle Counts\n");
-    for (i = 0; i < num_elems; ++i)
-      printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
-  }
-
-  //Create offsets into each chunk/vertical slice
-  offsets = new int[num_slices + 1];
-  slice_to_chunk = new int[num_slices];
+template<class DataTypes, typename ExecSpace>
+ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(int nChunks, int nSlices, 
+							 int* chunk_widths, int*& offs, int*& s2e) {
+  offs = new int[nSlices + 1];
+  s2e = new int[nSlices];
   offsets[0] = 0;
   int index = 1;
-  for (i = 0; i < num_chunks; ++i) {
+  for (int i = 0; i < nChunks; ++i) {
     for (int j = V; j <= chunk_widths[i]; j+=V) {
       slice_to_chunk[index-1] = i;
       offsets[index] = offsets[index-1] + V * C;
@@ -237,13 +226,41 @@ template<class DataTypes, typename ExecSpace>
       ++index;
     }
   }
+}
+template<class DataTypes, typename ExecSpace>
+  SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
+					       int sig, int v, int ne, int np,
+					       int* ptcls_per_elem, std::vector<int>* ids,
+					       bool debug)  : policy(p) {
+  C = policy.team_size();
+  sigma = sig;
+  V = v;
+  num_elems = ne;
+  num_ptcls = np;
+  
+  printf("Building SCS with C: %d sigma: %d V: %d\n",C,sigma,V);
 
+  //Perform sorting
+  std::pair<int, int>* ptcls;
+  sigmaSort(num_elems,ptcls_per_elem, sigma, ptcls);
+
+  //Number of chunks without vertical slicing
+  int* chunk_widths;
+  constructChunks(ptcls, num_chunks, num_slices, chunk_widths, row_to_element);
+
+  if(debug) {
+    printf("\nSigma Sorted Particle Counts\n");
+    for (int i = 0; i < num_elems; ++i)
+      printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
+  }
+
+  //Create offsets into each chunk/vertical slice
+  constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk);
   delete [] chunk_widths;
 
   if(debug) {
-    ALWAYS_ASSERT(num_slices+1 == index);
     printf("\nSlice Offsets\n");
-    for (i = 0; i < num_slices + 1; ++i)
+    for (int i = 0; i < num_slices + 1; ++i)
       printf("Slice %d starts at %d\n", i, offsets[i]);
   }
   
@@ -253,9 +270,10 @@ template<class DataTypes, typename ExecSpace>
   CreateSCSArrays<DataTypes>(scs_data, offsets[num_slices]);
 
   
-  index = 0;
+  int index = 0;
   int start = 0;
   int old_elem = 0;
+  int i;
   for (i = 0; i < num_slices; ++i) { //for each slice
     int elem = slice_to_chunk[i];
     if (old_elem!=elem) {
@@ -334,6 +352,47 @@ template <std::size_t N>
       scs[i][j] = 0;
 }
 
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
+  //For now call rebuild
+  rebuildSCS(new_element);
+}
+
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
+  int* new_particles_per_elem = new int[num_elems];
+
+  for (int slice = 0; slice < num_slices; ++slice) {
+    int width = (offsets[slice + 1] - offsets[slice]) / C;
+    int chunk = slice_to_chunk[slice];
+    for (int elem = chunk * C; elem < (chunk + 1) * C; ++elem) {
+      for (int particle = 0; particle < width; ++particle) {
+	++new_particles_per_elem[new_element[particle]] += particle_mask[particle];
+      }
+    }
+  }
+
+  //Perform sorting
+  std::pair<int, int>* ptcls;
+  sigmaSort(num_elems, new_particles_per_elem, sigma, ptcls);
+
+  //Create chunking and count slices
+  int* chunk_widths;
+  int new_nchunks, new_nslices;
+  int* new_row_to_element;
+  constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element);
+
+  //Create offsets for each slice
+  int* new_offsets;
+  int* new_slice_to_chunk;
+  constructOffsets(new_nchunks, new_nslices, chunk_widths,new_offsets, new_slice_to_chunk);
+  delete [] chunk_widths;
+
+  delete [] ptcls;
+  delete [] new_particles_per_elem;
+}
 
 
 

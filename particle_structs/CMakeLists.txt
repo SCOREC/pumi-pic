@@ -53,6 +53,7 @@ set(PS_SOURCES
   algorithms/Push.cpp
   algorithms/psTypes.cpp
   support/psAssert.cpp
+  support/SellCSigma.cpp
 )
 
 set(PS_HEADERS

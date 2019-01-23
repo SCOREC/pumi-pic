@@ -1,6 +1,7 @@
 #include "SellCSigma.h"
 
-void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, std::pair<int, int>*& ptcl_pairs) {
+void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 
+	       std::pair<int, int>*& ptcl_pairs, bool doSort) {
   //Make temporary copy of the particle counts for sorting
   // Pair consists of <ptcl count, elem id>
   typedef std::pair<int,int> pair_t;
@@ -9,12 +10,14 @@ void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, std::pair<int, int
     ptcl_pairs[i] = std::make_pair(ptcls_per_elem[i], i);
 
   //Sort the entries with sigma sorting
-  int i;
-  if (sigma > 1) {
-    for (i = 0; i < num_elems - sigma; i+=sigma) {
-      std::sort(ptcl_pairs + i, ptcl_pairs + i + sigma, std::greater<pair_t>());
+  if (doSort) {
+    int i;
+    if (sigma > 1) {
+      for (i = 0; i < num_elems - sigma; i+=sigma) {
+	std::sort(ptcl_pairs + i, ptcl_pairs + i + sigma, std::greater<pair_t>());
+      }
+      std::sort(ptcl_pairs + i, ptcl_pairs + num_elems, std::greater<pair_t>());
     }
-    std::sort(ptcl_pairs + i, ptcl_pairs + num_elems, std::greater<pair_t>());
   }
 }
 

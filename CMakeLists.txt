@@ -62,6 +62,7 @@ message(STATUS "Found particle_structures: ${particle_structures_VERSION}")
 bob_public_dep(particle_structures)
 
 find_package(Omega_h 9 REQUIRED)
+set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 bob_public_dep(Omega_h)
 

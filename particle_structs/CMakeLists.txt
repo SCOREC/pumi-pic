@@ -25,7 +25,6 @@ message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if (ENABLE_KOKKOS)
   find_package(KokkosCore REQUIRED)
-  add_definitions(-DKOKKOS_ENABLED)
   set(KOKKOS_ENABLED true)
   include_directories(${KokkosCore_INCLUDE_DIRS})
 
@@ -60,6 +59,7 @@ set(PS_HEADERS
   support/SCS_Macros.h
   support/SellCSigma.h
   support/MemberTypes.h
+  support/psAssert.h
   algorithms/psParams.h
   algorithms/psTypes.h
   algorithms/Distribute.h
@@ -76,6 +76,8 @@ if (ENABLE_KOKKOS)
     ${KokkosCore_INCLUDE_DIRS} DIRECTORY CACHE)
   bob_public_dep(KokkosCore)
   # }
+  add_definitions(-DKOKKOS_ENABLED)
+  target_compile_definitions(particleStructs INTERFACE -DKOKKOS_ENABLED)
   target_include_directories(particleStructs INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
     $<INSTALL_INTERFACE:include>)

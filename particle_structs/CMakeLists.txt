@@ -62,6 +62,7 @@ set(PS_HEADERS
   support/MemberTypes.h
   algorithms/psParams.h
   algorithms/psTypes.h
+  algorithms/Distribute.h
 )
 
 add_library(particleStructs ${PS_SOURCES})

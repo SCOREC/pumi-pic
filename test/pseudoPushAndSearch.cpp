@@ -67,13 +67,16 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  //In this example we store two fp_t[3] arrays, 'Vector3d', and an
-  //integer per particle.
+  //To demonstrate push and adjacency search we store:
+  //-two fp_t[3] arrays, 'Vector3d', for the current and
+  // computed (pre adjacency search) positions, and
+  //-an integer to store the 'new' parent element for use by
+  // the particle movement procedure
   typedef MemberTypes<Vector3d, Vector3d, int > Particle;
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = 1;
+  const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   const bool debug = false;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);

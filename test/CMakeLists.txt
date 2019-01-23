@@ -9,7 +9,7 @@ make_test(adj test_adj.cpp)
 make_test(barycentric test_barycentric.cpp)
 make_test(linetri_intersection test_linetri_intersection.cpp)
 make_test(push_and_search test_push_and_search.cpp)
-make_test(createParticles createParticles.cpp)
+make_test(pseudoPushAndSearch pseudoPushAndSearch.cpp)
 
 include(testing.cmake)
 

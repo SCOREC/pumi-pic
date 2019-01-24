@@ -149,6 +149,42 @@ struct CreateSCSArrays<MemberTypes<Types...> > {
   }
 };
 
+template <typename... Types>
+struct CopySCSEntriesImpl;
+
+template <>
+struct CopySCSEntriesImpl<> {
+  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {}
+};
+
+template <class T, typename... Types>
+struct CopySCSEntriesImpl<T, Types...> {
+  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {
+    static_cast<T*>(new_data[0])[new_index] = static_cast<T*>(old_data[0])[old_index];
+    CopySCSEntriesImpl<Types...>(new_data + 1, new_index, old_data + 1, old_index);
+  }
+};
+
+template <class T, typename... Types>
+template <int N>
+struct CopySCSEntriesImpl<T[N], Types...> {
+  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {
+    for (int i = 0; i < N; ++i)
+      static_cast<T*>(new_data[0])[new_index][i] = static_cast<T*>(old_data[0])[old_index][i];
+    CopySCSEntriesImpl<Types...>(new_data + 1, new_index, old_data + 1, old_index);
+  }
+};
+
+template <typename... Types>
+struct CopySCSEntries;
+
+template <typename... Types>
+struct CopySCSEntries<MemberTypes<Types...> > {
+  CopySCSEntries(void* new_data[], int new_index, void* old_data[], int old_index) {
+    CopySCSEntriesImpl<Types...>(new_data, new_index, old_data, old_index);
+  }
+};
+
 //Implementation to construct SCS arrays of different types
 template <typename... Types>
 struct DestroySCSArraysImpl;
@@ -409,7 +445,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
   
   //Fill the SCS
-  int* element_index[new_nchunks];
+  int* element_index = new int[new_nchunks];
   int chunk = -1;
   for (int i =0; i < new_nslices; ++i) {
     if ( new_slice_to_chunk[i] == chunk)
@@ -426,7 +462,8 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
 	if (particle_mask[particle]) {
 	  //for each type
 	  int new_elem = new_element[particle];
-	  new_scs_data[0][element_index[new_elem]] = scs_data[0][particle];
+	  int new_index = element_index[new_elem];
+	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[elem] += C;
 	}
       }
@@ -448,7 +485,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
   slice_to_chunk = new_slice_to_chunk;
   arr_to_scs = new_arr_to_scs;
   particle_mask = new_particle_mask;
-  for (int i =0; i < num_types; ++i)
+  for (size_t i = 0; i < num_types; ++i)
     scs_data[i] = new_scs_data[i];
 }
 

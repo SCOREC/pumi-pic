@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     int start_id = scs->offsets[i];
     int end_id = scs->offsets[i+1];
     //loop through slice horizontally
-    for (int j = start_id; j< end_id; j+=4) {
+    for (int j = start_id; j< end_id; j+=ts) {
       //Loop through slice vertically (C)
       for (int k=0; k < ts; ++k) {
         if (scs->particle_mask[j+k]) {

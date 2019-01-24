@@ -37,7 +37,7 @@ class SellCSigma {
   /*
     Rebuilds a new SCS where particles move to the element in new_element[i]
   */
-  void rebuildSCS(int* new_element);
+ void rebuildSCS(int* new_element, bool debug = false);
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -249,21 +249,22 @@ template<class DataTypes, typename ExecSpace>
 							 int* chunk_widths, int*& offs, int*& s2e) {
   offs = new int[nSlices + 1];
   s2e = new int[nSlices];
-  offsets[0] = 0;
+  offs[0] = 0;
   int index = 1;
   for (int i = 0; i < nChunks; ++i) {
     for (int j = V; j <= chunk_widths[i]; j+=V) {
-      slice_to_chunk[index-1] = i;
-      offsets[index] = offsets[index-1] + V * C;
+      s2e[index-1] = i;
+      offs[index] = offs[index-1] + V * C;
       ++index;
     }
     int rem = chunk_widths[i] % V;
     if (rem > 0) {
-      slice_to_chunk[index-1] = i;
-      offsets[index] = offsets[index-1] + rem * C;
+      s2e[index-1] = i;
+      offs[index] = offs[index-1] + rem * C;
       ++index;
     }
   }
+  ALWAYS_ASSERT(index == nSlices + 1);
 }
 template<class DataTypes, typename ExecSpace>
   SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
@@ -409,15 +410,17 @@ void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
 
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
-  int* new_particles_per_elem = new int[num_elems];
+  void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, bool debug) {
 
+  int* new_particles_per_elem = new int[num_elems];
+  for (int i =0; i < num_elems; ++i)
+    new_particles_per_elem[i] = 0;
   for (int slice = 0; slice < num_slices; ++slice) {
-    int width = (offsets[slice + 1] - offsets[slice]) / C;
-    int chunk = slice_to_chunk[slice];
-    for (int elem = chunk * C; elem < (chunk + 1) * C; ++elem) {
-      for (int particle = 0; particle < width; ++particle) {
-	++new_particles_per_elem[new_element[particle]] += particle_mask[particle];
+    for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
+      for (int k = 0; k < C; ++k) {
+	if (particle_mask[j + k]) {
+	  new_particles_per_elem[new_element[j+k]] += particle_mask[j+k];
+	}
       }
     }
   }
@@ -432,11 +435,23 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
   int* new_row_to_element;
   constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element);
 
+  if(debug) {
+    printf("\nSigma Sorted Particle Counts\n");
+    for (int i = 0; i < num_elems; ++i)
+      printf("Element %d: has %d particles\n", new_row_to_element[i], ptcls[i].first);
+  }
+
   //Create offsets for each slice
   int* new_offsets;
   int* new_slice_to_chunk;
   constructOffsets(new_nchunks, new_nslices, chunk_widths,new_offsets, new_slice_to_chunk);
   delete [] chunk_widths;
+
+  if(debug) {
+    printf("\nSlice Offsets\n");
+    for (int i = 0; i < num_slices + 1; ++i)
+      printf("Slice %d starts at %d\n", i, offsets[i]);
+  }
 
   //Allocate the Chunks
   int* new_arr_to_scs = new int[num_ptcls];
@@ -445,7 +460,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
   
   //Fill the SCS
-  int* element_index = new int[new_nchunks];
+  int* element_index = new int[new_nchunks * C];
   int chunk = -1;
   for (int i =0; i < new_nslices; ++i) {
     if ( new_slice_to_chunk[i] == chunk)
@@ -455,18 +470,37 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element) {
       element_index[chunk*C + e] = new_offsets[i] + e;
   }
   for (int slice = 0; slice < num_slices; ++slice) {
-    int width = (offsets[slice + 1] - offsets[slice]) / C;
-    int chunk = slice_to_chunk[slice];
-    for (int elem = chunk * C; elem < (chunk + 1) * C; ++elem) {
-      for (int particle = 0; particle < width; ++particle) {
+    for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
+      for (int k = 0; k < C; ++k) {
+	int particle = j + k;
 	if (particle_mask[particle]) {
 	  //for each type
 	  int new_elem = new_element[particle];
 	  int new_index = element_index[new_elem];
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
-	  element_index[elem] += C;
+	  element_index[new_elem] += C;
+	  new_particle_mask[particle] = true;
 	}
+	else 
+	  new_particle_mask[particle] = false;
       }
+    }
+  }
+
+  delete [] element_index;
+  if(debug) {
+    printf("\narr_to_scs\n");
+    for (int i = 0; i < num_ptcls; ++i)
+      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
+    printf("\nSlices\n");
+    for (int i = 0; i < num_slices; ++i){
+      printf("Slice %d:", i);
+      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
+        printf(" %d", particle_mask[j]);
+        if (j % C == C - 1)
+          printf(" |");
+      }
+      printf("\n");
     }
   }
 

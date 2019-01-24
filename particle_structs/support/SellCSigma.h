@@ -449,8 +449,8 @@ template<class DataTypes, typename ExecSpace>
 
   if(debug) {
     printf("\nSlice Offsets\n");
-    for (int i = 0; i < num_slices + 1; ++i)
-      printf("Slice %d starts at %d\n", i, offsets[i]);
+    for (int i = 0; i < new_nslices + 1; ++i)
+      printf("Slice %d starts at %d\n", i, new_offsets[i]);
   }
 
   //Allocate the Chunks
@@ -466,17 +466,20 @@ template<class DataTypes, typename ExecSpace>
     if ( new_slice_to_chunk[i] == chunk)
       continue;
     chunk = new_slice_to_chunk[i];
-    for (int e = 0; e < C; ++e)
+    for (int e = 0; e < C; ++e) {
       element_index[chunk*C + e] = new_offsets[i] + e;
+    }
   }
+
+  int* old_to_new_index = new int[offsets[num_slices]];
   for (int slice = 0; slice < num_slices; ++slice) {
     for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
       for (int k = 0; k < C; ++k) {
 	int particle = j + k;
 	if (particle_mask[particle]) {
-	  //for each type
 	  int new_elem = new_element[particle];
 	  int new_index = element_index[new_elem];
+	  old_to_new_index[particle] = new_index;
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[new_elem] += C;
 	  new_particle_mask[particle] = true;
@@ -486,23 +489,11 @@ template<class DataTypes, typename ExecSpace>
       }
     }
   }
-
-  delete [] element_index;
-  if(debug) {
-    printf("\narr_to_scs\n");
-    for (int i = 0; i < num_ptcls; ++i)
-      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
-    printf("\nSlices\n");
-    for (int i = 0; i < num_slices; ++i){
-      printf("Slice %d:", i);
-      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
-        printf(" %d", particle_mask[j]);
-        if (j % C == C - 1)
-          printf(" |");
-      }
-      printf("\n");
-    }
+  for (int i =0; i < num_ptcls; ++i) {
+    new_arr_to_scs[i] = old_to_new_index[arr_to_scs[i]];
   }
+  delete [] old_to_new_index;
+  delete [] element_index;
 
   
   delete [] ptcls;
@@ -521,6 +512,22 @@ template<class DataTypes, typename ExecSpace>
   particle_mask = new_particle_mask;
   for (size_t i = 0; i < num_types; ++i)
     scs_data[i] = new_scs_data[i];
+
+  if(debug) {
+    printf("\narr_to_scs\n");
+    for (int i = 0; i < num_ptcls; ++i)
+      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
+    printf("\nSlices\n");
+    for (int i = 0; i < num_slices; ++i){
+      printf("Slice %d:", i);
+      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
+        printf(" %d", particle_mask[j]);
+        if (j % C == C - 1)
+          printf(" |");
+      }
+      printf("\n");
+    }
+  }
 }
 
 

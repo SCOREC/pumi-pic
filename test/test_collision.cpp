@@ -1,4 +1,6 @@
-
+#include "Omega_h_file.hpp"
+#include "Omega_h_for.hpp"
+#include "Omega_h_mesh.hpp"
 #include "pumipic_adjacency.hpp"
 #include "unit_tests.hpp"
 
@@ -11,16 +13,16 @@ int main(int argc, char** argv) {
   //TODO set points here X={0, 0.416667, 0.25}
   //Unexpected results : all on surface. origin: (0 0 0); dest: (-1 1 1); 0.1,0.1,0  11,1,-1
 
+  auto lib = Omega_h::Library(&argc, &argv);
+  const auto world = lib.world();
+  auto mesh = Omega_h::gmsh::read(argv[1], world);
+
   Omega_h::Vector<3> orig{2, 0.5,0.3};
   Omega_h::Vector<3> dest{1.1,50,0};
   Omega_h::Write<Omega_h::Real> res(3,0);
   res[0] = 1.99091;
   res[1] = 1;
   res[2] = 0.29697;
-
-  auto lib = Omega_h::Library(&argc, &argv);
-  const auto world = lib.world();
-  auto mesh = Omega_h::gmsh::read(argv[1], world);
 
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);

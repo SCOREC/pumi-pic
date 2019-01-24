@@ -20,7 +20,10 @@ int main(int argc, char** argv) {
               << "Example: ./barycentric test3\n";
     exit(1);
   }
-
+  
+  auto lib = Omega_h::Library(&argc, &argv);
+  const auto world = lib.world();
+  
   if(std::string(argv[1]) =="test1")
   {
     if(test_barycentric1()) return 0;

@@ -12,6 +12,10 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
+  auto lib = Omega_h::Library(&argc, &argv);
+  const auto world = lib.world();
+
+
   if(argc==1)
   {
     Omega_h::Vector<3> xpoint{0, 0, 0};

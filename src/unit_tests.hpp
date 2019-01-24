@@ -394,9 +394,8 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
 }
 
 //TODO add checks
-void test_unit(Omega_h::Library *lib)
+void test_unit(Omega_h::Mesh &m)
 {
-    Omega_h::Mesh m(lib);
     Omega_h::build_from_elems2verts(&m, OMEGA_H_SIMPLEX, 3, Omega_h::LOs({0, 1, 2, 3}), 4);
     print_mesh_stat(m, false);
 

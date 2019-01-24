@@ -62,7 +62,7 @@ int main(int argc, char** argv)
   Omega_h::Int nelems = mesh.nelems();
 
 #if PRINT_DETAIL==1
-  test_unit(&lib);
+  test_unit(mesh);
   print_mesh_stat(mesh);
   //p::print_array(&data.data()->data()[0], 3, "data");
 #endif

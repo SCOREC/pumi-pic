@@ -70,7 +70,6 @@ void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
   }
 }
 
-typedef int lid_t;
 typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
 /** \brief helper function to transfer a host array to a device view
  */

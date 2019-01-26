@@ -10,6 +10,8 @@ typedef double fp_t;
 typedef float fp_t;
 #endif
 
+typedef int lid_t;
+
 typedef fp_t Vector3d[3];
 
 //Particle = <current position vector, pushed position vector>

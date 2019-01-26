@@ -312,12 +312,12 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
         Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
 
         //TESTING. Check particle origin containment in current element
-        bool test_res = find_barycentric_tet(M, orig, bcc);
+        find_barycentric_tet(M, orig, bcc);
 #if DEBUG >1
         if(!(all_positive(bcc.data(), 4)))
           std::cout << "ORIGIN ********NOT in elemet_id " << ielem << " \n";
 #endif //DEBUG
-        const bool res = find_barycentric_tet(M, dest, bcc);
+        find_barycentric_tet(M, dest, bcc);
 
         if(all_positive(bcc.data(), 4, 0)) //SURFACE_EXCLUDE)) TODO
         {
@@ -497,6 +497,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 #if DEBUG >1
   std::cout << "While loop nums " << loops << "\n";
 #endif //DEBUG
+  return found;
 } //search_mesh
 
 

@@ -8,6 +8,8 @@
 #include "MemberTypes.h"
 #include <Kokkos_Core.hpp>
 
+namespace particle_structs {
+
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
@@ -264,7 +266,7 @@ template<class DataTypes, typename ExecSpace>
       ++index;
     }
   }
-  ALWAYS_ASSERT(index == nSlices + 1);
+  PS_ALWAYS_ASSERT(index == nSlices + 1);
 }
 template<class DataTypes, typename ExecSpace>
   SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
@@ -325,7 +327,7 @@ template<class DataTypes, typename ExecSpace>
         if (k < num_elems && ptcls[k].first > start + j) {
           int ent_id = ptcls[k].second;
           int ptcl = ids[ent_id][start + j];
-          ALWAYS_ASSERT(ptcl<np);
+          PS_ALWAYS_ASSERT(ptcl<np);
           arr_to_scs[ptcl] = index;
           particle_mask[index++] = true;
         }
@@ -558,5 +560,7 @@ template <class DataTypes, typename ExecSpace>
   row_to_element_d = kkLidView("row_to_element_d", C * num_chunks);
   hostToDevice(row_to_element_d,row_to_element);
 }
+
+} // end namespace particle_structs
 
 #endif

@@ -1,5 +1,7 @@
 #include "psTypes.h"
 
+namespace particle_structs {
+
 elemCoords::elemCoords(int ne, int np, int s) {
   num_elems = ne;
   verts_per_elem = np;
@@ -13,4 +15,6 @@ elemCoords::~elemCoords() {
   delete [] x;
   delete [] y;
   delete [] z;
+}
+
 }

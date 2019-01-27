@@ -6,6 +6,11 @@
 #include <SellCSigma.h>
 #include <Distribute.h>
 #include <psAssert.h>
+
+using particle_structs::SellCSigma;
+using particle_structs::MemberTypes;
+using particle_structs::distribute_particles;
+
 int main(int argc, char** argv) {
 
   Kokkos::initialize(argc,argv);
@@ -14,14 +19,14 @@ int main(int argc, char** argv) {
   typedef MemberTypes<int[3],double[2],char> Type3;
   
   printf("Type1: %lu\n",Type1::memsize);
-  ALWAYS_ASSERT(Type1::memsize == sizeof(int));
+  PS_ALWAYS_ASSERT(Type1::memsize == sizeof(int));
   printf("Type2: %lu\n",Type2::memsize);
-  ALWAYS_ASSERT(Type2::memsize == sizeof(int) + sizeof(double));
+  PS_ALWAYS_ASSERT(Type2::memsize == sizeof(int) + sizeof(double));
   printf("Type3: %lu\n",Type3::memsize);
-  ALWAYS_ASSERT(Type3::memsize == 3*sizeof(int) + 2*sizeof(double) + sizeof(char));
+  PS_ALWAYS_ASSERT(Type3::memsize == 3*sizeof(int) + 2*sizeof(double) + sizeof(char));
 
   printf("Type3 start of doubles: %lu\n",Type3::sizeToIndex<1>());
-  ALWAYS_ASSERT(Type3::sizeToIndex<1>() == 3*sizeof(int));
+  PS_ALWAYS_ASSERT(Type3::sizeToIndex<1>() == 3*sizeof(int));
 
 
   int ne = 5;

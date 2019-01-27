@@ -3,6 +3,8 @@
 #include "psTypes.h"
 #include <SellCSigma.h>
 
+namespace particle_structs {
+
 void push_array(int np, fp_t* xs, fp_t* ys, fp_t* zs,
     int* ptcl_to_elem, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz,
@@ -23,5 +25,7 @@ void push_scs_kk(SellCSigma<Particle>* scs, int np, elemCoords& elems,
 
 void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
     fp_t distance, fp_t dx, fp_t dy, fp_t dz);
+
+}
 
 #endif

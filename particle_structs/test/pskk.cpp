@@ -15,6 +15,13 @@
 
 #include <Kokkos_Core.hpp>
 
+namespace PS = particle_structs;
+using particle_structs::fp_t;
+using particle_structs::Particle;
+using particle_structs::SellCSigma;
+using particle_structs::distribute_particles;
+using particle_structs::distribute_name;
+
 void printTimerResolution() {
   Kokkos::Timer timer;
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -31,7 +38,7 @@ const double EPSILON = 0.0001;
 void positionsMatch(int np,
 		    fp_t* x1, fp_t* y1, fp_t* z1,
                     SellCSigma<Particle>* scs) {
-  Vector3d *pushed_position_vector = scs->getSCS<1>();
+  PS::Vector3d *pushed_position_vector = scs->getSCS<1>();
   //Confirm all particles were pushed
   for (int i = 0; i < np; ++i) {
     const int scsIdx = scs->arr_to_scs[i];
@@ -60,7 +67,7 @@ void checkThenClear(int np,
     fp_t* x1, fp_t* y1, fp_t* z1,
                     SellCSigma<Particle>* scs) {
   positionsMatch(np, x1, y1, z1, scs);
-  Vector3d *pushed_position_vector = scs->getSCS<1>();
+  PS::Vector3d *pushed_position_vector = scs->getSCS<1>();
   for(int i=0; i<np; i++) {
     int scs_index = scs->arr_to_scs[i];
     pushed_position_vector[scs_index][0] = 0;
@@ -154,8 +161,8 @@ int main(int argc, char* argv[]) {
 						       ptcls_per_elem,
 						       ids, debug);
   //Set initial positions and 0 out future position
-  Vector3d *initial_position_scs = scs->getSCS<0>();
-  Vector3d *pushed_position_scs = scs->getSCS<1>();
+  PS::Vector3d *initial_position_scs = scs->getSCS<0>();
+  PS::Vector3d *pushed_position_scs = scs->getSCS<1>();
 
   for (int i = 0; i < np; ++i) {
     int scs_index = scs->arr_to_scs[i];
@@ -175,7 +182,7 @@ int main(int argc, char* argv[]) {
   // for that information.  This duplication of vertex info eliminates
   // 'jumps' through the vertex arrays and thus improves performance;
   // something a 'real' analysis code may do.
-  elemCoords elems(ne, 4, scs->C * scs->num_chunks);
+  PS::elemCoords elems(ne, 4, scs->C * scs->num_chunks);
   //Write something into the coordinate arrays. Does not matter.
   for( int i=0; i<elems.size; i++ ) {
     elems.x[i] = i;

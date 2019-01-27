@@ -1,5 +1,7 @@
 #include "SellCSigma.h"
 
+namespace particle_structs {
+
 void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 
 	       std::pair<int, int>*& ptcl_pairs, bool doSort) {
   //Make temporary copy of the particle counts for sorting
@@ -21,3 +23,4 @@ void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma,
   }
 }
 
+}

@@ -4,6 +4,8 @@
 #include <Kokkos_Core.hpp>
 #include <SCS_Macros.h>
 
+namespace particle_structs {
+
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
 }
@@ -307,7 +309,7 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   double totTime = 0;
   for( int iter=0; iter<NUM_ITERATIONS; iter++) {
     timer.reset();
-    PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
       //Can't used const construction of arrays because they require unprotected commas
       fp_t dir[3];
       dir[0] = disp_d(0)*disp_d(1);
@@ -328,7 +330,7 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
       z[1] = ez_d(e+1);
       z[2] = ez_d(e+2);
       z[3] = ez_d(e+3);
-      PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
         fp_t c= 0;
         c += x[0] + y[0] + z[0];
         c += x[1] + y[1] + z[1];
@@ -353,3 +355,5 @@ void push_scs_kk_macros(SellCSigma<Particle>* scs, int np, elemCoords& elems,
 }
 
 #endif //kokkos enabled
+
+}

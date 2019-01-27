@@ -1,5 +1,8 @@
 #ifndef PSPARAMS_H
 #define PSPARAMS_H
+
+namespace particle_structs {
+
 const double TERA = 1E12;
 
 //six operations = add and multiply each coordinate in 3D
@@ -9,4 +12,7 @@ const double TERA = 1E12;
 const double PARTICLE_OPS = 6; 
 
 const int NUM_ITERATIONS = 100;
+
+}
+
 #endif

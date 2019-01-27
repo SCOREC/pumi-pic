@@ -3,6 +3,8 @@
 
 #include <MemberTypes.h>
 
+namespace particle_structs {
+
 #ifdef FP64
 typedef double fp_t;
 #endif
@@ -30,5 +32,7 @@ class elemCoords {
   private:
     elemCoords() {};
 };
+
+}
 
 #endif

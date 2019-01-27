@@ -7,6 +7,10 @@
 #include <psAssert.h>
 #include <Distribute.h>
 
+using particle_structs::SellCSigma;
+using particle_structs::MemberTypes;
+using particle_structs::distribute_particles;
+
 int main(int argc, char* argv[]) {
 
   Kokkos::initialize(argc, argv);

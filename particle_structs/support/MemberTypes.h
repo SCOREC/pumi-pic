@@ -2,6 +2,9 @@
 #define __MEMBERTYPES_H__
 
 #include <cstdlib>
+
+namespace particle_structs {
+
 template<std::size_t N, typename T, typename... Types>
 struct MemberSize;
 
@@ -56,5 +59,6 @@ struct MemberTypeAtIndex<N,MemberTypes<Types...> > {
   using type = typename MemberTypeAtIndexImpl<N, Types...>::type;
 };
 
+}
 
 #endif

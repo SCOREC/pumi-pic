@@ -124,9 +124,9 @@ int main(int argc, char** argv) {
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
 
-  if(argc != 3)
+  if(argc != 2)
   {
-    std::cout << "Usage: " << argv[0] << " <mesh> <particles per element>\n";
+    std::cout << "Usage: " << argv[0] << " <mesh>\n";
     exit(1);
   }
 

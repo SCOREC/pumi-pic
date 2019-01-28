@@ -63,6 +63,7 @@ void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
 
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     fp_t dx, fp_t dy, fp_t dz) {
+  fprintf(stderr, "push\n");
   Kokkos::Timer timer;
   Vector3d *scs_initial_position = scs->getSCS<0>();
   Vector3d *scs_pushed_position = scs->getSCS<1>();
@@ -97,6 +98,87 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   totTime += timer.seconds();
   printTiming("scs push", totTime);
 #endif
+}
+
+void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+  fprintf(stderr, "search\n");
+
+  assert(scs->num_elems == mesh.nelems());
+
+  //define the 20+ input args...
+  //TODO create the mesh arrays inside the function
+  //TODO document the search_mesh function args after cleanup
+  Omega_h::LO something = 1; 
+  Omega_h::Int nelems = mesh.nelems();
+
+  //initial positions
+  Omega_h::Write<Omega_h::Real> x0(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> y0(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> z0(scs->num_ptcls,0);
+  //final positions
+  Omega_h::Write<Omega_h::Real> x(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> y(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> z(scs->num_ptcls,0);
+
+  //set particle positions
+  scs->transferToDevice();
+  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    printf("elm %d\n", e);
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      printf("ptcl %d\n", pid);
+      x[pid] = x_scs_d(pid,0);
+      y[pid] = x_scs_d(pid,1);
+      z[pid] = x_scs_d(pid,2);
+      x0[pid] = 0;
+      y0[pid] = 0;
+      z0[pid] = 0;
+    });
+  });
+
+  // sanity check
+  auto f = OMEGA_H_LAMBDA(o::LO i) {
+    printf("%d %f %f %f\n", i, x[i], y[i], z[i]);
+  };
+  o::parallel_for(scs->num_ptcls, f, "print_x");
+
+  //mesh adjacencies
+  const auto dual = mesh.ask_dual();
+  const auto down_r2f = mesh.ask_down(3, 2);
+  const auto down_f2e = mesh.ask_down(2,1);
+  const auto up_e2f = mesh.ask_up(1, 2);
+  const auto up_f2r = mesh.ask_up(2, 3);
+
+  //boundary classification and coordinates
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto face_verts =  mesh.ask_verts_of(2);//LOs
+
+  //flags
+  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1); // TODO what does this store?
+  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls); //next element to search for
+  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1);
+  Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);
+  Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);
+
+  auto set_ptcl_flag = OMEGA_H_LAMBDA(o::LO i) {
+    if(ptcl_flags[i]==0){
+      ptcl_flags[i]=1;
+    }
+  };
+  o::parallel_for(scs->num_ptcls, set_ptcl_flag, "set_ptcl_flags");
+
+  Omega_h::LO loops = 0;
+  Omega_h::LO maxLoops = 4;
+  //bool isFound = p::search_mesh(
+  //    something, nelems, x0, y0, z0, x, y, z,
+  //    dual, down_r2f, down_f2e, up_e2f, up_f2r,
+  //    side_is_exposed, mesh2verts, coords, face_verts,
+  //    ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
+  //    xpoints, loops, maxLoops);
+  //assert(isFound);
 }
 
 void setInitialPtclCoords(Vector3d* p, int numPtcls) {
@@ -149,6 +231,9 @@ int main(int argc, char** argv) {
   if (!distribute_particles(ne,numPtcls,strat,ptcls_per_elem, ids)) {
     return 1;
   }
+  for(int i=0; i<ne; i++)
+    if(ptcls_per_elem[i]>0)
+      printf("ppe[%d] %d\n", i, ptcls_per_elem[i]);
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
   //in memory and can be ignored until performance is being evaluated.  These
@@ -166,7 +251,8 @@ int main(int argc, char** argv) {
   Vector3d *initial_position_scs = scs->getSCS<0>();
   setInitialPtclCoords(initial_position_scs, numPtcls); //TODO
 
-  //run search to move the particles to their starting elements //TODO
+  //run search to move the particles to their starting elements
+  search(mesh,scs);
  
   //rebuild the SCS to set the new element-to-particle lists //TODO
 

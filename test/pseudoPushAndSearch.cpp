@@ -62,19 +62,13 @@ void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
   Kokkos::deep_copy(d,hv);
 }
 
-void push(SellCSigma<Particle>* scs, int np, elemCoords& elems,
-                        fp_t distance, fp_t dx, fp_t dy, fp_t dz) {
+void push(SellCSigma<Particle>* scs, int np, fp_t distance,
+    fp_t dx, fp_t dy, fp_t dz) {
   Kokkos::Timer timer;
   Vector3d *scs_initial_position = scs->getSCS<0>();
   Vector3d *scs_pushed_position = scs->getSCS<1>();
   //Move SCS data to the device
   scs->transferToDevice();
-  kkFpView ex_d("ex_d", elems.size);
-  hostToDeviceFp(ex_d, elems.x);
-  kkFpView ey_d("ey_d", elems.size);
-  hostToDeviceFp(ey_d, elems.y);
-  kkFpView ez_d("ez_d", elems.size);
-  hostToDeviceFp(ez_d, elems.z);
 
   kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(position_d, scs_initial_position);
@@ -90,36 +84,15 @@ void push(SellCSigma<Particle>* scs, int np, elemCoords& elems,
   double totTime = 0;
   timer.reset();
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    //Can't used const construction of arrays because they require unprotected commas
+    (void) e;
     fp_t dir[3];
     dir[0] = disp_d(0)*disp_d(1);
     dir[1] = disp_d(0)*disp_d(2);
     dir[2] = disp_d(0)*disp_d(3);
-    fp_t x[4];
-    x[0] = ex_d(e);
-    x[1] = ex_d(e+1);
-    x[2] = ex_d(e+2);
-    x[3] = ex_d(e+3);
-    fp_t y[4];
-    y[0] = ey_d(e);
-    y[1] = ey_d(e+1);
-    y[2] = ey_d(e+2);
-    y[3] = ey_d(e+3);
-    fp_t z[4];
-    z[0] = ez_d(e);
-    z[1] = ez_d(e+1);
-    z[2] = ez_d(e+2);
-    z[3] = ez_d(e+3);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      fp_t c= 0;
-      c += x[0] + y[0] + z[0];
-      c += x[1] + y[1] + z[1];
-      c += x[2] + y[2] + z[2];
-      c += x[3] + y[3] + z[3];
-      c/=4;
-      new_position_d(pid,0) = position_d(pid,0) + c * dir[0];
-      new_position_d(pid,1) = position_d(pid,1) + c * dir[1];
-      new_position_d(pid,2) = position_d(pid,2) + c * dir[2];
+      new_position_d(pid,0) = position_d(pid,0) * dir[0];
+      new_position_d(pid,1) = position_d(pid,1) * dir[1];
+      new_position_d(pid,2) = position_d(pid,2) * dir[2];
     });
   });
   totTime += timer.seconds();
@@ -129,16 +102,6 @@ void push(SellCSigma<Particle>* scs, int np, elemCoords& elems,
 
 void setInitialPtclCoords(Vector3d* p) {
   (void)p;
-}
-
-void setElemCoords(const o::Reals* coords, const o::LOs* r2v, elemCoords& elems) {
-  (void)coords;
-  (void)r2v;
-  for( int i=0; i<elems.size; i++ ) {
-    elems.x[i] = i;
-    elems.y[i] = i;
-    elems.z[i] = i;
-  }
 }
 
 int main(int argc, char** argv) {
@@ -196,13 +159,9 @@ int main(int argc, char** argv) {
   //Set initial positions and 0 out future position
   Vector3d *initial_position_scs = scs->getSCS<0>();
   int *flag_scs = scs->getSCS<2>();
-  setInitialPtclCoords(initial_position_scs);
+  setInitialPtclCoords(initial_position_scs); //TODO
   (void)flag_scs; //TODO
 
-  //create elems struct
-  elemCoords elems(ne, 4, scs->C * scs->num_chunks);
-  setElemCoords(&coords, &r2v, elems); //TODO - what is the layout of coords?
-  
   //define parameters controlling particle motion
   //TODO - set these based on the model 
   fp_t distance = .1;
@@ -218,7 +177,7 @@ int main(int argc, char** argv) {
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     fprintf(stderr, "\n");
     timer.reset();
-    push(scs, np, elems, distance, dx, dy, dz);
+    push(scs, np, distance, dx, dy, dz);
     fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
   }
 

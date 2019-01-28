@@ -99,8 +99,17 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
 #endif
 }
 
-void setInitialPtclCoords(Vector3d* p) {
-  (void)p;
+void setInitialPtclCoords(Vector3d* p, int numPtcls) {
+  const fp_t insetFaceDiameter = 0.6;
+  const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
+  const fp_t insetFaceRim = 0.3; // in x and z
+  const fp_t insetFaceCenter = 0; // in x and z
+  const fp_t x_delta = insetFaceDiameter / numPtcls;
+  for(int i=0; i<numPtcls; i++) {
+    p[i][0] = insetFaceRim + (x_delta * i);
+    p[i][1] = insetFacePlane;
+    p[i][2] = insetFaceCenter;
+  }
 }
 
 int main(int argc, char** argv) {
@@ -128,18 +137,16 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-
-  const int ppe = atoi(argv[2]);
-  Omega_h::Int ne = mesh.nelems();
-  const int np = ppe*ne;
+  const int numPtcls = 12;
 
   //Distribute particles to elements evenly (strat = 0)
+  Omega_h::Int ne = mesh.nelems();
   const int strat = 0;
   fprintf(stderr, "distribution %d-%s #elements %d #particles %d\n",
-      strat, distribute_name(strat), ne, np);
+      strat, distribute_name(strat), ne, numPtcls);
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  if (!distribute_particles(ne,np,strat,ptcls_per_elem, ids)) {
+  if (!distribute_particles(ne,numPtcls,strat,ptcls_per_elem, ids)) {
     return 1;
   }
 
@@ -152,13 +159,18 @@ int main(int argc, char** argv) {
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
   fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", policy.team_size(), V, sigma);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, np,
+  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
 						       ptcls_per_elem,
 						       ids, debug);
   //Set initial positions and 0 out future position
   Vector3d *initial_position_scs = scs->getSCS<0>();
+  setInitialPtclCoords(initial_position_scs, numPtcls); //TODO
+
+  //run search to move the particles to their starting elements //TODO
+ 
+  //rebuild the SCS to set the new element-to-particle lists //TODO
+
   int *flag_scs = scs->getSCS<2>();
-  setInitialPtclCoords(initial_position_scs); //TODO
   (void)flag_scs; //TODO
 
   //define parameters controlling particle motion
@@ -173,7 +185,7 @@ int main(int argc, char** argv) {
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     fprintf(stderr, "\n");
     timer.reset();
-    push(scs, np, distance, dx, dy, dz);
+    push(scs, numPtcls, distance, dx, dy, dz);
     fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
   }
 

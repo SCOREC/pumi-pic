@@ -40,7 +40,6 @@ void printTimerResolution() {
 }
 
 typedef Kokkos::DefaultExecutionSpace exe_space;
-//TODO Figure out how to template these helper fns
 typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view */
 void hostToDeviceFp(kkFpView d, fp_t* h) {
@@ -163,15 +162,12 @@ int main(int argc, char** argv) {
   (void)flag_scs; //TODO
 
   //define parameters controlling particle motion
-  //TODO - set these based on the model 
-  fp_t distance = .1;
-  fp_t dx = 0.2;
-  fp_t dy = 0;
+  //move the particles in +y direction by 1/20th of the
+  //pisces model's height
+  fp_t distance = .05;
+  fp_t dx = 0;
+  fp_t dy = 1;
   fp_t dz = 0;
-  fp_t length = sqrt(dx * dx + dy * dy + dz * dz);
-  dx /= length;
-  dy /= length;
-  dz /= length;
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {

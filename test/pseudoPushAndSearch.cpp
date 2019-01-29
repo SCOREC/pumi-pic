@@ -146,7 +146,7 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
 
   //flags
   Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // TODO what does this store?
-  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls);              // TODO use scs
+  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1);           // TODO use scs
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
   Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
   Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
@@ -173,12 +173,12 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
 
   // sanity check
   auto f = OMEGA_H_LAMBDA(o::LO i) {
-    printf("%d %f %f %f -> %f %f %f\n", i, x0[i], y0[i], z0[i], x[i], y[i], z[i]);
+    printf("elem_ids[%d] %d %f %f %f -> %f %f %f\n", i, elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
   };
   o::parallel_for(scs->num_ptcls, f, "print_x");
 
   Omega_h::LO loops = 0;
-  Omega_h::LO maxLoops = 4;
+  Omega_h::LO maxLoops = 100;
   bool isFound = p::search_mesh(
       something, nelems, x0, y0, z0, x, y, z,
       dual, down_r2f, down_f2e, up_e2f, up_f2r,
@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 12;
+  const int numPtcls = 1;
 
   //Distribute particles to elements evenly (strat = 0)
   Omega_h::Int ne = mesh.nelems();

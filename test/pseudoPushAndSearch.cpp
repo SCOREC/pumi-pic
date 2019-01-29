@@ -61,6 +61,16 @@ void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
   Kokkos::deep_copy(d,hv);
 }
 
+void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
+  kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
+  Kokkos::deep_copy(hv,d);
+  for(size_t i=0; i<hv.size()/3; ++i) {
+    h[i][0] = hv(i,0);
+    h[i][1] = hv(i,1);
+    h[i][2] = hv(i,2);
+  }
+}
+
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     fp_t dx, fp_t dy, fp_t dz) {
   fprintf(stderr, "push\n");
@@ -120,28 +130,6 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   Omega_h::Write<Omega_h::Real> y(scs->num_ptcls,0);
   Omega_h::Write<Omega_h::Real> z(scs->num_ptcls,0);
 
-  //set particle positions
-  scs->transferToDevice();
-  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    printf("elm %d\n", e);
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      printf("ptcl %d\n", pid);
-      x[pid] = x_scs_d(pid,0);
-      y[pid] = x_scs_d(pid,1);
-      z[pid] = x_scs_d(pid,2);
-      x0[pid] = 0;
-      y0[pid] = 0;
-      z0[pid] = 0;
-    });
-  });
-
-  // sanity check
-  auto f = OMEGA_H_LAMBDA(o::LO i) {
-    printf("%d %f %f %f\n", i, x[i], y[i], z[i]);
-  };
-  o::parallel_for(scs->num_ptcls, f, "print_x");
 
   //mesh adjacencies
   const auto dual = mesh.ask_dual();
@@ -157,31 +145,80 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
 
   //flags
-  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1); // TODO what does this store?
-  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls); //next element to search for
-  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1);
-  Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);
-  Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);
+  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // TODO what does this store?
+  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls);              // TODO use scs
+  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
+  Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
+  Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
 
-  auto set_ptcl_flag = OMEGA_H_LAMBDA(o::LO i) {
-    if(ptcl_flags[i]==0){
-      ptcl_flags[i]=1;
-    }
+  //set particle positions and parent element ids
+  scs->transferToDevice();
+  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    printf("elm %d\n", e);
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      printf("ptcl %d\n", pid);
+      x0[pid] = x_scs_d(pid,0);
+      y0[pid] = x_scs_d(pid,1);
+      z0[pid] = x_scs_d(pid,2);
+      x[pid] = xtgt_scs_d(pid,0);
+      y[pid] = xtgt_scs_d(pid,1);
+      z[pid] = xtgt_scs_d(pid,2);
+      elem_ids[pid] = e;
+    });
+  });
+
+  // sanity check
+  auto f = OMEGA_H_LAMBDA(o::LO i) {
+    printf("%d %f %f %f -> %f %f %f\n", i, x0[i], y0[i], z0[i], x[i], y[i], z[i]);
   };
-  o::parallel_for(scs->num_ptcls, set_ptcl_flag, "set_ptcl_flags");
+  o::parallel_for(scs->num_ptcls, f, "print_x");
 
   Omega_h::LO loops = 0;
   Omega_h::LO maxLoops = 4;
-  //bool isFound = p::search_mesh(
-  //    something, nelems, x0, y0, z0, x, y, z,
-  //    dual, down_r2f, down_f2e, up_e2f, up_f2r,
-  //    side_is_exposed, mesh2verts, coords, face_verts,
-  //    ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
-  //    xpoints, loops, maxLoops);
-  //assert(isFound);
+  bool isFound = p::search_mesh(
+      something, nelems, x0, y0, z0, x, y, z,
+      dual, down_r2f, down_f2e, up_e2f, up_f2r,
+      side_is_exposed, mesh2verts, coords, face_verts,
+      ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
+      xpoints, loops, maxLoops);
+  assert(isFound);
 }
 
-void setInitialPtclCoords(Vector3d* p, int numPtcls) {
+//HACK to avoid having an unguarded comma in the SCS PARALLEL macro
+OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4> v) {
+  return o::gather_vectors<4, 3>(a, v);
+}
+
+void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+  //get centroid of parent element and set the child particle coordinates
+  //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
+  //It isn't clear why the template parameter for gather_[verts|vectors] was
+  //sized eight... maybe something to do with the 'Overlay'.  Given that there
+  //are four vertices bounding a tet, I'm setting that parameter to four below.
+  auto cells2nodes = mesh.get_adj(o::REGION, o::VERT).ab2b;
+  auto nodes2coords = mesh.coords();
+  //set particle positions and parent element ids
+  scs->transferToDevice();
+  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
+    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
+    auto center = average(cell_nodes2coords);
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+      for(int i=0; i<3; i++)
+        x_scs_d(pid,i) = center[i];
+    });
+  });
+  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+}
+
+void setTargetPtclCoords(Vector3d* p, int numPtcls) {
   const fp_t insetFaceDiameter = 0.6;
   const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
   const fp_t insetFaceRim = 0.3; // in x and z
@@ -247,15 +284,20 @@ int main(int argc, char** argv) {
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
 						       ptcls_per_elem,
 						       ids, debug);
-  //Set initial positions and 0 out future position
-  Vector3d *initial_position_scs = scs->getSCS<0>();
-  setInitialPtclCoords(initial_position_scs, numPtcls); //TODO
+  delete [] ptcls_per_elem;
+
+  //Set initial and target positions so search will
+  // find the parent elements
+  setInitialPtclCoords(mesh, scs);
+  Vector3d *final_position_scs = scs->getSCS<1>();
+  setTargetPtclCoords(final_position_scs, numPtcls);
 
   //run search to move the particles to their starting elements
   search(mesh,scs);
  
   //rebuild the SCS to set the new element-to-particle lists //TODO
 
+  /*
   int *flag_scs = scs->getSCS<2>();
   (void)flag_scs; //TODO
 
@@ -274,9 +316,9 @@ int main(int argc, char** argv) {
     push(scs, numPtcls, distance, dx, dy, dz);
     fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
   }
+  */
 
   //cleanup
-  delete [] ptcls_per_elem;
   delete [] ids;
   delete scs;
   return 0;

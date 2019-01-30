@@ -279,10 +279,10 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
   const auto up_f2r_faces = &up_f2r.a2ab;
   const auto up_f2r_reg = &up_f2r.ab2b;
 
-  const int debug = 2;
+  const int debug = 1;
 
-  fprintf(stderr, "elem_ids.size() %d\n", elem_ids.size());
-  Omega_h::Write<Omega_h::LO> elem_ids_next(elem_ids.size(),-1);
+  const int totNumPtcls = elem_ids.size();
+  Omega_h::Write<Omega_h::LO> elem_ids_next(totNumPtcls,-1);
 
   //particle search: adjacency + boundary crossing
   auto search_ptcl = OMEGA_H_LAMBDA( Omega_h::LO ielem)
@@ -297,11 +297,12 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     assert(nptcl==1);
     // Each group of particles inside the parallel_for.
     // TODO Change ntpcl, ip start and limit. Update global(?) indices inside.
-    for(Omega_h::LO ip = 0; ip < nptcl; ++ip)
+    for(Omega_h::LO ip = 0; ip < totNumPtcls; ++ip) //HACK - each element checks all particles
     {
+      //skip if the particle is not in this element
       if(elem_ids[ip] != ielem) continue;
 
-      if(debug>1)
+      if(debug)
         std::cerr << "Elem " << ielem << " ptcl:" << ip << "\n";
       bool continue_coll = (coll_adj_face_ids[ip] !=-1) ? true:false;
       Omega_h::LO coll_face_id = -1;
@@ -459,13 +460,14 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( Omega_h::LO i) {
       elem_ids[i] = elem_ids_next[i];
+      elem_ids_next[i] = -1;
     };
     Omega_h::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
 
     // TODO synchronize
 
     //TODO this could be a sequential bottle-neck
-    for(int i=0; i<nptcl; ++i){ if(part_flags[i] > 0) {found = false; break;} }
+    for(int i=0; i<totNumPtcls; ++i){ if(part_flags[i] > 0) {found = false; break;} }
     //Copy particle data from previous to next (adjacent) element
     ++loops;
 

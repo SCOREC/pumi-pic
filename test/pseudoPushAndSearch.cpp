@@ -256,7 +256,7 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 1;
+  const int numPtcls = 2;
 
   //Distribute particles to elements evenly (strat = 0)
   Omega_h::Int ne = mesh.nelems();

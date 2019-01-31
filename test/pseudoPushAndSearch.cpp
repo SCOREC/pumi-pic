@@ -186,6 +186,17 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
       xpoints, loops, maxLoops);
   assert(isFound);
+  auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
+    printf("elem_ids[%d] %d\n", i, elem_ids[i]);
+  };
+  o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
+  o::Write<o::LO> elm_has_ptcls(mesh.nelems(), -1);
+  auto setElmsWithPtcls = OMEGA_H_LAMBDA(o::LO i) {
+    elm_has_ptcls[ elem_ids[i] ] = 1;
+  };
+  o::parallel_for(scs->num_ptcls, setElmsWithPtcls, "setElmsWithPtcls");
+  o::LOs ehp(elm_has_ptcls);
+  mesh.add_tag(o::REGION, "initial_elms", 1, ehp);
 }
 
 //HACK to avoid having an unguarded comma in the SCS PARALLEL macro
@@ -219,15 +230,15 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
 }
 
 void setTargetPtclCoords(Vector3d* p, int numPtcls) {
-  const fp_t insetFaceDiameter = 0.6;
+  const fp_t insetFaceDiameter = 0.5;
   const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
-  const fp_t insetFaceRim = 0.3; // in x and z
+  const fp_t insetFaceRim = -0.25; // in x
   const fp_t insetFaceCenter = 0; // in x and z
-  const fp_t x_delta = insetFaceDiameter / numPtcls;
+  const fp_t x_delta = insetFaceDiameter / (numPtcls-1);
   for(int i=0; i<numPtcls; i++) {
-    p[i][0] = insetFaceRim + (x_delta * i);
+    p[i][0] = insetFaceCenter;
     p[i][1] = insetFacePlane;
-    p[i][2] = insetFaceCenter;
+    p[i][2] = insetFaceRim + (x_delta * i);
   }
 }
 
@@ -256,18 +267,19 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 2;
+  const int numPtcls = 12;
+  const int initialElement = 271;
 
-  //Distribute particles to elements evenly (strat = 0)
   Omega_h::Int ne = mesh.nelems();
-  const int strat = 0;
-  fprintf(stderr, "distribution %d-%s #elements %d #particles %d\n",
-      strat, distribute_name(strat), ne, numPtcls);
+  fprintf(stderr, "number of elements %d number of particles %d\n",
+      ne, numPtcls);
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  if (!distribute_particles(ne,numPtcls,strat,ptcls_per_elem, ids)) {
-    return 1;
-  }
+  for(int i=0; i<ne; i++)
+    ptcls_per_elem[i] = 0;
+  for(int i=0; i<numPtcls; i++)
+    ids[initialElement].push_back(i);
+  ptcls_per_elem[initialElement] = numPtcls;
   for(int i=0; i<ne; i++)
     if(ptcls_per_elem[i]>0)
       printf("ppe[%d] %d\n", i, ptcls_per_elem[i]);
@@ -321,5 +333,7 @@ int main(int argc, char** argv) {
   //cleanup
   delete [] ids;
   delete scs;
+
+  Omega_h::vtk::write_parallel("rendered", &mesh, mesh.dim());
   return 0;
 }

@@ -122,6 +122,23 @@ struct InitializeType<T[N]> {
         scs_data[i][j] = 0;
   }
 };
+
+
+template <class T>
+struct CopyType {
+  CopyType(T *new_data, int new_index, T* old_data, int old_index) {
+    new_data[new_index] = old_data[old_index];
+  }
+};
+
+template <class T, int N>
+struct CopyType<T[N]> {
+  CopyType(T (*new_data)[N], int new_index, T (*old_data)[N], int old_index) {
+    for (int i =0; i < N; ++i)
+      new_data[new_index][i] = old_data[old_index][i];
+  }
+};
+
 //Implementation to construct SCS arrays of different types
 template <typename... Types>
 struct CreateSCSArraysImpl;
@@ -162,17 +179,8 @@ struct CopySCSEntriesImpl<> {
 template <class T, typename... Types>
 struct CopySCSEntriesImpl<T, Types...> {
   CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {
-    static_cast<T*>(new_data[0])[new_index] = static_cast<T*>(old_data[0])[old_index];
-    CopySCSEntriesImpl<Types...>(new_data + 1, new_index, old_data + 1, old_index);
-  }
-};
-
-template <class T, typename... Types>
-template <int N>
-struct CopySCSEntriesImpl<T[N], Types...> {
-  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {
-    for (int i = 0; i < N; ++i)
-      static_cast<T*>(new_data[0])[new_index][i] = static_cast<T*>(old_data[0])[old_index][i];
+    CopyType<T>(static_cast<T*>(new_data[0]),new_index, 
+		static_cast<T*>(old_data[0]), old_index);
     CopySCSEntriesImpl<Types...>(new_data + 1, new_index, old_data + 1, old_index);
   }
 };

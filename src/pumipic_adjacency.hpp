@@ -279,7 +279,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
   const auto up_f2r_faces = &up_f2r.a2ab;
   const auto up_f2r_reg = &up_f2r.ab2b;
 
-  const int debug = 1;
+  const int debug = 0;
 
   const int totNumPtcls = elem_ids.size();
   Omega_h::Write<Omega_h::LO> elem_ids_next(totNumPtcls,-1);

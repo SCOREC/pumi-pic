@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 1
+#define NUM_ITERATIONS 10
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -110,6 +110,53 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
 #endif
 }
 
+void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
+  //read from the tag
+  o::LOs ehp_nm1 = mesh.get_array<o::LO>(mesh.dim(), "has_particles");
+  o::Write<o::LO> ehp_nm0(ehp_nm1.size());
+  auto set_ehp = OMEGA_H_LAMBDA(o::LO i) {
+    ehp_nm0[i] = ehp_nm1[i];
+  };
+  o::parallel_for(ehp_nm1.size(), set_ehp, "set_ehp");
+  scs->transferToDevice();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      (void)pid;
+      ehp_nm0[e] = loop;
+    });
+  });
+  o::LOs ehp_nm0_r(ehp_nm0);
+  mesh.set_tag(o::REGION, "has_particles", ehp_nm0_r);
+}
+
+void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
+  fprintf(stderr, "rebuild\n");
+  auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
+    printf("elem_ids[%d] %d\n", i, elem_ids[i]);
+  };
+  o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
+
+  fprintf(stderr, "rebuild 0.1\n");
+  const int scs_capacity = scs->offsets[scs->num_slices];
+  o::Write<o::LO> scs_elem_ids(scs_capacity);
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      scs_elem_ids[pid] = elem_ids[pid];
+    });
+  });
+  fprintf(stderr, "rebuild 0.2\n");
+  o::HostRead<o::LO> scs_elem_ids_hr(scs_elem_ids);
+  int* new_element = new int[scs_capacity];
+  for(int i=0; i<scs_capacity; i++) {
+    new_element[i] = scs_elem_ids_hr[i];
+  }
+  fprintf(stderr, "rebuild 0.3\n");
+  scs->rebuildSCS(new_element);
+  fprintf(stderr, "rebuild 0.4\n");
+  delete [] new_element;
+}
+
 void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   fprintf(stderr, "search\n");
 
@@ -186,17 +233,9 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
       xpoints, loops, maxLoops);
   assert(isFound);
-  auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
-    printf("elem_ids[%d] %d\n", i, elem_ids[i]);
-  };
-  o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
-  o::Write<o::LO> elm_has_ptcls(mesh.nelems(), -1);
-  auto setElmsWithPtcls = OMEGA_H_LAMBDA(o::LO i) {
-    elm_has_ptcls[ elem_ids[i] ] = 1;
-  };
-  o::parallel_for(scs->num_ptcls, setElmsWithPtcls, "setElmsWithPtcls");
-  o::LOs ehp(elm_has_ptcls);
-  mesh.add_tag(o::REGION, "initial_elms", 1, ehp);
+
+  //rebuild the SCS to set the new element-to-particle lists
+  rebuild(scs, elem_ids);
 }
 
 //HACK to avoid having an unguarded comma in the SCS PARALLEL macro
@@ -307,28 +346,30 @@ int main(int argc, char** argv) {
   //run search to move the particles to their starting elements
   search(mesh,scs);
  
-  //rebuild the SCS to set the new element-to-particle lists //TODO
-
-  /*
-  int *flag_scs = scs->getSCS<2>();
-  (void)flag_scs; //TODO
-
   //define parameters controlling particle motion
   //move the particles in +y direction by 1/20th of the
   //pisces model's height
-  fp_t distance = .05;
+  fp_t heightOfDomain = 1.0;
+  fp_t distance = heightOfDomain/20;
   fp_t dx = 0;
   fp_t dy = 1;
   fp_t dz = 0;
+
+  fprintf(stderr, "b4 tag\n");
+  mesh.add_tag(o::REGION, "has_particles", 1, o::LOs(ne, -1));
+  fprintf(stderr, "after tag\n");
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     fprintf(stderr, "\n");
     timer.reset();
     push(scs, numPtcls, distance, dx, dy, dz);
-    fprintf(stderr, "kokkos scs with macros push and transfer (seconds) %f\n", timer.seconds());
+    fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
+    timer.reset();
+    search(mesh,scs);
+    fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
+    tagParentElements(mesh,scs,iter);
   }
-  */
 
   //cleanup
   delete [] ids;

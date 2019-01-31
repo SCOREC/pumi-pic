@@ -299,8 +299,8 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     // TODO Change ntpcl, ip start and limit. Update global(?) indices inside.
     for(Omega_h::LO ip = 0; ip < totNumPtcls; ++ip) //HACK - each element checks all particles
     {
-      //skip if the particle is not in this element
-      if(elem_ids[ip] != ielem) continue;
+      //skip if the particle is not in this element or has been found
+      if(elem_ids[ip] != ielem || part_flags[ip] <= 0) continue;
 
       if(debug)
         std::cerr << "Elem " << ielem << " ptcl:" << ip << "\n";
@@ -460,7 +460,6 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( Omega_h::LO i) {
       elem_ids[i] = elem_ids_next[i];
-      elem_ids_next[i] = -1;
     };
     Omega_h::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
 

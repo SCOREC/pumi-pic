@@ -40,6 +40,23 @@ void printTimerResolution() {
 }
 
 typedef Kokkos::DefaultExecutionSpace exe_space;
+typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
+void hostToDeviceLid(kkLidView d, lid_t *h) {
+  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
+  for (size_t i=0; i<hv.size(); ++i) {
+    hv(i) = h[i];
+  }
+  Kokkos::deep_copy(d,hv);
+}
+
+void deviceToHostLid(kkLidView d, lid_t *h) {
+  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
+  Kokkos::deep_copy(hv,d);
+  for(size_t i=0; i<hv.size(); ++i) {
+    h[i] = hv(i);
+  }
+}
+
 typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view */
 void hostToDeviceFp(kkFpView d, fp_t* h) {
@@ -79,11 +96,16 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   hostToDeviceFp(x_nm1, scs->getSCS<0>());
   kkFp3View x_nm0("x_nm0", scs->offsets[scs->num_slices]);
   hostToDeviceFp(x_nm0, scs->getSCS<1>());
+  kkLidView pid_d("pid", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>());
   o::Write<o::Real> px_nm1(scs->num_ptcls*3);
   o::Write<o::Real> px_nm0(scs->num_ptcls*3);
+  o::Write<o::LO> pid_w(scs->num_ptcls);
 
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      pid_w[pid] = pid_d(pid);
       for(int i=0; i<3; i++) {
         px_nm1[pid*3+i] = x_nm1(pid,i);
         px_nm0[pid*3+i] = x_nm0(pid,i);
@@ -92,11 +114,25 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   });
   o::HostRead<o::Real> px_nm0_hr(px_nm0);
   o::HostRead<o::Real> px_nm1_hr(px_nm1);
+  o::HostRead<o::LO> pid_hr(pid_w);
   for(int i=0; i< scs->num_ptcls; i++) {
     fprintf(stderr, "ptcl %d %.3f %.3f %.3f --> %.3f %.3f %.3f\n",
-      i, px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2],
+      pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2],
       px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
   }
+}
+
+void setRand(SellCSigma<Particle>* scs, kkFpView disp_d, o::Write<o::Real> rand_d) {
+  srand (time(NULL));
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void) e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      rand_d[pid] = (disp_d(0)/10)*(std::rand() % 10);
+      fprintf(stderr, "rand ptcl %d %.3f\n", pid_d(pid), rand_d[pid]);
+    });
+  });
 }
 
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
@@ -122,13 +158,8 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
 
   o::Write<o::Real> ptclUnique_d(scs->offsets[scs->num_slices], 0);
   if(rand) {
-    srand (time(NULL));
-    auto set_rand = OMEGA_H_LAMBDA(o::LO i) {
-      ptclUnique_d[i] = (disp_d(0)/10)*(std::rand() % 10);
-      fprintf(stderr, "ptcl %d rand %.3f\n", i, ptclUnique_d[i]);
-    };
-    o::parallel_for(scs->offsets[scs->num_slices], set_rand, "set_rand");
     fprintf(stderr, "random ptcl movement enabled\n");
+    setRand(scs, disp_d, ptclUnique_d);
   }
 
 #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)  
@@ -305,6 +336,20 @@ OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
   return o::gather_vectors<4, 3>(a, v);
 }
 
+void setPtclIds(SellCSigma<Particle>* scs) {
+  fprintf(stderr, "%s\n", __func__);
+  scs->transferToDevice();
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      pid_d(pid) = pid;
+    });
+  });
+  deviceToHostLid(pid_d, scs->getSCS<2>() );
+}
+
 void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //get centroid of parent element and set the child particle coordinates
   //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
@@ -331,6 +376,7 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
 }
 
 void setTargetPtclCoords(Vector3d* p, int numPtcls) {
+  fprintf(stderr, "%s\n", __func__);
   const fp_t insetFaceDiameter = 0.5;
   const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
   const fp_t insetFaceRim = -0.25; // in x
@@ -404,6 +450,7 @@ int main(int argc, char** argv) {
   //Set initial and target positions so search will
   // find the parent elements
   setInitialPtclCoords(mesh, scs);
+  setPtclIds(scs);
   Vector3d *final_position_scs = scs->getSCS<1>();
   setTargetPtclCoords(final_position_scs, numPtcls);
 

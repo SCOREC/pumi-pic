@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 10
+#define NUM_ITERATIONS 20
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -69,31 +69,6 @@ void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
     h[i][1] = hv(i,1);
     h[i][2] = hv(i,2);
   }
-}
-
-void exitIfOutsideDomain(SellCSigma<Particle>* scs, kkFp3View pos) {
-  fprintf(stderr, "%s\n", __func__);
-  const fp_t xlimit = 0.4;
-  const fp_t ylimit = 1;
-  const fp_t zlimit = 0.4;
-
-  scs->transferToDevice();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void) e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if( pos(pid,0) >= xlimit || 
-          pos(pid,0) <= -xlimit  ) {
-        assert(false);
-      }
-      if( pos(pid,1) >= ylimit ) {
-        assert(false);
-      }
-      if( pos(pid,2) >= zlimit || 
-          pos(pid,2) <= -zlimit  ) {
-        assert(false);
-      }
-    });
-  });
 }
 
 void writeDispVectors(SellCSigma<Particle>* scs) {
@@ -173,12 +148,12 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   });
   totTime += timer.seconds();
   printTiming("scs push", totTime);
-  exitIfOutsideDomain(scs, new_position_d);
 #endif
   deviceToHostFp(new_position_d, scs_pushed_position);
 }
 
 void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
+  fprintf(stderr, "%s\n", __func__);
   //read from the tag
   o::LOs ehp_nm1 = mesh.get_array<o::LO>(mesh.dim(), "has_particles");
   o::Write<o::LO> ehp_nm0(ehp_nm1.size());
@@ -360,7 +335,9 @@ void setTargetPtclCoords(Vector3d* p, int numPtcls) {
   const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
   const fp_t insetFaceRim = -0.25; // in x
   const fp_t insetFaceCenter = 0; // in x and z
-  const fp_t x_delta = insetFaceDiameter / (numPtcls-1);
+  fp_t x_delta = insetFaceDiameter / (numPtcls-1);
+  if( numPtcls == 1 )
+    x_delta = 0;
   for(int i=0; i<numPtcls; i++) {
     p[i][0] = insetFaceCenter;
     p[i][1] = insetFacePlane;
@@ -450,14 +427,22 @@ int main(int argc, char** argv) {
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
+    if(scs->num_ptcls == 0) {
+      fprintf(stderr, "No particles remain... exiting push loop\n");
+      break;
+    }
     fprintf(stderr, "\n");
     timer.reset();
-    push(scs, numPtcls, distance, dx, dy, dz, randomPtclMove);
+    push(scs, scs->num_ptcls, distance, dx, dy, dz, randomPtclMove);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     writeDispVectors(scs);
     timer.reset();
     search(mesh,scs);
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
+    if(scs->num_ptcls == 0) {
+      fprintf(stderr, "No particles remain... exiting push loop\n");
+      break;
+    }
     tagParentElements(mesh,scs,iter);
   }
 
@@ -466,5 +451,6 @@ int main(int argc, char** argv) {
   delete scs;
 
   Omega_h::vtk::write_parallel("rendered", &mesh, mesh.dim());
+  fprintf(stderr, "done\n");
   return 0;
 }

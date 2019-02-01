@@ -397,13 +397,12 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
 
         if(detected)
         {
-          //elem_ids[ip] = -1;
+          elem_ids_next[ip] = -1;
           //coll_adj_face_ids[ip] = -1;
           part_flags.data()[ip] = -1;
           for(Omega_h::LO i=0; i<3; ++i)xpoints[ip*3+i] = xpoint.data()[i];
           //store current face_id and element_ids
-          if(debug)
-            print_osh_vector(xpoint, "COLLISION POINT");
+          print_osh_vector(xpoint, "COLLISION POINT");
           break;
         }
         if(debug>1)

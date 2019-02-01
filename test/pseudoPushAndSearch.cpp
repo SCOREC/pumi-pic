@@ -96,6 +96,34 @@ void exitIfOutsideDomain(SellCSigma<Particle>* scs, kkFp3View pos) {
   });
 }
 
+void writeDispVectors(SellCSigma<Particle>* scs) {
+  fprintf(stderr, "%s\n", __func__);
+  scs->transferToDevice();
+
+  kkFp3View x_nm1("x_nm1", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_nm1, scs->getSCS<0>());
+  kkFp3View x_nm0("x_nm0", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_nm0, scs->getSCS<1>());
+  o::Write<o::Real> px_nm1(scs->num_ptcls*3);
+  o::Write<o::Real> px_nm0(scs->num_ptcls*3);
+
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      for(int i=0; i<3; i++) {
+        px_nm1[pid*3+i] = x_nm1(pid,i);
+        px_nm0[pid*3+i] = x_nm0(pid,i);
+      }
+    });
+  });
+  o::HostRead<o::Real> px_nm0_hr(px_nm0);
+  o::HostRead<o::Real> px_nm1_hr(px_nm1);
+  for(int i=0; i< scs->num_ptcls; i++) {
+    fprintf(stderr, "ptcl %d %.3f %.3f %.3f --> %.3f %.3f %.3f\n",
+      i, px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2],
+      px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
+  }
+}
+
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     fp_t dx, fp_t dy, fp_t dz, bool rand=false) {
   fprintf(stderr, "push\n");
@@ -426,6 +454,7 @@ int main(int argc, char** argv) {
     timer.reset();
     push(scs, numPtcls, distance, dx, dy, dz, randomPtclMove);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
+    writeDispVectors(scs);
     timer.reset();
     search(mesh,scs);
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());

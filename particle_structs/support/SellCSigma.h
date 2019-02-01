@@ -450,7 +450,7 @@ template<class DataTypes, typename ExecSpace>
       scs_data[i] = 0;
     return;
   }
-
+  int new_num_ptcls = activePtcls;
   //Perform sorting (Disabled currently due to needing mapping from old elems -> new elems)
   std::pair<int, int>* ptcls;
   sigmaSort(num_elems, new_particles_per_elem, sigma, ptcls, false);
@@ -480,7 +480,7 @@ template<class DataTypes, typename ExecSpace>
   }
 
   //Allocate the Chunks
-  int* new_arr_to_scs = new int[num_ptcls];
+  int* new_arr_to_scs = new int[new_num_ptcls];
   bool* new_particle_mask = new bool[new_offsets[new_nslices]];
   void* new_scs_data[num_types];
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
@@ -515,8 +515,10 @@ template<class DataTypes, typename ExecSpace>
       }
     }
   }
+  int index = 0;
   for (int i =0; i < num_ptcls; ++i) {
-    new_arr_to_scs[i] = old_to_new_index[arr_to_scs[i]];
+    if (new_element[arr_to_scs[i]] != -1)
+      new_arr_to_scs[index++] = old_to_new_index[arr_to_scs[i]];
   }
   delete [] old_to_new_index;
   delete [] element_index;
@@ -529,6 +531,7 @@ template<class DataTypes, typename ExecSpace>
   destroySCS();
 
   //set scs to point to new values
+  num_ptcls = new_num_ptcls;
   num_chunks = new_nchunks;
   num_slices = new_nslices;
   row_to_element = new_row_to_element;

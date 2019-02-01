@@ -425,14 +425,30 @@ template<class DataTypes, typename ExecSpace>
   int* new_particles_per_elem = new int[num_elems];
   for (int i =0; i < num_elems; ++i)
     new_particles_per_elem[i] = 0;
+  int activePtcls = 0;
   for (int slice = 0; slice < num_slices; ++slice) {
     for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
       for (int k = 0; k < C; ++k) {
-	if (particle_mask[j + k]) {
+	if (particle_mask[j + k] && new_element[j+k] != -1) {
 	  new_particles_per_elem[new_element[j+k]] += particle_mask[j+k];
+          activePtcls++;
 	}
       }
     }
+  }
+  if(!activePtcls) {
+    destroySCS();
+    num_ptcls = 0;
+    num_chunks = 0;
+    num_slices = 0;
+    row_to_element = 0;
+    offsets = 0;
+    slice_to_chunk = 0;
+    arr_to_scs = 0;
+    particle_mask = 0;
+    for (size_t i = 0; i < num_types; ++i)
+      scs_data[i] = 0;
+    return;
   }
 
   //Perform sorting (Disabled currently due to needing mapping from old elems -> new elems)
@@ -486,7 +502,7 @@ template<class DataTypes, typename ExecSpace>
     for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
       for (int k = 0; k < C; ++k) {
 	int particle = j + k;
-	if (particle_mask[particle]) {
+	if (particle_mask[particle] && new_element[particle] != -1) {
 	  int new_elem = new_element[particle];
 	  int new_index = element_index[new_elem];
 	  old_to_new_index[particle] = new_index;

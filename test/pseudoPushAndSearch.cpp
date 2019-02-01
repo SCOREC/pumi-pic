@@ -71,9 +71,36 @@ void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
   }
 }
 
+void exitIfOutsideDomain(SellCSigma<Particle>* scs, kkFp3View pos) {
+  fprintf(stderr, "%s\n", __func__);
+  const fp_t xlimit = 0.4;
+  const fp_t ylimit = 1;
+  const fp_t zlimit = 0.4;
+
+  scs->transferToDevice();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void) e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      if( pos(pid,0) >= xlimit || 
+          pos(pid,0) <= -xlimit  ) {
+        assert(false);
+      }
+      if( pos(pid,1) >= ylimit ) {
+        assert(false);
+      }
+      if( pos(pid,2) >= zlimit || 
+          pos(pid,2) <= -zlimit  ) {
+        assert(false);
+      }
+    });
+  });
+}
+
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
-    fp_t dx, fp_t dy, fp_t dz) {
+    fp_t dx, fp_t dy, fp_t dz, bool rand=false) {
   fprintf(stderr, "push\n");
+
+
   Kokkos::Timer timer;
   Vector3d *scs_initial_position = scs->getSCS<0>();
   Vector3d *scs_pushed_position = scs->getSCS<1>();
@@ -90,6 +117,17 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   hostToDeviceFp(disp_d, disp);
   fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
 
+  o::Write<o::Real> ptclUnique_d(scs->offsets[scs->num_slices], 0);
+  if(rand) {
+    srand (time(NULL));
+    auto set_rand = OMEGA_H_LAMBDA(o::LO i) {
+      ptclUnique_d[i] = (disp_d(0)/10)*(std::rand() % 10);
+      fprintf(stderr, "ptcl %d rand %.3f\n", i, ptclUnique_d[i]);
+    };
+    o::parallel_for(scs->offsets[scs->num_slices], set_rand, "set_rand");
+    fprintf(stderr, "random ptcl movement enabled\n");
+  }
+
 #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)  
   double totTime = 0;
   timer.reset();
@@ -100,14 +138,16 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     dir[1] = disp_d(0)*disp_d(2);
     dir[2] = disp_d(0)*disp_d(3);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      new_position_d(pid,0) = position_d(pid,0) * dir[0];
-      new_position_d(pid,1) = position_d(pid,1) * dir[1];
-      new_position_d(pid,2) = position_d(pid,2) * dir[2];
+      new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
+      new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
+      new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
     });
   });
   totTime += timer.seconds();
   printTiming("scs push", totTime);
+  exitIfOutsideDomain(scs, new_position_d);
 #endif
+  deviceToHostFp(new_position_d, scs_pushed_position);
 }
 
 void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
@@ -129,14 +169,36 @@ void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
   mesh.set_tag(o::REGION, "has_particles", ehp_nm0_r);
 }
 
+void updatePtclPositions(SellCSigma<Particle>* scs) {
+  scs->transferToDevice();
+  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+      xtgt_scs_d(pid,0) = 0;
+      xtgt_scs_d(pid,1) = 0;
+      xtgt_scs_d(pid,2) = 0;
+    });
+  });
+  deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
+  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+}
+
 void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
+  updatePtclPositions(scs); 
+
   auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
     printf("elem_ids[%d] %d\n", i, elem_ids[i]);
   };
   o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
 
-  fprintf(stderr, "rebuild 0.1\n");
   const int scs_capacity = scs->offsets[scs->num_slices];
   o::Write<o::LO> scs_elem_ids(scs_capacity);
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
@@ -145,15 +207,12 @@ void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
       scs_elem_ids[pid] = elem_ids[pid];
     });
   });
-  fprintf(stderr, "rebuild 0.2\n");
   o::HostRead<o::LO> scs_elem_ids_hr(scs_elem_ids);
   int* new_element = new int[scs_capacity];
   for(int i=0; i<scs_capacity; i++) {
     new_element[i] = scs_elem_ids_hr[i];
   }
-  fprintf(stderr, "rebuild 0.3\n");
   scs->rebuildSCS(new_element);
-  fprintf(stderr, "rebuild 0.4\n");
   delete [] new_element;
 }
 
@@ -192,7 +251,7 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
 
   //flags
-  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // TODO what does this store?
+  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // < 0 - particle has hit a boundary or reached its destination
   Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1);           // TODO use scs
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
   Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
@@ -354,16 +413,18 @@ int main(int argc, char** argv) {
   fp_t dx = 0;
   fp_t dy = 1;
   fp_t dz = 0;
+  const bool randomPtclMove = true;
 
-  fprintf(stderr, "b4 tag\n");
+  fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
+      distance, dx, dy, dz);
+
   mesh.add_tag(o::REGION, "has_particles", 1, o::LOs(ne, -1));
-  fprintf(stderr, "after tag\n");
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     fprintf(stderr, "\n");
     timer.reset();
-    push(scs, numPtcls, distance, dx, dy, dz);
+    push(scs, numPtcls, distance, dx, dy, dz, randomPtclMove);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     timer.reset();
     search(mesh,scs);

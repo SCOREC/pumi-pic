@@ -452,7 +452,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
   loops = 0;
   while(!found)
   {
-    fprintf(stderr, "------------ %d ------------\n", loops);
+    if(debug) fprintf(stderr, "------------ %d ------------\n", loops);
     //TODO check if particle is on boundary and remove from list if so.
 
     // Searching all elements. TODO exclude those done ?
@@ -473,8 +473,7 @@ OMEGA_H_INLINE bool search_mesh(Omega_h::LO nptcl, Omega_h::LO nelems, const Ome
     if(limit && loops>limit) break;
   }
 
-  if(debug)
-    std::cerr << "While loop nums " << loops << "\n";
+  std::cerr << "search iterations " << loops << "\n";
 
   return found;
 } //search_mesh

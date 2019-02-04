@@ -384,7 +384,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
       {
         // TODO interpolate Fields to ptcl position, and store them, for push
         // interpolateFields(bcc, ptcls);
-        elem_ids_next[ip] = -1; //TODO note this
+        elem_ids_next[ip] = elem_ids[ip];
         part_flags.data()[ip] = -1;
         if(debug) 
         {

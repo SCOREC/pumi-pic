@@ -116,9 +116,12 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   o::HostRead<o::Real> px_nm1_hr(px_nm1);
   o::HostRead<o::LO> pid_hr(pid_w);
   for(int i=0; i< scs->num_ptcls; i++) {
-    fprintf(stderr, "ptcl %d %.3f %.3f %.3f --> %.3f %.3f %.3f\n",
-      pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2],
-      px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
+    fprintf(stderr, "ptclID%d  %.3f %.3f %.3f initial\n",
+      pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2]);
+  }
+  for(int i=0; i< scs->num_ptcls; i++) {
+    fprintf(stderr, "ptclID%d  %.3f %.3f %.3f final\n",
+      pid_hr[i], px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
   }
 }
 
@@ -129,7 +132,7 @@ void setRand(SellCSigma<Particle>* scs, kkFpView disp_d, o::Write<o::Real> rand_
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void) e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      rand_d[pid] = (disp_d(0)/10)*(std::rand() % 10);
+      rand_d[pid] = (disp_d(0))*((double)(std::rand())/RAND_MAX - 1.0);
       fprintf(stderr, "rand ptcl %d %.3f\n", pid_d(pid), rand_d[pid]);
     });
   });
@@ -173,7 +176,7 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     dir[2] = disp_d(0)*disp_d(3);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
-      new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
+      new_position_d(pid,1) = position_d(pid,1) + dir[1] + std::abs(ptclUnique_d[pid]);
       new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
     });
   });
@@ -258,7 +261,6 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //define the 20+ input args...
   //TODO create the mesh arrays inside the function
   //TODO document the search_mesh function args after cleanup
-  Omega_h::LO something = 1; 
   Omega_h::Int nelems = mesh.nelems();
 
   //initial positions
@@ -291,12 +293,18 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
   Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
 
+  Omega_h::Write<Omega_h::LO> pids(scs->num_ptcls,-1);
+
   //set particle positions and parent element ids
   scs->transferToDevice();
   kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
   kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     printf("elm %d\n", e);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -308,19 +316,20 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       y[pid] = xtgt_scs_d(pid,1);
       z[pid] = xtgt_scs_d(pid,2);
       elem_ids[pid] = e;
+      pids[pid] = pid_d(pid);
     });
   });
 
   // sanity check
   auto f = OMEGA_H_LAMBDA(o::LO i) {
-    printf("elem_ids[%d] %d %f %f %f -> %f %f %f\n", i, elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
+    printf("elem_ids[%d] %d %d %f %f %f -> %f %f %f\n", i, pids[i], elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
   };
   o::parallel_for(scs->num_ptcls, f, "print_x");
 
   Omega_h::LO loops = 0;
   Omega_h::LO maxLoops = 100;
   bool isFound = p::search_mesh(
-      something, nelems, x0, y0, z0, x, y, z,
+      pids, nelems, x0, y0, z0, x, y, z,
       dual, down_r2f, down_f2e, up_e2f, up_f2r,
       side_is_exposed, mesh2verts, coords, face_verts,
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
@@ -462,8 +471,8 @@ int main(int argc, char** argv) {
   //pisces model's height
   fp_t heightOfDomain = 1.0;
   fp_t distance = heightOfDomain/20;
-  fp_t dx = 0;
-  fp_t dy = 1;
+  fp_t dx = -0.5;
+  fp_t dy = 0.8;
   fp_t dz = 0;
   const bool randomPtclMove = true;
 

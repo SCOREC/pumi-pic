@@ -276,9 +276,6 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //mesh adjacencies
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
-  const auto down_f2e = mesh.ask_down(2,1);
-  const auto up_e2f = mesh.ask_up(1, 2);
-  const auto up_f2r = mesh.ask_up(2, 3);
 
   //boundary classification and coordinates
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -330,7 +327,7 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   Omega_h::LO maxLoops = 100;
   bool isFound = p::search_mesh(
       pids, nelems, x0, y0, z0, x, y, z,
-      dual, down_r2f, down_f2e, up_e2f, up_f2r,
+      dual, down_r2f,
       side_is_exposed, mesh2verts, coords, face_verts,
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
       xpoints, loops, maxLoops);

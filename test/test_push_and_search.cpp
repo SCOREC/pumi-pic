@@ -49,9 +49,6 @@ int main(int argc, char** argv)
   // dual, up, down are Adj ~ Graph{arrays:LOs a2ab,ab2b}
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
-  const auto down_f2e = mesh.ask_down(2,1);
-  const auto up_e2f = mesh.ask_up(1, 2);
-  const auto up_f2r = mesh.ask_up(2, 3);
   //coordinates
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
@@ -149,7 +146,7 @@ int main(int argc, char** argv)
     std::cout << x0[0] << " " << y0[0] << " " <<  z0[0] << " => " << x[0] << " " << y[0] << " " <<  z[0] << "\n";
 #endif
     //search
-    p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed,
+    p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, side_is_exposed,
        mesh2verts, coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
 
     if(!p::compare_array(xpoints.data(), xinit, 3, 1e-5))

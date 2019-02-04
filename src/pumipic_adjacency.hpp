@@ -243,8 +243,9 @@ OMEGA_H_INLINE bool line_triangle_intx_simple_prev(const Omega_h::Few<Omega_h::V
 
 OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
     const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge, bool inverse=false )
+    Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge, bool reverse=false )
 {
+  bool debug=0;
   edge = -1;
   xpoint = {0, 0, 0};
 
@@ -259,11 +260,11 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   const Omega_h::Vector<DIM> edge0 = abc[1] - abc[0];
   const Omega_h::Vector<DIM> edge1 = abc[2] - abc[0];
   Omega_h::Vector<DIM> normv = Omega_h::cross(edge0, edge1);
-  //std::cout << "Surface normal reverse? " << inverse <<" \n";
-  if(inverse)
+  if(reverse)
   {
     normv = -1*normv;
-    //std::cout << "Surface normal reversed \n";
+    if(debug)
+      std::cout << "Surface normal reversed \n";
 
   }
   const Omega_h::Vector<DIM> snorm_unit = Omega_h::normalize(normv);
@@ -274,14 +275,16 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   if(std::abs(proj_lined) >0)
   {
     const Omega_h::Real par_t = dist2plane/proj_lined;
-    //std::cout << " abs(proj_lined)>0;  par_t= " << par_t << " dist2plane= "
-    //         <<  dist2plane << "; proj_lined= " << proj_lined << ";\n";
+    if(debug)
+      std::cout << " abs(proj_lined)>0;  par_t= " << par_t << " dist2plane= "
+             <<  dist2plane << "; proj_lined= " << proj_lined << ";\n";
     if (par_t > bound_intol && par_t <= 1.0) //TODO test tol value
     {
       xpoint = origin + par_t * line;
       Omega_h::Write<Omega_h::Real> bcc{3,0};
       bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
-      //print_array(bcc.data(), 3, "BCC");
+      if(debug)
+        print_array(bcc.data(), 3, "BCC");
       if(res)
       {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
@@ -294,11 +297,13 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
           if(proj >0) found = true;
           else if(proj<0)
           {
-            std::cout << "Particle Entering domain\n";
+            if(debug)
+              std::cout << "Particle Entering domain\n";
           }
           else if(almost_equal(proj,0.0)) //TODO use tol
-          {
-            std::cout << "Particle path on surface\n";
+          { 
+            if(debug)
+              std::cout << "Particle path on surface\n";
           }
         }
       }
@@ -306,11 +311,13 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     }
     else if(par_t >1.0)
     {
-      std::cout << "Error** Line origin and destination are on the same side of face \n";
+      if(debug)
+        std::cout << "Error** Line origin and destination are on the same side of face \n";
     }
     else if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
     {
-      std::cout << "No/Self-intersection of ptcl origin with plane at origin. t= " << par_t << " "
+      if(debug)
+        std::cout << "No/Self-intersection of ptcl origin with plane at origin. t= " << par_t << " "
                 << dist2plane << " " << proj_lined << "\n";
     }
   }
@@ -342,7 +349,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
   const auto up_f2r_faces = &up_f2r.a2ab;
   const auto up_f2r_reg = &up_f2r.ab2b;
 
-  const int debug = 0;
+  const int debug = 1;
 
   const int totNumPtcls = elem_ids.size();
   Omega_h::Write<Omega_h::LO> elem_ids_next(totNumPtcls,-1);
@@ -385,8 +392,8 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
         contain = true;
         // TODO interpolate Fields to ptcl position, and store them, for push
         // interpolateFields(bcc, ptcls);
-        elem_ids[ip] = -1; //TODO note this
-        part_flags.data()[ip] = 0;
+        elem_ids_next[ip] = -1; //TODO note this
+        part_flags.data()[ip] = -1;
         if(debug) 
         {
             std::cerr << "********found in " << ielem << " \n";
@@ -406,7 +413,8 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
       for(auto iface = beg_face; iface < end_face; ++iface) //not 0..3
       {
         const auto face_id = (*down_r2fs)[iface];
-        //std::cout << " \nFace: " << face_id << " dface_ind " <<  dface_ind << "\n";
+        if(debug >1)  
+          std::cout << " \nFace: " << face_id << " dface_ind " <<  dface_ind << "\n";
 
         bool next_elem = false;
         Omega_h::Vector<3> xpoint{0,0,0};
@@ -415,10 +423,11 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
         const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
         Omega_h::LO matInd1 = fmap[f_index*2], matInd2 = fmap[f_index*2+1];
 
-        //std::cout << "Face_local_index "<< fv2v.data()[0] << " " << fv2v.data()[1] << " " << fv2v.data()[2] << "\n";
-        //std::cout << "Mat index "<< tetv2v[matInd1] << " " << tetv2v[matInd2] << " " <<  matInd1 << " " << matInd2 << " \n";
-        //std::cout << "Mat dat ind " <<  tetv2v.data()[0] << " " << tetv2v.data()[1] << " "
-        //          << tetv2v.data()[2] << " " << tetv2v.data()[3] << "\n";
+        if(debug >3)
+          std::cout << "Face_local_index "<< fv2v.data()[0] << " " << fv2v.data()[1] << " " << fv2v.data()[2] << "\n";
+          std::cout << "Mat index "<< tetv2v[matInd1] << " " << tetv2v[matInd2] << " " <<  matInd1 << " " << matInd2 << " \n";
+          std::cout << "Mat dat ind " <<  tetv2v.data()[0] << " " << tetv2v.data()[1] << " "
+                   << tetv2v.data()[2] << " " << tetv2v.data()[3] << "\n";
 
 
         if(fv2v.data()[1] == tetv2v[matInd1] && fv2v.data()[2] == tetv2v[matInd2])
@@ -435,12 +444,11 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
 
         Omega_h::LO dummy = -1;
         bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, dummy, inverse);
-        //if(detected)
-        //    std::cout << " Detected: For el=" << ielem << "\n";
+        if( detected)
+            std::cout << " Detected: For el=" << ielem << "\n";
 
         if(detected && side_is_exposed[face_id])
         {
-           //elem_ids[ip] = -1;
            contain = false;
            part_flags.data()[ip] = -1;
            for(Omega_h::LO i=0; i<3; ++i)xpoints[ip*3+i] = xpoint.data()[i];
@@ -448,7 +456,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
 
            print_osh_vector(xpoint, "COLLISION POINT");
 
-           elem_ids[ip] = -1;
+           elem_ids_next[ip] = -1;
            break;
          }
          else if(detected && !side_is_exposed[face_id])
@@ -456,26 +464,29 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
            contain = false;
           //OMEGA_H_CHECK(side2side_elems[side + 1] - side2side_elems[side] == 2);
            auto adj_elem  = (*dual_faces)[dface_ind];
+           if(debug)
+             std::cout << "Deletected For el=" << ielem << " ;face_id=" << (*down_r2fs)[iface]
+                     << " ;ADJ elem= " << adj_elem << "\n";
 
-           //std::cout << "Deletected For el=" << ielem << " ;face_id=" << (*down_r2fs)[iface]
-           //          << " ;ADJ elem= " << adj_elem << "\n";
-
-           elem_ids[ip] = adj_elem;
+           elem_ids_next[ip] = adj_elem;
            break;
          }
 
          if(!side_is_exposed[face_id])//TODO for DEBUG
          {
-           //std::cout << "adj_element_across_this_face " << (*dual_faces)[dface_ind] << "\n";
+           if(debug)
+             std::cout << "adj_element_across_this_face " << (*dual_faces)[dface_ind] << "\n";
            const Omega_h::LO min_ind = min_index(bcc.data(), 4);
            if(f_index == min_ind)
            {
-           //  std::cout << "Min_bcc el|face_id=" << ielem << "," << (*down_r2fs)[iface]
-           //          << " :unused adj_elem= " << (*dual_faces)[dface_ind] << "\n";
+             if(debug)
+               std::cout << "Min_bcc el|face_id=" << ielem << "," << (*down_r2fs)[iface]
+                     << " :unused adj_elem= " << (*dual_faces)[dface_ind] << "\n";
             if(!detected)
             {
-              elem_ids[ip] = (*dual_faces)[dface_ind];
-              //std::cout << "...  adj_elem=" << elem_ids[ip]  <<  "\n";
+              elem_ids_next[ip] = (*dual_faces)[dface_ind];
+              if(debug)
+                std::cout << "...  adj_elem=" << elem_ids[ip]  <<  "\n";
             }
            }
 

@@ -340,14 +340,9 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
  Omega_h::Write<Omega_h::Real> &bccs, Omega_h::Write<Omega_h::Real> &xpoints, Omega_h::LO &loops, 
  Omega_h::LO limit=0)
 {
-  const auto up_e2f_edges = &up_e2f.a2ab;
-  const auto up_e2f_faces = &up_e2f.ab2b;
-  const auto down_f2es = &down_f2e.ab2b;
   const auto down_r2fs = &down_r2f.ab2b;
   const auto dual_faces = &dual.ab2b;
   const auto dual_elems = &dual.a2ab;
-  const auto up_f2r_faces = &up_f2r.a2ab;
-  const auto up_f2r_reg = &up_f2r.ab2b;
 
   const int debug = 1;
 
@@ -376,7 +371,6 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
         
       const Omega_h::Vector<3> orig{x0[ip], y0[ip], z0[ip]};
       const Omega_h::Vector<3> dest{x[ip], y[ip], z[ip]};
-      bool contain = false;
       
       Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
 
@@ -389,7 +383,6 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
       //check if the destination is in this element
       if(all_positive(bcc.data(), 4, 0)) //SURFACE_EXCLUDE)) TODO
       {
-        contain = true;
         // TODO interpolate Fields to ptcl position, and store them, for push
         // interpolateFields(bcc, ptcls);
         elem_ids_next[ip] = -1; //TODO note this
@@ -416,18 +409,18 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
         if(debug >1)  
           std::cout << " \nFace: " << face_id << " dface_ind " <<  dface_ind << "\n";
 
-        bool next_elem = false;
         Omega_h::Vector<3> xpoint{0,0,0};
         auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
 
         const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
         Omega_h::LO matInd1 = fmap[f_index*2], matInd2 = fmap[f_index*2+1];
 
-        if(debug >3)
+        if(debug >3) {
           std::cout << "Face_local_index "<< fv2v.data()[0] << " " << fv2v.data()[1] << " " << fv2v.data()[2] << "\n";
           std::cout << "Mat index "<< tetv2v[matInd1] << " " << tetv2v[matInd2] << " " <<  matInd1 << " " << matInd2 << " \n";
           std::cout << "Mat dat ind " <<  tetv2v.data()[0] << " " << tetv2v.data()[1] << " "
                    << tetv2v.data()[2] << " " << tetv2v.data()[3] << "\n";
+        }
 
 
         if(fv2v.data()[1] == tetv2v[matInd1] && fv2v.data()[2] == tetv2v[matInd2])
@@ -449,7 +442,6 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
 
         if(detected && side_is_exposed[face_id])
         {
-           contain = false;
            part_flags.data()[ip] = -1;
            for(Omega_h::LO i=0; i<3; ++i)xpoints[ip*3+i] = xpoint.data()[i];
            //store current face_id and element_ids
@@ -461,7 +453,6 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
          }
          else if(detected && !side_is_exposed[face_id])
          {
-           contain = false;
           //OMEGA_H_CHECK(side2side_elems[side + 1] - side2side_elems[side] == 2);
            auto adj_elem  = (*dual_faces)[dface_ind];
            if(debug)

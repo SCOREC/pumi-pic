@@ -36,8 +36,35 @@ find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")
 set(MPIRUN_PROCFLAG "-np" CACHE string
   "the command line flag to give process count to MPIRUN")
 
+#set debug flag
+set(debug_flag)
+if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
+  set(debug_flag "-g")
+endif()
+
 #deps
-find_package(Omega_h REQUIRED 8.2.0)
+find_package(KokkosCore REQUIRED)
+include_directories(${KokkosCore_INCLUDE_DIRS})
+
+message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
+set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})
+set(CMAKE_C_COMPILER ${KokkosCore_C_COMPILER})
+message(STATUS "Kokkos CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER}")
+message(STATUS "Kokkos CMAKE_C_COMPILER ${KokkosCore_C_COMPILER}")
+
+message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
+set(CMAKE_CXX_FLAGS "${debug_flag} ${KokkosCore_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "${debug_flag} ${KokkosCore_C_FLAGS}")
+message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+message(STATUS "Kokkos CMAKE_C_FLAGS ${CMAKE_C_FLAGS}")
+
+find_package(particle_structures 0.0.1 REQUIRED)
+set(pumipic_USE_particle_structures_DEFAULT ON)
+message(STATUS "Found particle_structures: ${particle_structures_VERSION}")
+bob_public_dep(particle_structures)
+
+find_package(Omega_h 9 REQUIRED)
+set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 bob_public_dep(Omega_h)
 

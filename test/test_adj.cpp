@@ -48,16 +48,12 @@ int main(int argc, char** argv) {
 
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
-  const auto down_f2e = mesh.ask_down(2,1);
-  const auto up_e2f = mesh.ask_up(1, 2);
-  const auto up_f2r = mesh.ask_up(2, 3);
   //coordinates
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
 
@@ -93,7 +89,7 @@ int main(int argc, char** argv) {
   Omega_h::LO loops = 0;
  //TODO test for 2,0.5,0.2 2,0.5,0.2
  
-  p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, down_f2e, up_e2f, up_f2r, side_is_exposed,
+  p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, side_is_exposed,
        mesh2verts, coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
        
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
@@ -102,7 +98,7 @@ int main(int argc, char** argv) {
   {
     const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
     const auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
-    const bool res = g::find_barycentric_tet(M, dest, bcc);
+    g::find_barycentric_tet(M, dest, bcc);
     if(p::all_positive(bcc.data(), 4, 0))
       found_in = ielem;
   }

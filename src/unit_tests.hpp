@@ -33,7 +33,7 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
     const Omega_h::Vector<3> &p, const double *v, int pos=-1, bool intent=0)
 {
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
-  bool res = g::find_barycentric_tet(M, p, bcc);
+  g::find_barycentric_tet(M, p, bcc);
   if(pos == -1)
   {
   #ifdef DEBUG

@@ -1,5 +1,7 @@
 add_test(NAME type_test COMMAND ./typeTest)
 
+add_test(NAME rebuild COMMAND ./rebuild)
+
 function(test_suite TESTNAME NE NP DIST)
   add_test(NAME ${TESTNAME} COMMAND ./pskk ${NE} ${NP} ${DIST} 1 ${NP} 0)
   add_test(NAME ${TESTNAME}_sort COMMAND ./pskk ${NE} ${NP} ${DIST} ${NE} ${NP} 0)
@@ -14,5 +16,5 @@ function(push_test TESTNAME NE NP)
   test_suite(${TESTNAME}_exponential ${NE} ${NP} 3)
 endfunction(push_test)
 
-push_test(push_small 100 10000)
-push_test(push_medium 10000 10000000)
+#push_test(push_small 100 10000)
+#push_test(push_medium 10000 10000000)

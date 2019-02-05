@@ -75,9 +75,6 @@ class SellCSigma {
   // row = slice_to_chunk[slice] + row_in_chunk
   int* row_to_element;
 
-  //map from array particles to scs particles
-  int* arr_to_scs;
-
  //Kokkos Views
 #ifdef KOKKOS_ENABLED
  void transferToDevice();
@@ -314,7 +311,6 @@ template<class DataTypes, typename ExecSpace>
   }
   
   //Allocate the SCS
-  arr_to_scs = new int[np];
   particle_mask = new bool[offsets[num_slices]];
   CreateSCSArrays<DataTypes>(scs_data, offsets[num_slices]);
 
@@ -336,7 +332,6 @@ template<class DataTypes, typename ExecSpace>
           int ent_id = ptcls[k].second;
           int ptcl = ids[ent_id][start + j];
           PS_ALWAYS_ASSERT(ptcl<np);
-          arr_to_scs[ptcl] = index;
           particle_mask[index++] = true;
         }
         else
@@ -347,9 +342,6 @@ template<class DataTypes, typename ExecSpace>
   }
 
   if(debug) {
-    printf("\narr_to_scs\n");
-    for (i = 0; i < np; ++i)
-      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
     printf("\nSlices\n");
     for (i = 0; i < num_slices; ++i){
       printf("Slice %d:", i);
@@ -373,7 +365,6 @@ void SellCSigma<DataTypes, ExecSpace>::destroySCS() {
   delete [] row_to_element;
   delete [] offsets;
   delete [] particle_mask;
-  delete [] arr_to_scs;
 }
 template<class DataTypes, typename ExecSpace>
   SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
@@ -384,7 +375,6 @@ template<class DataTypes, typename ExecSpace>
   delete [] row_to_element;
   delete [] offsets;
   delete [] particle_mask;
-  delete [] arr_to_scs;
 }
 
 
@@ -444,7 +434,6 @@ template<class DataTypes, typename ExecSpace>
     row_to_element = 0;
     offsets = 0;
     slice_to_chunk = 0;
-    arr_to_scs = 0;
     particle_mask = 0;
     for (size_t i = 0; i < num_types; ++i)
       scs_data[i] = 0;
@@ -480,7 +469,6 @@ template<class DataTypes, typename ExecSpace>
   }
 
   //Allocate the Chunks
-  int* new_arr_to_scs = new int[new_num_ptcls];
   bool* new_particle_mask = new bool[new_offsets[new_nslices]];
   void* new_scs_data[num_types];
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
@@ -497,7 +485,6 @@ template<class DataTypes, typename ExecSpace>
     }
   }
 
-  int* old_to_new_index = new int[offsets[num_slices]];
   for (int slice = 0; slice < num_slices; ++slice) {
     for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
       for (int k = 0; k < C; ++k) {
@@ -505,7 +492,6 @@ template<class DataTypes, typename ExecSpace>
 	if (particle_mask[particle] && new_element[particle] != -1) {
 	  int new_elem = new_element[particle];
 	  int new_index = element_index[new_elem];
-	  old_to_new_index[particle] = new_index;
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[new_elem] += C;
 	  new_particle_mask[particle] = true;
@@ -515,12 +501,6 @@ template<class DataTypes, typename ExecSpace>
       }
     }
   }
-  int index = 0;
-  for (int i =0; i < num_ptcls; ++i) {
-    if (new_element[arr_to_scs[i]] != -1)
-      new_arr_to_scs[index++] = old_to_new_index[arr_to_scs[i]];
-  }
-  delete [] old_to_new_index;
   delete [] element_index;
 
   
@@ -537,15 +517,11 @@ template<class DataTypes, typename ExecSpace>
   row_to_element = new_row_to_element;
   offsets = new_offsets;
   slice_to_chunk = new_slice_to_chunk;
-  arr_to_scs = new_arr_to_scs;
   particle_mask = new_particle_mask;
   for (size_t i = 0; i < num_types; ++i)
     scs_data[i] = new_scs_data[i];
 
   if(debug) {
-    printf("\narr_to_scs\n");
-    for (int i = 0; i < num_ptcls; ++i)
-      printf("array index %5d -> scs index %5d\n", i, arr_to_scs[i]);
     printf("\nSlices\n");
     for (int i = 0; i < num_slices; ++i){
       printf("Slice %d:", i);

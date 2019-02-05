@@ -36,6 +36,12 @@ find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")
 set(MPIRUN_PROCFLAG "-np" CACHE string
   "the command line flag to give process count to MPIRUN")
 
+#set debug flag
+set(debug_flag)
+if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
+  set(debug_flag "-g")
+endif()
+
 #deps
 find_package(KokkosCore REQUIRED)
 include_directories(${KokkosCore_INCLUDE_DIRS})
@@ -43,18 +49,14 @@ include_directories(${KokkosCore_INCLUDE_DIRS})
 message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
 set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})
 set(CMAKE_C_COMPILER ${KokkosCore_C_COMPILER})
-set(CMAKE_FORTRAN_COMPILER ${KokkosCore_FORTRAN_COMPILER})
 message(STATUS "Kokkos CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER}")
 message(STATUS "Kokkos CMAKE_C_COMPILER ${KokkosCore_C_COMPILER}")
-message(STATUS "Kokkos CMAKE_FORTRAN_COMPILER ${KokkosCore_FORTRAN_COMPILER}")
 
 message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
-set(CMAKE_CXX_FLAGS ${KokkosCore_CXX_FLAGS})
-set(CMAKE_C_FLAGS ${KokkosCore_C_FLAGS})
-set(CMAKE_FORTRAN_FLAGS ${KokkosCore_FORTRAN_FLAGS})
-message(STATUS "Kokkos CMAKE_CXX_FLAGS ${KokkosCore_CXX_FLAGS}")
-message(STATUS "Kokkos CMAKE_C_FLAGS ${KokkosCore_C_FLAGS}")
-message(STATUS "Kokkos CMAKE_FORTRAN_FLAGS ${KokkosCore_FORTRAN_FLAGS}")
+set(CMAKE_CXX_FLAGS "${debug_flag} ${KokkosCore_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "${debug_flag} ${KokkosCore_C_FLAGS}")
+message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+message(STATUS "Kokkos CMAKE_C_FLAGS ${CMAKE_C_FLAGS}")
 
 find_package(particle_structures 0.0.1 REQUIRED)
 set(pumipic_USE_particle_structures_DEFAULT ON)

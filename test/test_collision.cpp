@@ -7,17 +7,6 @@ namespace p = pumipic;
 
 #define DO_TEST 0
 int main(int argc, char** argv) {
-
-  //TODO set points here X={0, 0.416667, 0.25}
-  //Unexpected results : all on surface. origin: (0 0 0); dest: (-1 1 1); 0.1,0.1,0  11,1,-1
-
-  Omega_h::Vector<3> orig{2, 0.5,0.3};
-  Omega_h::Vector<3> dest{1.1,50,0};
-  Omega_h::Write<Omega_h::Real> res(3,0);
-  res[0] = 1.99091;
-  res[1] = 1;
-  res[2] = 0.29697;
-
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::gmsh::read(argv[1], world);
@@ -31,7 +20,6 @@ int main(int argc, char** argv) {
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
   Omega_h::Int nelems = mesh.nelems();
-
 
   const Omega_h::LO np = 1; 
 
@@ -51,21 +39,32 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::LO> part_flags(np, 1); // to do or not
   Omega_h::Write<Omega_h::LO> elem_ids(np); //next element to search for
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(np, -1);
+  Omega_h::Write<Omega_h::LO> pids(np, 0);
 
-  elem_ids[0] = 87;
+  //TODO set points here X={0, 0.416667, 0.25}
+  //Unexpected results : all on surface. origin: (0 0 0); dest: (-1 1 1); 0.1,0.1,0  11,1,-1
+  Omega_h::Vector<3> orig{2, 0.5,0.3};
+  Omega_h::Vector<3> dest{1.1,50,0};
+  Omega_h::Write<Omega_h::Real> res(3,0);
+  res[0] = 1.99091;
+  res[1] = 1;
+  res[2] = 0.29697;
+
+  elem_ids[0] = 159;
   x0[0] = orig[0];
   y0[0] = orig[1];
   z0[0] = orig[2];
   x[0] = dest[0];
   y[0] = dest[1];
   z[0] = dest[2];
+  pids[0] = 1;
 
-  Omega_h::LO gpSize=1; //per group
   Omega_h::LO loops = 0;
+  Omega_h::LO maxLoops = 100;
 
-  p::search_mesh(gpSize, nelems, x0, y0, z0, x, y, z, dual, down_r2f, side_is_exposed,
-       mesh2verts, coords, face_verts, part_flags, elem_ids, coll_adj_face_ids, bccs, xpoints, loops);
-
+  p::search_mesh(pids, nelems, x0, y0, z0, x, y, z, dual, down_r2f,
+      side_is_exposed, mesh2verts, coords, face_verts, part_flags, elem_ids,
+      coll_adj_face_ids, bccs, xpoints, loops, maxLoops);
 
   //for collision cross-check test non-containment in any element
   Omega_h::Write<Omega_h::Real> bcc(4, -1.0);

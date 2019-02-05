@@ -30,7 +30,6 @@ int main(int argc, char** argv) {
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
 
@@ -75,7 +74,7 @@ int main(int argc, char** argv) {
   {
     const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
     const auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
-    const bool res = g::find_barycentric_tet(M, dest, bcc);
+    g::find_barycentric_tet(M, dest, bcc);
     if(g::all_positive(bcc.data(), 4))
       found_in = ielem;
   }

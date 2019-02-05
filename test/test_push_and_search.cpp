@@ -55,7 +55,6 @@ int main(int argc, char** argv)
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  const auto dim = mesh.dim();
   Omega_h::Int nelems = mesh.nelems();
 
 #if PRINT_DETAIL==1

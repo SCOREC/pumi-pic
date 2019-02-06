@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 1
+#define NUM_ITERATIONS 20
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -22,11 +22,6 @@ using particle_structs::elemCoords;
 namespace o = Omega_h;
 namespace p = pumipic;
 
-//To demonstrate push and adjacency search we store:
-//-two fp_t[3] arrays, 'Vector3d', for the current and
-// computed (pre adjacency search) positions, and
-//-an integer to store the 'new' parent element for use by
-// the particle movement procedure
 typedef MemberTypes<Vector3d, Vector3d, int > Particle;
 
 void printTiming(const char* name, double t) {
@@ -40,6 +35,23 @@ void printTimerResolution() {
 }
 
 typedef Kokkos::DefaultExecutionSpace exe_space;
+typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
+void hostToDeviceLid(kkLidView d, lid_t *h) {
+  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
+  for (size_t i=0; i<hv.size(); ++i) {
+    hv(i) = h[i];
+  }
+  Kokkos::deep_copy(d,hv);
+}
+
+void deviceToHostLid(kkLidView d, lid_t *h) {
+  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
+  Kokkos::deep_copy(hv,d);
+  for(size_t i=0; i<hv.size(); ++i) {
+    h[i] = hv(i);
+  }
+}
+
 typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view */
 void hostToDeviceFp(kkFpView d, fp_t* h) {
@@ -71,9 +83,24 @@ void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
   }
 }
 
+void setRand(SellCSigma<Particle>* scs, kkFpView disp_d, o::Write<o::Real> rand_d) {
+  srand (time(NULL));
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void) e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      rand_d[pid] = (disp_d(0))*((double)(std::rand())/RAND_MAX - 1.0);
+      fprintf(stderr, "rand ptcl %d %.3f\n", pid_d(pid), rand_d[pid]);
+    });
+  });
+}
+
 void push(SellCSigma<Particle>* scs, int np, fp_t distance,
-    fp_t dx, fp_t dy, fp_t dz) {
+    fp_t dx, fp_t dy, fp_t dz, bool rand=false) {
   fprintf(stderr, "push\n");
+
+
   Kokkos::Timer timer;
   Vector3d *scs_initial_position = scs->getSCS<0>();
   Vector3d *scs_pushed_position = scs->getSCS<1>();
@@ -90,6 +117,12 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   hostToDeviceFp(disp_d, disp);
   fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
 
+  o::Write<o::Real> ptclUnique_d(scs->offsets[scs->num_slices], 0);
+  if(rand) {
+    fprintf(stderr, "random ptcl movement enabled\n");
+    setRand(scs, disp_d, ptclUnique_d);
+  }
+
 #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)  
   double totTime = 0;
   timer.reset();
@@ -100,14 +133,63 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
     dir[1] = disp_d(0)*disp_d(2);
     dir[2] = disp_d(0)*disp_d(3);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      new_position_d(pid,0) = position_d(pid,0) * dir[0];
-      new_position_d(pid,1) = position_d(pid,1) * dir[1];
-      new_position_d(pid,2) = position_d(pid,2) * dir[2];
+      new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
+      new_position_d(pid,1) = position_d(pid,1) + dir[1] + std::abs(ptclUnique_d[pid]);
+      new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
     });
   });
   totTime += timer.seconds();
   printTiming("scs push", totTime);
 #endif
+  deviceToHostFp(new_position_d, scs_pushed_position);
+}
+
+
+void updatePtclPositions(SellCSigma<Particle>* scs) {
+  scs->transferToDevice();
+  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+      xtgt_scs_d(pid,0) = 0;
+      xtgt_scs_d(pid,1) = 0;
+      xtgt_scs_d(pid,2) = 0;
+    });
+  });
+  deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
+  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+}
+
+void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
+  fprintf(stderr, "rebuild\n");
+  updatePtclPositions(scs); 
+
+  auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
+    printf("elem_ids[%d] %d\n", i, elem_ids[i]);
+  };
+  o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
+
+  const int scs_capacity = scs->offsets[scs->num_slices];
+  o::Write<o::LO> scs_elem_ids(scs_capacity);
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      scs_elem_ids[pid] = elem_ids[pid];
+    });
+  });
+  o::HostRead<o::LO> scs_elem_ids_hr(scs_elem_ids);
+  int* new_element = new int[scs_capacity];
+  for(int i=0; i<scs_capacity; i++) {
+    new_element[i] = scs_elem_ids_hr[i];
+  }
+  scs->rebuildSCS(new_element);
+  delete [] new_element;
 }
 
 void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
@@ -118,7 +200,6 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //define the 20+ input args...
   //TODO create the mesh arrays inside the function
   //TODO document the search_mesh function args after cleanup
-  Omega_h::LO something = 1; 
   Omega_h::Int nelems = mesh.nelems();
 
   //initial positions
@@ -134,9 +215,6 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //mesh adjacencies
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
-  const auto down_f2e = mesh.ask_down(2,1);
-  const auto up_e2f = mesh.ask_up(1, 2);
-  const auto up_f2r = mesh.ask_up(2, 3);
 
   //boundary classification and coordinates
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -145,11 +223,13 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
 
   //flags
-  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // TODO what does this store?
+  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // < 0 - particle has hit a boundary or reached its destination
   Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1);           // TODO use scs
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
   Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
   Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
+
+  Omega_h::Write<Omega_h::LO> pids(scs->num_ptcls,-1);
 
   //set particle positions and parent element ids
   scs->transferToDevice();
@@ -157,6 +237,10 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
   kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     printf("elm %d\n", e);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -168,29 +252,47 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       y[pid] = xtgt_scs_d(pid,1);
       z[pid] = xtgt_scs_d(pid,2);
       elem_ids[pid] = e;
+      pids[pid] = pid_d(pid);
     });
   });
 
   // sanity check
   auto f = OMEGA_H_LAMBDA(o::LO i) {
-    printf("elem_ids[%d] %d %f %f %f -> %f %f %f\n", i, elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
+    printf("elem_ids[%d] %d %d %f %f %f -> %f %f %f\n", i, pids[i], elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
   };
   o::parallel_for(scs->num_ptcls, f, "print_x");
 
   Omega_h::LO loops = 0;
   Omega_h::LO maxLoops = 100;
   bool isFound = p::search_mesh(
-      something, nelems, x0, y0, z0, x, y, z,
-      dual, down_r2f, down_f2e, up_e2f, up_f2r,
+      pids, nelems, x0, y0, z0, x, y, z,
+      dual, down_r2f,
       side_is_exposed, mesh2verts, coords, face_verts,
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
       xpoints, loops, maxLoops);
   assert(isFound);
+
+  //rebuild the SCS to set the new element-to-particle lists
+  rebuild(scs, elem_ids);
 }
 
 //HACK to avoid having an unguarded comma in the SCS PARALLEL macro
 OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4> v) {
   return o::gather_vectors<4, 3>(a, v);
+}
+
+void setPtclIds(SellCSigma<Particle>* scs) {
+  fprintf(stderr, "%s\n", __func__);
+  scs->transferToDevice();
+  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      pid_d(pid) = pid;
+    });
+  });
+  deviceToHostLid(pid_d, scs->getSCS<2>() );
 }
 
 void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
@@ -219,16 +321,63 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
 }
 
 void setTargetPtclCoords(Vector3d* p, int numPtcls) {
-  const fp_t insetFaceDiameter = 0.6;
+  fprintf(stderr, "%s\n", __func__);
+  const fp_t insetFaceDiameter = 0.5;
   const fp_t insetFacePlane = 0.20001; // just above the inset bottom face
-  const fp_t insetFaceRim = 0.3; // in x and z
+  const fp_t insetFaceRim = -0.25; // in x
   const fp_t insetFaceCenter = 0; // in x and z
-  const fp_t x_delta = insetFaceDiameter / numPtcls;
+  fp_t x_delta = insetFaceDiameter / (numPtcls-1);
+  if( numPtcls == 1 )
+    x_delta = 0;
   for(int i=0; i<numPtcls; i++) {
-    p[i][0] = insetFaceRim + (x_delta * i);
+    p[i][0] = insetFaceCenter;
     p[i][1] = insetFacePlane;
-    p[i][2] = insetFaceCenter;
+    p[i][2] = insetFaceRim + (x_delta * i);
   }
+}
+
+void render(o::Mesh& mesh, int iter) {
+  std::stringstream ss;
+  ss << "rendered_t" << iter;
+  std::string s = ss.str();
+  Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
+}
+
+void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+  //transfer the SCS structure to the device
+  scs->transferToDevice();
+  //create an array to store the number of particles in each element
+  o::Write<o::LO> elmPtclCnt_w(mesh.nelems(),0);
+  //parallel loop over elements and particles
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    //get the omega_h element id
+    int o_e = row_to_element(e);
+    (void)o_e;
+    int ptcls = 0;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      (void)pid; //silence warning
+      ptcls++;
+    });
+    //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
+  });
+  //get the list of elements adjacent to each vertex
+  auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
+  //create a device writeable array to store the computed density
+  o::Write<o::Real> ad_w(mesh.nverts(),0);
+  //JO TODO
+  //parallel loop over the mesh vertices
+  //  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
+  //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/src/Omega_h_conserve.cpp#L759
+  //  'gather' the element values for this vertex using the verts2elems adjacency array and the elmPtclCnt_w array
+  //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L82
+  //  loop over the array from gather to sum the element particles counts for this vertex
+  //  divide the particle count by the number of adjacent elements
+  //  write the computed density to the ad_w array
+  //endfor
+  
+  //
+  o::Read<o::Real> ad_r(ad_w);
+  mesh.set_tag(mesh.dim(), "avg_density", ad_r);
 }
 
 int main(int argc, char** argv) {
@@ -256,18 +405,19 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 2;
+  const int numPtcls = 12;  //how many particles in domain
+  const int initialElement = 271;
 
-  //Distribute particles to elements evenly (strat = 0)
   Omega_h::Int ne = mesh.nelems();
-  const int strat = 0;
-  fprintf(stderr, "distribution %d-%s #elements %d #particles %d\n",
-      strat, distribute_name(strat), ne, numPtcls);
+  fprintf(stderr, "number of elements %d number of particles %d\n",
+      ne, numPtcls);
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  if (!distribute_particles(ne,numPtcls,strat,ptcls_per_elem, ids)) {
-    return 1;
-  }
+  for(int i=0; i<ne; i++)
+    ptcls_per_elem[i] = 0;
+  for(int i=0; i<numPtcls; i++)
+    ids[initialElement].push_back(i);
+  ptcls_per_elem[initialElement] = numPtcls;
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
   //in memory and can be ignored until performance is being evaluated.  These
@@ -283,13 +433,54 @@ int main(int argc, char** argv) {
 						       ids, debug);
   delete [] ptcls_per_elem;
 
+  //Set initial and target positions so search will
+  // find the parent elements
+  setInitialPtclCoords(mesh, scs);
+  setPtclIds(scs);
+  Vector3d *final_position_scs = scs->getSCS<1>();
+  setTargetPtclCoords(final_position_scs, numPtcls);
 
-  // *********************************
-  // call particle to mesh code here
-  // *********************************
+  //run search to move the particles to their starting elements
+  search(mesh,scs);
+ 
+  //define parameters controlling particle motion
+  //move the particles in +y direction by 1/20th of the
+  //pisces model's height
+  fp_t heightOfDomain = 1.0;
+  fp_t distance = heightOfDomain/20;
+  fp_t dx = -0.5;
+  fp_t dy = 0.8;
+  fp_t dz = 0;
+  const bool randomPtclMove = false;
+
+  fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
+      distance, dx, dy, dz);
+
+  //associate one floating point value with each mesh vertex and set them to 0
+  mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
+
+  Kokkos::Timer timer;
+  for(int iter=0; iter<NUM_ITERATIONS; iter++) {
+    computeAvgPtclDensity(mesh, scs);
+    render(mesh,iter);
+    timer.reset();
+    push(scs, scs->num_ptcls, distance, dx, dy, dz, randomPtclMove);
+    fprintf(stderr, "push (seconds) %f\n", timer.seconds());
+    timer.reset();
+    search(mesh,scs);
+    fprintf(stderr, "search and rebuild (seconds) %f\n", timer.seconds());
+    timer.reset();
+    if(scs->num_ptcls == 0) {
+      fprintf(stderr, "No particles remain... exiting push loop\n");
+      break;
+    }
+  }
 
   //cleanup
   delete [] ids;
   delete scs;
+
+  Omega_h::vtk::write_parallel("rendered", &mesh, mesh.dim());
+  fprintf(stderr, "done\n");
   return 0;
 }

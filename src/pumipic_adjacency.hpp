@@ -343,7 +343,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
   const auto dual_faces = &dual.ab2b;
   const auto dual_elems = &dual.a2ab;
 
-  const int debug = 1;
+  const int debug = 0;
 
   const int totNumPtcls = elem_ids.size();
   Omega_h::Write<Omega_h::LO> elem_ids_next(totNumPtcls,-1);

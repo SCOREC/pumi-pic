@@ -50,7 +50,6 @@ include_directories(algorithms)
 
 set(PS_SOURCES 
   algorithms/Distribute.cpp
-  algorithms/Push.cpp
   algorithms/psTypes.cpp
   support/psAssert.cpp
   support/SellCSigma.cpp

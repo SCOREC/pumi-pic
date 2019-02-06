@@ -156,8 +156,10 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   edge = -1;
   xpoint = {0, 0, 0};
 
-  print_osh_vector(origin, "origin", false);
-  print_osh_vector(dest, "dest");
+  if(debug) {
+    print_osh_vector(origin, "origin", false);
+    print_osh_vector(dest, "dest");
+  }
     
   //Boundary exclusion. Don't set it globally and change randomnly.
   const Omega_h::Real bound_intol = 0;//SURFACE_EXCLUDE; //TODO optimum value ?
@@ -214,7 +216,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
           }
         }
       }
-      print_array(bcc.data(), 3, "BCCtri");
+      if(debug)
+        print_array(bcc.data(), 3, "BCCtri");
     }
     else if(par_t >1.0)
     {
@@ -343,7 +346,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
 
         Omega_h::LO dummy = -1;
         bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, dummy, inverse);
-        if( detected)
+        if(debug && detected)
             std::cout << " Detected: For el=" << ielem << "\n";
 
         if(detected && side_is_exposed[face_id])
@@ -352,7 +355,8 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
            for(Omega_h::LO i=0; i<3; ++i)xpoints[ip*3+i] = xpoint.data()[i];
            //store current face_id and element_ids
 
-           print_osh_vector(xpoint, "COLLISION POINT");
+           if(debug)
+             print_osh_vector(xpoint, "COLLISION POINT");
 
            elem_ids_next[ip] = -1;
            break;

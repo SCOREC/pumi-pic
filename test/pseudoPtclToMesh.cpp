@@ -377,7 +377,7 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   
   //
   o::Read<o::Real> ad_r(ad_w);
-  mesh.set_tag(mesh.dim(), "avg_density", ad_r);
+  mesh.set_tag(o::VERT, "avg_density", ad_r);
 }
 
 int main(int argc, char** argv) {

@@ -358,17 +358,41 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       (void)pid; //silence warning
       ptcls++;
     });
-    //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
+   elmPtclCnt_w[o_e] = ptcls;
+	 //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
   });
   //get the list of elements adjacent to each vertex
   auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
-  //create a device writeable array to store the computed density
+    //create a device writeable array to store the computed density
   o::Write<o::Real> ad_w(mesh.nverts(),0);
   //JO TODO
+  const Omega_h::Write<Omega_h::Real> u_w(mesh.nverts());
+  const auto init_u = OMEGA_H_LAMBDA(Omega_h::LO r) {
+    auto x_r = Omega_h::get_vector<2>(mesh.coords(), r);
+    u_w[r] = x_r[1] - std::pow(2 * x_r[0] - 1, 2);
+  };
+  Omega_h::parallel_for(mesh.nverts(), init_u);
+  const Omega_h::Reals elmPtclCnt(u_w);
   //parallel loop over the mesh vertices
-  //  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
+  o::Few<o::LO,1> verts2elemsfew;
+  for (int i = 0; i < verts2elems.ab2b.size(); i++){
+    verts2elemsfew[i] = verts2elems.ab2b[i];
+  }
+  const auto densityVerticies = o::gather_scalars<1>(elmPtclCnt,verts2elemsfew);
+  const auto updateDensity = OMEGA_H_LAMBDA(Omega_h::LO r){
+  int densitySum = 0;
+  int i = 0;  
+  for (i = densityVerticies[i]; i < densityVerticies[i+1]; i++){
+      densitySum += densityVerticies[i];
+    }
+  densitySum /= verts2elems.a2ab[i];
+  ad_w[r] = densitySum;
+ };
+ o::parallel_for(mesh.nverts(), updateDensity);
+  
+//  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
   //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/src/Omega_h_conserve.cpp#L759
-  //  'gather' the element values for this vertex using the verts2elems adjacency array and the elmPtclCnt_w array
+  //  'gather' the element values for this vertex using the verts2elems adjacency array and the elmPtclCnt_w array 
   //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L82
   //  loop over the array from gather to sum the element particles counts for this vertex
   //  divide the particle count by the number of adjacent elements

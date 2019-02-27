@@ -366,29 +366,33 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
     //create a device writeable array to store the computed density
   o::Write<o::Real> ad_w(mesh.nverts(),0);
   //JO TODO
-  const Omega_h::Write<Omega_h::Real> u_w(mesh.nverts());
-  const auto init_u = OMEGA_H_LAMBDA(Omega_h::LO r) {
-    auto x_r = Omega_h::get_vector<2>(mesh.coords(), r);
-    u_w[r] = x_r[1] - std::pow(2 * x_r[0] - 1, 2);
-  };
-  Omega_h::parallel_for(mesh.nverts(), init_u);
-  const Omega_h::Reals elmPtclCnt(u_w);
+  const o::Write<o::Real> u_w(mesh.nverts());
+  const o::Reals elmPtclCnt(u_w);
   //parallel loop over the mesh vertices
+  
   o::Few<o::LO,1> verts2elemsfew;
-  for (int i = 0; i < verts2elems.ab2b.size(); i++){
-    verts2elemsfew[i] = verts2elems.ab2b[i];
-  }
-  const auto densityVerticies = o::gather_scalars<1>(elmPtclCnt,verts2elemsfew);
+
+ // const auto convertToFew = OMEGA_H_LAMBDA(Omega_h::LO r){
+   //  verts2elemsfew[r] = verts2elems.ab2b[r];
+ // };
+ // o::parallel_for(verts2elems.a2ab[r+1] - verts2elems.a2ab[r], convertToFew);
+
   const auto updateDensity = OMEGA_H_LAMBDA(Omega_h::LO r){
-  int densitySum = 0;
-  int i = 0;  
-  for (i = densityVerticies[i]; i < densityVerticies[i+1]; i++){
-      densitySum += densityVerticies[i];
+    int densitySum = 0;
+    int i = 0;  
+    const auto densityVerticies = o::gather_scalars<1>(elmPtclCnt,verts2elemsfew);
+  //  const auto convertToFew = OMEGA_H_LAMBDA(Omega_h::LO r){
+       verts2elemsfew(std::initializer_list<int> ( verts2elems.ab2b));
+  //  };
+   // o::parallel_for(verts2elems.a2ab[r+1] - verts2elems.a2ab[r], convertToFew);
+
+    for (i = densityVerticies(i); i < densityVerticies(i+1); i++){
+      densitySum += densityVerticies(i);
     }
-  densitySum /= verts2elems.a2ab[i];
-  ad_w[r] = densitySum;
- };
- o::parallel_for(mesh.nverts(), updateDensity);
+    densitySum /= verts2elems.a2ab[i];
+    ad_w[r] = densitySum;
+  };
+  o::parallel_for(mesh.nverts(), updateDensity);
   
 //  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
   //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/src/Omega_h_conserve.cpp#L759

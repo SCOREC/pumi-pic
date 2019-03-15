@@ -345,7 +345,6 @@ void render(o::Mesh& mesh, int iter) {
 }
 
 void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
-  printf("foo\n");
   //transfer the SCS structure to the device
   scs->transferToDevice();
   //create an array to store the number of particles in each element
@@ -361,6 +360,11 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
       ptcls++;
     });
    elmPtclCnt_w[o_e] = ptcls;
+  //print ptcls of elem_ids with particles 
+ // if (o_e == 1452 || o_e == 3085 || o_e == 3636 || o_e == 3760 || o_e == 5327 || o_e == 5226 || o_e == 5455 || o_e == 4669 || o_e == 5581 || o_e == 3406){
+  printf("ID %d has %d particles\n\n\n\n\n", o_e, ptcls);
+ // }
+  //if no particles in matches, theres a problem
 	 //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
   });
   o::Write<o::Real> epc_w(mesh.nelems(),0);
@@ -483,7 +487,7 @@ int main(int argc, char** argv) {
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
-    printf("iter %d\n",iter);
+    //printf("iter %d\n",iter);
     computeAvgPtclDensity(mesh, scs);
     render(mesh,iter);
     timer.reset();

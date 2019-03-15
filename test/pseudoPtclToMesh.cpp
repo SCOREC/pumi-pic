@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 20
+#define NUM_ITERATIONS 1
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -337,6 +337,7 @@ void setTargetPtclCoords(Vector3d* p, int numPtcls) {
 }
 
 void render(o::Mesh& mesh, int iter) {
+  printf("in render\n");
   std::stringstream ss;
   ss << "rendered_t" << iter;
   std::string s = ss.str();
@@ -344,6 +345,7 @@ void render(o::Mesh& mesh, int iter) {
 }
 
 void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
+  printf("foo\n");
   //transfer the SCS structure to the device
   scs->transferToDevice();
   //create an array to store the number of particles in each element
@@ -361,6 +363,13 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
    elmPtclCnt_w[o_e] = ptcls;
 	 //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
   });
+  o::Write<o::Real> epc_w(mesh.nelems(),0);
+  const auto convert = OMEGA_H_LAMBDA(o::LO i) {
+    epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
+  };
+  o::parallel_for(mesh.nelems(), convert, "convert_to_real");
+  o::Reals epc(epc_w);
+  mesh.add_tag(o::REGION, "element_particle_count", 1, o::Reals(epc));
   //get the list of elements adjacent to each vertex
   auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
     //create a device writeable array to store the computed density
@@ -376,7 +385,7 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
       vertVal += elmVal[elm];
     }
     ad_w[i] = vertVal / deg;
-    printf("vtx, particle count is %f,  %d density %f\n", i, vertVal, ad_w[i]);
+   // printf("vtx, particle count is %f,  %d density %f\n", i, vertVal, ad_w[i]);
   };
   o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
   //parallel loop over the mesh vertices  
@@ -474,6 +483,7 @@ int main(int argc, char** argv) {
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
+    printf("iter %d\n",iter);
     computeAvgPtclDensity(mesh, scs);
     render(mesh,iter);
     timer.reset();

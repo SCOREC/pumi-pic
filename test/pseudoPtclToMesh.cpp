@@ -343,7 +343,7 @@ void render(o::Mesh& mesh, int iter) {
   Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
 }
 
-void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
   //transfer the SCS structure to the device
   scs->transferToDevice();
   //create an array to store the number of particles in each element
@@ -366,24 +366,20 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
     //create a device writeable array to store the computed density
   o::Write<o::Real> ad_w(mesh.nverts(),0);
   //JO TODO
-  o::Write<o::Real> u_w(mesh.nverts());
-  o::Write<o::LO> elmVal(mesh.nelems(),1);
-  o::Write<o::Real> vtxDensity(mesh.nverts(),0); 
+  o::Write<o::LO> elmVal(mesh.nelems(),1); 
   const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
     const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
     const auto firstElm = verts2elems.a2ab[i];
+    o::Real vertVal = 0.00;
     for (int j = 0; j < deg; j++){
       const auto elm = verts2elems.ab2b[firstElm+j];
-      vtxDensity[i] += elmVal[elm];
+      vertVal += elmVal[elm];
     }
-    //printf("vtx %d density %.0f\n", i, vtxDensity[i]);
+    ad_w[i] = vertVal / deg;
+    printf("vtx, particle count is %f,  %d density %f\n", i, vertVal, ad_w[i]);
   };
-  o::parallel_for(mesh.nverts(), accumulate, "accumulate");
-  //parallel loop over the mesh vertices
- // const auto updateDensity = OMEGA_H_LAMBDA(Omega_h::LO r){
-  
- // o::parallel_for(mesh.nverts(), updateDensity);
-  
+  o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
+  //parallel loop over the mesh vertices  
 //  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
   //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/src/Omega_h_conserve.cpp#L759
   //  'gather' the element values for this vertex using the verts2elems adjacency array and the elmPtclCnt_w array 
@@ -393,7 +389,6 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //  write the computed density to the ad_w array
   //endfor
   
-  //
   o::Read<o::Real> ad_r(ad_w);
   mesh.set_tag(o::VERT, "avg_density", ad_r);
 }

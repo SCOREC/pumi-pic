@@ -238,7 +238,6 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   return found;
 }
 
-//updated Feb 3
 OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,
  const Omega_h::Write<Omega_h::Real> &y0, const Omega_h::Write<Omega_h::Real> &z0, 
  const Omega_h::Write<Omega_h::Real> &x, const Omega_h::Write<Omega_h::Real> &y, 
@@ -272,6 +271,11 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
     // TODO Change ntpcl, ip start and limit. Update global(?) indices inside.
     for(Omega_h::LO ip = 0; ip < totNumPtcls; ++ip) //HACK - each element checks all particles
     {
+      //skip inactive particles
+      if(pids[ip] == -1) {
+        continue;
+      }
+
       //skip if the particle is not in this element or has been found
       if(elem_ids[ip] != ielem || part_flags[ip] <= 0) continue;
 
@@ -408,7 +412,6 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
   {
     if(debug) fprintf(stderr, "------------ %d ------------\n", loops);
     //TODO check if particle is on boundary and remove from list if so.
-
     // Searching all elements. TODO exclude those done ?
     Omega_h::parallel_for(nelems,  search_ptcl, "search_ptcl");
     found = true;
@@ -417,10 +420,12 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
     };
     Omega_h::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
 
-    // TODO synchronize
-
-    //TODO this could be a sequential bottle-neck
-    for(int i=0; i<totNumPtcls; ++i){ if(part_flags[i] > 0) {found = false; break;} }
+    Omega_h::LOs part_flags_r(part_flags);
+    auto minFlag = Omega_h::get_min(part_flags_r);
+    auto maxFlag = Omega_h::get_max(part_flags_r);
+    fprintf(stderr, "%d 0.2 minFlag maxFlag %d %d\n", loops, minFlag, maxFlag);
+    if(maxFlag > 0)
+      found = false;
     //Copy particle data from previous to next (adjacent) element
     ++loops;
 

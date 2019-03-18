@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 20
+#define NUM_ITERATIONS 1
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -28,6 +28,14 @@ namespace p = pumipic;
 //-an integer to store the 'new' parent element for use by
 // the particle movement procedure
 typedef MemberTypes<Vector3d, Vector3d, int > Particle;
+
+void render(o::Mesh& mesh, int iter) {
+  printf("in render\n");
+  std::stringstream ss;
+  ss << "rendered_t" << iter;
+  std::string s = ss.str();
+  Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
+}
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -230,6 +238,7 @@ void updatePtclPositions(SellCSigma<Particle>* scs) {
 void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
   updatePtclPositions(scs); 
+  fprintf(stderr, "0.1 rebuild\n");
 
   auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
     printf("elem_ids[%d] %d\n", i, elem_ids[i]);
@@ -264,13 +273,13 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   Omega_h::Int nelems = mesh.nelems();
 
   //initial positions
-  Omega_h::Write<Omega_h::Real> x0(scs->num_ptcls,0);
-  Omega_h::Write<Omega_h::Real> y0(scs->num_ptcls,0);
-  Omega_h::Write<Omega_h::Real> z0(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> x0(scs->num_ptcls,0, "x0");
+  Omega_h::Write<Omega_h::Real> y0(scs->num_ptcls,0, "y0");
+  Omega_h::Write<Omega_h::Real> z0(scs->num_ptcls,0, "z0");
   //final positions
-  Omega_h::Write<Omega_h::Real> x(scs->num_ptcls,0);
-  Omega_h::Write<Omega_h::Real> y(scs->num_ptcls,0);
-  Omega_h::Write<Omega_h::Real> z(scs->num_ptcls,0);
+  Omega_h::Write<Omega_h::Real> x(scs->num_ptcls,0, "x");
+  Omega_h::Write<Omega_h::Real> y(scs->num_ptcls,0, "y");
+  Omega_h::Write<Omega_h::Real> z(scs->num_ptcls,0, "z");
 
 
   //mesh adjacencies
@@ -284,13 +293,13 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   const auto face_verts =  mesh.ask_verts_of(2);//LOs
 
   //flags
-  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1);         // < 0 - particle has hit a boundary or reached its destination
-  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1);           // TODO use scs
+  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1, "ptcl_flags");         // < 0 - particle has hit a boundary or reached its destination
+  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1,"elem_ids");           // TODO use scs
   Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
   Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
   Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
 
-  Omega_h::Write<Omega_h::LO> pids(scs->num_ptcls,-1);
+  Omega_h::Write<Omega_h::LO> pids(scs->num_ptcls,-1,"pids");
 
   //set particle positions and parent element ids
   scs->transferToDevice();
@@ -302,38 +311,51 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
   hostToDeviceLid(pid_d, scs->getSCS<2>() );
 
+  fprintf(stderr, "search 0.1\n");
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    printf("elm %d\n", e);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      printf("ptcl %d\n", pid);
-      x0[pid] = x_scs_d(pid,0);
-      y0[pid] = x_scs_d(pid,1);
-      z0[pid] = x_scs_d(pid,2);
-      x[pid] = xtgt_scs_d(pid,0);
-      y[pid] = xtgt_scs_d(pid,1);
-      z[pid] = xtgt_scs_d(pid,2);
-      elem_ids[pid] = e;
-      pids[pid] = pid_d(pid);
+      if(particle_mask(pid)) {
+        printf("elm ptcl %d %d\n", e, pid);
+        x0[pid] = x_scs_d(pid,0);
+        y0[pid] = x_scs_d(pid,1);
+        z0[pid] = x_scs_d(pid,2);
+        x[pid] = xtgt_scs_d(pid,0);
+        y[pid] = xtgt_scs_d(pid,1);
+        z[pid] = xtgt_scs_d(pid,2);
+        elem_ids[pid] = e;
+        pids[pid] = pid_d(pid);
+      } else {
+        printf("inactive ptcl %d %d\n", e, pid);
+        elem_ids[pid] = -1;
+        pids[pid] = -1;
+        ptcl_flags[pid] = -1;
+      }
     });
   });
 
   // sanity check
+  fprintf(stderr, "search 0.2\n");
   auto f = OMEGA_H_LAMBDA(o::LO i) {
-    printf("elem_ids[%d] %d %d %f %f %f -> %f %f %f\n", i, pids[i], elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
+    if(pids[i] != -1) {
+      printf("elem_ids[%d] %d %d %f %f %f -> %f %f %f\n", i, pids[i], elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
+    }
   };
   o::parallel_for(scs->num_ptcls, f, "print_x");
 
   Omega_h::LO loops = 0;
   Omega_h::LO maxLoops = 100;
+  fprintf(stderr, "search 0.3\n");
   bool isFound = p::search_mesh(
       pids, nelems, x0, y0, z0, x, y, z,
       dual, down_r2f,
       side_is_exposed, mesh2verts, coords, face_verts,
       ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
       xpoints, loops, maxLoops);
+  fprintf(stderr, "search 0.4\n");
   assert(isFound);
 
   //rebuild the SCS to set the new element-to-particle lists
+  fprintf(stderr, "search 0.5\n");
   rebuild(scs, elem_ids);
 }
 
@@ -428,6 +450,7 @@ int main(int argc, char** argv) {
   Omega_h::Int ne = mesh.nelems();
   fprintf(stderr, "number of elements %d number of particles %d\n",
       ne, numPtcls);
+  o::LOs foo(ne, 1, "foo");
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   for(int i=0; i<ne; i++)
@@ -446,7 +469,6 @@ int main(int argc, char** argv) {
   const int V = 1024;
   const bool debug = false;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
-  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", policy.team_size(), V, sigma);
   //Create the particle structure
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
 						       ptcls_per_elem,
@@ -476,7 +498,8 @@ int main(int argc, char** argv) {
   fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
       distance, dx, dy, dz);
 
-  mesh.add_tag(o::REGION, "has_particles", 1, o::LOs(ne, -1));
+  o::LOs elmTags(ne,1, "elmTagVals");
+  mesh.add_tag(o::REGION, "has_particles", 1, elmTags);
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
@@ -484,7 +507,7 @@ int main(int argc, char** argv) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    fprintf(stderr, "\n");
+    fprintf(stderr, "iter %d\n", iter);
     timer.reset();
     push(scs, scs->num_ptcls, distance, dx, dy, dz, randomPtclMove);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
@@ -497,6 +520,7 @@ int main(int argc, char** argv) {
       break;
     }
     tagParentElements(mesh,scs,iter);
+    render(mesh,iter);
   }
 
   //cleanup

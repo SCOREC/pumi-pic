@@ -362,7 +362,7 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
    elmPtclCnt_w[o_e] = ptcls;
   //print ptcls of elem_ids with particles 
  // if (o_e == 1452 || o_e == 3085 || o_e == 3636 || o_e == 3760 || o_e == 5327 || o_e == 5226 || o_e == 5455 || o_e == 4669 || o_e == 5581 || o_e == 3406){
-  printf("ID %d has %d particles\n\n\n\n\n", o_e, ptcls);
+ // printf("ID %d has %d particles\n", o_e, ptcls);
  // }
   //if no particles in matches, theres a problem
 	 //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
@@ -379,17 +379,18 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
     //create a device writeable array to store the computed density
   o::Write<o::Real> ad_w(mesh.nverts(),0);
   //JO TODO
-  o::Write<o::LO> elmVal(mesh.nelems(),1); 
   const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
     const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
     const auto firstElm = verts2elems.a2ab[i];
     o::Real vertVal = 0.00;
     for (int j = 0; j < deg; j++){
       const auto elm = verts2elems.ab2b[firstElm+j];
-      vertVal += elmVal[elm];
+      vertVal += epc[elm];
     }
     ad_w[i] = vertVal / deg;
-   // printf("vtx, particle count is %f,  %d density %f\n", i, vertVal, ad_w[i]);
+    if (vertVal > 0){ 
+     printf("%d vtx, particle count is %f, deg == %d\n", i, vertVal, deg);
+    }
   };
   o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
   //parallel loop over the mesh vertices  

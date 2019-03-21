@@ -8,7 +8,7 @@
 #include <chrono>
 #include <thread>
 
-#define NUM_ITERATIONS 1
+#define NUM_ITERATIONS 20
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -359,26 +359,19 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
       (void)pid; //silence warning
       ptcls++;
     });
-   elmPtclCnt_w[o_e] = ptcls;
-  //print ptcls of elem_ids with particles 
- // if (o_e == 1452 || o_e == 3085 || o_e == 3636 || o_e == 3760 || o_e == 5327 || o_e == 5226 || o_e == 5455 || o_e == 4669 || o_e == 5581 || o_e == 3406){
- // printf("ID %d has %d particles\n", o_e, ptcls);
- // }
-  //if no particles in matches, theres a problem
-	 //JO TODO - write the particle count for this element 'o_e' in the elmPtclCnt_w array
+    elmPtclCnt_w[o_e] = ptcls;
   });
   o::Write<o::Real> epc_w(mesh.nelems(),0);
   const auto convert = OMEGA_H_LAMBDA(o::LO i) {
-    epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
-  };
+     epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
+   };
   o::parallel_for(mesh.nelems(), convert, "convert_to_real");
   o::Reals epc(epc_w);
   mesh.add_tag(o::REGION, "element_particle_count", 1, o::Reals(epc));
   //get the list of elements adjacent to each vertex
   auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
-    //create a device writeable array to store the computed density
+  //create a device writeable array to store the computed density
   o::Write<o::Real> ad_w(mesh.nverts(),0);
-  //JO TODO
   const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
     const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
     const auto firstElm = verts2elems.a2ab[i];
@@ -388,21 +381,8 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
       vertVal += epc[elm];
     }
     ad_w[i] = vertVal / deg;
-    if (vertVal > 0){ 
-     printf("%d vtx, particle count is %f, deg == %d\n", i, vertVal, deg);
-    }
   };
-  o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
-  //parallel loop over the mesh vertices  
-//  see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L134
-  //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/src/Omega_h_conserve.cpp#L759
-  //  'gather' the element values for this vertex using the verts2elems adjacency array and the elmPtclCnt_w array 
-  //    see https://github.com/SNLComputation/omega_h/blob/d1aa5a5c975597b933e145bb26b5b477197e45ec/example/laplacian/main.cpp#L82
-  //  loop over the array from gather to sum the element particles counts for this vertex
-  //  divide the particle count by the number of adjacent elements
-  //  write the computed density to the ad_w array
-  //endfor
-  
+  o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");  
   o::Read<o::Real> ad_r(ad_w);
   mesh.set_tag(o::VERT, "avg_density", ad_r);
 }

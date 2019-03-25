@@ -471,6 +471,7 @@ template<class DataTypes, typename ExecSpace>
 
   //Allocate the Chunks
   int* new_particle_mask = new int[new_offsets[new_nslices]];
+  std::memset(new_particle_mask,0,new_offsets[new_nslices]*sizeof(int));
   void* new_scs_data[num_types];
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
   
@@ -495,10 +496,8 @@ template<class DataTypes, typename ExecSpace>
 	  int new_index = element_index[new_elem];
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[new_elem] += C;
-	  new_particle_mask[particle] = true;
+	  new_particle_mask[new_index] = 1;
 	}
-	else 
-	  new_particle_mask[particle] = false;
       }
     }
   }

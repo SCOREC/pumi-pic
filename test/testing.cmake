@@ -30,8 +30,10 @@ mpi_test(linetri_intersection_2 1
 mpi_test(push_and_search_1 1
   ./push_and_search ${TEST_DATA_DIR}/cube.msh )
 
-mpi_test(pseudoPushAndSearch 1
+mpi_test(pseudoPushAndSearch_t1 1
   ./pseudoPushAndSearch --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
 
 mpi_test(particleToMesh 1
   ./particleToMesh --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
+mpi_test(pseudoPushAndSearch_t2 1
+  ./pseudoPushAndSearch --kokkos-threads=2 ${TEST_DATA_DIR}/pisces/gitr.msh)

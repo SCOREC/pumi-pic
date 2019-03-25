@@ -265,6 +265,8 @@ void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
 void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   fprintf(stderr, "search\n");
 
+  p::search_mesh(mesh,scs);
+
   assert(scs->num_elems == mesh.nelems());
 
   //define the 20+ input args...

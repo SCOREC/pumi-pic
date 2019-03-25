@@ -10,6 +10,10 @@
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 
+#include <SellCSigma.h>
+#include <SCS_Macros.h>
+
+namespace o = Omega_h;
 
 //TODO use .get() to access data ?
 namespace pumipic
@@ -236,6 +240,10 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     std::cout << "Line and plane are parallel \n";
   }
   return found;
+}
+
+OMEGA_H_INLINE bool search_mesh(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+  return true;
 }
 
 OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,

@@ -32,3 +32,6 @@ mpi_test(push_and_search_1 1
 
 mpi_test(pseudoPushAndSearch 1
   ./pseudoPushAndSearch --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
+
+mpi_test(particleToMesh 1
+  ./particleToMesh --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)

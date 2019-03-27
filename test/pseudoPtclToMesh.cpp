@@ -170,11 +170,6 @@ void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
   updatePtclPositions(scs); 
 
-  auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
-    printf("elem_ids[%d] %d\n", i, elem_ids[i]);
-  };
-  o::parallel_for(scs->num_ptcls, printElmIds, "print_elm_ids");
-
   const int scs_capacity = scs->offsets[scs->num_slices];
   o::Write<o::LO> scs_elem_ids(scs_capacity);
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
@@ -242,9 +237,7 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   hostToDeviceLid(pid_d, scs->getSCS<2>() );
 
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    printf("elm %d\n", e);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      printf("ptcl %d\n", pid);
       x0[pid] = x_scs_d(pid,0);
       y0[pid] = x_scs_d(pid,1);
       z0[pid] = x_scs_d(pid,2);

@@ -56,7 +56,7 @@ OMEGA_H_INLINE bool all_positive(const Omega_h::Write<Omega_h::Real> a, Omega_h:
   return true;
 }
 
-OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+OMEGA_H_INLINE Omega_h::LO min_index(const Omega_h::Write<Omega_h::Real> a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];

@@ -205,7 +205,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
       {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
         {
-          edge = min_index(bcc.data(), 3, EPSILON); //TODO test tolerance
+          edge = min_index(bcc, 3, EPSILON); //TODO test tolerance
         }
         else
         {
@@ -245,17 +245,19 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   return found;
 }
 
-OMEGA_H_INLINE o::Vector<3> makeVector(int pid, kkFp3View xyz) {
+//The following helper functions avoid having an unguarded comma
+//(a comma not in parenthesis) in the SCS PARALLEL macro
+OMEGA_H_INLINE o::Vector<3> makeVector3(int pid, kkFp3View xyz) {
   return o::Vector<3>{xyz(pid,0), xyz(pid,1), xyz(pid,2)};
 }
-
+OMEGA_H_INLINE o::Vector<3> makeZeroVector3() {
+  return o::Vector<3>{0,0,0};
+}
 OMEGA_H_INLINE o::LO getfmap(int i) {
   assert(i>=0 && i<8);
   o::LOs fmap{2,1,1,3,2,3,0,3};
   return fmap[i];
 }
-
-//HACK to avoid having an unguarded comma in the SCS PARALLEL macro
 OMEGA_H_INLINE o::Matrix<3, 3> gatherVectors3x3(o::Reals const& a, o::Few<o::LO, 3> v) {
   return o::gather_vectors<3, 3>(a, v);
 }
@@ -278,6 +280,10 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);
+
+  const auto down_r2fs = down_r2f.ab2b;
+  const auto dual_faces = dual.ab2b;
+  const auto dual_elems = dual.a2ab;
 
   scs->transferToDevice();  //TODO user tuples should be allocated on device by default
   const auto scsCapacity = scs->offsets[scs->num_slices];
@@ -323,8 +329,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           auto elmId = e;
           if(debug)
             std::cerr << "Elem " << elmId << " ptcl:" << pid << "\n";
-          const o::Vector<3> orig = makeVector(pid, x_scs_d);
-          const o::Vector<3> dest = makeVector(pid, xtgt_scs_d);
+          const o::Vector<3> orig = makeVector3(pid, x_scs_d);
+          const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
           o::Write<o::Real> bcc(4, -1.0);
           //Check particle origin containment in current element
           find_barycentric_tet(M, orig, bcc);
@@ -336,16 +342,16 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           } else {
             //get element ID
             //TODO get map from omega methods. //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
-            auto dface_ind = dual[elmId];
+            auto dface_ind = dual_elems[elmId];
             const auto beg_face = e *4;
             const auto end_face = beg_face +4;
             o::LO f_index = 0;
             bool inverse;
 
             for(auto iface = beg_face; iface < end_face; ++iface) {
-              const auto face_id = down_r2f[iface];
+              const auto face_id = down_r2fs[iface];
 
-              o::Vector<3> xpoint(0);
+              o::Vector<3> xpoint = makeZeroVector3();
               auto fv2v = o::gather_verts<3>(face_verts, face_id);
 
               const auto face = gatherVectors3x3(coords, fv2v);
@@ -361,7 +367,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, dummy, inverse);
 
               if(detected && side_is_exposed[face_id]) {
-                 part_flags[pid] = -1;
+                 ptcl_flags[pid] = -1;
                  for(o::LO i=0; i<3; ++i)
                    xpoints[pid*3+i] = xpoint[i];
                  elem_ids_next[pid] = -1;

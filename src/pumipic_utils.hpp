@@ -46,7 +46,7 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   return true;
 }
 
-OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
+OMEGA_H_INLINE bool all_positive(const Omega_h::Write<Omega_h::Real> a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {

@@ -1,12 +1,11 @@
+#include "Omega_h_mesh.hpp"
+#include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
-#include "unit_tests.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
-#include <chrono>
-#include <thread>
 
 #define NUM_ITERATIONS 1
 
@@ -25,9 +24,9 @@ namespace p = pumipic;
 //To demonstrate push and adjacency search we store:
 //-two fp_t[3] arrays, 'Vector3d', for the current and
 // computed (pre adjacency search) positions, and
-//-an integer to store the 'new' parent element for use by
-// the particle movement procedure
-typedef MemberTypes<Vector3d, Vector3d, int > Particle;
+//-an integer to store the particles id
+typedef MemberTypes<Vector3d, Vector3d, int> Particle;
+
 
 void render(o::Mesh& mesh, int iter) {
   printf("in render\n");
@@ -47,65 +46,16 @@ void printTimerResolution() {
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
 }
 
-typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
-void hostToDeviceLid(kkLidView d, lid_t *h) {
-  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
-  for (size_t i=0; i<hv.size(); ++i) {
-    hv(i) = h[i];
-  }
-  Kokkos::deep_copy(d,hv);
-}
-
-void deviceToHostLid(kkLidView d, lid_t *h) {
-  kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
-  Kokkos::deep_copy(hv,d);
-  for(size_t i=0; i<hv.size(); ++i) {
-    h[i] = hv(i);
-  }
-}
-
-typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
-/** \brief helper function to transfer a host array to a device view */
-void hostToDeviceFp(kkFpView d, fp_t* h) {
-  kkFpView::HostMirror hv = Kokkos::create_mirror_view(d);
-  for (size_t i=0; i<hv.size(); ++i)
-    hv(i) = h[i];
-  Kokkos::deep_copy(d,hv);
-}
-
-typedef Kokkos::View<Vector3d*, exe_space::device_type> kkFp3View;
-/** \brief helper function to transfer a host array to a device view */
-void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
-  kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
-  for (size_t i=0; i<hv.size()/3; ++i) {
-    hv(i,0) = h[i][0];
-    hv(i,1) = h[i][1];
-    hv(i,2) = h[i][2];
-  }
-  Kokkos::deep_copy(d,hv);
-}
-
-void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
-  kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);
-  Kokkos::deep_copy(hv,d);
-  for(size_t i=0; i<hv.size()/3; ++i) {
-    h[i][0] = hv(i,0);
-    h[i][1] = hv(i,1);
-    h[i][2] = hv(i,2);
-  }
-}
-
 void writeDispVectors(SellCSigma<Particle>* scs) {
   fprintf(stderr, "%s\n", __func__);
   scs->transferToDevice();
 
-  kkFp3View x_nm1("x_nm1", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_nm1, scs->getSCS<0>());
-  kkFp3View x_nm0("x_nm0", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_nm0, scs->getSCS<1>());
-  kkLidView pid_d("pid", scs->offsets[scs->num_slices]);
-  hostToDeviceLid(pid_d, scs->getSCS<2>());
+  p::kkFp3View x_nm1("x_nm1", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(x_nm1, scs->getSCS<0>());
+  p::kkFp3View x_nm0("x_nm0", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(x_nm0, scs->getSCS<1>());
+  p::kkLidView pid_d("pid", scs->offsets[scs->num_slices]);
+  p::hostToDeviceLid(pid_d, scs->getSCS<2>());
   o::Write<o::Real> px_nm1(scs->num_ptcls*3);
   o::Write<o::Real> px_nm0(scs->num_ptcls*3);
   o::Write<o::LO> pid_w(scs->num_ptcls);
@@ -133,10 +83,10 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   }
 }
 
-void setRand(SellCSigma<Particle>* scs, kkFpView disp_d, o::Write<o::Real> rand_d) {
+void setRand(SellCSigma<Particle>* scs, p::kkFpView disp_d, o::Write<o::Real> rand_d) {
   srand (time(NULL));
-  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
-  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceLid(pid_d, scs->getSCS<2>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void) e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -157,14 +107,14 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   //Move SCS data to the device
   scs->transferToDevice();
 
-  kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(position_d, scs_initial_position);
-  kkFp3View new_position_d("new_position_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(new_position_d, scs_pushed_position);
+  p::kkFp3View position_d("position_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(position_d, scs_initial_position);
+  p::kkFp3View new_position_d("new_position_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(new_position_d, scs_pushed_position);
   
   fp_t disp[4] = {distance,dx,dy,dz};
-  kkFpView disp_d("direction_d", 4);
-  hostToDeviceFp(disp_d, disp);
+  p::kkFpView disp_d("direction_d", 4);
+  p::hostToDeviceFp(disp_d, disp);
   fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
 
   o::Write<o::Real> ptclUnique_d(scs->offsets[scs->num_slices], 0);
@@ -191,7 +141,7 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   totTime += timer.seconds();
   printTiming("scs push", totTime);
 #endif
-  deviceToHostFp(new_position_d, scs_pushed_position);
+  p::deviceToHostFp(new_position_d, scs_pushed_position);
 }
 
 void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
@@ -216,10 +166,10 @@ void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
 
 void updatePtclPositions(SellCSigma<Particle>* scs) {
   scs->transferToDevice();
-  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
-  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+  p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  p::kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -231,8 +181,8 @@ void updatePtclPositions(SellCSigma<Particle>* scs) {
       xtgt_scs_d(pid,2) = 0;
     });
   });
-  deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
-  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+  p::deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
+  p::deviceToHostFp(x_scs_d, scs->getSCS<0>() );
 }
 
 void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
@@ -264,98 +214,15 @@ void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
 
 void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   fprintf(stderr, "search\n");
-
-  p::search_mesh(mesh,scs);
-
   assert(scs->num_elems == mesh.nelems());
-
-  //define the 20+ input args...
-  //TODO create the mesh arrays inside the function
-  //TODO document the search_mesh function args after cleanup
-  Omega_h::Int nelems = mesh.nelems();
-
-  //initial positions
-  Omega_h::Write<Omega_h::Real> x0(scs->num_ptcls,0, "x0");
-  Omega_h::Write<Omega_h::Real> y0(scs->num_ptcls,0, "y0");
-  Omega_h::Write<Omega_h::Real> z0(scs->num_ptcls,0, "z0");
-  //final positions
-  Omega_h::Write<Omega_h::Real> x(scs->num_ptcls,0, "x");
-  Omega_h::Write<Omega_h::Real> y(scs->num_ptcls,0, "y");
-  Omega_h::Write<Omega_h::Real> z(scs->num_ptcls,0, "z");
-
-
-  //mesh adjacencies
-  const auto dual = mesh.ask_dual();
-  const auto down_r2f = mesh.ask_down(3, 2);
-
-  //boundary classification and coordinates
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  const auto mesh2verts = mesh.ask_elem_verts();
-  const auto coords = mesh.coords();
-  const auto face_verts =  mesh.ask_verts_of(2);//LOs
-
-  //flags
-  Omega_h::Write<Omega_h::LO> ptcl_flags(scs->num_ptcls, 1, "ptcl_flags");         // < 0 - particle has hit a boundary or reached its destination
-  Omega_h::Write<Omega_h::LO> elem_ids(scs->num_ptcls,-1,"elem_ids");           // TODO use scs
-  Omega_h::Write<Omega_h::LO> coll_adj_face_ids(scs->num_ptcls, -1); // why is this needed outside the search fn? what is it?
-  Omega_h::Write<Omega_h::Real> bccs(4*scs->num_ptcls, -1.0);        // TODO use scs. for debugging only?
-  Omega_h::Write<Omega_h::Real> xpoints(3*scs->num_ptcls, -1.0);     // what is this? for debugging only?
-
-  Omega_h::Write<Omega_h::LO> pids(scs->num_ptcls,-1,"pids");
-
-  //set particle positions and parent element ids
-  scs->transferToDevice();
-  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
-  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
-
-  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
-  hostToDeviceLid(pid_d, scs->getSCS<2>() );
-
-  fprintf(stderr, "search 0.1\n");
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if(particle_mask(pid)) {
-        printf("elm ptcl %d %d\n", e, pid);
-        x0[pid] = x_scs_d(pid,0);
-        y0[pid] = x_scs_d(pid,1);
-        z0[pid] = x_scs_d(pid,2);
-        x[pid] = xtgt_scs_d(pid,0);
-        y[pid] = xtgt_scs_d(pid,1);
-        z[pid] = xtgt_scs_d(pid,2);
-        elem_ids[pid] = e;
-        pids[pid] = pid_d(pid);
-      } else {
-        printf("inactive ptcl %d %d\n", e, pid);
-        elem_ids[pid] = -1;
-        pids[pid] = -1;
-        ptcl_flags[pid] = -1;
-      }
-    });
-  });
-
-  // sanity check
-  fprintf(stderr, "search 0.2\n");
-  auto f = OMEGA_H_LAMBDA(o::LO i) {
-    if(pids[i] != -1) {
-      printf("elem_ids[%d] %d %d %f %f %f -> %f %f %f\n", i, pids[i], elem_ids[i], x0[i], y0[i], z0[i], x[i], y[i], z[i]);
-    }
-  };
-  o::parallel_for(scs->num_ptcls, f, "print_x");
-
-  Omega_h::LO loops = 0;
   Omega_h::LO maxLoops = 100;
   fprintf(stderr, "search 0.3\n");
-  bool isFound = p::search_mesh(
-      pids, nelems, x0, y0, z0, x, y, z,
-      dual, down_r2f,
-      side_is_exposed, mesh2verts, coords, face_verts,
-      ptcl_flags, elem_ids, coll_adj_face_ids, bccs,
-      xpoints, loops, maxLoops);
+  const auto scsCapacity = scs->offsets[scs->num_slices];
+  o::Write<o::LO> elem_ids(scsCapacity,-1);
+  bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
+  //bool isFound = p::search_mesh(mesh, scs, elem_ids, maxLoops);
   fprintf(stderr, "search 0.4\n");
   assert(isFound);
-
   //rebuild the SCS to set the new element-to-particle lists
   fprintf(stderr, "search 0.5\n");
   rebuild(scs, elem_ids);
@@ -369,15 +236,15 @@ OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
 void setPtclIds(SellCSigma<Particle>* scs) {
   fprintf(stderr, "%s\n", __func__);
   scs->transferToDevice();
-  kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
-  hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceLid(pid_d, scs->getSCS<2>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       pid_d(pid) = pid;
     });
   });
-  deviceToHostLid(pid_d, scs->getSCS<2>() );
+  p::deviceToHostLid(pid_d, scs->getSCS<2>() );
 }
 
 void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
@@ -390,8 +257,8 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   auto nodes2coords = mesh.coords();
   //set particle positions and parent element ids
   scs->transferToDevice();
-  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
     auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
@@ -402,7 +269,7 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
         x_scs_d(pid,i) = center[i];
     });
   });
-  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+  p::deviceToHostFp(x_scs_d, scs->getSCS<0>() );
 }
 
 void setTargetPtclCoords(Vector3d* p, int numPtcls) {
@@ -446,7 +313,7 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 12;
+  const int numPtcls = 1;
   const int initialElement = 271;
 
   Omega_h::Int ne = mesh.nelems();

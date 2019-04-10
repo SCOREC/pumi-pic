@@ -161,7 +161,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
     Omega_h::Vector<DIM> &xpoint, bool reverse=false )
 {
-  bool debug=0;
+  const auto debug = 0;
   xpoint = {0, 0, 0};
 
   if(debug) {
@@ -310,7 +310,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     });
   });
 
-  const int debug = 1;
+  const int debug = 0;
 
   bool found = false;
   int loops = 0;
@@ -437,7 +437,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
     o::LOs ptcl_done_r(ptcl_done);
     auto minFlag = o::get_min(ptcl_done_r);
-    fprintf(stderr, "%d 0.2 ptcl_done min %d\n", loops, minFlag);
     if(minFlag == 0)
       found = false;
     //Copy particle data from previous to next (adjacent) element

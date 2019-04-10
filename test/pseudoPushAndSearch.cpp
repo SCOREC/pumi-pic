@@ -29,7 +29,7 @@ typedef MemberTypes<Vector3d, Vector3d, int> Particle;
 
 
 void render(o::Mesh& mesh, int iter) {
-  printf("in render\n");
+  fprintf(stderr, "%s\n", __func__);
   std::stringstream ss;
   ss << "rendered_t" << iter;
   std::string s = ss.str();
@@ -61,7 +61,6 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   o::Write<o::Real> px_nm0(capacity*3);
   o::Write<o::LO> pid_w(capacity);
 
-  fprintf(stderr,"%s 0.1\n", __func__);
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -75,7 +74,6 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
       }
     });
   });
-  fprintf(stderr,"%s 0.2\n", __func__);
   o::HostRead<o::Real> px_nm0_hr(px_nm0);
   o::HostRead<o::Real> px_nm1_hr(px_nm1);
   o::HostRead<o::LO> pid_hr(pid_w);
@@ -95,13 +93,15 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
 
 void setRand(SellCSigma<Particle>* scs, p::kkFpView disp_d, o::Write<o::Real> rand_d) {
   srand (time(NULL));
+  const auto debug = 0;
   p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
   p::hostToDeviceLid(pid_d, scs->getSCS<2>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void) e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       rand_d[pid] = (disp_d(0))*((double)(std::rand())/RAND_MAX - 1.0);
-      fprintf(stderr, "rand ptcl %d %.3f\n", pid_d(pid), rand_d[pid]);
+      if(debug)
+        fprintf(stderr, "rand ptcl %d %.3f\n", pid_d(pid), rand_d[pid]);
     });
   });
 }
@@ -199,8 +199,6 @@ void updatePtclPositions(SellCSigma<Particle>* scs) {
 void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
   updatePtclPositions(scs); 
-  fprintf(stderr, "0.1 rebuild\n");
-
   auto printElmIds = OMEGA_H_LAMBDA(o::LO i) {
     printf("elem_ids[%d] %d\n", i, elem_ids[i]);
   };
@@ -227,15 +225,11 @@ void search(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   fprintf(stderr, "search\n");
   assert(scs->num_elems == mesh.nelems());
   Omega_h::LO maxLoops = 100;
-  fprintf(stderr, "search 0.3\n");
   const auto scsCapacity = scs->offsets[scs->num_slices];
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
-  //bool isFound = p::search_mesh(mesh, scs, elem_ids, maxLoops);
-  fprintf(stderr, "search 0.4\n");
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
-  fprintf(stderr, "search 0.5\n");
   rebuild(scs, elem_ids);
 }
 

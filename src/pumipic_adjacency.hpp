@@ -155,12 +155,13 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
   return 1;
 }
 
+/** \brief returns true if line dest-origin intersects the triangle abc
+ */
 OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
     const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge, bool reverse=false )
+    Omega_h::Vector<DIM> &xpoint, bool reverse=false )
 {
   bool debug=0;
-  edge = -1;
   xpoint = {0, 0, 0};
 
   if(debug) {
@@ -203,11 +204,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
         print_array(bcc.data(), 3, "BCC");
       if(res)
       {
-        if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
-        {
-          edge = min_index(bcc, 3, EPSILON); //TODO test tolerance
-        }
-        else
+        if(! (bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) ) //TODO all zeros ?
         {
           const Omega_h::Real proj = osh_dot(snorm_unit, surf2dest);
           if(proj >0) found = true;
@@ -229,7 +226,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
     else if(par_t >1.0)
     {
       if(debug)
-        std::cout << "Error** Line origin and destination are on the same side of face \n";
+        std::cerr << "Line origin and destination are on the same side of face \n";
     }
     else if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
     {
@@ -295,8 +292,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   kkLidView pid_d("pid_d", scsCapacity);
   hostToDeviceLid(pid_d, scs->template getSCS<2>() );
 
-  // ptcl_flags[i] < 0 : particle i has hit a boundary or reached its destination
-  o::Write<o::LO> ptcl_flags(scsCapacity, 1, "ptcl_flags");
+  // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
+  o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
   // particle intersection points
   o::Write<o::Real> xpoints(3*scsCapacity, -1.0);
   // store the next parent for each particle
@@ -305,13 +302,15 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       if(particle_mask(pid)) {
         elem_ids[pid] = e;
+        ptcl_done[pid] = 0;
       } else {
         elem_ids[pid] = -1;
+        ptcl_done[pid] = 1;
       }
     });
   });
 
-  const int debug = 0;
+  const int debug = 1;
 
   bool found = false;
   int loops = 0;
@@ -320,30 +319,46 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       fprintf(stderr, "------------ %d ------------\n", loops);
     }
     PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-      (void)e;
-      const auto tetv2v = o::gather_verts<4>(mesh2verts, e);
-      const auto M = gatherVectors4x3(coords, tetv2v);
+      auto elmId = e;
+      auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
+      auto M = gatherVectors4x3(coords, tetv2v);
       PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
         //inactive particle that is still moving to its target position
-        if( particle_mask(pid) && ptcl_flags[pid] > 0 ) {
-          auto elmId = e;
+        if( particle_mask(pid) && !ptcl_done[pid] ) {
           if(debug)
             std::cerr << "Elem " << elmId << " ptcl:" << pid << "\n";
+          if(elmId != elem_ids[pid]) {
+            elmId = elem_ids[pid];
+            tetv2v = o::gather_verts<4>(mesh2verts, elmId);
+            M = gatherVectors4x3(coords, tetv2v);
+            if(debug)
+              std::cerr << "Elem " << elmId << " ptcl:" << pid << "\n";
+          }
           const o::Vector<3> orig = makeVector3(pid, x_scs_d);
           const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
+          if(debug && loops == 0) {
+            std::cerr << "orig " <<
+              orig[0] << " " << orig[1] << " " << orig[2] <<
+              " dest " <<
+              dest[0] << " " << dest[1] << " " << dest[2] << "\n";
+          }
           o::Write<o::Real> bcc(4, -1.0);
           //Check particle origin containment in current element
           find_barycentric_tet(M, orig, bcc);
           find_barycentric_tet(M, dest, bcc);
           //check if the destination is in this element
           if(all_positive(bcc, 4, 0)) {
+            if(debug)
+              std::cerr << "ptcl " << pid << " is in destination elm " << elmId << "\n";
             elem_ids_next[pid] = elem_ids[pid];
-            ptcl_flags[pid] = -1;
+            ptcl_done[pid] = 1;
           } else {
+            if(debug)
+              std::cerr << "ptcl " << pid << " checking adj elms\n";
             //get element ID
             //TODO get map from omega methods. //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
             auto dface_ind = dual_elems[elmId];
-            const auto beg_face = e *4;
+            const auto beg_face = elmId *4;
             const auto end_face = beg_face +4;
             o::LO f_index = 0;
             bool inverse;
@@ -363,34 +378,54 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               else
                 inverse = true;
 
-              o::LO dummy = -1;
-              bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, dummy, inverse);
+              bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse);
+              if(debug)
+                std::cerr << "ptcl " << pid << " faceid " << face_id << " detected " << detected << "\n";
 
               if(detected && side_is_exposed[face_id]) {
-                 ptcl_flags[pid] = -1;
-                 for(o::LO i=0; i<3; ++i)
-                   xpoints[pid*3+i] = xpoint[i];
-                 elem_ids_next[pid] = -1;
-                 break;
+                ptcl_done[pid] = 1;
+                for(o::LO i=0; i<3; ++i)
+                  xpoints[pid*3+i] = xpoint[i];
+                elem_ids_next[pid] = -1;
+                if(debug) {
+                  std::cerr << "ptcl " << pid << " faceid " << face_id
+                            << " detected and exposed, next parent elm "
+                            << elem_ids_next[pid] << "\n";
+                }
+                break;
               } else if(detected && !side_is_exposed[face_id]) {
-                 auto adj_elem  = dual_faces[dface_ind];
-                 elem_ids_next[pid] = adj_elem;
-                 break;
+                auto adj_elem  = dual_faces[dface_ind];
+                elem_ids_next[pid] = adj_elem;
+                if(debug) {
+                  std::cerr << "ptcl " << pid << " faceid " << face_id
+                            << " detected and !exposed, next parent elm "
+                            << elem_ids_next[pid] << "\n";
+                }
+                break;
               }
 
+              // no line triangle intersection found for the current face
+              // appears to be a guess at the next element based on the smallest BCC
               if(!side_is_exposed[face_id]) {
-                const o::LO min_ind = min_index(bcc, 4);
-                if(f_index == min_ind && !detected)
-                  elem_ids_next[pid] = dual_faces[dface_ind];
-              }
-
-              if( !side_is_exposed[face_id])
+                if(debug)
+                  std::cerr << "ptcl " << pid << " faceid " << face_id << " !detected and !exposed\n";
                 ++dface_ind;
+                const o::LO min_ind = min_index(bcc, 4);
+                if(f_index == min_ind) {
+                  elem_ids_next[pid] = dual_faces[dface_ind];
+                  if(debug) {
+                    std::cerr << "WARNING ptcl " << pid << " faceid " << face_id
+                              << " !detected and !exposed, next parent elm "
+                              << elem_ids_next[pid] << "\n";
+                  }
+                  //why no 'break' statement here?
+                }
+              }
 
               ++f_index;
-            } //iface
-          }
-        }
+            } //for iface
+          } //else not in current element
+        } //if active particle
       });
     });
 
@@ -400,11 +435,10 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     };
     o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
 
-    o::LOs ptcl_flags_r(ptcl_flags);
-    auto minFlag = o::get_min(ptcl_flags_r);
-    auto maxFlag = o::get_max(ptcl_flags_r);
-    fprintf(stderr, "%d 0.2 minFlag maxFlag %d %d\n", loops, minFlag, maxFlag);
-    if(maxFlag > 0)
+    o::LOs ptcl_done_r(ptcl_done);
+    auto minFlag = o::get_min(ptcl_done_r);
+    fprintf(stderr, "%d 0.2 ptcl_done min %d\n", loops, minFlag);
+    if(minFlag == 0)
       found = false;
     //Copy particle data from previous to next (adjacent) element
     ++loops;

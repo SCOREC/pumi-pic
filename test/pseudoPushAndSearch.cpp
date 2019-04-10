@@ -7,7 +7,7 @@
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
 
-#define NUM_ITERATIONS 1
+#define NUM_ITERATIONS 10
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -50,36 +50,46 @@ void writeDispVectors(SellCSigma<Particle>* scs) {
   fprintf(stderr, "%s\n", __func__);
   scs->transferToDevice();
 
-  p::kkFp3View x_nm1("x_nm1", scs->offsets[scs->num_slices]);
+  const int capacity = scs->offsets[scs->num_slices];
+  p::kkFp3View x_nm1("x_nm1", capacity);
   p::hostToDeviceFp(x_nm1, scs->getSCS<0>());
-  p::kkFp3View x_nm0("x_nm0", scs->offsets[scs->num_slices]);
+  p::kkFp3View x_nm0("x_nm0", capacity);
   p::hostToDeviceFp(x_nm0, scs->getSCS<1>());
-  p::kkLidView pid_d("pid", scs->offsets[scs->num_slices]);
+  p::kkLidView pid_d("pid", capacity);
   p::hostToDeviceLid(pid_d, scs->getSCS<2>());
-  o::Write<o::Real> px_nm1(scs->num_ptcls*3);
-  o::Write<o::Real> px_nm0(scs->num_ptcls*3);
-  o::Write<o::LO> pid_w(scs->num_ptcls);
+  o::Write<o::Real> px_nm1(capacity*3);
+  o::Write<o::Real> px_nm0(capacity*3);
+  o::Write<o::LO> pid_w(capacity);
 
+  fprintf(stderr,"%s 0.1\n", __func__);
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      pid_w[pid] = pid_d(pid);
-      for(int i=0; i<3; i++) {
-        px_nm1[pid*3+i] = x_nm1(pid,i);
-        px_nm0[pid*3+i] = x_nm0(pid,i);
+      pid_w[pid] = -1;
+      if(particle_mask(pid)) {
+        pid_w[pid] = pid_d(pid);
+        for(int i=0; i<3; i++) {
+          px_nm1[pid*3+i] = x_nm1(pid,i);
+          px_nm0[pid*3+i] = x_nm0(pid,i);
+        }
       }
     });
   });
+  fprintf(stderr,"%s 0.2\n", __func__);
   o::HostRead<o::Real> px_nm0_hr(px_nm0);
   o::HostRead<o::Real> px_nm1_hr(px_nm1);
   o::HostRead<o::LO> pid_hr(pid_w);
-  for(int i=0; i< scs->num_ptcls; i++) {
-    fprintf(stderr, "ptclID%d  %.3f %.3f %.3f initial\n",
-      pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2]);
+  for(int i=0; i< capacity; i++) {
+    if(pid_hr[i] != -1) {
+      fprintf(stderr, "ptclID%d  %.3f %.3f %.3f initial\n",
+        pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2]);
+    }
   }
-  for(int i=0; i< scs->num_ptcls; i++) {
-    fprintf(stderr, "ptclID%d  %.3f %.3f %.3f final\n",
-      pid_hr[i], px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
+  for(int i=0; i< capacity; i++) {
+    if(pid_hr[i] != -1) {
+      fprintf(stderr, "ptclID%d  %.3f %.3f %.3f final\n",
+        pid_hr[i], px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
+    }
   }
 }
 
@@ -156,8 +166,9 @@ void tagParentElements(o::Mesh& mesh, SellCSigma<Particle>* scs, int loop) {
   scs->transferToDevice();
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      (void)pid;
-      ehp_nm0[e] = loop;
+      if(particle_mask(pid)) {
+        ehp_nm0[e] = loop;
+      }
     });
   });
   o::LOs ehp_nm0_r(ehp_nm0);
@@ -264,9 +275,11 @@ void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
     auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
     auto center = average(cell_nodes2coords);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
-      for(int i=0; i<3; i++)
-        x_scs_d(pid,i) = center[i];
+      if(particle_mask(pid)) {
+        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+        for(int i=0; i<3; i++)
+          x_scs_d(pid,i) = center[i];
+      }
     });
   });
   p::deviceToHostFp(x_scs_d, scs->getSCS<0>() );
@@ -313,7 +326,7 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 1;
+  const int numPtcls = 12;
   const int initialElement = 271;
 
   Omega_h::Int ne = mesh.nelems();
@@ -367,7 +380,7 @@ int main(int argc, char** argv) {
   fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
       distance, dx, dy, dz);
 
-  o::LOs elmTags(ne,1, "elmTagVals");
+  o::LOs elmTags(ne, 0, "elmTagVals");
   mesh.add_tag(o::REGION, "has_particles", 1, elmTags);
 
   Kokkos::Timer timer;

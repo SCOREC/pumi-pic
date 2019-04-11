@@ -3,9 +3,13 @@ set(HEADERS
   pumipic_push.hpp
   pumipic_utils.hpp
   pumipic_constants.hpp
+  pumipi_part_construct.hpp
   )
 
-add_library(pumipic INTERFACE)
+set(SOURCES
+  pumipic_part_construct.cpp
+)
+add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>

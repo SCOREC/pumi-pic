@@ -11,6 +11,7 @@ using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
 using particle_structs::distribute_particles;
 
+
 int main(int argc, char* argv[]) {
 
   Kokkos::initialize(argc, argv);
@@ -21,12 +22,13 @@ int main(int argc, char* argv[]) {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  Kokkos::TeamPolicy<Kokkos::OpenMP> po(128, 4);
+  typedef Kokkos::DefaultExecutionSpace exe_space;
+  Kokkos::TeamPolicy<exe_space> po(128, 4);
   int ts = po.team_size();
-  SellCSigma<Type, Kokkos::OpenMP>* scs = 
-    new SellCSigma<Type, Kokkos::OpenMP>(po, 5, 2, ne, np, ptcls_per_elem, ids, true);
-  SellCSigma<Type, Kokkos::OpenMP>* scs2 = 
-    new SellCSigma<Type, Kokkos::OpenMP>(po, 5, 2, ne, np, ptcls_per_elem, ids, 0);
+  SellCSigma<Type, exe_space>* scs =
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, true);
+  SellCSigma<Type, exe_space>* scs2 =
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, 0);
 
   delete [] ptcls_per_elem;
   delete [] ids;

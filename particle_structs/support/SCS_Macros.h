@@ -3,6 +3,7 @@
 
 
 #define PS_PARALLEL_FOR_ELEMENTS(SCS, thread, element_id, ALGORITHM) \
+  typedef Kokkos::DefaultExecutionSpace exe_space; \
   typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView; \
   kkLidView offsets = SCS->offsets_d; \
   kkLidView chunk_size = SCS->chunksz_d; \

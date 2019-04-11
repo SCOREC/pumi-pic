@@ -1,5 +1,6 @@
 #Setting Version Number, Project Name
 cmake_minimum_required (VERSION 3.0)
+cmake_policy(SET CMP0054 NEW)
 project(particle_structures VERSION 0.0.1 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
@@ -20,7 +21,7 @@ if (DEBUG)
    add_definitions(-DDEBUG)
 endif()
 set(debug_flag)
-if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
+if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
   set(debug_flag "-g")
 endif()
 

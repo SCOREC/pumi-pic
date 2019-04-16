@@ -66,7 +66,7 @@ class SellCSigma {
   //  it is a part of.
   int* slice_to_chunk;
   //particle_mask true means there is a particle at this location, false otherwise
-  bool* particle_mask;
+  int* particle_mask;
 
   //offsets into the scs structure
   int* offsets;
@@ -89,6 +89,7 @@ class SellCSigma {
  kkLidView slicesz_d;
  kkLidView num_elems_d;
  kkLidView row_to_element_d;
+ kkLidView particle_mask_d;
 
 #endif
  private: 
@@ -311,7 +312,7 @@ template<class DataTypes, typename ExecSpace>
   }
   
   //Allocate the SCS
-  particle_mask = new bool[offsets[num_slices]];
+  particle_mask = new int[offsets[num_slices]];
   CreateSCSArrays<DataTypes>(scs_data, offsets[num_slices]);
 
   //Fill the SCS
@@ -469,7 +470,8 @@ template<class DataTypes, typename ExecSpace>
   }
 
   //Allocate the Chunks
-  bool* new_particle_mask = new bool[new_offsets[new_nslices]];
+  int* new_particle_mask = new int[new_offsets[new_nslices]];
+  std::memset(new_particle_mask,0,new_offsets[new_nslices]*sizeof(int));
   void* new_scs_data[num_types];
   CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
   
@@ -494,10 +496,8 @@ template<class DataTypes, typename ExecSpace>
 	  int new_index = element_index[new_elem];
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[new_elem] += C;
-	  new_particle_mask[particle] = true;
+	  new_particle_mask[new_index] = 1;
 	}
-	else 
-	  new_particle_mask[particle] = false;
       }
     }
   }
@@ -562,6 +562,9 @@ template <class DataTypes, typename ExecSpace>
 
   row_to_element_d = kkLidView("row_to_element_d", C * num_chunks);
   hostToDevice(row_to_element_d,row_to_element);
+
+  particle_mask_d = kkLidView("particle_mask_d", offsets[num_slices]);
+  hostToDevice(particle_mask_d,particle_mask);
 }
 
 } // end namespace particle_structs

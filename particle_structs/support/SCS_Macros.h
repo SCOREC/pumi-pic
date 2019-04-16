@@ -3,11 +3,13 @@
 
 
 #define PS_PARALLEL_FOR_ELEMENTS(SCS, thread, element_id, ALGORITHM) \
+  typedef Kokkos::DefaultExecutionSpace exe_space; \
   typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView; \
   kkLidView offsets = SCS->offsets_d; \
   kkLidView chunk_size = SCS->chunksz_d; \
   kkLidView slice_to_chunk = SCS->slice_to_chunk_d; \
   kkLidView row_to_element = SCS->row_to_element_d; \
+  kkLidView particle_mask = SCS->particle_mask_d; \
   const int league_size = SCS->num_slices; \
   const int team_size = SCS->C; \
   typedef Kokkos::TeamPolicy<> team_policy; \

@@ -89,6 +89,17 @@ if (ENABLE_KOKKOS)
   target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
   target_link_libraries(particleStructs PRIVATE
     ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
+
+  include(${CMAKE_CURRENT_LIST_DIR}/cmake/detect_kokkos_opts.cmake)
+  detect_kokkos_opts()
+  if (KokkosCore_HAS_CUDA)
+    add_definitions(-DSCS_USE_CUDA)
+    target_compile_definitions(particleStructs INTERFACE -DSCS_USE_CUDA)
+  endif()
+  if (KokkosCore_HAS_OpenMP)
+    add_definitions(-DSCS_USE_OPENMP)
+    target_compile_definitions(particleStructs INTERFACE -DSCS_USE_OPENMP)
+  endif()
 endif()
 
 option(FP64 "Use 64bits for floating point values" ON)

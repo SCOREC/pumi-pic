@@ -77,10 +77,13 @@ class SellCSigma {
 
  //Kokkos Views
 #ifdef KOKKOS_ENABLED
- void transferToDevice();
-
  typedef Kokkos::DefaultExecutionSpace exe_space;
  typedef Kokkos::View<int*, exe_space::device_type> kkLidView;
+
+  void transferToDevice();
+
+  template <typename FunctionType>
+  void parallel_for(FunctionType& fn);
 
  kkLidView offsets_d;
  kkLidView slice_to_chunk_d;
@@ -536,9 +539,8 @@ template<class DataTypes, typename ExecSpace>
 }
 
 
-
 template <class T>
-void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> view, T* data) {
+void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>& view, T* data) {
   typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror hv = 
     Kokkos::create_mirror_view(view);
   for (size_t i = 0; i < hv.size(); ++i)
@@ -547,11 +549,11 @@ void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> v
 }
 
 template <class DataTypes, typename ExecSpace>
-  void SellCSigma<DataTypes, ExecSpace>::transferToDevice() {
+void SellCSigma<DataTypes, ExecSpace>::transferToDevice() {
   offsets_d = kkLidView("offsets_d",num_slices+1);
   hostToDevice(offsets_d,offsets);
 
-  slice_to_chunk_d = kkLidView("slice_to_dhunk_d",num_slices);
+  slice_to_chunk_d = kkLidView("slice_to_chunk_d",num_slices);
   hostToDevice(slice_to_chunk_d,slice_to_chunk);
 
   num_particles_d = kkLidView("num_particles_d",1);
@@ -565,6 +567,41 @@ template <class DataTypes, typename ExecSpace>
 
   particle_mask_d = kkLidView("particle_mask_d", offsets[num_slices]);
   hostToDevice(particle_mask_d,particle_mask);
+}
+
+template <class DataTypes, typename ExecSpace>
+template <typename FunctionType>
+void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn) {
+  FunctionType* fn_d;
+#ifdef SCS_USE_CUDA
+  cudaMalloc(&fn_d, sizeof(FunctionType));
+  cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+#else
+  fn_d = &fn;
+#endif
+  const int league_size = num_slices;
+  const int team_size = C;
+  typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
+  const team_policy policy(league_size, team_size);
+  auto offsets_cpy = offsets_d;
+  auto slice_to_chunk_cpy = slice_to_chunk_d;
+  auto row_to_element_cpy = row_to_element_d;
+  auto particle_mask_cpy = particle_mask_d;
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
+    const int slice = thread.league_rank();
+    const int slice_row = thread.team_rank();
+    const int rowLen = (offsets_cpy(slice+1)-offsets_cpy(slice))/team_size;
+    const int start = offsets_cpy(slice) + slice_row;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (int& j) {
+      const int row = slice_to_chunk_cpy(slice) * team_size + slice_row;
+      const int element_id = row_to_element_cpy(row);
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) {
+        const int particle_id = start+(p*team_size);
+        const int mask = particle_mask_cpy[particle_id];
+        (*fn_d)(element_id, particle_id, mask);
+      });
+    });
+  });
 }
 
 } // end namespace particle_structs

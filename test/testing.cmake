@@ -35,3 +35,13 @@ mpi_test(pseudoPushAndSearch 1
 
 mpi_test(particleToMesh 1
   ./particleToMesh --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
+
+#MPI+X testing
+
+mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube_ptn)
+
+mpi_test(print_partition_pisces_4 4 ./print_partition ${TEST_DATA_DIR}/pisces.msh testing_pisces_ptn)
+
+mpi_test(ptn_loading_cube 2 ./ptn_loading ${TEST_DATA_DIR}/cube.msh testing_cube 1 3)
+
+mpi_test(ptn_loading_pisces 4 ./ptn_loading ${TEST_DATA_DIR}/pisces.msh testing_pisces 3 6)

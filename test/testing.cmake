@@ -36,6 +36,8 @@ endfunction(mpi_test)
 #mpi_test(particleToMesh 1
 #  ./particleToMesh --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
 
+#mpi_test(distToBdryPre 1
+#   ./distToBdryPre --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
+
 mpi_test(distToBdry 1
    ./distToBdry --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
-

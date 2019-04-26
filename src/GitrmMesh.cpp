@@ -6,18 +6,15 @@ namespace o = Omega_h;
 namespace p = pumipic;
 
 /*
-bool gitrm_findDistanceToBdry(const gitrmMesh &gm, 
+bool gitrm_findDistanceToBdry(const GitrmMesh &gm, 
   SellCSigma<Particle>* scs) {
 
-  MESHDATA(gm->mesh);
+  MESHDATA(gm.mesh);
 
-  const auto bdryFacesData = gm.bdryFaces;
-  const auto bdryFacesPtr = gm.bdryFaceInds;
-  
-  auto *scs = pcl->scs;
-  auto &thread = pcl->thread;
+  const auto &bdryFacesData = gm.bdryFaces;
+  const auto &bdryFacesPtr = gm.bdryFaceInds;
 
-  // elem will be declared; pass scs,thread. 
+  // elem will be declared within; pass scs,thread. 
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
     o::LO nFaces = 0;
     const auto *bdryFacesOfElem = getBdryFacesOfElem(bdryFaces,
@@ -26,7 +23,7 @@ bool gitrm_findDistanceToBdry(const gitrmMesh &gm,
     // pid will be declared
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       const auto ref = scs.get(pid); // FIXME 
-      oVector point{0, 0, 0};
+      o::Vector<3> point{0, 0, 0};
       o::Few<o::Real, nFaces> dists({0});
       o::Few< oVector, 3> face;
 
@@ -70,6 +67,9 @@ void GitrmMesh::initNearBdryDistData(){
 
 // No more changes to the bdry faces data; and delete flat arrays
 void GitrmMesh::convert2ReadOnlyCSR() {
+  const auto coords = mesh.coords();
+  const auto face_verts = mesh.ask_verts_of(2);
+
   const auto &bdryFacesW = this->bdryFacesW;  //not used ?
   const auto &numBdryFaceIds = this->numBdryFaceIds;
   const auto &bdryFaceIds = this->bdryFaceIds;
@@ -77,50 +77,24 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   auto &bdryFaceInds = this->bdryFaceInds;
 
   auto nel = mesh.nelems();
-  /*
-  // omega_h parallel_reduce not working !
-  numAddedBdryFaces = o::parallel_reduce(nel, OMEGA_H_LAMBDA(
-    const int i, double& update){
-      update += numBdryFaceIds[i];
-  }, "numAddedBdryFaces");
-  numNearBdryElems = o::parallel_reduce(nel, OMEGA_H_LAMBDA(
-    const int i, double& update){
-      if(numBdryFaceIds[i] >0){
-        update += 1;
-      }
-  }, "numNearBdryElems");
- */
-
-  Kokkos::parallel_reduce("numAddedBdryFaces", nel, 
-       KOKKOS_LAMBDA(const int &i, o::LO &lsum ) {
-     lsum += numBdryFaceIds[i];
-  }, numAddedBdryFaces);
-
-  Kokkos::parallel_reduce("numNearBdryElems", nel, 
-       KOKKOS_LAMBDA(const int &i, o::LO &lsum ) {
-     if(numBdryFaceIds[i] >0){
-       lsum += 1;
-     }
-  }, numNearBdryElems);
-
-
-  OMEGA_H_CHECK(numNearBdryElems > 0);
-  OMEGA_H_CHECK(numAddedBdryFaces > 0);
-
+  auto S = SIZE_PER_FACE;
   // Convert to CSR.
   //Copy to host
   o::HostRead<o::LO> numBdryFaceIdsH(numBdryFaceIds);
   // Done on host, since ordered sum of all previous element ids required for CSR.
-  // This is per near bdry element
-  o::HostWrite<o::LO> bdryFaceIndsCsr(nel+1, 0);
+  // Not actual index of bdryFaces, but has to x by SIZE_PER_FACE to get it
+  o::HostWrite<o::LO> bdryFaceIndsCsr(nel+1);
+  //Num of faces
   o::Int sum = 0;
   o::Int e = 0;
-  for(e=0; e<nel; ++e){
-    bdryFaceIndsCsr[e] = sum * SIZE_PER_FACE;
+  for(e=0; e < nel; ++e){
+    bdryFaceIndsCsr[e] = sum; // * S;
      sum += numBdryFaceIdsH[e];
   }
   // last entry
-  bdryFaceIndsCsr[e] = bdryFaceIndsCsr[e-1];
+  bdryFaceIndsCsr[e] = sum;
+
+  numAddedBdryFaces = sum;
 
   //CSR indices
   bdryFaceInds = o::LOs(bdryFaceIndsCsr.write()); //TODO check
@@ -130,25 +104,42 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   // Replace flat arrays of Write<> by convenient,
   // Kokkos::View<double[numAddedBdryFaces][SIZE_PER_FACE]> ..  ?
 
-  o::Write<o::Real> bdryFacesCsrW(numAddedBdryFaces * SIZE_PER_FACE, 0);
-
+  o::Write<o::Real> bdryFacesCsrW(numAddedBdryFaces * S, 0);
+  
+  //Copy data
   auto convert = OMEGA_H_LAMBDA(o::LO elem){
-    // Index points to data counting spread out face or x,y,z components.
+    // Index points to data counting spread out face or x,y,z components. ?
     // This calculates face number from the above. 
-    auto beg = bdryFaceInds[elem] / SIZE_PER_FACE;
-    auto end = bdryFaceInds[elem+1] / SIZE_PER_FACE;
+
+    // face index is NOT the actual array index of face data.
+    auto beg = bdryFaceInds[elem];  //TODO check
+    auto end = bdryFaceInds[elem+1];
     if(beg == end){
       return;
     }
+    OMEGA_H_CHECK((end - beg) == numBdryFaceIds[elem]);
+
     // Source position calculated using pre-assigned fixed number of faces
     // per element. Here face number (outer loop) is used to get absolute position.
+    // Size_per_face was effectively 1 less so far, since the face id was not added.
+    // The face_id is added as Real at the 1st entry of each face.
 
-    for(o::LO i = beg; i<end; ++i){ //memcopy ?
-      // Copy as Real
-      bdryFacesCsrW[i*SIZE_PER_FACE] = bdryFaceIds[i];
-      for(o::LO j= 1; j<SIZE_PER_FACE+1; ++j){
-        bdryFacesCsrW[i*SIZE_PER_FACE + j] = bdryFacesW[elem*i*SIZE_PER_FACE + j];
+    // Source face size is 1 less.
+    //auto bfd = elem*BDRYFACE_SIZE*(S-1);
+    auto bfi = elem*BDRYFACE_SIZE;
+    o::Real fdat[9] = {0};
+
+    // Looping over implicit face numbers
+    for(o::LO i = beg; i < end; ++i){
+      p::get_face_data_by_id(face_verts, coords, bdryFaceIds[bfi], fdat);
+
+      // Face index is x by size_per_face 
+      bdryFacesCsrW[i*S] = bdryFaceIds[bfi];
+      for(o::LO j=1; j<S; ++j){
+        //bdryFacesCsrW[i*S + j] = bdryFacesW[bfd + j-1]; //TODO check this
+        bdryFacesCsrW[i*S + j] = fdat[j-1];
       }
+      ++bfi;
     }    
   };
   o::parallel_for(nel, convert, "Convert to CSR write");
@@ -409,17 +400,17 @@ void GitrmMesh::preProcessDistToBdry() {
 
 }
 
-void GitrmMesh::printBdryFaceIds(bool printIds=true, o::LO minNums=10){
+void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums){
   auto &numBdryFaceIds = this->numBdryFaceIds;
   auto &bdryFaceIds = this->bdryFaceIds;
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
   auto print = OMEGA_H_LAMBDA(o::LO elem){
-    o::LO nb = numBdryFaceIds[elem];
-    if(nb > minNums){
+    o::LO num = numBdryFaceIds[elem];
+    if(num > minNums){
       printf(" %d (tot %d ) :: ", elem, numBdryFaceIds[elem]);
       if(printIds){
-        for(o::LO i=0; i<nb; ++i){
-          o::LO ind = elem* BDRYFACE_SIZE+i;
+        for(o::LO i=0; i<num; ++i){
+          o::LO ind = elem * BDRYFACE_SIZE + i;
           printf("%d( %d ), ", bdryFaceIds[ind], bdryFaceElemIds[ind]);
         }
       }
@@ -427,9 +418,32 @@ void GitrmMesh::printBdryFaceIds(bool printIds=true, o::LO minNums=10){
     }
   };
   
-  o::LO nums = mesh.nelems();
-  o::parallel_for(nums, print, "printAFewBdryFaceNums");
+  o::parallel_for(mesh.nelems(), print, "printBdryFaceIds");
   printf("\nDEPTH: %0.5f \n", DEPTH_DIST2_BDRY);
 }
 
 
+void GitrmMesh::printBdryFacesCSR(bool printIds, o::LO minNums){
+  auto &bdryFaceIds = this->bdryFaceIds;
+  auto &bdryFaceElemIds = this->bdryFaceElemIds;
+  auto &bdryFaceInds = this->bdryFaceInds;
+  auto print = OMEGA_H_LAMBDA(o::LO elem){
+    o::LO ind1 = bdryFaceInds[elem];
+    o::LO ind2 = bdryFaceInds[elem+1];
+    auto nf = ind2 - ind1;
+
+    if(nf > minNums){
+      printf("e_%d #%d  %d  %d \n", elem, nf, ind1, ind2);
+      if(printIds){
+        for(o::LO i=0; i<nf; ++i){
+          o::LO ind = elem * BDRYFACE_SIZE+i;
+          printf("%d( %d ), ", bdryFaceIds[ind], bdryFaceElemIds[ind]);
+        }
+      }
+      printf("\n");
+    }
+  };
+  printf("\nCSR: \n");
+  o::parallel_for(mesh.nelems(), print, "printBdryFacesCSR");
+  printf("\nDEPTH: %0.5f \n", DEPTH_DIST2_BDRY);
+}

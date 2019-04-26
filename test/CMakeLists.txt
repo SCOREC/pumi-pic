@@ -13,7 +13,8 @@ endfunction(make_test)
 #make_test(push_and_search test_push_and_search.cpp)
 #make_test(pseudoPushAndSearch pseudoPushAndSearch.cpp)
 #make_test(particleToMesh pseudoPtclToMesh.cpp)
-make_test(distToBdry dist2BdryPre.cpp)
+#make_test(distToBdryPre dist2BdryPre.cpp)
+make_test(distToBdry dist2Bdry.cpp)
 
 include(testing.cmake)
 

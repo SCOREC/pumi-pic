@@ -7,6 +7,14 @@
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
 
+#include <psTypes.h>
+#include <SellCSigma.h>
+#include <SCS_Macros.h>
+#include <Distribute.h>
+#include <Kokkos_Core.hpp>
+
+
+
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 
@@ -472,7 +480,7 @@ bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, con
   return found;
 } //search_mesh
 */
-/*
+
 // Voronoi regions of triangle, to find nearest point on triangle
 enum TriRegion {
   VTXA, 
@@ -487,31 +495,31 @@ enum TriRegion {
 
 //Ref: Real-time Collision Detection by Christer Ericson, 2005.
 //ptp = ref point; ptq = nearest point on triangle; abc = triangle
-OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc, 
-  const oVector &ptp, oVector &ptq) {
+OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> &abc, 
+  const o::Vector<3> &ptp, o::Vector<3> &ptq) {
   // Check if P in vertex region outside A
-  oVector pta = abc[0];
-  oVector ptb = abc[1];
-  oVector ptc = abc[2];
+  o::Vector<3> pta = abc[0];
+  o::Vector<3> ptb = abc[1];
+  o::Vector<3> ptc = abc[2];
 
-  oVector vab = ptb - pta;
-  oVector vac = ptc - pta;
-  oVector vap = ptp - pta;
+  o::Vector<3> vab = ptb - pta;
+  o::Vector<3> vac = ptc - pta;
+  o::Vector<3> vap = ptp - pta;
   o::Real d1 = osh_dot(vab, vap);
   o::Real d2 = osh_dot(vac, vap);
   if (d1 <= 0 && d2 <= 0) {
     // barycentric coordinates (1,0,0)
-    qpt = pta;
+    ptq = pta;
     return VTXA; 
   }
 
   // Check if P in vertex region outside B
-  oVector vbp = ptp - ptb;
+  o::Vector<3> vbp = ptp - ptb;
   o::Real d3 = osh_dot(vab, vbp);
   o::Real d4 = osh_dot(vac, vbp);
   if (d3 >= 0 && d4 <= d3){ 
     // barycentric coordinates (0,1,0)
-    qpt = ptb;
+    ptq = ptb;
     return VTXB; 
   }
 
@@ -520,18 +528,18 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc,
   if (vc <= 0 && d1 >= 0 && d3 <= 0) {
     o::Real v = d1 / (d1 - d3);
     // barycentric coordinates (1-v,v,0)
-    qpt = pta + v * vab; 
+    ptq = pta + v * vab; 
     return EDGEAB;
   }
 
   // Check if P in vertex region outside C
-  oVector vcp = ptp - ptc;
+  o::Vector<3> vcp = ptp - ptc;
   o::Real d5 = osh_dot(vab, vcp);
   o::Real d6 = osh_dot(vac, vcp);
   if (d6 >= 0 && d5 <= d6) { 
     // barycentric coordinates (0,0,1)
-    qpt = ptc; 
-    return VERTC;
+    ptq = ptc; 
+    return VTXC;
   }
 
   // Check if P in edge region of AC, if so return projection of P onto AC
@@ -539,7 +547,7 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc,
   if (vb <= 0 && d2 >= 0 && d6 <= 0) {
     o::Real w = d2 / (d2 - d6);
     // barycentric coordinates (1-w,0,w)
-    qpt = pta + w * vac; 
+    ptq = pta + w * vac; 
     return EDGEAC;
   }
 
@@ -548,7 +556,7 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc,
   if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
     o::Real w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
     // barycentric coordinates (0,1-w,w)
-    qpt =  ptb + w * (ptc - ptb); 
+    ptq =  ptb + w * (ptc - ptb); 
     return EDGEBC;
   }
 
@@ -557,10 +565,50 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc,
   o::Real v = vb * inv;
   o::Real w = vc * inv;
   // u*a + v*b + w*c, u = va * inv = 1 - v - w
-  qpt =  pta + v * vab+ w * vac; 
+  ptq =  pta + v * vab+ w * vac; 
   return TRIFACE;
 }
-*/
+
+// TODO define scs with sufficient members
+bool findDistanceToBdry(o::Mesh &mesh,  SellCSigma<Particle>* scs,
+   o::Reals &bdryFaces, o::LOs &bdryFaceInds) {
+
+  const auto nel = mesh.nelems(); \
+  const auto coords = mesh.coords(); \
+  const auto mesh2verts = mesh.ask_elem_verts(); \
+  const auto dual_faces = mesh.ask_dual().ab2b; \
+  const auto dual_elems= mesh.ask_dual().a2ab; \
+  const auto face_verts = mesh.ask_verts_of(2); \
+  const auto down_r2f = mesh.ask_down(3, 2).ab2b; \
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+
+
+  // elem will be declared within; pass scs,thread. 
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
+    o::LO nFaces = 0;
+    const auto *bdryFacesOfElem = getBdryFacesOfElem(bdryFaces,
+                          bdryFaceInds, elem, nFaces);
+
+    // pid will be declared
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      const auto ref = scs.get(pid); // FIXME 
+      o::Vector<3> point{0, 0, 0};
+      o::Few<o::Real, nFaces> dists({0});
+      o::Few< o::Vector<3>, 3> face;
+
+      for( fi = 0; fi < nFaces; ++fi ){
+        getTetFaceVectors(bdryFacesOfElem, fi, face);
+        auto v = findNearestPointOnTriangle(face, ref, point); 
+        if(v == VERTB) std::cout << "vertex B \n";
+
+        dists[face] = osh_dot(point - ref, point - ref);
+      }
+      o::Real dist = std::min(dists); //FIXME 
+      scs.distToBdry[pid] = dist;
+    });
+  });
+}
+
 
 // Only device
 OMEGA_H_INLINE const o::Real *getBdryFacesOfElem( o::Reals &bdryFacesData,
@@ -603,6 +651,18 @@ OMEGA_H_INLINE bool if_exists_in_array(o::LO &ids, o::LO eid,
 */
 
 
+OMEGA_H_INLINE void get_face_data_by_id(const Omega_h::LOs &face_verts, 
+  const Omega_h::Reals &coords,  const o::LO face_id, o::Real (&fdat)[9]){
+
+  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id);
+  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+  for(auto i=0; i<3; ++i){
+    for(auto j=0; j<3; ++j){
+      fdat[i] = face[i][j];
+    }
+  }
+}
+
 //OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet, 
 //  const o::Write<o::Real> &data, const o::LO start = 0, 
 //  const o::Real depth = 0.001, const o::LO dim = 3){
@@ -643,37 +703,6 @@ OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet,
   }
   return false;
 }
-
- // Not used, since this function call from lambda, to modify data, 
- // forces passed argument data to be const
- //Not checking if id already in.
- OMEGA_H_INLINE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids,
-     o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid,
-     o::LO elem, const o::Matrix<3, 3> &face){
-   OMEGA_H_CHECK(fi < fnums);
-   //memcpy ?
-   for(o::LO i=0; i<size; ++i){
-     for(o::LO j=0; j<3; j++){
-       data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
-     }
-   }
-   ids[elem*fnums + fi] = fid;
- }
-
- // Not used; function call from lambda, to change data, forces data to be const
- // Total exposed faces has to be passed in as nbdry; no separate checking
- OMEGA_H_INLINE void updateAdjElemFlags(const o::LOs &dual_elems, const o::LOs &dual_faces, o::LO elem,
-   o::Write<o::LO> &bdryFlags, o::LO nbdry=0){
-
-   auto dface_ind = dual_elems[elem];
-   for(o::LO i=0; i<4-nbdry; ++i){
-     auto adj_elem  = dual_faces[dface_ind];
-     o::LO val = 1;
-     Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
-     ++dface_ind;
-   }
- }
-
 
 
 } //namespace

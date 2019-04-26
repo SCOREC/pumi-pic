@@ -1,4 +1,4 @@
-//#include "pumipic_adjacency.hpp"
+#include "pumipic_adjacency.hpp"
 #include "GitrmMesh.hpp"
 #include "unit_tests.hpp"
 #include <psTypes.h>
@@ -421,9 +421,8 @@ int main(int argc, char** argv) {
   //preProcessDistToBdry(mesh, bdryFacesW, numBdryFaceIds, bdryFaceIds, bdryFlags);
   gm.preProcessDistToBdry();
   gm.printBdryFaceIds(false, 20); //numBdryFaceIds, mesh);  
-
-  fprintf(stderr, "time (seconds) %f\n", timer.seconds());
-  timer.reset();
+  gm.convert2ReadOnlyCSR();
+  gm.printBdryFacesCSR();
 
   fprintf(stderr, "done\n");
   return 0;

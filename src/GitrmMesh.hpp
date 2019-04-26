@@ -1,26 +1,23 @@
 #ifndef GITRM_MESH_HPP
 #define GITRM_MESH_HPP
 
-#include <iostream>
-
-#include "Omega_h_for.hpp"
-#include "Omega_h_adj.hpp"
-#include "Omega_h_element.hpp"
-
 #include "pumipic_adjacency.hpp"
+
+//#include <psTypes.h>
+//#include <SellCSigma.h>
+//#include <SCS_Macros.h>
+
 
 namespace o = Omega_h;
 namespace p = pumipic;
 
-// This class is not a device class since 'this' is not captured by 
-// reference in order to access class members within lambdas. 
 
 // The define is good for device too, or pass by template ?
 #ifndef DEPTH_DIST2_BDRY
 #define DEPTH_DIST2_BDRY 0.001 // 1mm
 #endif
 #ifndef BDRYFACE_SIZE
-#define BDRYFACE_SIZE 500
+#define BDRYFACE_SIZE 100
 #endif
 
 // 3 vtx and 1 id as Real
@@ -37,9 +34,10 @@ enum { SIZE_PER_FACE = 10 };
   const auto down_r2f = mesh.ask_down(3, 2).ab2b; \
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
+// This class is not a device class since 'this' is not captured by 
+// reference in order to access class members within lambdas. 
 class GitrmMesh{
 public:
-  // Pre-process
   GitrmMesh(o::Mesh &);
   ~GitrmMesh(){}
 
@@ -50,7 +48,8 @@ public:
   void initNearBdryDistData();
   void convert2ReadOnlyCSR();
   void copyBdryFacesToSelf();
-  void printBdryFaceIds(bool, o::LO);
+  void printBdryFaceIds(bool printIds=true, o::LO minNums=0);
+  void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
 
 /** Space for a fixed # of Bdry faces is assigned per element, rather than 
    using a common data to be accessed using face id. 
@@ -80,48 +79,43 @@ public:
   // convert to Read only CSR after write. Store bdryFaceIds as Real
   // Reals, LOs are const & have const cast of device data
   o::Reals bdryFaces;
+  // Indexes' size is nel+1. Not actual index, but has to x by size of face
   o::LOs bdryFaceInds;
 };
-//void preProcessDistToBdry(o::Real depth, o::Mesh &mesh, o::Write<o::Real> &bdryFacesW, 
- //   o::Write<o::LO> &numBdryFaceIds, o::Write<o::LO> &bdryFaceIds, o::Write<o::LO> &bdryFlags);
-/*void convert2ReadOnlyCSR(o::Mesh &mesh, o::Write<o::Real> &bdryFacesW, o::Write<o::LO> &numBdryFaceIds,
-      o::Write<o::LO> &bdryFaceIds, o::Write<o::LO> &bdryFlags, o::Write<o::Real> &bdryFaces, 
-      o::Write<o::LO> &bdryFaceInds);
-*/
+
+
+//bool gitrm_findDistanceToBdry(const GitrmMesh &gm, 
+ //    SellCSigma<Particle>* scs);
+
+ // Not used, since this function call from lambda, to modify data, 
+ // forces passed argument data to be const
+ //Not checking if id already in.
+ OMEGA_H_INLINE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids,
+     o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid,
+     o::LO elem, const o::Matrix<3, 3> &face){
+   OMEGA_H_CHECK(fi < fnums);
+   //memcpy ?
+   for(o::LO i=0; i<size; ++i){
+     for(o::LO j=0; j<3; j++){
+       data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
+     }
+   }
+   ids[elem*fnums + fi] = fid;
+ }
+
+ // Not used; function call from lambda, to change data, forces data to be const
+ // Total exposed faces has to be passed in as nbdry; no separate checking
+ OMEGA_H_INLINE void updateAdjElemFlags(const o::LOs &dual_elems, const o::LOs &dual_faces, o::LO elem,
+   o::Write<o::LO> &bdryFlags, o::LO nbdry=0){
+
+   auto dface_ind = dual_elems[elem];
+   for(o::LO i=0; i<4-nbdry; ++i){
+     auto adj_elem  = dual_faces[dface_ind];
+     o::LO val = 1;
+     Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
+     ++dface_ind;
+   }
+ }
+
+
 #endif// define
-
-/*
-bool gitrm_findDistanceToBdry(const gitrmMesh &gm, 
-  SellCSigma<Particle>* scs);
-*/
-
-/*
-//Not checking if id already in.
-OMEGA_H_INLINE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids, 
-    o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid, 
-    o::LO elem, const o::Matrix<3, 3> &face){
-  OMEGA_H_CHECK(fi < fnums);
-  //memcpy ?
-  for(o::LO i=0; i<size; ++i){
-    for(o::LO j=0; j<3; j++){
-      data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
-    }
-  }
-  ids[elem*fnums + fi] = fid;  
-}
-
-// flags are const ref ?
-// Total exposed faces has to be passed in as nbdry; no separate checking 
-OMEGA_H_INLINE void updateAdjElemFlags(const o::LOs &dual_elems, const o::LOs &dual_faces, o::LO elem, 
-  o::Write<o::LO> &bdryFlags, o::LO nbdry=0){
-
-  auto dface_ind = dual_elems[elem];
-  for(o::LO i=0; i<4-nbdry; ++i){
-    auto adj_elem  = dual_faces[dface_ind];
-    o::LO val = 1;
-    Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
-    ++dface_ind;
-  }
-}
-*/
-

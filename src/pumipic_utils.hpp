@@ -111,6 +111,7 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
   return true;
 }
 
+/*
 void print_matrix(const Omega_h::Matrix<3, 4> &M)
 {
   std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
@@ -142,6 +143,7 @@ void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
     print_osh_vector(dest, "point");
     print_array(bcc.data(), 4, "BCoords");
 }
+*/
 } //namespace
 #endif
 

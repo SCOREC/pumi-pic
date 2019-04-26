@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
     {
   #ifdef DEBUG
       std::cout << "Barycentric test : " << bcname[i] <<  " \n";
-      pumipic::print_matrix(tet);
+      //pumipic::print_matrix(tet);
   #endif // DEBUG
       index = Omega_h::simplex_opposite_template(3, 2, i);
       bool res = test_barycentric_tet(tet, tet[index], bcc_mat[i].data());

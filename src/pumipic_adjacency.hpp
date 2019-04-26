@@ -10,10 +10,10 @@
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 
-
-//TODO use .get() to access data ?
+namespace o = Omega_h;
 namespace pumipic
 {
+  const int verbose = 0; //TODO move to pumipic_constants.hpp as inline/static
 
 /*
    see description: Omega_h_simplex.hpp, Omega_h_refine_topology.hpp line 26
@@ -28,47 +28,45 @@ namespace pumipic
             \ | /
               1
 */
-//retrieve face coords in the Omega_h order
-OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
-          const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc)
-{
+//retrieve face coords in the o order
+OMEGA_H_INLINE void get_face_coords(const o::Matrix<DIM, 4> &M,
+          const o::LO iface, o::Few<o::Vector<DIM>, 3> &abc) {
+
    //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
     OMEGA_H_CHECK(iface<4 && iface>=0);
-    abc[0] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 0)];
-    abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
-    abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
+    abc[0] = M[o::simplex_down_template(DIM, FDIM, iface, 0)];
+    abc[1] = M[o::simplex_down_template(DIM, FDIM, iface, 1)];
+    abc[2] = M[o::simplex_down_template(DIM, FDIM, iface, 2)];
 
-#if DEBUG >2
-    std::cout << "face " << iface << ": \n"; 
-#endif // DEBUG
+    if(verbose > 1)
+        std::cout << "face " << iface << ": \n"; 
 }
 
-OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-          const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<DIM>, 2> &ab)
-{
+OMEGA_H_INLINE void get_edge_coords(const o::Few<o::Vector<DIM>, 3> &abc,
+          const o::LO iedge, o::Few<o::Vector<DIM>, 2> &ab) {
+
    //edge_vert:0,1; 1,2; 2,0
-    ab[0] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 0)];
-    ab[1] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 1)];
-#ifdef DEBUG
-    std::cout << "abc_index " << ab[0].data() << ", " << ab[1].data()
-              << " iedge:" << iedge << "\n";
-#endif // DEBUG
+    ab[0] = abc[o::simplex_down_template(FDIM, 1, iedge, 0)];
+    ab[1] = abc[o::simplex_down_template(FDIM, 1, iedge, 1)];
+    if(verbose > 2)
+        std::cout << "abc_index " << ab[0].data() << ", " << ab[1].data()
+                  << " iedge:" << iedge << "\n";
 }
 
-OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
-    const Omega_h::Few<Omega_h::Vector<DIM>, 3>& face, const Omega_h::LO faceid )
-{
-    Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
+OMEGA_H_INLINE void check_face(const o::Matrix<DIM, 4> &M,
+    const o::Few<o::Vector<DIM>, 3>& face, const o::LO faceid ){
+
+    o::Few<o::Vector<DIM>, 3> abc;
     get_face_coords( M, faceid, abc);
 
-#ifdef DEBUG
-    print_array(abc[0].data(),3, "a");
-    print_array(face[0].data(),3, "face1");
-    print_array(abc[1].data(), 3, "b");
-    print_array(face[1].data(), 3, "face2");
-    print_array(abc[2].data(), 3, "c");
-    print_array(face[2].data(), 3, "face3");
-#endif
+    /*if(verbose > 2) {
+      print_array(abc[0].data(),3, "a");
+      print_array(face[0].data(),3, "face1");
+      print_array(abc[1].data(), 3, "b");
+      print_array(face[1].data(), 3, "face2");
+      print_array(abc[2].data(), 3, "c");
+      print_array(face[2].data(), 3, "face3");
+    } */
     OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), DIM)); //a
     OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), DIM)); //b
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
@@ -76,45 +74,47 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
 //TODO Warning: Check opposite_template use in this before using
-OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
+OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Write<Omega_h::Real> &bcc)
 {
-  for(Omega_h::LO i=0; i<3; ++i) bcc[i] = -1;
+  OMEGA_H_CHECK(!(std::isnan(pos[0]) || std::isnan(pos[1]) || std::isnan(pos[2])));
+
+  for(Omega_h::LO i=0; i<3; ++i) bcc[i] = 0;
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
   for(Omega_h::LO iface=0; iface<4; ++iface) // TODO last not needed
   {
-    get_face_coords(Mat, iface, abc);
+    get_face_coords(mat, iface, abc);
     auto vab = abc[1] - abc[0]; //b - a;
     auto vac = abc[2] - abc[0]; //c - a;
     auto vap = pos - abc[0]; // p - a;
-    vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
+    vals[iface] = osh_dot(vap, o::cross(vac, vab)); //ac, ab NOTE
 
-#if DEBUG >2
-    std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
-    print_array(abc[0].data(),3);
-    print_array(abc[1].data(),3);
-    print_array(abc[2].data(),3);
-    print_array(pos.data(),3, "point");
-    std::cout << "\n";
-#endif // DEBUG
+    if(verbose > 2) {
+      std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
+     /*
+      print_array(abc[0].data(),3);
+      print_array(abc[1].data(),3);
+      print_array(abc[2].data(),3);
+      print_array(pos.data(),3, "point");
+      std::cout << "\n";
+    */
+    }
   }
   //volume using bottom face=0
-  get_face_coords(Mat, 0, abc);
-  auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
+  get_face_coords(mat, 0, abc);
+  auto vtx3 = o::simplex_opposite_template(DIM, FDIM, 0);
   OMEGA_H_CHECK(3 == vtx3);
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
-  Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
-  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
-  Omega_h::Real inv_vol = 0.0;
+  o::Vector<DIM> cross_ac_ab = o::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
+  o::Real vol6 = osh_dot(mat[vtx3]-mat[0], cross_ac_ab);
+  o::Real inv_vol = 0.0;
   if(vol6 > EPSILON) // TODO tolerance
     inv_vol = 1.0/vol6;
-  else
-  {
-#if DEBUG >0  
-    std::cout << vol6 << "too low \n";
-#endif 
+  else {
+    if(verbose > 0)  
+      std::cout << "Error: Volume " << vol6 << " too small \n";
     return 0;
   }
   bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
@@ -122,124 +122,164 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   bcc[2] = inv_vol * vals[2];
   bcc[3] = inv_vol * vals[3]; // 1-others
 
-  return 1; //success
+  return 0; //success
 }
 
 
+template <typename T>
+OMEGA_H_INLINE double interpolateTet(const T &field, const double (&bcc)[4],
+  const Omega_h::LO ielem)
+{
+  //bcc in face order, field in vertex order ? TODO
+  OMEGA_H_CHECK(all_positive(bcc, 4)==1);
+  double val = 0;
+  for(Omega_h::LO fi=0; fi<4; ++fi) //faces
+  {
+      Omega_h::LO d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
+      Omega_h::LO fd = d + 4*ielem;
+      val = val + bcc[fi]*field[fd];
+  }
+  return val;
+}
+
+template <typename T>
+OMEGA_H_INLINE void interpolate3dFieldTet(const T &fieldx, const T &fieldy,
+  const T &fieldz, const double (&bcc)[4], const Omega_h::LO ielem, Omega_h::Vector<3> &fv)
+{
+    Omega_h::Real fx = interpolateTet(fieldx,  bcc,  ielem);
+    Omega_h::Real fy = interpolateTet(fieldy,  bcc,  ielem);
+    Omega_h::Real fz = interpolateTet(fieldz,  bcc,  ielem);
+    fv = {fx, fy, fz};
+}
+
+
+OMEGA_H_INLINE void findTetCoords(const Omega_h::LOs &mesh2verts,
+const Omega_h::Reals &coords, const Omega_h::LO ielem, Omega_h::Matrix<DIM, 4> &mat)
+{
+  const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
+  mat = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+}
+
+OMEGA_H_INLINE void findBCCoordsInTet(const Omega_h::Reals &coords, const Omega_h::LOs &mesh2verts,
+   const Omega_h::Vector<3> &xyz, const Omega_h::LO ielem, Omega_h::Write<Omega_h::Real> &bcc)
+{
+  Omega_h::Matrix<3, 4> mat;
+  findTetCoords(mesh2verts, coords, ielem, mat);
+  const bool res = find_barycentric_tet(mat, xyz, bcc);
+  OMEGA_H_CHECK(res==0);
+  OMEGA_H_CHECK(all_positive(bcc.data(), 4)==1);
+}
+
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 // corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge) ?
-OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-     const Omega_h::Vector<3> &xpoint, Omega_h::Write<Omega_h::Real> &bc)
-{
-  Omega_h::Vector<DIM> a = abc[0];
-  Omega_h::Vector<DIM> b = abc[1];
-  Omega_h::Vector<DIM> c = abc[2];
-  Omega_h::Vector<DIM> cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
-  Omega_h::Vector<DIM> norm = Omega_h::normalize(cross);
-  Omega_h::Real area = osh_dot(norm, cross);
+OMEGA_H_INLINE bool find_barycentric_tri_simple(const o::Few<o::Vector<DIM>, 3> &abc,
+     const o::Vector<3> &xpoint, o::Write<o::Real> &bc) {
+
+  o::Vector<DIM> a = abc[0];
+  o::Vector<DIM> b = abc[1];
+  o::Vector<DIM> c = abc[2];
+  o::Vector<DIM> cross = 1/2.0 * o::cross(b-a, c-a); //NOTE order
+  o::Vector<DIM> norm = o::normalize(cross);
+  o::Real area = osh_dot(norm, cross);
 
   if(std::abs(area) < 1e-6)  //TODO
     return 0;
-  Omega_h::Real fac = 1/(area*2.0);
-  bc[0] = fac * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
-  bc[1] = fac * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
-  bc[2] = fac * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
+  o::Real fac = 1/(area*2.0);
+  bc[0] = fac * osh_dot(norm, o::cross(b-a, xpoint-a));
+  bc[1] = fac * osh_dot(norm, o::cross(c-b, xpoint-b));
+  bc[2] = fac * osh_dot(norm, o::cross(xpoint-a, c-a));
 
   return 1;
 }
 
-OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-    const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, Omega_h::LO &edge, bool reverse=false )
-{
-  bool debug=0;
+OMEGA_H_INLINE bool line_triangle_intx_simple(const o::Few<o::Vector<DIM>, 3> &abc,
+    const o::Vector<DIM> &origin, const o::Vector<DIM> &dest,
+    o::Vector<DIM> &xpoint, o::LO &edge, bool reverse=false ) {
+
   edge = -1;
   xpoint = {0, 0, 0};
 
-  if(debug) {
-    print_osh_vector(origin, "origin", false);
-    print_osh_vector(dest, "dest");
+  if(verbose > 1) {
+   // print_osh_vector(origin, "origin", false);
+   // print_osh_vector(dest, "dest");
   }
     
   //Boundary exclusion. Don't set it globally and change randomnly.
-  const Omega_h::Real bound_intol = 0;//SURFACE_EXCLUDE; //TODO optimum value ?
+  const o::Real bound_intol = 0;//SURFACE_EXCLUDE; //TODO optimum value ?
 
   bool found = false;
-  const Omega_h::Vector<DIM> line = dest - origin;
-  const Omega_h::Vector<DIM> edge0 = abc[1] - abc[0];
-  const Omega_h::Vector<DIM> edge1 = abc[2] - abc[0];
-  Omega_h::Vector<DIM> normv = Omega_h::cross(edge0, edge1);
-  if(reverse)
-  {
+  const o::Vector<DIM> line = dest - origin;
+  const o::Vector<DIM> edge0 = abc[1] - abc[0];
+  const o::Vector<DIM> edge1 = abc[2] - abc[0];
+  o::Vector<DIM> normv = o::cross(edge0, edge1);
+
+  if(reverse) {
     normv = -1*normv;
-    if(debug)
+    if(verbose > 0)
       std::cout << "Surface normal reversed \n";
 
   }
-  const Omega_h::Vector<DIM> snorm_unit = Omega_h::normalize(normv);
-  const Omega_h::Real dist2plane = osh_dot(abc[0] - origin, snorm_unit);
-  const Omega_h::Real proj_lined =  osh_dot(line, snorm_unit);
-  const Omega_h::Vector<DIM> surf2dest = dest - abc[0];
+  const o::Vector<DIM> snorm_unit = o::normalize(normv);
+  const o::Real dist2plane = osh_dot(abc[0] - origin, snorm_unit);
+  const o::Real proj_lined =  osh_dot(line, snorm_unit);
+  const o::Vector<DIM> surf2dest = dest - abc[0];
 
-  if(std::abs(proj_lined) >0)
-  {
-    const Omega_h::Real par_t = dist2plane/proj_lined;
-    if(debug)
+  if(std::abs(proj_lined) >0) {
+    const o::Real par_t = dist2plane/proj_lined;
+    if(verbose > 2)
       std::cout << " abs(proj_lined)>0;  par_t= " << par_t << " dist2plane= "
              <<  dist2plane << "; proj_lined= " << proj_lined << ";\n";
-    if (par_t > bound_intol && par_t <= 1.0) //TODO test tol value
-    {
+    if (par_t > bound_intol && par_t <= 1.0) {//TODO test tol value
       xpoint = origin + par_t * line;
-      Omega_h::Write<Omega_h::Real> bcc{3,0};
+      o::Write<o::Real> bcc{3,0};
       bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
-      if(debug)
-        print_array(bcc.data(), 3, "BCC");
-      if(res)
-      {
-        if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) //TODO all zeros ?
-        {
+      if(verbose > 2)
+       // print_array(bcc.data(), 3, "BCC");
+      if(res) {
+        if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) { //TODO all zeros ?
           edge = min_index(bcc.data(), 3, EPSILON); //TODO test tolerance
         }
-        else
-        {
-          const Omega_h::Real proj = osh_dot(snorm_unit, surf2dest);
+        else {
+          const o::Real proj = osh_dot(snorm_unit, surf2dest);
           if(proj >0) found = true;
-          else if(proj<0)
-          {
-            if(debug)
+          else if (proj<0) {
+            if(verbose > 1)
               std::cout << "Particle Entering domain\n";
           }
-          else if(almost_equal(proj,0.0)) //TODO use tol
-          { 
-            if(debug)
+          else if(almost_equal(proj,0.0)) {//TODO use tol
+            if(verbose > 1)
               std::cout << "Particle path on surface\n";
           }
         }
       }
-      if(debug)
-        print_array(bcc.data(), 3, "BCCtri");
+      //if(verbose > 2)
+       // print_array(bcc.data(), 3, "BCCtri");
     }
-    else if(par_t >1.0)
-    {
-      if(debug)
+    else if(par_t >1.0) {
+      if(verbose > 0)
         std::cout << "Error** Line origin and destination are on the same side of face \n";
     }
-    else if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
-    {
-      if(debug)
+    else if(par_t < bound_intol) {// dist2plane ~0. Line contained in plane, no intersection?
+      if(verbose > 1)
         std::cout << "No/Self-intersection of ptcl origin with plane at origin. t= " << par_t << " "
                 << dist2plane << " " << proj_lined << "\n";
     }
   }
-  else
-  {
-    std::cout << "Line and plane are parallel \n";
+  else if(verbose > 1) {
+      std::cout << "Line and plane are parallel \n";
   }
   return found;
 }
 
-//updated Feb 3
-OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,
+/*
+Adjacent element IDs are stored for further searching if the ptcl not done. 
+TODO Search should exclude particle if on surface of an element by SURFACE_EXCLUDE. 
+When an intersection on bdry is found, that face id is to be stored to use in surface model.
+NOTE: reset it before this function call, but not during the while loop within this.
+*/
+
+/*
+bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,
  const Omega_h::Write<Omega_h::Real> &y0, const Omega_h::Write<Omega_h::Real> &z0, 
  const Omega_h::Write<Omega_h::Real> &x, const Omega_h::Write<Omega_h::Real> &y, 
  const Omega_h::Write<Omega_h::Real> &z, const Omega_h::Adj &dual, const Omega_h::Adj &down_r2f,
@@ -299,7 +339,7 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
         if(debug) 
         {
             std::cerr << "********found in " << ielem << " \n";
-            print_matrix(M);
+            //print_matrix(M);
         }
         continue;
       }
@@ -431,10 +471,211 @@ OMEGA_H_INLINE bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h:
 
   return found;
 } //search_mesh
+*/
+/*
+// Voronoi regions of triangle, to find nearest point on triangle
+enum TriRegion {
+  VTXA, 
+  VTXB,
+  VTXC,
+  EDGEAB,
+  EDGEAC,
+  EDGEBC,
+  TRIFACE
+};
+
+
+//Ref: Real-time Collision Detection by Christer Ericson, 2005.
+//ptp = ref point; ptq = nearest point on triangle; abc = triangle
+OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< oVector, 3> &abc, 
+  const oVector &ptp, oVector &ptq) {
+  // Check if P in vertex region outside A
+  oVector pta = abc[0];
+  oVector ptb = abc[1];
+  oVector ptc = abc[2];
+
+  oVector vab = ptb - pta;
+  oVector vac = ptc - pta;
+  oVector vap = ptp - pta;
+  o::Real d1 = osh_dot(vab, vap);
+  o::Real d2 = osh_dot(vac, vap);
+  if (d1 <= 0 && d2 <= 0) {
+    // barycentric coordinates (1,0,0)
+    qpt = pta;
+    return VTXA; 
+  }
+
+  // Check if P in vertex region outside B
+  oVector vbp = ptp - ptb;
+  o::Real d3 = osh_dot(vab, vbp);
+  o::Real d4 = osh_dot(vac, vbp);
+  if (d3 >= 0 && d4 <= d3){ 
+    // barycentric coordinates (0,1,0)
+    qpt = ptb;
+    return VTXB; 
+  }
+
+  // Check if P in edge region of AB, if so return projection of P onto AB
+  o::Real vc = d1*d4 - d3*d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    o::Real v = d1 / (d1 - d3);
+    // barycentric coordinates (1-v,v,0)
+    qpt = pta + v * vab; 
+    return EDGEAB;
+  }
+
+  // Check if P in vertex region outside C
+  oVector vcp = ptp - ptc;
+  o::Real d5 = osh_dot(vab, vcp);
+  o::Real d6 = osh_dot(vac, vcp);
+  if (d6 >= 0 && d5 <= d6) { 
+    // barycentric coordinates (0,0,1)
+    qpt = ptc; 
+    return VERTC;
+  }
+
+  // Check if P in edge region of AC, if so return projection of P onto AC
+  o::Real vb = d5*d2 - d1*d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    o::Real w = d2 / (d2 - d6);
+    // barycentric coordinates (1-w,0,w)
+    qpt = pta + w * vac; 
+    return EDGEAC;
+  }
+
+  // Check if P in edge region of BC, if so return projection of P onto BC
+  o::Real va = d3*d6 - d5*d4;
+  if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+    o::Real w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+    // barycentric coordinates (0,1-w,w)
+    qpt =  ptb + w * (ptc - ptb); 
+    return EDGEBC;
+  }
+
+  // P inside face region. Compute Q through its barycentric coordinates (u,v,w)
+  o::Real inv = 1 / (va + vb + vc);
+  o::Real v = vb * inv;
+  o::Real w = vc * inv;
+  // u*a + v*b + w*c, u = va * inv = 1 - v - w
+  qpt =  pta + v * vab+ w * vac; 
+  return TRIFACE;
+}
+*/
+
+// Only device
+OMEGA_H_INLINE const o::Real *getBdryFacesOfElem( o::Reals &bdryFacesData,
+   o::LOs &numBdryFacesData, o::LO elem, o::LO size, o::LO &nFaces) {
+  OMEGA_H_CHECK(size > 0);
+  o::LO start = numBdryFacesData[elem];
+  o::LO end = numBdryFacesData[elem+1];
+  nFaces = 1.0/size * (end - start);
+  const o::Real *endP = &(bdryFacesData.data()[end]);   //FIXME ??
+  OMEGA_H_CHECK(endP);
+  return &(bdryFacesData.data()[start]);
+}
+
+//Order of face vertices not taken care of
+OMEGA_H_INLINE void getTetFaceVectors(o::Real *fd, o::LO fi, 
+  o::LO size,  o::Few< o::Vector<3>, 3> &abc){
+  o::LO start = fi*size;
+  o::LO end = (fi+1)*size;
+  OMEGA_H_CHECK(fd[start]);
+  OMEGA_H_CHECK(fd[end-1]);
+
+  for(o::LO i=0; i<3; ++i){ //Tet vertexes
+    for(o::LO j=0; j<3; ++j){ //coords
+      abc[i][j] = fd[start++];
+    }
+  }
+}
+/*
+// TODO template
+OMEGA_H_INLINE bool if_exists_in_array(o::LO &ids, o::LO eid, 
+    o::LO size, o::LO entry){
+  for(o::LO i=0; i<size; ++i){
+    if(ids[eid*size + i] == entry){
+      return true;
+    }
+  }
+  return false;
+}
+
+*/
+
+
+//OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet, 
+//  const o::Write<o::Real> &data, const o::LO start = 0, 
+//  const o::Real depth = 0.001, const o::LO dim = 3){
+
+OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet, 
+  const Omega_h::LOs &face_verts, const Omega_h::Reals &coords, const o::LO face_id,
+  const o::Real depth = 0.001, const o::LO dim = 3){
+
+  //TODO test this copying 
+  /*
+  o::Few<o::Vector<3>, 3> face;
+  for(o::LO i=0; i< dim; ++i){
+    //face[i] = {data[start+i*3], data[start+i*3+1], data[start+i*3+2]};
+    for(o::LO j=0; j< dim; ++j){
+      face[i][j] = data[start + j]; 
+    }
+  }
+  */
+
+  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
+  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+
+  for(o::LO i=0; i<3; ++i){
+    for(o::LO j=0; j<4; ++j){
+      o::Vector<3> dv = face[i] - tet[j];
+      o::Real d2 = osh_dot(dv, dv);
+      
+
+     // printf("face_%0.3f,%0.3f,%0.3f tet_%0.3f,%0.3f,%0.3f \n", 
+     //   face[i][0],face[i][1], face[i][2],tet[j][0],tet[j][1],tet[j][2]);
+      
+      // printf("dist_%0.5f depth_%0.5f \n", sqrt(d2), depth);
+
+      if(d2 <= depth*depth){
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+ // Not used, since this function call from lambda, to modify data, 
+ // forces passed argument data to be const
+ //Not checking if id already in.
+ OMEGA_H_INLINE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids,
+     o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid,
+     o::LO elem, const o::Matrix<3, 3> &face){
+   OMEGA_H_CHECK(fi < fnums);
+   //memcpy ?
+   for(o::LO i=0; i<size; ++i){
+     for(o::LO j=0; j<3; j++){
+       data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
+     }
+   }
+   ids[elem*fnums + fi] = fid;
+ }
+
+ // Not used; function call from lambda, to change data, forces data to be const
+ // Total exposed faces has to be passed in as nbdry; no separate checking
+ OMEGA_H_INLINE void updateAdjElemFlags(const o::LOs &dual_elems, const o::LOs &dual_faces, o::LO elem,
+   o::Write<o::LO> &bdryFlags, o::LO nbdry=0){
+
+   auto dface_ind = dual_elems[elem];
+   for(o::LO i=0; i<4-nbdry; ++i){
+     auto adj_elem  = dual_faces[dface_ind];
+     o::LO val = 1;
+     Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
+     ++dface_ind;
+   }
+ }
+
+
 
 } //namespace
-#ifdef DEBUG
-#undef DEBUG
-#endif // DEBUG
-#endif //define
 
+#endif //define

@@ -4,10 +4,12 @@ set(HEADERS
   pumipic_utils.hpp
   pumipic_constants.hpp
   pumipi_part_construct.hpp
+  GitrmMesh.hpp
   )
 
 set(SOURCES
   pumipic_part_construct.cpp
+  GitrmMesh.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

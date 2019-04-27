@@ -3,7 +3,7 @@ set(HEADERS
   pumipic_push.hpp
   pumipic_utils.hpp
   pumipic_constants.hpp
-  pumipi_part_construct.hpp
+  pumipic_part_construct.hpp
   )
 
 set(SOURCES

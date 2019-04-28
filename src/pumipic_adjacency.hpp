@@ -8,12 +8,10 @@
 #include "Omega_h_element.hpp"
 
 #include <psTypes.h>
+#include <MemberTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
-#include <Distribute.h>
 #include <Kokkos_Core.hpp>
-
-
 
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
@@ -569,44 +567,43 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
   return TRIFACE;
 }
 
+using particle_structs::Vector3d;
+using particle_structs::SellCSigma;
+using particle_structs::MemberTypes;
+
 // TODO define scs with sufficient members
-bool findDistanceToBdry(o::Mesh &mesh,  SellCSigma<Particle>* scs,
-   o::Reals &bdryFaces, o::LOs &bdryFaceInds) {
+typedef MemberTypes<Vector3d, Vector3d, int > Particle;
 
-  const auto nel = mesh.nelems(); \
-  const auto coords = mesh.coords(); \
-  const auto mesh2verts = mesh.ask_elem_verts(); \
-  const auto dual_faces = mesh.ask_dual().ab2b; \
-  const auto dual_elems= mesh.ask_dual().a2ab; \
-  const auto face_verts = mesh.ask_verts_of(2); \
-  const auto down_r2f = mesh.ask_down(3, 2).ab2b; \
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
+bool findDistanceToBdry( SellCSigma<Particle>* scs,
+   const o::Reals &bdryFaces, const o::LOs &bdryFaceInds) {
 
+  scs->transferToDevice();
 
-  // elem will be declared within; pass scs,thread. 
+  // elem is declared in macro 
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
-    o::LO nFaces = 0;
+
+    o::Vector<3> point{0, 0, 0};  //Cause of Error: adds argument
+    o::Few< o::Vector<3>, 3> face;  //Error adds argument
+    o::LO nFaces = 0;               //Error adds argument
     const auto *bdryFacesOfElem = getBdryFacesOfElem(bdryFaces,
                           bdryFaceInds, elem, nFaces);
 
-    // pid will be declared
+    o::Few<o::Real, nFaces> dists({0});
+        
+    // pid is declared in macro
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      const auto ref = scs.get(pid); // FIXME 
-      o::Vector<3> point{0, 0, 0};
-      o::Few<o::Real, nFaces> dists({0});
-      o::Few< o::Vector<3>, 3> face;
+      //const auto ref = scs->get(pid); // FIXME 
 
-      for( fi = 0; fi < nFaces; ++fi ){
-        getTetFaceVectors(bdryFacesOfElem, fi, face);
-        auto v = findNearestPointOnTriangle(face, ref, point); 
-        if(v == VERTB) std::cout << "vertex B \n";
-
-        dists[face] = osh_dot(point - ref, point - ref);
+      for( o::LO fi = 0; fi < nFaces; ++fi ){
+         getTetFaceVectors(bdryFacesOfElem, fi, face);
+//        auto reg = findNearestPointOnTriangle(face, ref, point); 
+//        dists[face] = osh_dot(point - ref, point - ref);
       }
-      o::Real dist = std::min(dists); //FIXME 
-      scs.distToBdry[pid] = dist;
+//    o::Real dist = std::min(dists.data()); //FIXME 
+//    scs.distToBdry[pid] = dist;
+  
     });
-  });
+  });  //Error at ')' : macro "PS_PARALLEL_FOR_ELEMENTS" passed 8 arguments, but takes just 4 
 }
 
 

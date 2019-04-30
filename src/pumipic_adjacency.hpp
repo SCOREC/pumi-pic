@@ -65,14 +65,14 @@ OMEGA_H_INLINE void check_face(const o::Matrix<DIM, 4> &M,
     o::Few<o::Vector<DIM>, 3> abc;
     get_face_coords( M, faceid, abc);
 
-    /*if(verbose > 2) {
+    if(verbose > 2) {
       print_array(abc[0].data(),3, "a");
       print_array(face[0].data(),3, "face1");
       print_array(abc[1].data(), 3, "b");
       print_array(face[1].data(), 3, "face2");
       print_array(abc[2].data(), 3, "c");
       print_array(face[2].data(), 3, "face3");
-    } */
+    }
     OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), DIM)); //a
     OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), DIM)); //b
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
@@ -99,13 +99,11 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &mat,
 
     if(verbose > 2) {
       std::cout << "vol: " << vals[iface] << " for points_of_this_TET:\n" ;
-     /*
       print_array(abc[0].data(),3);
       print_array(abc[1].data(),3);
       print_array(abc[2].data(),3);
       print_array(pos.data(),3, "point");
       std::cout << "\n";
-    */
     }
   }
   //volume using bottom face=0
@@ -206,8 +204,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const o::Few<o::Vector<DIM>, 3> &a
   xpoint = {0, 0, 0};
 
   if(verbose > 1) {
-   // print_osh_vector(origin, "origin", false);
-   // print_osh_vector(dest, "dest");
+    print_osh_vector(origin, "origin", false);
+    print_osh_vector(dest, "dest");
   }
     
   //Boundary exclusion. Don't set it globally and change randomnly.
@@ -240,7 +238,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const o::Few<o::Vector<DIM>, 3> &a
       o::Write<o::Real> bcc{3,0};
       bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
       if(verbose > 2)
-       // print_array(bcc.data(), 3, "BCC");
+        print_array(bcc.data(), 3, "BCC");
       if(res) {
         if(bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) { //TODO all zeros ?
           edge = min_index(bcc.data(), 3, EPSILON); //TODO test tolerance
@@ -258,8 +256,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const o::Few<o::Vector<DIM>, 3> &a
           }
         }
       }
-      //if(verbose > 2)
-       // print_array(bcc.data(), 3, "BCCtri");
+      if(verbose > 2)
+        print_array(bcc.data(), 3, "BCCtri");
     }
     else if(par_t >1.0) {
       if(verbose > 0)
@@ -284,8 +282,9 @@ When an intersection on bdry is found, that face id is to be stored to use in su
 NOTE: reset it before this function call, but not during the while loop within this.
 */
 
-/*
-bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, const Omega_h::Write<Omega_h::Real> &x0,
+
+inline bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, 
+    const Omega_h::Write<Omega_h::Real> &x0,
  const Omega_h::Write<Omega_h::Real> &y0, const Omega_h::Write<Omega_h::Real> &z0, 
  const Omega_h::Write<Omega_h::Real> &x, const Omega_h::Write<Omega_h::Real> &y, 
  const Omega_h::Write<Omega_h::Real> &z, const Omega_h::Adj &dual, const Omega_h::Adj &down_r2f,
@@ -345,7 +344,7 @@ bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, con
         if(debug) 
         {
             std::cerr << "********found in " << ielem << " \n";
-            //print_matrix(M);
+            print_matrix(M);
         }
         continue;
       }
@@ -477,7 +476,7 @@ bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nelems, con
 
   return found;
 } //search_mesh
-*/
+
 
 // Voronoi regions of triangle, to find nearest point on triangle
 enum TriRegion {
@@ -495,10 +494,20 @@ enum TriRegion {
 //ptp = ref point; ptq = nearest point on triangle; abc = triangle
 OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> &abc, 
   const o::Vector<3> &ptp, o::Vector<3> &ptq) {
+  
+  o::LO verbose = 1;
+  o::LO region = -1;
   // Check if P in vertex region outside A
   o::Vector<3> pta = abc[0];
   o::Vector<3> ptb = abc[1];
   o::Vector<3> ptc = abc[2];
+
+  if(verbose >2){
+    print_osh_vector(pta, "pta", false);
+    print_osh_vector(ptb, "ptb", false);
+    print_osh_vector(ptc, "ptc", false);
+    print_osh_vector(ptp, "ptp");
+  }
 
   o::Vector<3> vab = ptb - pta;
   o::Vector<3> vac = ptc - pta;
@@ -508,7 +517,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
   if (d1 <= 0 && d2 <= 0) {
     // barycentric coordinates (1,0,0)
     ptq = pta;
-    return VTXA; 
+    region = VTXA;
+    //return VTXA; 
   }
 
   // Check if P in vertex region outside B
@@ -518,7 +528,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
   if (d3 >= 0 && d4 <= d3){ 
     // barycentric coordinates (0,1,0)
     ptq = ptb;
-    return VTXB; 
+    region = VTXB;
+    //return VTXB; 
   }
 
   // Check if P in edge region of AB, if so return projection of P onto AB
@@ -527,7 +538,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
     o::Real v = d1 / (d1 - d3);
     // barycentric coordinates (1-v,v,0)
     ptq = pta + v * vab; 
-    return EDGEAB;
+    region = EDGEAB;
+    //return EDGEAB;
   }
 
   // Check if P in vertex region outside C
@@ -537,7 +549,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
   if (d6 >= 0 && d5 <= d6) { 
     // barycentric coordinates (0,0,1)
     ptq = ptc; 
-    return VTXC;
+    region = VTXC;
+    //return VTXC;
   }
 
   // Check if P in edge region of AC, if so return projection of P onto AC
@@ -546,7 +559,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
     o::Real w = d2 / (d2 - d6);
     // barycentric coordinates (1-w,0,w)
     ptq = pta + w * vac; 
-    return EDGEAC;
+    region = EDGEAC;
+    //return EDGEAC;
   }
 
   // Check if P in edge region of BC, if so return projection of P onto BC
@@ -555,7 +569,8 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
     o::Real w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
     // barycentric coordinates (0,1-w,w)
     ptq =  ptb + w * (ptc - ptb); 
-    return EDGEBC;
+    region = EDGEBC;
+    //return EDGEBC;
   }
 
   // P inside face region. Compute Q through its barycentric coordinates (u,v,w)
@@ -563,118 +578,52 @@ OMEGA_H_INLINE o::LO findNearestPointOnTriangle( const o::Few< o::Vector<3>, 3> 
   o::Real v = vb * inv;
   o::Real w = vc * inv;
   // u*a + v*b + w*c, u = va * inv = 1 - v - w
-  ptq =  pta + v * vab+ w * vac; 
-  return TRIFACE;
-}
+  ptq =  pta + v * vab+ w * vac;
+  if(region <0) region = TRIFACE;
+  //return TRIFACE;
 
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
-
-// TODO define scs with sufficient members
-typedef MemberTypes<Vector3d, Vector3d, int > Particle;
-
-bool findDistanceToBdry( SellCSigma<Particle>* scs,
-   const o::Reals &bdryFaces, const o::LOs &bdryFaceInds) {
-
-  scs->transferToDevice();
-
-  // elem is declared in macro 
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
-
-    o::Vector<3> point{0, 0, 0};  //Cause of Error: adds argument
-    o::Few< o::Vector<3>, 3> face;  //Error adds argument
-    o::LO nFaces = 0;               //Error adds argument
-    const auto *bdryFacesOfElem = getBdryFacesOfElem(bdryFaces,
-                          bdryFaceInds, elem, nFaces);
-
-    o::Few<o::Real, nFaces> dists({0});
-        
-    // pid is declared in macro
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      //const auto ref = scs->get(pid); // FIXME 
-
-      for( o::LO fi = 0; fi < nFaces; ++fi ){
-         getTetFaceVectors(bdryFacesOfElem, fi, face);
-//        auto reg = findNearestPointOnTriangle(face, ref, point); 
-//        dists[face] = osh_dot(point - ref, point - ref);
-      }
-//    o::Real dist = std::min(dists.data()); //FIXME 
-//    scs.distToBdry[pid] = dist;
-  
-    });
-  });  //Error at ')' : macro "PS_PARALLEL_FOR_ELEMENTS" passed 8 arguments, but takes just 4 
-}
-
-
-// Only device
-OMEGA_H_INLINE const o::Real *getBdryFacesOfElem( o::Reals &bdryFacesData,
-   o::LOs &numBdryFacesData, o::LO elem, o::LO size, o::LO &nFaces) {
-  OMEGA_H_CHECK(size > 0);
-  o::LO start = numBdryFacesData[elem];
-  o::LO end = numBdryFacesData[elem+1];
-  nFaces = 1.0/size * (end - start);
-  const o::Real *endP = &(bdryFacesData.data()[end]);   //FIXME ??
-  OMEGA_H_CHECK(endP);
-  return &(bdryFacesData.data()[start]);
-}
-
-//Order of face vertices not taken care of
-OMEGA_H_INLINE void getTetFaceVectors(o::Real *fd, o::LO fi, 
-  o::LO size,  o::Few< o::Vector<3>, 3> &abc){
-  o::LO start = fi*size;
-  o::LO end = (fi+1)*size;
-  OMEGA_H_CHECK(fd[start]);
-  OMEGA_H_CHECK(fd[end-1]);
-
-  for(o::LO i=0; i<3; ++i){ //Tet vertexes
-    for(o::LO j=0; j<3; ++j){ //coords
-      abc[i][j] = fd[start++];
-    }
+  if(verbose >2){
+    printf("Q: %0.4f %0.4f %0.4f:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", 
+        ptq[0], ptq[1], ptq[2], d1, d2, d3, d4, d5, d6);
   }
-}
-/*
-// TODO template
-OMEGA_H_INLINE bool if_exists_in_array(o::LO &ids, o::LO eid, 
-    o::LO size, o::LO entry){
-  for(o::LO i=0; i<size; ++i){
-    if(ids[eid*size + i] == entry){
-      return true;
-    }
-  }
-  return false;
+  return region; //TODO Temp
 }
 
-*/
 
-
+//TODO remove print by argument
 OMEGA_H_INLINE void get_face_data_by_id(const Omega_h::LOs &face_verts, 
-  const Omega_h::Reals &coords,  const o::LO face_id, o::Real (&fdat)[9]){
+  const Omega_h::Reals &coords,  const o::LO face_id, o::Real (&fdat)[9],
+  const bool p=false){
 
   auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id);
   const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
   for(auto i=0; i<3; ++i){
     for(auto j=0; j<3; ++j){
-      fdat[i] = face[i][j];
+      fdat[i*3+j] = face[i][j];
+      if(p){
+        printf(" fdat[%d]=%.3f i_%d j_%d face[i][j]=%.3f \n", i*3+j, 
+          fdat[i], i, j, face[i][j]);
+      }
     }
   }
 }
 
 //OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet, 
-//  const o::Write<o::Real> &data, const o::LO start = 0, 
+//  const o::Write<o::Real> &data, const o::LO beg = 0, 
 //  const o::Real depth = 0.001, const o::LO dim = 3){
+
 
 OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet, 
   const Omega_h::LOs &face_verts, const Omega_h::Reals &coords, const o::LO face_id,
-  const o::Real depth = 0.001, const o::LO dim = 3){
+  const o::Real depth = 0.001){
 
   //TODO test this copying 
   /*
   o::Few<o::Vector<3>, 3> face;
   for(o::LO i=0; i< dim; ++i){
-    //face[i] = {data[start+i*3], data[start+i*3+1], data[start+i*3+2]};
+    //face[i] = {data[beg+i*3], data[beg+i*3+1], data[beg+i*3+2]};
     for(o::LO j=0; j< dim; ++j){
-      face[i][j] = data[start + j]; 
+      face[i][j] = data[beg + j]; 
     }
   }
   */
@@ -682,8 +631,8 @@ OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet,
   auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
   const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
 
-  for(o::LO i=0; i<3; ++i){
-    for(o::LO j=0; j<4; ++j){
+  for(o::LO i=0; i<3; ++i){ //3 vtx of face
+    for(o::LO j=0; j<4; ++j){ //4 vtx of tet
       o::Vector<3> dv = face[i] - tet[j];
       o::Real d2 = osh_dot(dv, dv);
       
@@ -701,6 +650,105 @@ OMEGA_H_INLINE bool checkIfFaceWithinDistToTet(const o::Matrix<DIM, 4> &tet,
   return false;
 }
 
+
+
+using particle_structs::Vector3d;
+using particle_structs::SellCSigma;
+using particle_structs::MemberTypes;
+
+// TODO define scs with sufficient members
+typedef MemberTypes<Vector3d, Vector3d, int > Particle;
+
+OMEGA_H_INLINE void findDistanceToBdry( SellCSigma<Particle>* scs, 
+  const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, 
+  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
+  const o::LO fsize, const o::LO fskip, const o::LO nel) {
+
+  o::LO verbose = 3;
+  
+  //fskip is 2, since 1st 2 are not part of face vertices
+
+  scs->transferToDevice();
+
+  OMEGA_H_CHECK(fsize > 0 && nel >0);
+
+  // elem is declared in macro 
+  //PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
+
+  //TODO temporarily skipping  macros
+  auto run = OMEGA_H_LAMBDA(o::LO elem){ 
+  
+    o::LO beg = bdryFaceInds[elem];
+    o::LO nFaces = bdryFaceInds[elem+1] - beg;
+
+    if(nFaces ==0) 
+      return;
+
+    o::Real dist = 0;
+    o::Real min = std::numeric_limits<o::Real>::max();
+    o::Few< o::Vector<3>, 3> face;
+    o::Vector<3> point{0, 0, 0};
+    o::LO fe = -1;
+    o::LO fel = -1;
+
+    if(verbose >2){
+      //printf("\n e_%d nFaces_%d %d %d\n", elem, nFaces, bdryFaceInds[elem], bdryFaceInds[elem+1]);
+    }
+    // pid is declared in macro
+    // PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+    //const auto ref = scs->get(pid); // FIXME 
+
+    for( o::LO fi = 0; fi < nFaces; ++fi ){
+      
+      // TODO put in a function
+      o::LO ind = (beg + fi)*fsize;
+      
+      // fskip=2 for faceId, elId
+      OMEGA_H_CHECK(fskip > 0);
+      fe = static_cast<o::LO>(bdryFaces[ind + fskip-1]);
+      
+      for(o::LO i=0; i<3; ++i){ //Tet vertexes
+        for(o::LO j=0; j<3; ++j){ //coords
+          face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+          if(verbose > 3){ 
+            printf(" e_%d face[%d][%d]=%0.3f ind_%d  fe_%d \n ", elem, i, j, 
+              face[i][j], ind + i*3 + j + fskip, fe);
+          }
+        }
+      }
+      //TODO replace this temp centroid as particle position
+      o::Matrix<3, 4> m;
+      findTetCoords(mesh2verts, coords, elem, m);
+      //Centroid of tet
+      o::Vector<3> ref{{1/4.0*(m[0][0]+m[1][0]+m[2][0]+m[3][0]), 
+                        1/4.0*(m[0][1]+m[1][1]+m[2][1]+m[3][1]),
+                        1/4.0*(m[0][2]+m[1][2]+m[2][2]+m[3][2])}};
+      
+
+
+      auto region = findNearestPointOnTriangle(face, ref, point); 
+      dist = osh_dot(point - ref, point - ref);
+      if(dist < min) {
+        min = dist;
+        fel = fe;
+      }
+      //scs.distToBdry[pid] = min;
+      if(verbose >3){
+        printf("e_%d dist_%0.8f region_%d fe_%d\n", elem, min, region, fe);
+      }
+    }
+
+    min = std::sqrt(min);
+    //TODO include elem ids of bdry faces, to see in paraview.
+    if(verbose >2){
+      printf("\n*** e_%d MINdist_%0.8f face_el %d\n", elem, min, fel);
+    }
+  };
+  o::parallel_for(nel, run, "dist2Bdry");
+
+//    });
+//  }); 
+}
 
 } //namespace
 

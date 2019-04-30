@@ -16,12 +16,13 @@ namespace p = pumipic;
 #ifndef DEPTH_DIST2_BDRY
 #define DEPTH_DIST2_BDRY 0.001 // 1mm
 #endif
+
 #ifndef BDRYFACE_SIZE
 #define BDRYFACE_SIZE 100
 #endif
 
-// 3 vtx and 1 id as Real
-enum { SIZE_PER_FACE = 10 };
+// 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
+enum { SIZE_PER_FACE = 11, FSKIP=2 };
 
 
 #define MESHDATA(mesh) \

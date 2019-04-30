@@ -5,43 +5,6 @@
 namespace o = Omega_h;
 namespace p = pumipic;
 
-/*
-bool gitrm_findDistanceToBdry(const GitrmMesh &gm, 
-  SellCSigma<Particle>* scs) {
-
-  MESHDATA(gm.mesh);
-
-  const auto &bdryFacesData = gm.bdryFaces;
-  const auto &bdryFacesPtr = gm.bdryFaceInds;
-
-  // elem will be declared within; pass scs,thread. 
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, elem, {
-    o::LO nFaces = 0;
-    const auto *bdryFacesOfElem = getBdryFacesOfElem(bdryFaces,
-                          bdryFaceInds, elem, nFaces);
-
-    // pid will be declared
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      const auto ref = scs.get(pid); // FIXME 
-      o::Vector<3> point{0, 0, 0};
-      o::Few<o::Real, nFaces> dists({0});
-      o::Few< oVector, 3> face;
-
-      for( fi = 0; fi < nFaces; ++fi ){
-        getTetFaceVectors(bdryFacesOfElem, fi, face);
-        //auto v =
-        findNearestPointOnTriangle(face, ref, point); 
-        //if(v==TriRegion::VERTB) std::cout << "vertex B \n";
-        // std::cout << static_cast<int>(v) << "\n";
-
-        dists[face] = osh_dot(point - ref, point - ref);
-      }
-      o::Real dist = std::min(dists); //FIXME 
-      scs.distToBdry[pid] = dist;
-    });
-  });
-}
-*/
 
 GitrmMesh::GitrmMesh(o::Mesh &m): 
   mesh(m),
@@ -70,14 +33,17 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
 
-  const auto &bdryFacesW = this->bdryFacesW;  //not used ?
+  const auto &bdryFacesW = this->bdryFacesW;  //not used now
   const auto &numBdryFaceIds = this->numBdryFaceIds;
   const auto &bdryFaceIds = this->bdryFaceIds;
+  const auto &bdryFaceElemIds = this->bdryFaceElemIds;
+
   auto &bdryFaces = this->bdryFaces;
   auto &bdryFaceInds = this->bdryFaceInds;
 
   auto nel = mesh.nelems();
-  auto S = SIZE_PER_FACE;
+  o::LO S = SIZE_PER_FACE;
+
   // Convert to CSR.
   //Copy to host
   o::HostRead<o::LO> numBdryFaceIdsH(numBdryFaceIds);
@@ -121,7 +87,7 @@ void GitrmMesh::convert2ReadOnlyCSR() {
 
     // Source position calculated using pre-assigned fixed number of faces
     // per element. Here face number (outer loop) is used to get absolute position.
-    // Size_per_face was effectively 1 less so far, since the face id was not added.
+    // Size_per_face was effectively 2 less so far, since the face id was not added.
     // The face_id is added as Real at the 1st entry of each face.
 
     // Source face size is 1 less.
@@ -131,13 +97,15 @@ void GitrmMesh::convert2ReadOnlyCSR() {
 
     // Looping over implicit face numbers
     for(o::LO i = beg; i < end; ++i){
-      p::get_face_data_by_id(face_verts, coords, bdryFaceIds[bfi], fdat);
+      p::get_face_data_by_id(face_verts, coords, bdryFaceIds[bfi], fdat, 0);
 
       // Face index is x by size_per_face 
-      bdryFacesCsrW[i*S] = bdryFaceIds[bfi];
-      for(o::LO j=1; j<S; ++j){
+      bdryFacesCsrW[i*S] = static_cast<o::Real>(bdryFaceIds[bfi]);
+      bdryFacesCsrW[i*S+1] = static_cast<o::Real>(bdryFaceElemIds[bfi]);
+//printf(" f_%d  el_%d\n", bdryFaceIds[bfi], bdryFaceElemIds[bfi]);
+      for(o::LO j = FSKIP; j < S; ++j){
         //bdryFacesCsrW[i*S + j] = bdryFacesW[bfd + j-1]; //TODO check this
-        bdryFacesCsrW[i*S + j] = fdat[j-1];
+        bdryFacesCsrW[i*S + j] = fdat[j - FSKIP];
       }
       ++bfi;
     }    
@@ -330,7 +298,7 @@ void GitrmMesh::preProcessDistToBdry() {
         //o::LO start = adj_elem*BDRYFACE_SIZE*(SIZE_PER_FACE-1) + ai*(SIZE_PER_FACE-1);
         //if(verbose >2) printf("start@%d elem_%d adj_elem_%d ai_%d\n", start, elem, adj_elem, ai);
         bool add = p::checkIfFaceWithinDistToTet(tet, face_verts, coords, 
-          adj_fid, DEPTH_DIST2_BDRY);
+                    adj_fid, DEPTH_DIST2_BDRY);
         if(!add) {
           if(verbose >2) printf("NOT adding \n");
           continue;

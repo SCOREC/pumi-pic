@@ -111,8 +111,8 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
   return true;
 }
 
-/*
-void print_matrix(const Omega_h::Matrix<3, 4> &M)
+
+OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
 {
   std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
   std::cout << "M1  " << M[1].data()[0] << ", " << M[1].data()[1] << ", " << M[1].data()[2] <<"\n";
@@ -121,7 +121,7 @@ void print_matrix(const Omega_h::Matrix<3, 4> &M)
 }
 
 
-void print_array(const double* a, int n=3, std::string name=" ")
+OMEGA_H_INLINE void print_array(const double* a, int n=3, std::string name=" ")
 {
   if(name!=" ")
     std::cout << name << ": ";
@@ -130,20 +130,20 @@ void print_array(const double* a, int n=3, std::string name=" ")
   std::cout <<"\n";
 }
 
-void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
+OMEGA_H_INLINE void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
 {
   std::string str = line_break ? ")\n" : "); ";
   std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
 }
 
-void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
+OMEGA_H_INLINE void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
      Omega_h::Write<Omega_h::Real> &bcc)
 {
     print_matrix(M);  //include file problem ?
     print_osh_vector(dest, "point");
     print_array(bcc.data(), 4, "BCoords");
 }
-*/
+
 } //namespace
 #endif
 

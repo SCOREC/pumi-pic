@@ -423,7 +423,7 @@ int main(int argc, char** argv) {
 
   //preProcessDistToBdry(mesh, bdryFacesW, numBdryFaceIds, bdryFaceIds, bdryFlags);
   gm.preProcessDistToBdry();
-  gm.printBdryFaceIds(false, 23); //numBdryFaceIds, mesh);  
+  gm.printBdryFaceIds(false, 20); //numBdryFaceIds, mesh);  
   gm.convert2ReadOnlyCSR();
   gm.printBdryFacesCSR(false, 23);
 
@@ -461,11 +461,11 @@ int main(int argc, char** argv) {
   setInitialPtclCoords(mesh, scs);
   setPtclIds(scs);
 
-  p::findDistanceToBdry(scs, gm.bdryFaces, gm.bdryFaceInds);
+  p::findDistanceToBdry(scs, r2v, coords, gm.bdryFaces, gm.bdryFaceInds, 
+      SIZE_PER_FACE, FSKIP, ne);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());
   timer.reset();
-
 
   delete [] ids;
   delete scs;

@@ -37,12 +37,10 @@ int main(int argc, char** argv) {
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-
   Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.world());
   int dim = mesh.dim();
   Omega_h::Read<Omega_h::GO> global_ids = mesh.globals(dim);
   int nge = mesh.nglobal_ents(dim);
-  printf("%d %d\n",nge, mesh.nelems());
   int* owners = new int[nge];
   for (int i = 0; i < nge; ++i)
     owners[i] = 0;

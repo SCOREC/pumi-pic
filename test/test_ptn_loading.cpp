@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  comm_size = 4;
+
   int safe_layers = atoi(argv[3]);
   int ghost_layers = atoi(argv[4]);
 
@@ -48,7 +48,8 @@ int main(int argc, char** argv) {
   int dim = mesh.dim();
   int ne = mesh.nents(dim);
   if (rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(), mesh.nfaces(), mesh.nelems());
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(), 
+           mesh.nfaces(), mesh.nelems());
 
   //********* Load the partition vector ***********//
   Omega_h::HostWrite<Omega_h::LO> host_owners(ne);

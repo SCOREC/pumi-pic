@@ -131,7 +131,6 @@ void GitrmMesh::convert2ReadOnlyCSR() {
 // Pre-processing to fill bdry faces in elements near bdry within depth needed. 
 // Call init function before this. Filling flat arrays; Later call convert2ReadOnlyCSR.
 
-o::LO verbose = 0;
 void GitrmMesh::copyBdryFacesToSelf() {
 
   MESHDATA(mesh);
@@ -141,6 +140,7 @@ void GitrmMesh::copyBdryFacesToSelf() {
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
   auto &bdryFlags = this->bdryFlags;
 
+  o::LO verbose = 2;
   auto fillBdry = OMEGA_H_LAMBDA(o::LO elem){
 
     // Find  bdry faces: # and id

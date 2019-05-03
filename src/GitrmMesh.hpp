@@ -8,6 +8,7 @@ namespace o = Omega_h;
 namespace p = pumipic;
 
 
+
 // The define is good for device too, or pass by template ?
 #ifndef DEPTH_DIST2_BDRY
 #define DEPTH_DIST2_BDRY 0.001 // 1mm
@@ -32,8 +33,7 @@ enum { SIZE_PER_FACE = 11, FSKIP=2 };
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
 
-// This class is not a device class since 'this' is not captured by 
-// reference in order to access class members within lambdas. 
+
 class GitrmMesh {
 public:
   //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
@@ -54,7 +54,6 @@ public:
   }
   */
 
-  // o::Mesh is a reference 
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
 
@@ -79,7 +78,6 @@ public:
   void test_preProcessDistToBdry();
 
 
-  // Don't make a copy of mesh, or object of this class
   //o::Mesh *mesh;
   o::Mesh &mesh;
   o::LO numNearBdryElems = 0;
@@ -91,7 +89,7 @@ private:
   void convert2ReadOnlyCSR();
   void copyBdryFacesToSelf();
   void initNearBdryDistData();
-  // Data for pre-processing, deleted after converting to CSR
+  // Data for pre-processing, delete after converting to CSR
   o::Write<o::Real> bdryFacesW;
   o::Write<o::LO> numBdryFaceIds;
   o::Write<o::LO> bdryFaceIds;
@@ -158,15 +156,15 @@ private:
  }
 
 
-//TODO add description of data size of bdryFaces, bdryFaceInds and indexes
-// TODO gitrm namespace and inline ?
+/** @brief Calculate distance of particles to domain boundary 
+ * TODO add description of data size of bdryFaces, bdryFaceInds and indexes
+ */
+// TODO gitrm namespace ?
 inline void gitrm_findDistanceToBdry ( 
   particle_structs::SellCSigma<Particle>* scs, 
   const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, 
   const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
   const o::LO fsize, const o::LO fskip, const o::LO nel) {
-
-  o::LO verb = 3;
   
   //fskip is 2, since 1st 2 are not part of face vertices
 
@@ -180,13 +178,12 @@ inline void gitrm_findDistanceToBdry (
   kkFpView d2bdry_d("d2bdry_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(d2bdry_d, scs->getSCS<3>() );
   
-  //TODO temporarily skipping  macros
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     //if (mask <= 0) return; //TODO ?????
 
     //TODO  
-    o::LO verbose = 2;//(elem==6223)?3:0;
+    o::LO verbose = (elem%500==0)?2:1;
 
     o::LO beg = bdryFaceInds[elem];
     o::LO nFaces = bdryFaceInds[elem+1] - beg;
@@ -263,7 +260,6 @@ inline void gitrm_findDistanceToBdry (
     }
 
     min = std::sqrt(min);
-    //TODO include elem ids of bdry faces, to see in paraview.
     if(verbose >1){
       printf("\n*** e_%d MINdist_%0.8f fi_%d face_el %d reg_%d\n", 
         elem, min, fid, fel, minRegion);
@@ -272,7 +268,7 @@ inline void gitrm_findDistanceToBdry (
   };
 
   scs->parallel_for(distRun);
-  
+
   deviceToHostFp(d2bdry_d, scs->getSCS<3>());
 
 }

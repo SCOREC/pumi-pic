@@ -24,19 +24,25 @@ using particle_structs::elemCoords;
 namespace o = Omega_h;
 namespace p = pumipic;
 
+
 //TODO modify to have all member data
-typedef MemberTypes < Vector3d, Vector3d, int,  double > Particle;  //FIXME
+typedef MemberTypes < Vector3d, Vector3d, int,  double > Particle;
+
+// 'Particle' definition retrieval positions. 
+enum {PCL_POS1, PCL_POS2, PCL_ID, PCL_D2BDRY};
+
 
 class GitrmParticles {
 public:
 
   GitrmParticles(o::Mesh &m);
   ~GitrmParticles();
+  GitrmParticles(GitrmParticles const&) = delete;
+  void operator=(GitrmParticles const&) = delete;
 
   void defineParticles();
 
   SellCSigma<Particle>* scs;
-  //temp ?, no gitrmMesh ref, circular dep
   o::Mesh &mesh;
 };
 

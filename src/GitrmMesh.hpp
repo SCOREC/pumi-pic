@@ -2,11 +2,7 @@
 #define GITRM_MESH_HPP
 
 #include "pumipic_adjacency.hpp"
-
-//#include <psTypes.h>
-//#include <SellCSigma.h>
-//#include <SCS_Macros.h>
-
+#include "GitrmParticles.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -35,67 +31,110 @@ enum { SIZE_PER_FACE = 11, FSKIP=2 };
   const auto down_r2f = mesh.ask_down(3, 2).ab2b; \
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
+
 // This class is not a device class since 'this' is not captured by 
 // reference in order to access class members within lambdas. 
-class GitrmMesh{
+class GitrmMesh {
 public:
+  //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
   GitrmMesh(o::Mesh &);
-  ~GitrmMesh(){}
+  ~GitrmMesh();
+
+ /*
+  GitrmMesh& getInstance(o::Mesh *m = nullptr){
+    if(!mesh && !m){
+      std::cout << "Call getInstance(mesh) \n"; 
+      std::exit(1);
+    }
+    GitrmMesh gm;
+    if(!mesh && m){
+      mesh = m;
+    }
+    return gm;
+  }
+  */
 
   // o::Mesh is a reference 
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
 
-  void initNearBdryDistData();
-  void convert2ReadOnlyCSR();
-  void copyBdryFacesToSelf();
+  
+/** @brief preProcessDistToBdry: Space for a fixed # of Bdry faces is assigned per element.
+  * First step: Boundary faces are added to its own element data.
+  * When new faces are added, the owner element updates flags of adj.elements.
+  * So, the above inital stage sets up flags of adj.eleemnts of bdry face elements. 
+  * Second step: updating and passing these faces to adj. elements.
+  * Each element checks if its flag is set by any adj. element. If so, check all 
+  * adj. elements for new faces and copies off the ids, and data (not tested).
+  * Flags are reset before checking adj.elements such that any other thread can still
+  * set it during copying, in which case the next iteration will be run, even if the 
+  * data is already copied off in the previous step due to flag/data mismatch.
+  * @return Flat arrays of bdry face data: bdryFacesW, numBdryFaceIds, 
+  * bdryFaceIds, bdryFaceElemIds
+  */
+  void preProcessDistToBdry();
+
   void printBdryFaceIds(bool printIds=true, o::LO minNums=0);
   void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
+  void test_preProcessDistToBdry();
 
-/** Space for a fixed # of Bdry faces is assigned per element, rather than 
-   using a common data to be accessed using face id. 
-   First stage, only boundary faces are added to the same elements.
-   When new faces are added, the owner element updates flags of adj.elements.
-   So, the above inital stage sets up flags of adj.eleemnts of bdry face elements. 
-   Second stage is updating and passing these faces to second and further adj. levels.
-   Each element checks if its flag is set by any adj.element. If so, check all 
-   adj. elements for new faces and copies off them.
-   Flags are reset before checking adj.elements such that any other thread can still
-   set it during copying, in which case the next iteration will be run, even if the 
-   data is already copied off in the previous step due to flag/data mismatch.
-  */
 
-  void preProcessDistToBdry();
   // Don't make a copy of mesh, or object of this class
+  //o::Mesh *mesh;
   o::Mesh &mesh;
   o::LO numNearBdryElems = 0;
   o::LO numAddedBdryFaces = 0;
 
-  // Simple objects, no data yet
+private:
+  //GitrmMesh() = default;
+  // static bool hasMesh;
+  void convert2ReadOnlyCSR();
+  void copyBdryFacesToSelf();
+  void initNearBdryDistData();
+  // Data for pre-processing, deleted after converting to CSR
   o::Write<o::Real> bdryFacesW;
   o::Write<o::LO> numBdryFaceIds;
   o::Write<o::LO> bdryFaceIds;
   o::Write<o::LO> bdryFlags;
   o::Write<o::LO> bdryFaceElemIds;
-  // convert to Read only CSR after write. Store bdryFaceIds as Real
-  // Reals, LOs are const & have const cast of device data
+
+public:
+  /**  @brief CSR data, used in simulation time-step loop.
+  * Storing face data in each element, i.e. same bdry face is copied  
+  * to neighboring elements if within the depth. This leads to increased storage,
+  * compared to having an array of unique face data, which could be accessed
+  * by all elements (slow down).
+  * Convert to Read only CSR after write. Store element and bdryFaceIds as Reals. 
+  * Reals, LOs are const & have const cast of device data
+  */
   o::Reals bdryFaces;
-  // Indexes' size is nel+1. Not actual index, but has to x by size of face
+  /** @brief Indexes' size is nel+1. The index has to be mult. by size of face to get
+   * array index of data.
+   */
   o::LOs bdryFaceInds;
+
+
+  /** @brief Adjacency based BFS search, for testing pre-processing
+  */
+  void preProcessDistToBdryByAdjSearch();
+  o::Reals bdryFacesBfs;
+  o::LOs bdryFaceIndsBfs;
+
+private:
+  void initBFSAdjSearchData();
+  void convert2CsrBfs();
+  o::Write<o::LO> visitedElems;
+  o::Write<o::LO> bdryFaceIdsBfs;
+  o::Write<o::LO> bdryFaceElemIdsBfs;
 };
 
 
-//bool gitrm_findDistanceToBdry(const GitrmMesh &gm, 
- //    SellCSigma<Particle>* scs);
-
  // Not used, since this function call from lambda, to modify data, 
  // forces passed argument data to be const
- //Not checking if id already in.
  OMEGA_H_INLINE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids,
      o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid,
      o::LO elem, const o::Matrix<3, 3> &face){
    OMEGA_H_CHECK(fi < fnums);
-   //memcpy ?
    for(o::LO i=0; i<size; ++i){
      for(o::LO j=0; j<3; j++){
        data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
@@ -118,5 +157,123 @@ public:
    }
  }
 
+
+//TODO add description of data size of bdryFaces, bdryFaceInds and indexes
+// TODO gitrm namespace and inline ?
+inline void gitrm_findDistanceToBdry ( 
+  particle_structs::SellCSigma<Particle>* scs, 
+  const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, 
+  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
+  const o::LO fsize, const o::LO fskip, const o::LO nel) {
+
+  o::LO verb = 3;
+  
+  //fskip is 2, since 1st 2 are not part of face vertices
+
+  scs->transferToDevice();
+
+  OMEGA_H_CHECK(fsize > 0 && nel >0);
+
+
+  //TODO temporarily skipping  macros
+  auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
+                                const int &mask){ 
+    //if (mask <= 0) return; //TODO ?????
+    //TODO
+    if(elem%500) return;
+    o::LO verbose = (elem==6223)?3:0;
+
+    o::LO beg = bdryFaceInds[elem];
+    o::LO nFaces = bdryFaceInds[elem+1] - beg;
+    if(nFaces ==0) 
+      return;
+
+    o::Real dist = 0;
+    o::Real min = std::numeric_limits<o::Real>::max();
+    o::Few< o::Vector<3>, 3> face;
+    o::Vector<3> point{0, 0, 0};
+    o::LO fe = -1;
+    o::LO fel = -1;
+    o::LO fi = -1;
+    o::LO fid = -1;
+    o::LO minRegion = -1;
+    o::LO region = -1;
+
+    if(verbose >2){
+      printf("\n e_%d nFaces_%d %d %d\n", elem, nFaces, bdryFaceInds[elem], bdryFaceInds[elem+1]);
+    }
+
+
+    for( o::LO ii = 0; ii < nFaces; ++ii ){
+      
+      // TODO put in a function
+      o::LO ind = (beg + ii)*fsize;
+      
+      // fskip=2 for faceId, elId
+      OMEGA_H_CHECK(fskip ==2);
+      fe = static_cast<o::LO>(bdryFaces[ind + fskip-1]);
+      fi = static_cast<o::LO>(bdryFaces[ind]);// fskip-2 =0
+
+      // Get a face @ind from bdryFaces
+      for(o::LO i=0; i<3; ++i){ //Tet vertexes
+        for(o::LO j=0; j<3; ++j){ //coords
+          face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+          if(verbose > 2){ 
+            printf(" e_%d face[%d][%d]=%0.3f ind_%d  fe_%d \n ", elem, i, j, 
+              face[i][j], ind + i*3 + j + fskip, fe);
+          }
+        }
+      }
+
+      auto id = scs->getSCS<0>();
+      auto pos = scs->getSCS<1>();
+      printf(": %d %d %.1f", pid, id[pid], pos[pid]);
+      //const o::Vector<3> ref({pos[pid], pos[pid+1], pos[pid+2]});
+      
+      //TODO replace this temp centroid as particle position
+      o::Matrix<3, 4> m;
+      p::findTetCoords(mesh2verts, coords, elem, m);
+      //Centroid of tet
+      o::Vector<3> ref{{1/4.0*(m[0][0]+m[1][0]+m[2][0]+m[3][0]), 
+                        1/4.0*(m[0][1]+m[1][1]+m[2][1]+m[3][1]),
+                        1/4.0*(m[0][2]+m[1][2]+m[2][2]+m[3][2])}};
+      
+
+      o::LO r = p::find_closest_point_on_triangle_with_normal(face, ref, point);
+      if(verbose >2){
+          printf("Red: e_%d region_%d fe_%d\n", elem, region, fe);
+      }
+
+      region = p::find_closest_point_on_triangle(face, ref, point); 
+      dist = p::osh_dot(point - ref, point - ref);
+      if(verbose >2){
+          printf("e_%d thisdist_%0.6f region_%d fe_%d\n", elem, dist, region, fe);
+      }
+
+      if(dist < min) {
+        min = dist;
+        fel = fe;
+        fid = fi;
+        minRegion = region;
+        if(verbose >2){
+          printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
+            elem, min, region, fi, fe);
+          p::print_osh_vector(ref, "P");
+          p::print_osh_vector(point, "Nearest_pt");
+        }
+      }
+      //scs.distToBdry[pid] = min;
+    }
+
+    min = std::sqrt(min);
+    //TODO include elem ids of bdry faces, to see in paraview.
+    if(verbose >2){
+      printf("\n*** e_%d MINdist_%0.8f fi_%d face_el %d reg_%d\n", 
+        elem, min, fid, fel, minRegion);
+    }
+  };
+  scs->parallel_for(distRun);
+
+}
 
 #endif// define

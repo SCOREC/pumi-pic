@@ -1,16 +1,24 @@
 #include "GitrmMesh.hpp"
+#include "GitrmParticles.hpp"
 #include "Omega_h_reduce.hpp"
-
+#include <SellCSigma.h>
+#include <SCS_Macros.h>
 
 namespace o = Omega_h;
 namespace p = pumipic;
 
 
+//o::Mesh* GitrmMesh::mesh = nullptr;
+//bool GitrmMesh::hasMesh = false;
+
 GitrmMesh::GitrmMesh(o::Mesh &m): 
   mesh(m),
   numNearBdryElems(0),
   numAddedBdryFaces(0) {
-    initNearBdryDistData();
+}
+
+GitrmMesh::~GitrmMesh(){
+
 }
 
 // These are only for temporary writing during pre-processing
@@ -135,7 +143,7 @@ void GitrmMesh::copyBdryFacesToSelf() {
 
   auto fillBdry = OMEGA_H_LAMBDA(o::LO elem){
 
-    // Checking bdry faces
+    // Find  bdry faces: # and id
     o::LO nbdry = 0; 
     o::LO bdryFids[4];
     const auto beg_face = elem *4;
@@ -150,10 +158,8 @@ void GitrmMesh::copyBdryFacesToSelf() {
         ++nbdry;
       }
     }
-    // TODO: pisces mesh elem id 9 is exposed, but not as per side_is_exposed.
-    // Check if the mesh created matches with the mesh data
 
-    //If no bdry faces to add
+    // If no bdry faces to add
     if(!nbdry){
       return;
     }
@@ -222,7 +228,8 @@ void GitrmMesh::preProcessDistToBdry() {
   auto &bdryFaceIds = this->bdryFaceIds;
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
   auto &bdryFlags = this->bdryFlags;
-
+  
+  initNearBdryDistData();
   copyBdryFacesToSelf();
 
   auto fill = OMEGA_H_LAMBDA(o::LO elem){
@@ -245,20 +252,26 @@ void GitrmMesh::preProcessDistToBdry() {
 
     o::LO nbf = 0;
     
+    // Bdry element need not have regions that have shortest dist to bdry
+    // always on the own bdry face. So, need to add adj. faces. So, interior
+    // faces of bdry elems have to add neigbhors' faces
+
     // Store existing # of faces
     o::LO existing = numBdryFaceIds[elem];
     o::LO tot = existing;
-    const auto beg_face = elem *4;
-    const auto end_face = beg_face +4;
+
+    o::LO inFids[4] = {-1, -1, -1, -1};
+    // One purpose of small functions that use mesh data is to pre-use 
+    // mesh data as far as possible, i.e. minimize using mesh data 
+    // alongside unavoidable large-data in a loop.
+    o::LO nIn = p::get_face_type_ids_of_elem(elem, down_r2f, 
+                  side_is_exposed, inFids, 1); //1=interior
+    nbf = 4 - nIn;
+
     auto dface_ind = dual_elems[elem]; //first interior
-    for(auto fi = beg_face; fi < end_face; ++fi){//not 0..3
-      const auto fid = down_r2f[fi];
-      if(side_is_exposed[fid]) {
-        ++nbf;
-        // Bdry element need not have regions that have shortest dist to bdry
-        // always on the own bdry face. So, need to add adj. faces.
-        continue;
-      }
+    for(auto fi = 0; fi < nIn; ++fi){
+
+      auto fid = inFids[fi];
 
       //Check all adjacent elements
       auto adj_elem  = dual_faces[dface_ind];
@@ -280,9 +293,9 @@ void GitrmMesh::preProcessDistToBdry() {
          if(verbose >2) 
           printf("adj_elem_%d, fadj_ %d, of_e_%d : ", adj_elem,  adj_fid, adj_fElid); 
 
-        for(auto fi = 0; fi < tot; ++fi){
-          if(verbose >2) printf("   this_fid_ %d ", bdryFaceIds[BDRYFACE_SIZE*elem+fi]);
-          if(adj_fid == bdryFaceIds[BDRYFACE_SIZE*elem+fi]){ 
+        for(auto ii = 0; ii < tot; ++ii){
+          if(verbose >2) printf("   this_fid_ %d ", bdryFaceIds[BDRYFACE_SIZE*elem+ii]);
+          if(adj_fid == bdryFaceIds[BDRYFACE_SIZE*elem+ii]){ 
             if(verbose >2) printf("found %d in current \n", adj_fid);
             found = true;
             break;
@@ -297,7 +310,7 @@ void GitrmMesh::preProcessDistToBdry() {
         //TODO test this
         //o::LO start = adj_elem*BDRYFACE_SIZE*(SIZE_PER_FACE-1) + ai*(SIZE_PER_FACE-1);
         //if(verbose >2) printf("start@%d elem_%d adj_elem_%d ai_%d\n", start, elem, adj_elem, ai);
-        bool add = p::checkIfFaceWithinDistToTet(tet, face_verts, coords, 
+        bool add = p::check_if_face_within_dist_to_tet(tet, face_verts, coords, 
                     adj_fid, DEPTH_DIST2_BDRY);
         if(!add) {
           if(verbose >2) printf("NOT adding \n");
@@ -365,8 +378,10 @@ void GitrmMesh::preProcessDistToBdry() {
    printf("LOOP %d total %d \n", ln, total);
    ++ln;
   }
-
+  
+  convert2ReadOnlyCSR();
 }
+
 
 void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums){
   auto &numBdryFaceIds = this->numBdryFaceIds;
@@ -414,4 +429,53 @@ void GitrmMesh::printBdryFacesCSR(bool printIds, o::LO minNums){
   printf("\nCSR: \n");
   o::parallel_for(mesh.nelems(), print, "printBdryFacesCSR");
   printf("\nDEPTH: %0.5f \n", DEPTH_DIST2_BDRY);
+}
+
+
+void GitrmMesh::initBFSAdjSearchData(){
+  OMEGA_H_CHECK(BDRYFACE_SIZE > 0);
+  OMEGA_H_CHECK(SIZE_PER_FACE > 0);
+  auto nel = mesh.nelems();
+  numBdryFaceIds = o::Write<o::LO>(nel, 0);
+  visitedElems = o::Write<o::LO>(nel* BDRYFACE_SIZE, 0);
+}
+
+void GitrmMesh::convert2CsrBfs(){
+
+}
+
+
+void GitrmMesh::preProcessDistToBdryByAdjSearch(){
+  MESHDATA(mesh);
+  
+  auto &numBdryFaceIds = this->numBdryFaceIds;
+  auto &visitedElems = this->visitedElems;
+
+  auto &bdryFaceIdsBfs = this->bdryFaceIdsBfs;
+  auto &bdryFaceElemIdsBfs = this->bdryFaceElemIdsBfs;
+
+  auto &bdryFacesBfs = this->bdryFaces;
+  auto &bdryFaceIndsBfs = this->bdryFaceIndsBfs;
+  
+  initBFSAdjSearchData();
+
+  auto run = OMEGA_H_LAMBDA(o::LO elem){
+    // Collect bdry faces
+    o::LO bdryFids[4];
+    o::LO nbdry = p::get_face_type_ids_of_elem(elem, down_r2f, side_is_exposed, bdryFids, 2);
+
+    for(auto fi=0; fi < nbdry; ++fi){
+      auto fid = bdryFids[fi];
+      // BFS
+      while(true){
+
+
+      }
+
+
+
+    }
+  };
+  o::parallel_for(mesh.nelems(), run, "preProcessDistToBdryByAdjSearch");
+
 }

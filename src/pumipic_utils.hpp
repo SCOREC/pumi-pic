@@ -78,6 +78,15 @@ OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
 
+OMEGA_H_INLINE void osh_cross(const Omega_h::Vector<3> &a,
+   const Omega_h::Vector<3> &b, Omega_h::Vector<3> &c)
+{
+  c[0] = a[1]*b[2] - a[2]*b[1];
+  c[1] = - a[0]*b[2] + a[2]*b[0];
+  c[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+
 OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
 {
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);

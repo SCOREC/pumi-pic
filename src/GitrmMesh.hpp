@@ -170,18 +170,23 @@ inline void gitrm_findDistanceToBdry (
   
   //fskip is 2, since 1st 2 are not part of face vertices
 
-  scs->transferToDevice();
-
   OMEGA_H_CHECK(fsize > 0 && nel >0);
+  
+  Vector3d *scs_pos = scs->getSCS<0>();
+  scs->transferToDevice();
+  kkFp3View pos_d("position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(pos_d, scs_pos);
 
-
+  kkFpView d2bdry_d("d2bdry_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(d2bdry_d, scs->getSCS<3>() );
+  
   //TODO temporarily skipping  macros
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     //if (mask <= 0) return; //TODO ?????
-    //TODO
-    if(elem%500) return;
-    o::LO verbose = (elem==6223)?3:0;
+
+    //TODO  
+    o::LO verbose = 2;//(elem==6223)?3:0;
 
     o::LO beg = bdryFaceInds[elem];
     o::LO nFaces = bdryFaceInds[elem+1] - beg;
@@ -200,7 +205,8 @@ inline void gitrm_findDistanceToBdry (
     o::LO region = -1;
 
     if(verbose >2){
-      printf("\n e_%d nFaces_%d %d %d\n", elem, nFaces, bdryFaceInds[elem], bdryFaceInds[elem+1]);
+      printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
+        bdryFaceInds[elem+1]);
     }
 
 
@@ -218,28 +224,20 @@ inline void gitrm_findDistanceToBdry (
       for(o::LO i=0; i<3; ++i){ //Tet vertexes
         for(o::LO j=0; j<3; ++j){ //coords
           face[i][j] = bdryFaces[ind + i*3 + j + fskip];
-          if(verbose > 2){ 
+          if(verbose > 3){ 
             printf(" e_%d face[%d][%d]=%0.3f ind_%d  fe_%d \n ", elem, i, j, 
               face[i][j], ind + i*3 + j + fskip, fe);
           }
         }
       }
 
-      auto id = scs->getSCS<0>();
-      auto pos = scs->getSCS<1>();
-      printf(": %d %d %.1f", pid, id[pid], pos[pid]);
-      //const o::Vector<3> ref({pos[pid], pos[pid+1], pos[pid+2]});
-      
-      //TODO replace this temp centroid as particle position
-      o::Matrix<3, 4> m;
-      p::findTetCoords(mesh2verts, coords, elem, m);
-      //Centroid of tet
-      o::Vector<3> ref{{1/4.0*(m[0][0]+m[1][0]+m[2][0]+m[3][0]), 
-                        1/4.0*(m[0][1]+m[1][1]+m[2][1]+m[3][1]),
-                        1/4.0*(m[0][2]+m[1][2]+m[2][2]+m[3][2])}};
-      
+      const o::Vector<3> ref({ pos_d(pid,0), pos_d(pid,1), pos_d(pid,2)});
 
-      o::LO r = p::find_closest_point_on_triangle_with_normal(face, ref, point);
+      if(verbose > 2) {
+        printf(": %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
+      }
+
+      o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
       if(verbose >2){
           printf("Red: e_%d region_%d fe_%d\n", elem, region, fe);
       }
@@ -262,17 +260,20 @@ inline void gitrm_findDistanceToBdry (
           p::print_osh_vector(point, "Nearest_pt");
         }
       }
-      //scs.distToBdry[pid] = min;
     }
 
     min = std::sqrt(min);
     //TODO include elem ids of bdry faces, to see in paraview.
-    if(verbose >2){
+    if(verbose >1){
       printf("\n*** e_%d MINdist_%0.8f fi_%d face_el %d reg_%d\n", 
         elem, min, fid, fel, minRegion);
     }
+    d2bdry_d(pid) = min;
   };
+
   scs->parallel_for(distRun);
+  
+  deviceToHostFp(d2bdry_d, scs->getSCS<3>());
 
 }
 

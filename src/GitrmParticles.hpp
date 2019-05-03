@@ -25,7 +25,7 @@ namespace o = Omega_h;
 namespace p = pumipic;
 
 //TODO modify to have all member data
-typedef MemberTypes < Vector3d, Vector3d, int > Particle;  //FIXME
+typedef MemberTypes < Vector3d, Vector3d, int,  double > Particle;  //FIXME
 
 class GitrmParticles {
 public:
@@ -79,6 +79,15 @@ inline void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
   }
   Kokkos::deep_copy(d,hv);
 }
+
+inline void deviceToHostFp(kkFpView d, fp_t *h) {
+  kkFpView::HostMirror hv = Kokkos::create_mirror_view(d);
+  Kokkos::deep_copy(hv,d);
+  for(size_t i=0; i<hv.size(); ++i) {
+    h[i] = hv(i);
+  }
+}
+
 
 inline void deviceToHostFp(kkFp3View d, fp_t (*h)[3]) {
   kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);

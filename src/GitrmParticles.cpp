@@ -29,9 +29,6 @@ namespace p = pumipic;
 
 
 
-typedef MemberTypes<Vector3d, Vector3d, int > Particle;  //FIXME
-
-
 //TODO remove mesh argument, once Singleton gm is used
 GitrmParticles::GitrmParticles(o::Mesh &m):
   mesh(m) {

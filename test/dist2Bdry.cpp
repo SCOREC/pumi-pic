@@ -49,16 +49,11 @@ int main(int argc, char** argv) {
   fprintf(stderr, "number of elements %d \n", ne);
 
 
-
-  //associate one floating point value with each mesh vertex and set them to 0
-//  mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
-
   //GitrmMesh &gm = GitrmMesh::getInstance(&mesh);
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
   // Add bdry faces to elements within 1mm
 
-  //preProcessDistToBdry(mesh, bdryFacesW, numBdryFaceIds, bdryFaceIds, bdryFlags);
   gm.preProcessDistToBdry();
   gm.printBdryFaceIds(false, 25); //numBdryFaceIds, mesh);  
   gm.printBdryFacesCSR(false, 25);

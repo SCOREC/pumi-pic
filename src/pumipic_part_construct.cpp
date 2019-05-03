@@ -16,7 +16,8 @@
 #include <Omega_h_reduce.hpp>
 
 namespace {
-  void createGlobalNumbering(int comm_size, Omega_h::Write<Omega_h::LO>& owner,
+  void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
+                             Omega_h::Write<Omega_h::LO>& rank_offset_nelms,
                              Omega_h::Write<Omega_h::LO>& elem_gid);
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
                        Omega_h::Write<Omega_h::LO>& is_safe, Omega_h::Write<Omega_h::LO>& is_visited,
@@ -50,7 +51,8 @@ namespace pumipic {
     int ne = mesh.nelems();
     /************* Globally Number Element **********/
     Omega_h::Write<Omega_h::LO> elem_gid(ne);
-    createGlobalNumbering(comm_size, owner, elem_gid);
+    Omega_h::Write<Omega_h::LO> rank_offset_nelms(comm_size+1,0);
+    createGlobalNumbering(owner, rank_offset_nelms, elem_gid);
 
     // **********Determine safe zone and ghost region**************** //
     Omega_h::Write<Omega_h::LO> is_safe(ne);
@@ -120,14 +122,17 @@ namespace pumipic {
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
     Omega_h::Write<Omega_h::LO> new_elem_gid(picpart->nelems(), 0);
     Omega_h::Write<Omega_h::LO>& new_elem_ids = *(ent_ids[dim]);
-    const auto convertSafeAndGid = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
+    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
+    const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = new_elem_ids[elem_id];
+      //TODO remove this conditional using padding?
       if (new_elem >= 0) {
         new_safe[new_elem] = is_safe[elem_id];
         new_elem_gid[new_elem] = elem_gid[elem_id];
+        new_ent_owners[new_elem] = owner[elem_id];
       }
     };
-    Omega_h::parallel_for(mesh.nelems(), convertSafeAndGid, "convertSafeAndGid");
+    Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
     picpart->add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::LO>(new_elem_gid));
     picpart->add_tag(dim, "safe", 1, Omega_h::Read<Omega_h::LO>(new_safe));
 
@@ -143,23 +148,23 @@ namespace pumipic {
 
 namespace {
 
-  void createGlobalNumbering(int comm_size, Omega_h::Write<Omega_h::LO>& owner,
+  void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
+                             Omega_h::Write<Omega_h::LO>& rank_offset_nelms,
                              Omega_h::Write<Omega_h::LO>& elem_gid) {
-    //Exclusive sum of # elements per part
-    Omega_h::Write<Omega_h::LO> elems_per_rank(comm_size+1, 0);
+    const int comm_size = rank_offset_nelms.size();
     //TODO put this on device
     for (int i = 0; i < owner.size(); ++i) {
-      ++elems_per_rank[owner[i]+1];
+      ++rank_offset_nelms[owner[i]+1];
     }
     
     //Exclusive sum over elems per rank
     for (int i = 1; i <= comm_size; ++i) {
-      elems_per_rank[i] += elems_per_rank[i-1];
+      rank_offset_nelms[i] += rank_offset_nelms[i-1];
     }
     //Globally number the elements
     int* elem_gid_rank = new int[comm_size];
     for (int i = 0; i < comm_size; ++i)
-      elem_gid_rank[i] = elems_per_rank[i];
+      elem_gid_rank[i] = rank_offset_nelms[i];
     for (int i = 0; i < owner.size(); ++i) {
       elem_gid[i] = elem_gid_rank[owner[i]]++;
     }

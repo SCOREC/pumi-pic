@@ -82,7 +82,7 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
 //TODO Warning: Check opposite_template use in this before using
-OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
+OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc)
 {
   for(Omega_h::LO i=0; i<4; ++i) bcc[i] = -1;

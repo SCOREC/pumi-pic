@@ -111,12 +111,12 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
   return true;
 }
 
-void print_matrix(const Omega_h::Matrix<3, 4> &M)
+OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
 {
-  std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
-  std::cout << "M1  " << M[1].data()[0] << ", " << M[1].data()[1] << ", " << M[1].data()[2] <<"\n";
-  std::cout << "M2  " << M[2].data()[0] << ", " << M[2].data()[1] << ", " << M[2].data()[2] <<"\n";
-  std::cout << "M3  " << M[3].data()[0] << ", " << M[3].data()[1] << ", " << M[3].data()[2] <<"\n";
+  printf("M0 %.4f, %.4f, %.4f\n", M[0][0], M[0][1], M[0][2]);
+  printf("M1 %.4f, %.4f, %.4f\n", M[1][0], M[1][1], M[1][2]);
+  printf("M2 %.4f, %.4f, %.4f\n", M[2][0], M[2][1], M[2][2]);
+  printf("M3 %.4f, %.4f, %.4f\n", M[3][0], M[3][1], M[3][2]);
 }
 
 

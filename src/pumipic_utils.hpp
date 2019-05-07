@@ -46,9 +46,9 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   return true;
 }
 
-OMEGA_H_INLINE bool all_positive(const Omega_h::Write<Omega_h::Real> a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
+OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, Omega_h::Real tol=EPSILON)
 {
-  for(Omega_h::LO i=0; i<n; ++i)
+  for(Omega_h::LO i=0; i<a.size(); ++i)
   {
     if(a[i] < -tol) // TODO set default the right tolerance
      return false;
@@ -56,7 +56,8 @@ OMEGA_H_INLINE bool all_positive(const Omega_h::Write<Omega_h::Real> a, Omega_h:
   return true;
 }
 
-OMEGA_H_INLINE Omega_h::LO min_index(const Omega_h::Write<Omega_h::Real> a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+template <class T> OMEGA_H_DEVICE Omega_h::LO 
+min_index(const T a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
@@ -70,7 +71,6 @@ OMEGA_H_INLINE Omega_h::LO min_index(const Omega_h::Write<Omega_h::Real> a, Omeg
   }
   return ind;
 }
-
 
 OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
    const Omega_h::Vector<3> &b)

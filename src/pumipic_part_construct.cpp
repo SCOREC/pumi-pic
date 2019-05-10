@@ -1,4 +1,5 @@
 #include "pumipic_part_construct.hpp"
+#include "pumipic_comm.hpp"
 #include <Omega_h_for.hpp>
 #include <Omega_h_file.hpp>  //gmsh
 #include <Omega_h_tag.hpp>
@@ -6,16 +7,13 @@
 #include <Omega_h_array.hpp>
 #include <Omega_h_array_ops.hpp>
 #include <Omega_h_element.hpp>
-#include <Omega_h_scalar.hpp> //divide
-#include <Omega_h_mark.hpp>
 #include <Omega_h_class.hpp>
 #include <Omega_h_mesh.hpp>
-#include <Omega_h_shape.hpp>
-#include <Omega_h_build.hpp>
-#include <Omega_h_compare.hpp>
 #include <Omega_h_reduce.hpp>
-
+#include <Omega_h_build.hpp>
 namespace {
+  void calculateOwnerOffset(Omega_h::Write<Omega_h::LO>& owner,
+                            Omega_h::Write<Omega_h::LO>& offset_nents);
   void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
                              Omega_h::Write<Omega_h::LO>& rank_offset_nelms,
                              Omega_h::Write<Omega_h::LO>& elem_gid);
@@ -73,6 +71,7 @@ namespace pumipic {
         if (has_part[i])
           printf("Rank %d is keeping %d\n", rank, i);
       }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
     if (debug >= 3) {
       //*************Render the 0th rank after BFS*************//
@@ -80,8 +79,9 @@ namespace pumipic {
       mesh.add_tag(dim, "safe", 1, Omega_h::Read<int>(is_safe));
       mesh.add_tag(dim, "visited", 1, Omega_h::Read<int>(is_visited));
       if (rank == 0) {
-        Omega_h::vtk::write_parallel("rendered", &mesh, dim);
+        Omega_h::vtk::write_parallel("full_mesh", &mesh, dim);
       }
+      MPI_Barrier(MPI_COMM_WORLD);
     }
 
     /***************** Count Number of Entities in the PICpart *************/    
@@ -91,15 +91,23 @@ namespace pumipic {
       buf_ents[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
     for (int i = 0; i <= dim; ++i)
       setSafeEnts(mesh, i, ne, has_part, owner, *(buf_ents[i]));
-  
+
+    if (debug >= 2) {
+      if (rank == 0) {
+        for (int i = 0; i < (*buf_ents[dim]).size(); i++)
+          printf("%d: %d\n", i, (*buf_ents[dim])[i]);
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+    }
     //Gather number of entities remaining in the picpart
     Omega_h::Write<Omega_h::LO> num_ents(dim+1,0);
     for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumArray(mesh.nents(i), *(buf_ents[i]));
-    if (debug >= 1)
+    if (debug >= 1) {
       printf("Rank %d has <v e f r> %d %d %d %d\n", rank, 
              num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
-
+      MPI_Barrier(MPI_COMM_WORLD);
+    }
     /**************** Create numberings for the entities on the picpart **************/
     Omega_h::Write<Omega_h::LO>** ent_ids = new Omega_h::Write<Omega_h::LO>*[dim+1];
     for (int i = 0; i <= dim; ++i) {
@@ -135,6 +143,12 @@ namespace pumipic {
     Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
     picpart->add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::LO>(new_elem_gid));
     picpart->add_tag(dim, "safe", 1, Omega_h::Read<Omega_h::LO>(new_safe));
+    picpart->add_tag(dim, "owner", 1, Omega_h::Read<Omega_h::LO>(new_ent_owners));
+
+    Omega_h::Write<Omega_h::LO> picpart_offset_nelms(comm_size+1,0);
+    calculateOwnerOffset(new_ent_owners, picpart_offset_nelms);
+    setupPICComm(picpart, 3, rank_offset_nelms, picpart_offset_nelms,
+                 new_elem_gid, new_ent_owners);
 
     //Cleanup
     for (int i = 0; i <= dim; ++i) {
@@ -148,19 +162,26 @@ namespace pumipic {
 
 namespace {
 
+  void calculateOwnerOffset(Omega_h::Write<Omega_h::LO>& owner,
+                            Omega_h::Write<Omega_h::LO>& offset_nents) {
+    const int comm_size = offset_nents.size()-1;
+    //TODO put this on device
+    for (int i = 0; i < owner.size(); ++i) {
+      ++offset_nents[owner[i]+1];
+    }
+    //Exclusive sum over elems per rank
+    for (int i = 1; i <= comm_size; ++i) {
+      offset_nents[i] += offset_nents[i-1];
+    }
+  }
+
   void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
                              Omega_h::Write<Omega_h::LO>& rank_offset_nelms,
                              Omega_h::Write<Omega_h::LO>& elem_gid) {
     const int comm_size = rank_offset_nelms.size();
-    //TODO put this on device
-    for (int i = 0; i < owner.size(); ++i) {
-      ++rank_offset_nelms[owner[i]+1];
-    }
-    
-    //Exclusive sum over elems per rank
-    for (int i = 1; i <= comm_size; ++i) {
-      rank_offset_nelms[i] += rank_offset_nelms[i-1];
-    }
+    calculateOwnerOffset(owner,rank_offset_nelms);
+
+    //TODO Put this on device
     //Globally number the elements
     int* elem_gid_rank = new int[comm_size];
     for (int i = 0; i < comm_size; ++i)
@@ -232,6 +253,7 @@ namespace {
     }
   }
 
+  //TODO Replace with omega_h reduce/scan
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr) {
     Omega_h::LO sum = 0;
 #if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)

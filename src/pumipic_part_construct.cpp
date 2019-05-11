@@ -73,7 +73,7 @@ namespace pumipic {
           printf("Rank %d is keeping %d\n", rank, i);
       }
       MPI_Barrier(MPI_COMM_WORLD);
-    }
+    }    
     if (debug >= 3) {
       //*************Render the 0th rank after BFS*************//
       mesh.add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::GO>(elem_gid));
@@ -84,33 +84,36 @@ namespace pumipic {
       }
       MPI_Barrier(MPI_COMM_WORLD);
     }
+
     /***************** Count the number of parts in the picpart ****************/
     num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
 
     
     /***************** Count Number of Entities in the PICpart *************/
     //Mark all entities owned by a part with has_part[part] = true as staying
-    Omega_h::Write<Omega_h::LO>** buf_ents = new Omega_h::Write<Omega_h::LO>*[dim+1];
+    Omega_h::Write<Omega_h::LO> buf_ents[4];
     for (int i = 0; i <= dim; ++i) 
-      buf_ents[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
+      buf_ents[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
     for (int i = 0; i <= dim; ++i)
-      setSafeEnts(mesh, i, ne, has_part, owner, *(buf_ents[i]));
+      setSafeEnts(mesh, i, ne, has_part, owner, buf_ents[i]);
 
     //Gather number of entities remaining in the picpart
     Omega_h::Write<Omega_h::LO> num_ents(dim+1,0);
     for (int i = 0; i <= dim; ++i)
-      num_ents[i] = sumPositives(mesh.nents(i), *(buf_ents[i]));
+      num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
+
     if (debug >= 1) {
       printf("Rank %d has <v e f r> %d %d %d %d\n", rank, 
              num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
       MPI_Barrier(MPI_COMM_WORLD);
     }
+
     /**************** Create numberings for the entities on the picpart **************/
-    Omega_h::Write<Omega_h::LO>** ent_ids = new Omega_h::Write<Omega_h::LO>*[dim+1];
+    Omega_h::Write<Omega_h::LO> ent_ids[4];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
-      ent_ids[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i), -1);
-      numberValidEntries(mesh.nents(i), *(buf_ents[i]), *(ent_ids[i]));
+      ent_ids[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i), -1);
+      numberValidEntries(mesh.nents(i), buf_ents[i], ent_ids[i]);
     }
 
     //************Build a new mesh as the picpart**************
@@ -119,19 +122,19 @@ namespace pumipic {
 
     //Gather coordinates
     Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
-    gatherCoords(mesh, *(ent_ids[0]), new_coords);
+    gatherCoords(mesh, ent_ids[0], new_coords);
 
+    //Build the mesh
     for (int i = dim; i >= 0; --i)
-      buildAndClassify(mesh,picpart,i,num_ents[i], *(ent_ids[i]), *(ent_ids[0]), new_coords);
+      buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
     Omega_h::finalize_classification(picpart);
 
     //****************Convert Tags to the picpart***********
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
     Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO>& new_elem_ids = *(ent_ids[dim]);
     Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
     const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
-      const Omega_h::LO new_elem = new_elem_ids[elem_id];
+      const Omega_h::LO new_elem = ent_ids[dim][elem_id];
       //TODO remove this conditional using padding?
       if (new_elem >= 0) {
         new_safe[new_elem] = is_safe[elem_id];
@@ -150,21 +153,14 @@ namespace pumipic {
       picpart->add_tag(dim, "owner", 1, Omega_h::Read<Omega_h::LO>(new_ent_owners));
     }
 
-    Omega_h::Write<Omega_h::LO> picpart_offset_nelms(comm_size+1,0);
-    
+
+    //**************** Build communication information ********************//
     //TODO create communication information for each entity dimension
     picpart->set_comm(lib->world());
+    Omega_h::Write<Omega_h::LO> picpart_offset_nelms(comm_size+1,0);
     calculateOwnerOffset(new_ent_owners, picpart_offset_nelms);
     setupComm(3, rank_offset_nelms, picpart_offset_nelms,
               new_ent_owners);
-
-    //Cleanup
-    for (int i = 0; i <= dim; ++i) {
-      delete buf_ents[i];
-      delete ent_ids[i];
-    }
-    delete [] buf_ents;
-    delete [] ent_ids;
   }
 }
 

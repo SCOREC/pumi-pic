@@ -6,7 +6,7 @@ namespace pumipic {
   class Mesh {
   public:
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO>& partition_vector,
-         int buffer_layers, int safe_layers, int debug = 0);
+         int buffer_layers, int safe_layers);
     //TODO? create XGC classification method for creating picpart
     //TODO? create picpart with the entire mesh
     //TODO? create picpart with unsafe_layers instead of safe_layers
@@ -56,6 +56,13 @@ namespace pumipic {
     Mesh() {throw std::runtime_error("Cannot build empty PIC part mesh.");}
     Mesh(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
     Mesh& operator=(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
+
+    //Picpart construction
+    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& owner,
+                          Omega_h::Write<Omega_h::GO> elem_gid,
+                          Omega_h::Write<Omega_h::LO> rank_offset_nelms,
+                          Omega_h::Write<Omega_h::LO> has_part,
+                          Omega_h::Write<Omega_h::LO> is_safe);
 
     //Communication setup
     void setupComm(int dim, Omega_h::Write<Omega_h::LO> global_ents_per_rank,

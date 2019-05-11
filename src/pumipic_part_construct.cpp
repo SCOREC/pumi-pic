@@ -35,7 +35,7 @@ namespace {
 
 namespace pumipic {
   Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& owner,
-                  int ghost_layers, int safe_layers, int debug) {
+                  int ghost_layers, int safe_layers) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     int comm_size;
@@ -46,20 +46,19 @@ namespace pumipic {
       throw 1;
     }
 
-    int dim = mesh.dim();
-    int ne = mesh.nelems();
     /************* Globally Number Element **********/
-    Omega_h::Write<Omega_h::GO> elem_gid(ne);
+    Omega_h::Write<Omega_h::GO> elem_gid(mesh.nelems());
     Omega_h::Write<Omega_h::LO> rank_offset_nelms(comm_size+1,0);
     createGlobalNumbering(owner, rank_offset_nelms, elem_gid);
+    //TODO define global numbering on all entity types
 
     // **********Determine safe zone and ghost region**************** //
-    Omega_h::Write<Omega_h::LO> is_safe(ne);
-    Omega_h::Write<Omega_h::LO> is_visited(ne);
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
+    Omega_h::Write<Omega_h::LO> is_visited(mesh.nelems());
     const auto initVisit = OMEGA_H_LAMBDA( Omega_h::LO elem_id){
       is_visited[elem_id] = is_safe[elem_id] = (owner[elem_id] == rank);
     };
-    Omega_h::parallel_for(ne, initVisit, "initVisit");
+    Omega_h::parallel_for(mesh.nelems(), initVisit, "initVisit");
     Omega_h::Write<Omega_h::LO> has_part(comm_size);
     for (int i = 0; i < comm_size; ++i)
       has_part[i] = (i == rank);
@@ -67,23 +66,18 @@ namespace pumipic {
     bfsBufferLayers(mesh, bridge_dim, safe_layers, ghost_layers, is_safe, is_visited, 
                     owner, has_part);
 
-    if (debug >= 2) {
-      for (int i = 0; i < comm_size; ++i) {
-        if (has_part[i])
-          printf("Rank %d is keeping %d\n", rank, i);
-      }
-      MPI_Barrier(MPI_COMM_WORLD);
-    }    
-    if (debug >= 3) {
-      //*************Render the 0th rank after BFS*************//
-      mesh.add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::GO>(elem_gid));
-      mesh.add_tag(dim, "safe", 1, Omega_h::Read<int>(is_safe));
-      mesh.add_tag(dim, "visited", 1, Omega_h::Read<int>(is_visited));
-      if (rank == 0) {
-        Omega_h::vtk::write_parallel("full_mesh", &mesh, dim);
-      }
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
+    constructPICPart(mesh, owner, elem_gid, rank_offset_nelms, has_part, is_safe);
+  }
+  void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& owner,
+                              Omega_h::Write<Omega_h::GO> elem_gid,
+                              Omega_h::Write<Omega_h::LO> rank_offset_nelms,
+                              Omega_h::Write<Omega_h::LO> has_part,
+                              Omega_h::Write<Omega_h::LO> is_safe) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int dim = mesh.dim();
 
     /***************** Count the number of parts in the picpart ****************/
     num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
@@ -95,18 +89,12 @@ namespace pumipic {
     for (int i = 0; i <= dim; ++i) 
       buf_ents[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
     for (int i = 0; i <= dim; ++i)
-      setSafeEnts(mesh, i, ne, has_part, owner, buf_ents[i]);
+      setSafeEnts(mesh, i, mesh.nelems(), has_part, owner, buf_ents[i]);
 
     //Gather number of entities remaining in the picpart
     Omega_h::Write<Omega_h::LO> num_ents(dim+1,0);
     for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
-
-    if (debug >= 1) {
-      printf("Rank %d has <v e f r> %d %d %d %d\n", rank, 
-             num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
 
     /**************** Create numberings for the entities on the picpart **************/
     Omega_h::Write<Omega_h::LO> ent_ids[4];
@@ -145,14 +133,6 @@ namespace pumipic {
     Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
     global_ids_per_dim[dim] = Omega_h::Read<Omega_h::GO>(new_elem_gid);
     is_ent_safe = Omega_h::Read<Omega_h::LO>(new_safe);
-
-    //TODO define global numbering on all entity types
-    if (debug >= 3) {
-      picpart->add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::GO>(new_elem_gid));
-      picpart->add_tag(dim, "safe", 1, Omega_h::Read<Omega_h::LO>(new_safe));
-      picpart->add_tag(dim, "owner", 1, Omega_h::Read<Omega_h::LO>(new_ent_owners));
-    }
-
 
     //**************** Build communication information ********************//
     //TODO create communication information for each entity dimension

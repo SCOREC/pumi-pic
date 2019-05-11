@@ -18,10 +18,10 @@ int main(int argc, char** argv) {
   Omega_h::Library lib = Omega_h::Library(&argc, &argv);
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (argc != 5 && argc != 6) {
+  if (argc != 5) {
     if (!rank)
       fprintf(stderr, "Usage: %s <mesh> <partition filename> "
-              "<# of safe layers> <# of buffer layers> [verbosity (0-3)]\n", argv[0]);
+              "<# of safe layers> <# of buffer layers>\n", argv[0]);
     MPI_Finalize();
     return EXIT_FAILURE;
   }
@@ -30,9 +30,6 @@ int main(int argc, char** argv) {
 
   int safe_layers = atoi(argv[3]);
   int ghost_layers = atoi(argv[4]);
-  int verbosity = 0;
-  if (argc >= 6)
-    verbosity = atoi(argv[5]);
 
   //**********Load the mesh in serial everywhere*************//
   Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.self());
@@ -58,7 +55,7 @@ int main(int argc, char** argv) {
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 
-  pumipic::Mesh picparts(mesh,owner,ghost_layers, safe_layers, verbosity);
+  pumipic::Mesh picparts(mesh,owner,ghost_layers, safe_layers);
 
   char vtk_name[80];
   sprintf(vtk_name, "picpart%d",rank);

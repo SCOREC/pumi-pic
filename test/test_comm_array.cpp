@@ -57,10 +57,10 @@ int main(int argc, char** argv) {
 
   //Check that each entry is equal to the number of ranks
   Omega_h::HostWrite<Omega_h::LO> host_array(comm_array);
+  Omega_h::HostRead<Omega_h::LO> elm_offsets(picparts.nentsOffsets(3));
   bool success = true;
-  for (int i = picparts.offset_ents_per_rank_per_dim[dim][rank];
-       i < picparts.offset_ents_per_rank_per_dim[dim][rank]; ++i)
-    if (host_array[i] != picparts.num_buffers())
+  for (int i = elm_offsets[rank]; i < elm_offsets[rank+1]; ++i)
+    if (host_array[i] != picparts.numBuffers(dim))
       success = false;
 
   if (!success) {

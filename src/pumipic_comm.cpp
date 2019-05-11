@@ -8,9 +8,9 @@
 #include <Omega_h_reduce.hpp>
 
 namespace pumipic {
-  void Mesh::setupComm(int dim, Omega_h::Write<Omega_h::LO>& global_ents_per_rank,
-                    Omega_h::Write<Omega_h::LO>& picpart_ents_per_rank,
-                    Omega_h::Write<Omega_h::LO>& ent_owners) {
+  void Mesh::setupComm(int dim, Omega_h::Write<Omega_h::LO> global_ents_per_rank,
+                    Omega_h::Write<Omega_h::LO> picpart_ents_per_rank,
+                    Omega_h::Write<Omega_h::LO> ent_owners) {
     Omega_h::CommPtr comm = picpart->comm();
     int nents = picpart->nents(dim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
@@ -18,7 +18,7 @@ namespace pumipic {
 
     //Compute the number of parts that make up the picpart
     Omega_h::HostWrite<Omega_h::LO> host_offset_nents(picpart_ents_per_rank);
-    buffered_parts[dim] = new int[num_cores[dim]];
+    buffered_parts[dim] = Omega_h::HostWrite<Omega_h::LO>(num_cores[dim]);
     int index = 0;
     for (int i = 0; i < host_offset_nents.size(); ++i) {
       if (host_offset_nents[i] != host_offset_nents[i+1] && i != comm->rank())

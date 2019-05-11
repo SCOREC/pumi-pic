@@ -10,6 +10,5 @@
 namespace pumipic {
   Mesh::~Mesh() {
     delete picpart;
-    delete [] buffered_parts[3];
   }
 }

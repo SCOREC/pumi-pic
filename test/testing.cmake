@@ -47,3 +47,10 @@ mpi_test(ptn_loading_cube 2 ./ptn_loading ${TEST_DATA_DIR}/cube.msh testing_cube
 
 mpi_test(ptn_loading_pisces 4 
          ./ptn_loading ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn 1 3)
+
+mpi_test(full_mesh_pisces 4 
+         ./full_mesh ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
+
+mpi_test(comm_array_pisces 4 
+         ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
+

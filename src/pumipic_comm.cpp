@@ -1,4 +1,4 @@
-#include "pumipic_comm.hpp"
+#include "pumipic_mesh.hpp"
 #include <Omega_h_for.hpp>
 #include <Omega_h_tag.hpp>
 #include <Omega_h_adj.hpp>
@@ -7,63 +7,28 @@
 #include <Omega_h_build.hpp>
 #include <Omega_h_reduce.hpp>
 
-namespace {
-  struct PIC_Comm {
-    Omega_h::Mesh* picpart;
-    int comm_size; //The number of MPI ranks
-    int comm_rank; //The MPI rank of this part
-    int comm_neighbors; //number of ranks that make up the picpart
-    //Exclusive sum of entities per part that is in the picpart
-    Omega_h::Read<Omega_h::LO>* nents_per_rank_per_dim[4];
-    //Mapping from entity index to comm array index
-    Omega_h::Read<Omega_h::LO>* ent_to_comm_arr_per_dim[4]; //can be a tag
-    //Owner of each entity
-    Omega_h::Read<Omega_h::LO>* ent_owner_per_dim[4]; //can be a tag
-    //Mapping from picpart entity index to core local index
-    Omega_h::Read<Omega_h::LO>* ent_rank_local_id_per_dim[4]; //can be a tag
-    PIC_Comm() {
-      for (int i = 0; i < 4; ++i) {
-        nents_per_rank_per_dim[i] = NULL;
-        ent_to_comm_arr_per_dim[i] = NULL;
-        ent_owner_per_dim[i] = NULL;
-        ent_rank_local_id_per_dim[i] = NULL;
-      }
-    }
-    ~PIC_Comm() {
-      for (int i = 0; i < 4; ++i) {
-        if (nents_per_rank_per_dim[i]) {
-          delete nents_per_rank_per_dim[i];
-          delete ent_to_comm_arr_per_dim[i];
-          delete ent_owner_per_dim[i];
-          delete ent_rank_local_id_per_dim[i];
-        }
-      }
-    }
-  };
-  
-  PIC_Comm pic_comm;
-}
-
 namespace pumipic {
-  int PIC_Comm_Self() { return pic_comm.comm_rank;}
-  int PIC_Comm_Size() { return pic_comm.comm_size;}
-  int PIC_Comm_Neighbors() { return pic_comm.comm_neighbors;}
-  void setupPICComm(Omega_h::Mesh* picpart, int dim,
-                    Omega_h::Write<Omega_h::LO>& global_ents_per_rank,
+  void Mesh::setupComm(int dim, Omega_h::Write<Omega_h::LO>& global_ents_per_rank,
                     Omega_h::Write<Omega_h::LO>& picpart_ents_per_rank,
-                    Omega_h::Write<Omega_h::LO>& ent_global_numbering,
                     Omega_h::Write<Omega_h::LO>& ent_owners) {
-    pic_comm.picpart = picpart;
-    MPI_Comm_rank(MPI_COMM_WORLD, &(pic_comm.comm_rank));
-    MPI_Comm_size(MPI_COMM_WORLD, &(pic_comm.comm_size));
-    int nents = ent_owners.size();
+    Omega_h::CommPtr comm = picpart->comm();
+    int nents = picpart->nents(dim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
     Omega_h::Write<Omega_h::LO> comm_arr_index(nents,0);
 
+    //Compute the number of parts that make up the picpart
+    Omega_h::HostWrite<Omega_h::LO> host_offset_nents(picpart_ents_per_rank);
+    buffered_parts[dim] = new int[num_cores[dim]];
+    int index = 0;
+    for (int i = 0; i < host_offset_nents.size(); ++i) {
+      if (host_offset_nents[i] != host_offset_nents[i+1] && i != comm->rank())
+        buffered_parts[dim][index++] = i;
+    }
+    
     //Calculate rankwise local ids
     auto calculateRankLids = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
       const Omega_h::LO owner = ent_owners[ent_id];
-      ent_rank_lids[ent_id] = ent_global_numbering[ent_id] - global_ents_per_rank[owner];
+      ent_rank_lids[ent_id] = global_ids_per_dim[dim][ent_id] - global_ents_per_rank[owner];
     };
     Omega_h::parallel_for(nents, calculateRankLids, "calculateRankLids");
     //Calculate communication array indices
@@ -74,37 +39,27 @@ namespace pumipic {
     };
     Omega_h::parallel_for(nents, calculateCommArrayIndices, "calculateCommArrayIndices");
     
-    pic_comm.nents_per_rank_per_dim[dim] = new Omega_h::Read<Omega_h::LO>(picpart_ents_per_rank);
-    pic_comm.ent_to_comm_arr_per_dim[dim] = new Omega_h::Read<Omega_h::LO>(comm_arr_index);
-    pic_comm.ent_owner_per_dim[dim] = new Omega_h::Read<Omega_h::LO>(ent_owners);
-    pic_comm.ent_rank_local_id_per_dim[dim] = new Omega_h::Read<Omega_h::LO>(ent_rank_lids);
-
-
-    printf("Rank %d has %d elements\n", pic_comm.comm_rank,
-           picpart_ents_per_rank[pic_comm.comm_size]);
+    offset_ents_per_rank_per_dim[dim] = Omega_h::Read<Omega_h::LO>(picpart_ents_per_rank);
+    ent_to_comm_arr_index_per_dim[dim] = Omega_h::Read<Omega_h::LO>(comm_arr_index);
+    ent_owner_per_dim[dim] = Omega_h::Read<Omega_h::LO>(ent_owners);
+    ent_local_rank_id_per_dim[dim] = Omega_h::Read<Omega_h::LO>(ent_rank_lids);
   }
 
   template <class T>
-  typename Omega_h::Write<T> createCommArray(int dim, int num_entries_per_entity,
-                                             T default_value) {
-    if (!pic_comm.nents_per_rank_per_dim[dim]) {
-      fprintf(stderr, "Communication was not setup for dimension %d\n",dim);
-      return Omega_h::Write<T>(0,0);
-    }
-    int num_entries = (*(pic_comm.nents_per_rank_per_dim[dim]))[pic_comm.comm_size];
+  typename Omega_h::Write<T> Mesh::createCommArray(int dim, int num_entries_per_entity,
+                                                   T default_value) {
+    Omega_h::CommPtr comm = picpart->comm();
+    int num_entries = (offset_ents_per_rank_per_dim[dim])[comm->size()];
     int size = num_entries_per_entity * num_entries;
     return Omega_h::Write<T>(size,default_value);
   }
 
   //Reductions are done by a bulk fan-in fan-out through the core region of each picpart
   template <class T>
-  void reduce(int dim, Op op, Omega_h::Write<T>& array) {
-    if (!pic_comm.nents_per_rank_per_dim[dim]) {
-      fprintf(stderr, "Communication was not setup for dimension %d\n",dim);
-      return;
-    }
-    Omega_h::HostRead<Omega_h::LO> ent_offsets(*pic_comm.nents_per_rank_per_dim[dim]);
-    if (ent_offsets[pic_comm.comm_size] != array.size()) {
+  void Mesh::reduceCommArray(int dim, Op op, Omega_h::Write<T> array) {
+    Omega_h::CommPtr comm = picpart->comm();
+    Omega_h::HostRead<Omega_h::LO> ent_offsets(offset_ents_per_rank_per_dim[dim]);
+    if (ent_offsets[comm->size()] != array.size()) {
       fprintf(stderr, "Comm array size does not match the expected size for dimension %d\n",dim);
       return;
     }
@@ -114,34 +69,33 @@ namespace pumipic {
     T* data = host_array.data();
     
     //Prepare sending and receiving data of cores to the owner of that region
-    int my_num_entries = ent_offsets[PIC_Comm_Self()+1] - ent_offsets[PIC_Comm_Self()];
-    Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[PIC_Comm_Neighbors()];
-    for (int i = 0; i < PIC_Comm_Neighbors(); ++i)
+    int my_num_entries = ent_offsets[comm->rank()+1] - ent_offsets[comm->rank()];
+    Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[num_cores[dim]];
+    for (int i = 0; i < num_cores[dim]; ++i)
       neighbor_arrays[i] = new Omega_h::HostWrite<T>(my_num_entries);
-    MPI_Request* send_requests = new MPI_Request[PIC_Comm_Neighbors()];
-    MPI_Request* recv_requests = new MPI_Request[PIC_Comm_Neighbors()];
-    int neighbor_index = 0;
+    MPI_Request* send_requests = new MPI_Request[num_cores[dim]];
+    MPI_Request* recv_requests = new MPI_Request[num_cores[dim]];
     //TODO compile a list of neighbor ranks on host
-    for (int i = 0; i < PIC_Comm_Size(); ++i) {
-      int num_entries = ent_offsets[i+1] - ent_offsets[i];
-      if (num_entries > 0 && i != PIC_Comm_Self()) {
+    for (int i = 0; i < num_cores[dim]; ++i) {
+      int rank = buffered_parts[dim][i];
+      int num_entries = ent_offsets[rank+1] - ent_offsets[rank];
+      if (num_entries > 0) {
         //TODO determine the mpi datatype based on T or use MPI_CHAR and sizeof(T)
-        MPI_Isend(data + ent_offsets[i], num_entries, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, send_requests + neighbor_index);
+        MPI_Isend(data + ent_offsets[rank], num_entries, MPI_INT, rank, 0,
+                  comm->get_impl(), send_requests + i);
         
-        T* neighbor_data = neighbor_arrays[neighbor_index]->data();
-        MPI_Irecv(neighbor_data, my_num_entries, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, recv_requests + neighbor_index);
-        ++neighbor_index;
+        T* neighbor_data = neighbor_arrays[i]->data();
+        MPI_Irecv(neighbor_data, my_num_entries, MPI_INT, rank, 0,
+                  comm->get_impl(), recv_requests + i);
       }
     }
 
     //Wait for recv completion
-    for (int i = 0; i < PIC_Comm_Neighbors(); ++i) {
+    for (int i = 0; i < num_cores[dim]; ++i) {
       int finished_neighbor;
-      MPI_Waitany(PIC_Comm_Neighbors(), recv_requests, &finished_neighbor, MPI_STATUS_IGNORE);
+      MPI_Waitany(num_cores[dim], recv_requests, &finished_neighbor, MPI_STATUS_IGNORE);
       //When recv finishes copy data to the device and perform op
-      const Omega_h::LO start_index = ent_offsets[PIC_Comm_Self()];
+      const Omega_h::LO start_index = ent_offsets[comm->rank()];
       Omega_h::Write<T> recv_array(*(neighbor_arrays[finished_neighbor]));
       if (op == SUM_OP) {
         auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
@@ -168,28 +122,27 @@ namespace pumipic {
       }
       delete neighbor_arrays[finished_neighbor];
     }
-    MPI_Waitall(PIC_Comm_Neighbors(), send_requests,MPI_STATUSES_IGNORE);
+    MPI_Waitall(num_cores[dim], send_requests,MPI_STATUSES_IGNORE);
     delete [] neighbor_arrays;
     
     /***************** Fan Out ******************/
     Omega_h::HostWrite<T> reduced_host_array(array);
     data = reduced_host_array.data();
-    neighbor_index = 0;
     //TODO compile a list of neighbor ranks on host
-    for (int i = 0; i < PIC_Comm_Size(); ++i) {
-      int num_entries = ent_offsets[i+1] - ent_offsets[i];
-      if (num_entries > 0 && i != PIC_Comm_Self()) {
-        //TODO determine the mpi datatype based on T or use MPI_CHAR and sizeof(T)
-        MPI_Isend(data + ent_offsets[PIC_Comm_Self()], my_num_entries, MPI_INT, i, 1,
-                  MPI_COMM_WORLD, send_requests + neighbor_index);
+    for (int i = 0; i < num_cores[dim]; ++i) {
+      int rank = buffered_parts[dim][i];
+      int num_entries = ent_offsets[rank+1] - ent_offsets[rank];
+      if (num_entries > 0) {
+        //TODO determine the mpi datatype based on T or use MPI_CHAR and sizeof(T) (use mpi traits in omega_h?)
+        MPI_Isend(data + ent_offsets[comm->rank()], my_num_entries, MPI_INT, rank, 1,
+                  comm->get_impl(), send_requests + i);
         
-        MPI_Irecv(data + ent_offsets[i], num_entries, MPI_INT, i, 1,
-                  MPI_COMM_WORLD, recv_requests + neighbor_index);
-        ++neighbor_index;
+        MPI_Irecv(data + ent_offsets[rank], num_entries, MPI_INT, rank, 1,
+                  comm->get_impl(), recv_requests + i);
       }
     }
-    MPI_Waitall(PIC_Comm_Neighbors(), recv_requests,MPI_STATUSES_IGNORE);
-    MPI_Waitall(PIC_Comm_Neighbors(), send_requests,MPI_STATUSES_IGNORE);
+    MPI_Waitall(num_cores[dim], recv_requests,MPI_STATUSES_IGNORE);
+    MPI_Waitall(num_cores[dim], send_requests,MPI_STATUSES_IGNORE);
     delete [] send_requests;
     delete [] recv_requests;
 
@@ -201,4 +154,12 @@ namespace pumipic {
     Omega_h::parallel_for(array.size(), setArrayValues, "setArrayValues");
   }
 
+
+#define INST(T)                                                         \
+  template Omega_h::Write<T> Mesh::createCommArray(int, int, T);        \
+  template void Mesh::reduceCommArray(int, Op, Omega_h::Write<T>);
+  
+  INST(Omega_h::LO)
+  INST(Omega_h::Real)
+#undef INST
 }

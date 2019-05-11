@@ -3,13 +3,13 @@ set(HEADERS
   pumipic_push.hpp
   pumipic_utils.hpp
   pumipic_constants.hpp
-  pumipic_part_construct.hpp
-  pumipic_comm.hpp
-  )
+  pumipic_mesh.hpp
+)
 
 set(SOURCES
   pumipic_part_construct.cpp
   pumipic_comm.cpp
+  pumipic_mesh.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

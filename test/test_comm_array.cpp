@@ -9,30 +9,19 @@
 #include <Omega_h_mesh.hpp>
 
 #include <pumipic_mesh.hpp>
-#include "mpi.h"
 #include <Kokkos_Core.hpp>
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc, argv);
-
   Omega_h::Library lib = Omega_h::Library(&argc, &argv);
-  int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (argc != 5 && argc != 6) {
+  
+  int rank = lib.world()->rank();;
+  if (argc != 3) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition filename> "
-              "<# of safe layers> <# of buffer layers> [verbosity (0-3)]\n", argv[0]);
+      fprintf(stderr, "Usage: %s <mesh> <partition filename>\n", argv[0]);
     MPI_Finalize();
     return EXIT_FAILURE;
   }
-  int comm_size;
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-
-  int safe_layers = atoi(argv[3]);
-  int ghost_layers = atoi(argv[4]);
-  int verbosity = 0;
-  if (argc >= 6)
-    verbosity = atoi(argv[5]);
 
   //**********Load the mesh in serial everywhere*************//
   Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.self());
@@ -58,11 +47,25 @@ int main(int argc, char** argv) {
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 
-  pumipic::Mesh picparts(mesh,owner,ghost_layers, safe_layers, verbosity);
+  //********* Construct the PIC parts *********//
+  pumipic::Mesh picparts(mesh, owner, 3, 1);
 
-  char vtk_name[80];
-  sprintf(vtk_name, "picpart%d",rank);
-  Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
+  //Create an array with initial values of 1
+  Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 1, 1);
 
+  picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, comm_array);
+
+  //Check that each entry is equal to the number of ranks
+  Omega_h::HostWrite<Omega_h::LO> host_array(comm_array);
+  bool success = true;
+  for (int i = picparts.offset_ents_per_rank_per_dim[dim][rank];
+       i < picparts.offset_ents_per_rank_per_dim[dim][rank]; ++i)
+    if (host_array[i] != picparts.num_buffers())
+      success = false;
+
+  if (!success) {
+    fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
+    return EXIT_FAILURE;
+  }
   return 0;
 }

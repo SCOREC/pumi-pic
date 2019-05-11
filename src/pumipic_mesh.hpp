@@ -5,10 +5,13 @@
 namespace pumipic {
   class Mesh {
   public:
-    Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO>& partition_vector,
+    //Constucts PIC parts with a core and the entire mesh as buffer/safe
+    Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO> partition_vector);
+    //Constructs PIC parts with a core and buffer all parts within buffer_layers
+    // All elements in the core and elements within safe_layers from the core are safe
+    Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO> partition_vector,
          int buffer_layers, int safe_layers);
     //TODO? create XGC classification method for creating picpart
-    //TODO? create picpart with the entire mesh
     //TODO? create picpart with unsafe_layers instead of safe_layers
     ~Mesh();
     

@@ -34,7 +34,26 @@ namespace {
 }
 
 namespace pumipic {
-  Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& owner,
+    Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+    /************* Globally Number Element **********/
+    Omega_h::Write<Omega_h::GO> elem_gid(mesh.nelems());
+    Omega_h::Write<Omega_h::LO> rank_offset_nelms(comm_size+1,0);
+    createGlobalNumbering(owner, rank_offset_nelms, elem_gid);
+    //TODO define global numbering on all entity types
+
+    // *********** Set safe zone and buffer to be entire mesh**************** //
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 1);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size, 1);
+
+    constructPICPart(mesh, owner, elem_gid, rank_offset_nelms, has_part, is_safe);
+  }
+
+  Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner,
                   int ghost_layers, int safe_layers) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -59,7 +78,8 @@ namespace pumipic {
       is_visited[elem_id] = is_safe[elem_id] = (owner[elem_id] == rank);
     };
     Omega_h::parallel_for(mesh.nelems(), initVisit, "initVisit");
-    Omega_h::Write<Omega_h::LO> has_part(comm_size);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size,0);
+    //TODO put on device
     for (int i = 0; i < comm_size; ++i)
       has_part[i] = (i == rank);
     int bridge_dim = 0;

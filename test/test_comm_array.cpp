@@ -50,17 +50,24 @@ int main(int argc, char** argv) {
   //********* Construct the PIC parts *********//
   pumipic::Mesh picparts(mesh, owner, 3, 1);
 
-  //Create an array with initial values of 1
-  Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 1, 1);
+  //Create an array with initial values of 0
+  Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 1, 0);
 
+  Omega_h::Read<Omega_h::LO> owners = picparts.entOwners(3);
+  Omega_h::Read<Omega_h::LO> arr_index = picparts.commArrayIndex(3);
+  auto setMyElmsToOne = OMEGA_H_LAMBDA(Omega_h::LO elm_id) {
+    comm_array[arr_index[elm_id]] = owners[elm_id] == rank;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nelems(), setMyElmsToOne);
+  
   picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, comm_array);
 
-  //Check that each entry is equal to the number of ranks
+  //Check that each entry is equal to 1
   Omega_h::HostWrite<Omega_h::LO> host_array(comm_array);
   Omega_h::HostRead<Omega_h::LO> elm_offsets(picparts.nentsOffsets(3));
   bool success = true;
-  for (int i = elm_offsets[rank]; i < elm_offsets[rank+1]; ++i)
-    if (host_array[i] != picparts.numBuffers(dim))
+  for (int i = 0; i < host_array.size(); ++i)
+    if (host_array[i] != 1)
       success = false;
 
   if (!success) {

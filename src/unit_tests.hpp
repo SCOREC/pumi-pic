@@ -8,13 +8,9 @@
 #include <typeinfo>
 #include <sstream>
 
-#include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
-#include "Omega_h_adj.hpp"
-//#include "Omega_h_array.hpp"
 #include "Omega_h_array_ops.hpp"
-#include "Omega_h_element.hpp"
 #include "Omega_h_scalar.hpp" //divide
 #include "Omega_h_mark.hpp"
 #include "Omega_h_fail.hpp" //assert
@@ -37,13 +33,13 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
   if(pos == -1)
   {
   #ifdef DEBUG
-  /*  g::print_osh_vector(M[0], "", false);
+    g::print_osh_vector(M[0], "", false);
     g::print_osh_vector(M[1], "", false);
     g::print_osh_vector(M[2], "", false);
     g::print_osh_vector(M[3], "", false);
     g::print_osh_vector(p, " P");
     g::print_array(bcc.data(), 4, "BCC");
-  */
+  
 #endif // DEBUG
 
     //assumes size of v is 4
@@ -83,8 +79,8 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
     else
     {
 #ifdef DEBUG
-//      g::print_matrix(M );
-//      g::print_osh_vector(p, "p");
+      g::print_matrix(M );
+      g::print_osh_vector(p, "p");
       Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bcc[pos]);
 #endif // DEBUG
       return 0;
@@ -194,7 +190,7 @@ bool test_barycentric_tri()
     g::find_barycentric_tri_simple(M, M[index], bc);
     bool res = g::compare_array(bc.data(), bcc_mat[i].data(), 3);
 #ifdef DEBUG
-   // g::print_array(bc.data(), 3, "BC_tri");
+    g::print_array(bc.data(), 3, "BC_tri");
 #endif // DEBUG
     if(!res)
     {
@@ -214,7 +210,7 @@ bool test_barycentric_tri()
   {
     g::find_barycentric_tri_simple(M, xpoints[i], bc);
 #ifdef DEBUG
-   // g::print_array(bc.data(), 3, "BC_tri");
+    g::print_array(bc.data(), 3, "BC_tri");
 #endif // DEBUG
     if(bc[i] >= 0)
     {
@@ -250,7 +246,7 @@ void test_line_tri_intx()
     if(res)
     {
 #if DEBUG>0
-     // g::print_array(xpoint.data(), 3, "FoundXPT:");
+      g::print_array(xpoint.data(), 3, "FoundXPT:");
       std::cout << "--------\n";
 #endif // DEBUG
     }
@@ -281,7 +277,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
     {
       auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
       const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
-     // g::print_matrix(M);
+      g::print_matrix(M);
       std::cout << "Vertex IDS :\n";
       for(int i=0; i<4; ++i)
       {

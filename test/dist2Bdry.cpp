@@ -49,19 +49,19 @@ int main(int argc, char** argv) {
   fprintf(stderr, "number of elements %d \n", ne);
 
 
-  //GitrmMesh &gm = GitrmMesh::getInstance(&mesh);
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
-  // Add bdry faces to elements within 1mm
 
+  // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
-  gm.printBdryFaceIds(false, 25); //numBdryFaceIds, mesh);  
-  gm.printBdryFacesCSR(false, 25);
+  //gm.printBdryFaceIds(false, 20);
+  //gm.printBdryFacesCSR(false, 20);
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
   gitrm_findDistanceToBdry(gp.scs, r2v, coords, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP, ne);
+
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());
   timer.reset();
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
   //p::test_find_closest_point_on_triangle();
   p::test_find_distance_to_bdry();
 
-  Omega_h::vtk::write_parallel("pisces", &mesh, mesh.dim());
+  // Omega_h::vtk::write_parallel("pisces", &mesh, mesh.dim());
 
 
   fprintf(stderr, "done\n");

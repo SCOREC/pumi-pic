@@ -18,8 +18,15 @@ namespace p = pumipic;
 #define BDRYFACE_SIZE 100
 #endif
 
+#ifndef BFS_DATA_SIZE
+#define BFS_DATA_SIZE 100
+#endif
+
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };
+
+// Elements face type
+enum {INTERIOR=1, EXPOSED=2};
 
 
 #define MESHDATA(mesh) \
@@ -40,19 +47,6 @@ public:
   GitrmMesh(o::Mesh &);
   ~GitrmMesh();
 
- /*
-  GitrmMesh& getInstance(o::Mesh *m = nullptr){
-    if(!mesh && !m){
-      std::cout << "Call getInstance(mesh) \n"; 
-      std::exit(1);
-    }
-    GitrmMesh gm;
-    if(!mesh && m){
-      mesh = m;
-    }
-    return gm;
-  }
-  */
 
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
@@ -86,6 +80,8 @@ public:
 private:
   //GitrmMesh() = default;
   // static bool hasMesh;
+  void calculateCsrIndices(const o::Write<o::LO> &, const bool, o::LOs &, o::LO &);
+
   void convert2ReadOnlyCSR();
   void copyBdryFacesToSelf();
   void initNearBdryDistData();
@@ -111,19 +107,6 @@ public:
    */
   o::LOs bdryFaceInds;
 
-
-  /** @brief Adjacency based BFS search, for testing pre-processing
-  */
-  void preProcessDistToBdryByAdjSearch();
-  o::Reals bdryFacesBfs;
-  o::LOs bdryFaceIndsBfs;
-
-private:
-  void initBFSAdjSearchData();
-  void convert2CsrBfs();
-  o::Write<o::LO> visitedElems;
-  o::Write<o::LO> bdryFaceIdsBfs;
-  o::Write<o::LO> bdryFaceElemIdsBfs;
 };
 
 
@@ -199,7 +182,6 @@ inline void gitrm_findDistanceToBdry (
     o::LO fi = -1;
     o::LO fid = -1;
     o::LO minRegion = -1;
-    o::LO region = -1;
 
     if(verbose >2){
       printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
@@ -261,7 +243,7 @@ inline void gitrm_findDistanceToBdry (
 
     min = std::sqrt(min);
     if(verbose >1){
-      printf("\n*** e_%d MINdist_%0.8f fi_%d face_el %d reg_%d\n", 
+      printf("\n*** el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
         elem, min, fid, fel, minRegion);
     }
     d2bdry_d(pid) = min;

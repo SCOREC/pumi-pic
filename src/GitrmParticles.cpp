@@ -46,7 +46,6 @@ void GitrmParticles::defineParticles(){
   //o::Mesh &mesh = gm.mesh;
   auto ne = mesh.nelems();
 
- /* Particle data */
   const int numPtcls = ne;  //TODO
 
   fprintf(stderr, "number of elements %d number of particles %d\n",

@@ -10,6 +10,7 @@
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 
+
 namespace o = Omega_h;
 namespace pumipic
 {
@@ -378,11 +379,6 @@ inline bool search_mesh(const Omega_h::Write<Omega_h::LO> pids, Omega_h::LO nele
           inverse = true;
         }
 
-        //TODO not useful
-        auto fcoords = Omega_h::gather_vectors<3, 3>(coords, fv2v);
-        auto base = Omega_h::simplex_basis<3, 2>(fcoords); //edgres = Matrix<2,3>
-        auto snormal = Omega_h::normalize(Omega_h::cross(base[0], base[1]));
-
         Omega_h::LO dummy = -1;
         bool detected = line_triangle_intx_simple(face, orig, dest, xpoint, dummy, inverse);
         if(debug && detected)
@@ -491,7 +487,6 @@ OMEGA_H_INLINE o::LO find_closest_point_on_triangle_with_normal(
   const o::Few< o::Vector<3>, 3> &abc,
   const o::Vector<3> &p, o::Vector<3> &q, o::LO verbose = 0){
 
-  o::LO region = -1;
   // Check if P in vertex region outside A
   Vector a = abc[0];
   Vector b = abc[1];
@@ -756,10 +751,10 @@ OMEGA_H_INLINE bool check_if_face_within_dist_to_tet(const o::Matrix<DIM, 4> &te
   return false;
 }
 
-
+// TODO move to unit_tests
 inline void test_find_closest_point_on_triangle(){
   constexpr int nTris = 1;
-  o::Few<o::Few< o::Vector<3>, 3>, nTris> abcs{ {{1,0,0},{2,0,0},{1.5,1,0}} }; 
+  o::Few<o::Few< o::Vector<3>, 3>, nTris> abcs{{{1,0,0},{2,0,0},{1.5,1,0}}}; 
 
   constexpr int nPts = 7;
   o::Few<o::Vector<3>, nPts> pts{{0,-0.5,0}, {0,2,0}, {0,0.2,0},

@@ -1,11 +1,16 @@
-add_executable(typeTest typeTest.cpp)
-target_link_libraries(typeTest particleStructs)
+function(make_test exename srcname)
+  add_executable(${exename} ${srcname})
+  target_link_libraries(${exename} particleStructs)
+endfunction(make_test)
 
-add_executable(rebuild rebuild.cpp)
-target_link_libraries(rebuild particleStructs)
 
-add_executable(lambdaTest lambdaTest.cpp)
-target_link_libraries(lambdaTest particleStructs)
+make_test(typeTest typeTest.cpp)
+
+make_test(rebuild rebuild.cpp)
+
+make_test(lambdaTest lambdaTest.cpp)
+
+make_test(migrateTest migrateTest.cpp)
 
 include(testing.cmake)
 

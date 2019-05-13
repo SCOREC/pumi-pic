@@ -6,18 +6,25 @@
 #include <algorithm>
 #include "psAssert.h"
 #include "MemberTypes.h"
+#include "SCS_Macros.h"
 #include <Kokkos_Core.hpp>
-
+#include <mpi.h>
 namespace particle_structs {
 
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
+#ifdef KOKKOS_ENABLED
+ typedef Kokkos::View<int*, typename ExecSpace::device_type> kkLidView;
+#endif
   SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
              int* particles_per_element, std::vector<int>* particle_id_bins,
              bool debug=false);
   ~SellCSigma();
+
+ //Returns the size per data type of the scs including padding
+ int size() const { return offsets[num_slices];}
 
  //Gets the Nth member type SCS
   template <std::size_t N>
@@ -30,6 +37,11 @@ class SellCSigma {
  //Zeroes the values of the member type N that is an array with size entries
   template <std::size_t N>
   void zeroSCSArray(int size);
+
+ /* Migrates each particle to new_process and to new_element
+    Calls rebuildSCS to recreate the SCS after migrating particles
+ */
+ void migrate(kkLidView new_element, kkLidView new_process);
 
   /*
     Reshuffles the scs values to the element in new_element[i]
@@ -77,9 +89,6 @@ class SellCSigma {
 
  //Kokkos Views
 #ifdef KOKKOS_ENABLED
- typedef Kokkos::DefaultExecutionSpace exe_space;
- typedef Kokkos::View<int*, exe_space::device_type> kkLidView;
-
   void transferToDevice();
 
   template <typename FunctionType>
@@ -405,6 +414,48 @@ template <std::size_t N>
       scs[i][j] = 0;
 }
 
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView new_process) {
+  /********* Send # of particles being sent to each process *********/
+  int comm_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
+  kkLidView num_sent_particles("num_sent_particles", comm_size);
+  auto count_sending_particles = SCS_LAMBDA(int element_id, int particle_id, bool mask) {
+    const int process = new_process[particle_id];
+    Kokkos::atomic_fetch_add(&(num_sent_particles[process]), mask);
+  };
+  parallel_for(count_sending_particles);
+  kkLidView num_recv_particles("num_recv_particles", comm_size);
+  MPI_Alltoall(num_sent_particles.data(), 1, MPI_INT, 
+               num_recv_particles.data(), 1, MPI_INT, MPI_COMM_WORLD);
+  int num_new_particles = 0;
+  Kokkos::parallel_reduce("sum_new_particles", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
+      lsum += num_recv_particles[i];
+    }, num_new_particles);
+  
+  printf("%d %d\n", comm_rank, num_new_particles);
+
+  /* /\********* Create new particle_elements and particle_data *********\/ */
+  /* int* new_particle_elements = NULL; */
+
+  /* void* new_particle_data[num_types]; */
+  /* if (num_new_particles > 0) { */
+  /*   new_particle_elements = new int[num_new_particles]; */
+  /*   CreateSCSArrays<DataTypes>(new_particle_data, num_new_particles); */
+  /* } */
+
+  /* /\********* Send particle information to new processes *********\/ */
+
+  /* /\********* Combine and shift particles to their new destination *********\/ */
+  /* rebuildSCS(new_element, new_particles_elements, new_particle_data); */
+
+  /* delete [] new_particle_elements; */
+  /* for (int i = 0; i < num_types; ++i) */
+  /*   delete [] new_particle_data; */
+}
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {

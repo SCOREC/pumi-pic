@@ -9,6 +9,7 @@
 #include "SCS_Macros.h"
 #include <Kokkos_Core.hpp>
 #include <mpi.h>
+#include <unordered_map>
 namespace particle_structs {
 
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
@@ -19,29 +20,31 @@ class SellCSigma {
 #endif
   SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
-             int* particles_per_element, std::vector<int>* particle_id_bins,
+             int* particles_per_element, std::vector<int>* particle_id_bins, int* element_gids,
              bool debug=false);
   ~SellCSigma();
 
- //Returns the size per data type of the scs including padding
- int size() const { return offsets[num_slices];}
+  //Returns the size per data type of the scs including padding
+  int size() const { return offsets[num_slices];}
 
- //Gets the Nth member type SCS
+  //Gets the Nth member type SCS
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
- //Zeroes the values of the member type N
+  //Zeroes the values of the member type N
   template <std::size_t N>
   void zeroSCS();
 
- //Zeroes the values of the member type N that is an array with size entries
+  //Zeroes the values of the member type N that is an array with size entries
   template <std::size_t N>
   void zeroSCSArray(int size);
 
- /* Migrates each particle to new_process and to new_element
-    Calls rebuildSCS to recreate the SCS after migrating particles
- */
- void migrate(kkLidView new_element, kkLidView new_process);
+ void printFormat() const;
+
+  /* Migrates each particle to new_process and to new_element
+     Calls rebuildSCS to recreate the SCS after migrating particles
+  */
+  void migrate(kkLidView new_element, kkLidView new_process);
 
   /*
     Reshuffles the scs values to the element in new_element[i]
@@ -51,7 +54,7 @@ class SellCSigma {
   /*
     Rebuilds a new SCS where particles move to the element in new_element[i]
   */
- void rebuildSCS(int* new_element, bool debug = false);
+  void rebuildSCS(int* new_element, bool debug = false);
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -87,6 +90,11 @@ class SellCSigma {
   // row = slice_to_chunk[slice] + row_in_chunk
   int* row_to_element;
 
+  //mappings from row to element gid and back to row
+  int* row_to_element_gid;
+ typedef std::unordered_map<int, int> GID_Mapping;
+ GID_Mapping element_gid_to_row;
+
  //Kokkos Views
 #ifdef KOKKOS_ENABLED
   void transferToDevice();
@@ -111,9 +119,11 @@ class SellCSigma {
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}
   SellCSigma& operator=(const SellCSigma&) {throw 1;}
- void destroySCS();
+ void destroySCS(bool destroyGid2Row=true);
 
- void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, int*& row_element);
+ void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, 
+                      int*& row_element);
+ void createGlobalMapping(int* row2Elm, int* elmGid, int*& row2ElmGid, GID_Mapping& elmGid2Row);
  void constructOffsets(int nChunks, int nSlices, int* chunk_widths, int*& offs, int*& s2e);
 };
 
@@ -238,7 +248,7 @@ void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma,
 	       std::pair<int, int>*& ptcl_pairs, bool doSort = true);
 
 template<class DataTypes, typename ExecSpace>
-  void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls, int& nchunks, 
+void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls, int& nchunks, 
 							 int& nslices, int*& chunk_widths, 
 							 int*& row_element) {
   nchunks = num_elems / C + (num_elems % C != 0);
@@ -261,6 +271,21 @@ template<class DataTypes, typename ExecSpace>
   //Set the padded row_to_element values
   for (i = num_elems; i < nchunks * C; ++i) {
     row_element[i] = i;
+  }
+}
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(int* row2Elm, int* elmGid,
+                                                           int*& row2ElmGid, 
+                                                           GID_Mapping& elmGid2Row) {
+  row2ElmGid = new int[num_elems];
+  for (int i = 0; i < num_elems; ++i) {
+    int gid = elmGid[row2Elm[i]];
+    row2ElmGid[i] = gid;
+    elmGid2Row[gid] = i;
+  }
+  for (int j = num_elems; j < num_chunks*C; ++j) {
+    row2ElmGid[j] = -1;
   }
 }
 
@@ -290,6 +315,7 @@ template<class DataTypes, typename ExecSpace>
   SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 					       int sig, int v, int ne, int np,
 					       int* ptcls_per_elem, std::vector<int>* ids,
+                                               int* element_gids,
 					       bool debug)  : policy(p) {
   C = policy.team_size();
   sigma = sig;
@@ -306,6 +332,11 @@ template<class DataTypes, typename ExecSpace>
   //Number of chunks without vertical slicing
   int* chunk_widths;
   constructChunks(ptcls, num_chunks, num_slices, chunk_widths, row_to_element);
+
+  row_to_element_gid = NULL;
+  if (element_gids) {
+    createGlobalMapping(row_to_element, element_gids, row_to_element_gid, element_gid_to_row);
+  }
 
   if(debug) {
     printf("\nSigma Sorted Particle Counts\n");
@@ -371,23 +402,21 @@ template<class DataTypes, typename ExecSpace>
 }
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes, ExecSpace>::destroySCS() {
+void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
   DestroySCSArrays<DataTypes>((scs_data), 0);
   
   delete [] slice_to_chunk;
   delete [] row_to_element;
   delete [] offsets;
   delete [] particle_mask;
+  if (row_to_element_gid)
+    delete [] row_to_element_gid;
+  if (destroyGid2Row)
+    element_gid_to_row.clear();
 }
 template<class DataTypes, typename ExecSpace>
-  SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
-
-  DestroySCSArrays<DataTypes>((scs_data), 0);
-  
-  delete [] slice_to_chunk;
-  delete [] row_to_element;
-  delete [] offsets;
-  delete [] particle_mask;
+SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
+  destroySCS();
 }
 
 
@@ -432,29 +461,47 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   MPI_Alltoall(num_sent_particles.data(), 1, MPI_INT, 
                num_recv_particles.data(), 1, MPI_INT, MPI_COMM_WORLD);
   int num_new_particles = 0;
+
   Kokkos::parallel_reduce("sum_new_particles", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
       lsum += num_recv_particles[i];
     }, num_new_particles);
-  
+  num_new_particles -= num_ptcls;
   printf("%d %d\n", comm_rank, num_new_particles);
 
-  /* /\********* Create new particle_elements and particle_data *********\/ */
-  /* int* new_particle_elements = NULL; */
+  /********* Create new particle_elements and particle_data *********/
+  int* new_particle_elements = NULL;
 
-  /* void* new_particle_data[num_types]; */
-  /* if (num_new_particles > 0) { */
-  /*   new_particle_elements = new int[num_new_particles]; */
-  /*   CreateSCSArrays<DataTypes>(new_particle_data, num_new_particles); */
-  /* } */
+  void* new_particle_data[num_types];
+  if (num_new_particles > 0) {
+    new_particle_elements = new int[num_new_particles];
+    CreateSCSArrays<DataTypes>(new_particle_data, num_new_particles);
+  }
 
   /* /\********* Send particle information to new processes *********\/ */
+  //Perform an ex-sum on num_sent_particles & num_recv_particles
+  kkLidView offset_sent_particles("offset_sent_particles", comm_size+1);
+  kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
+  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
+    num += num_sent_particles[i];
+    offset_sent_particles[i+1] += num*final;
+  });
+  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
+    num += num_recv_particles[i];
+    offset_recv_particles[i+1] += num*final;
+  });
+
+  
+  //Create an array of particles being sent
+  kkLidView send_element("send_element", offset_sent_particles[comm_size]);
+  //Send the particles to each neighbor
+
+  //Recv particles from ranks that send nonzero number of particles
 
   /* /\********* Combine and shift particles to their new destination *********\/ */
   /* rebuildSCS(new_element, new_particles_elements, new_particle_data); */
 
-  /* delete [] new_particle_elements; */
-  /* for (int i = 0; i < num_types; ++i) */
-  /*   delete [] new_particle_data; */
+  delete [] new_particle_elements;
+  DestroySCSArrays<DataTypes>(new_particle_data, 0);
 }
 
 template<class DataTypes, typename ExecSpace>
@@ -481,6 +528,8 @@ template<class DataTypes, typename ExecSpace>
       }
     }
   }
+
+  //If there are no particles left, then destroy the structure
   if(!activePtcls) {
     destroySCS();
     num_ptcls = 0;
@@ -505,6 +554,12 @@ template<class DataTypes, typename ExecSpace>
   int* new_row_to_element;
   constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element);
 
+  //TODO Fairly certain this is wrong
+  int* new_row_to_element_gid;
+  element_gid_to_row.clear();
+  if (row_to_element_gid)
+    createGlobalMapping(new_row_to_element, row_to_element_gid, 
+                        new_row_to_element_gid, element_gid_to_row);
   if(debug) {
     printf("\nSigma Sorted Particle Counts\n");
     for (int i = 0; i < num_elems; ++i)
@@ -562,13 +617,14 @@ template<class DataTypes, typename ExecSpace>
   delete [] new_particles_per_elem;
 
   //Destroy old scs 
-  destroySCS();
+  destroySCS(false);
 
   //set scs to point to new values
   num_ptcls = new_num_ptcls;
   num_chunks = new_nchunks;
   num_slices = new_nslices;
   row_to_element = new_row_to_element;
+  row_to_element_gid = new_row_to_element_gid;
   offsets = new_offsets;
   slice_to_chunk = new_slice_to_chunk;
   particle_mask = new_particle_mask;
@@ -589,6 +645,40 @@ template<class DataTypes, typename ExecSpace>
   }
 }
 
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::printFormat() const {
+  char message[10000];
+  char* cur = message;
+  cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C, sigma, V);
+  cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
+  cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+  int last_chunk = -1;
+  for (int i = 0; i < num_slices; ++i) {
+    int chunk = slice_to_chunk[i];
+    if (chunk != last_chunk) {
+      last_chunk = chunk;
+      cur += sprintf(cur,"  Chunk %d. Elements", chunk);
+      if (row_to_element_gid)
+        cur += sprintf(cur,"(GID)");
+      cur += sprintf(cur,":");
+      for (int row = chunk*C; row < (chunk+1)*C; ++row) {
+        cur += sprintf(cur," %d", row_to_element[row]);
+        if (row_to_element_gid) {
+          cur += sprintf(cur,"(%d)", row_to_element_gid[row]);
+        }
+      }
+      cur += sprintf(cur,"\n");
+    }
+    cur += sprintf(cur,"    Slice %d", i);
+    for (int j = offsets[i]; j < offsets[i+1]; ++j) {
+      if ((j - offsets[i]) % C == 0)
+        cur += sprintf(cur," |");
+      cur += sprintf(cur," %d", particle_mask[j]);
+    }
+    cur += sprintf(cur,"\n");
+  }
+  printf("%s", message);
+}
 
 template <class T>
 void hostToDevice(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>& view, T* data) {

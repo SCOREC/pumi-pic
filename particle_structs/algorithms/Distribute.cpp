@@ -7,7 +7,6 @@
 
 namespace {
 
-
 void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
   int p = np / ne;
   int r = np % ne;
@@ -124,6 +123,17 @@ const char* distribute_name(int strat) {
     distribute_help();
     exit(EXIT_FAILURE);
   }
+}
+
+bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, int* gids) {
+  //For now only building a ring of elements
+  //Assumes the number of elements on each process is the same
+  int starting_index = (ne-1) * comm_rank;
+  for (int i = 0; i < ne; ++i)
+    gids[i] = starting_index+i;
+  if (comm_rank == comm_size-1 && comm_size != 1)
+    gids[ne-1] = 0;
+  return true;
 }
 
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::vector<int>* ids) {

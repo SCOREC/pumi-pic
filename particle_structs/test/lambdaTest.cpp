@@ -10,6 +10,7 @@
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
+using particle_structs::distribute_elements;
 using particle_structs::distribute_particles;
 
 
@@ -26,7 +27,9 @@ int main(int argc, char* argv[]) {
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
   Kokkos::TeamPolicy<exe_space> po(4, 4);
   SellCSigma<Type, exe_space>* scs =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids);
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
+  delete [] ptcls_per_elem;
+  delete [] ids;
 
   scs->transferToDevice();
 

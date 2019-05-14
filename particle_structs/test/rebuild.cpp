@@ -26,12 +26,13 @@ int main(int argc, char* argv[]) {
   Kokkos::TeamPolicy<exe_space> po(128, 4);
   int ts = po.team_size();
   SellCSigma<Type, exe_space>* scs =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, true);
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL, true);
   SellCSigma<Type, exe_space>* scs2 =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, 0);
-
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
   delete [] ptcls_per_elem;
   delete [] ids;
+
+  scs->printFormat();
 
   int* new_element = new int[scs->offsets[scs->num_slices]];
   int* values = scs->getSCS<0>();
@@ -79,6 +80,8 @@ int main(int argc, char* argv[]) {
       }
     }
   }
+
+  scs->printFormat();
 
   delete [] new_element;
   delete scs;

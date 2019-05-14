@@ -466,7 +466,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
       lsum += num_recv_particles[i];
     }, num_new_particles);
   num_new_particles -= num_ptcls;
-  printf("%d %d\n", comm_rank, num_new_particles);
+  printf("Rank: %d New Particles: %d\n", comm_rank, num_new_particles);
 
   /********* Create new particle_elements and particle_data *********/
   int* new_particle_elements = NULL;
@@ -500,8 +500,10 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   /* /\********* Combine and shift particles to their new destination *********\/ */
   /* rebuildSCS(new_element, new_particles_elements, new_particle_data); */
 
-  delete [] new_particle_elements;
-  DestroySCSArrays<DataTypes>(new_particle_data, 0);
+  if (num_new_particles > 0) {
+    delete [] new_particle_elements;
+    DestroySCSArrays<DataTypes>(new_particle_data, 0);
+  }
 }
 
 template<class DataTypes, typename ExecSpace>

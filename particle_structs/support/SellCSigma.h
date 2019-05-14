@@ -245,7 +245,7 @@ struct DestroySCSArrays<MemberTypes<Types...> > {
 };
 
 void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 
-	       std::pair<int, int>*& ptcl_pairs, bool doSort = true);
+	       std::pair<int, int>*& ptcl_pairs);
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls, int& nchunks, 
@@ -278,7 +278,7 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(int* row2Elm, int* elmGid,
                                                            int*& row2ElmGid, 
                                                            GID_Mapping& elmGid2Row) {
-  row2ElmGid = new int[num_elems];
+  row2ElmGid = new int[num_chunks*C];
   for (int i = 0; i < num_elems; ++i) {
     int gid = elmGid[row2Elm[i]];
     row2ElmGid[i] = gid;
@@ -514,16 +514,16 @@ void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
 template<class DataTypes, typename ExecSpace>
   void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, bool debug) {
 
-  int* new_particles_per_elem = new int[num_elems];
+  int* new_particles_per_elem = new int[num_chunks*C];
   for (int i =0; i < num_elems; ++i)
     new_particles_per_elem[i] = 0;
   int activePtcls = 0;
   for (int slice = 0; slice < num_slices; ++slice) {
     for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) {
       for (int k = 0; k < C; ++k) {
-	if (particle_mask[j + k] && new_element[j+k] != -1) {
+	if (particle_mask[j+k] && new_element[j+k] != -1) {
 	  new_particles_per_elem[new_element[j+k]] += particle_mask[j+k];
-          activePtcls++;
+          ++activePtcls;
 	}
       }
     }
@@ -531,11 +531,13 @@ template<class DataTypes, typename ExecSpace>
 
   //If there are no particles left, then destroy the structure
   if(!activePtcls) {
+    delete [] new_particles_per_elem;
     destroySCS();
     num_ptcls = 0;
     num_chunks = 0;
     num_slices = 0;
     row_to_element = 0;
+    row_to_element_gid = 0;
     offsets = 0;
     slice_to_chunk = 0;
     particle_mask = 0;
@@ -544,9 +546,10 @@ template<class DataTypes, typename ExecSpace>
     return;
   }
   int new_num_ptcls = activePtcls;
-  //Perform sorting (Disabled currently due to needing mapping from old elems -> new elems)
+  //Perform sorting
   std::pair<int, int>* ptcls;
-  sigmaSort(num_elems, new_particles_per_elem, sigma, ptcls, false);
+  sigmaSort(num_elems, new_particles_per_elem, sigma, ptcls);
+
 
   //Create chunking and count slices
   int* chunk_widths;
@@ -554,12 +557,22 @@ template<class DataTypes, typename ExecSpace>
   int* new_row_to_element;
   constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element);
 
-  //TODO Fairly certain this is wrong
+  //Create a mapping from element to new scs row index
+  //Also recreate the original gid mapping
+  int* element_to_new_row = new int[num_chunks * C];
+  int* gid_mapping = new int[num_chunks * C];
+  for (int i = 0; i < num_chunks * C; ++i) {
+    element_to_new_row[new_row_to_element[i]] = i;
+    if (row_to_element_gid)
+      gid_mapping[row_to_element[i]] = row_to_element_gid[i];
+  }
+
   int* new_row_to_element_gid;
   element_gid_to_row.clear();
   if (row_to_element_gid)
-    createGlobalMapping(new_row_to_element, row_to_element_gid, 
+    createGlobalMapping(new_row_to_element, gid_mapping, 
                         new_row_to_element_gid, element_gid_to_row);
+  delete [] gid_mapping;
   if(debug) {
     printf("\nSigma Sorted Particle Counts\n");
     for (int i = 0; i < num_elems; ++i)
@@ -602,17 +615,17 @@ template<class DataTypes, typename ExecSpace>
 	int particle = j + k;
 	if (particle_mask[particle] && new_element[particle] != -1) {
 	  int new_elem = new_element[particle];
-	  int new_index = element_index[new_elem];
+          int new_row = element_to_new_row[new_elem];
+	  int new_index = element_index[new_row];
 	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
-	  element_index[new_elem] += C;
+	  element_index[new_row] += C;
 	  new_particle_mask[new_index] = 1;
 	}
       }
     }
   }
   delete [] element_index;
-
-  
+  delete [] element_to_new_row;
   delete [] ptcls;
   delete [] new_particles_per_elem;
 
@@ -624,7 +637,8 @@ template<class DataTypes, typename ExecSpace>
   num_chunks = new_nchunks;
   num_slices = new_nslices;
   row_to_element = new_row_to_element;
-  row_to_element_gid = new_row_to_element_gid;
+  if (row_to_element_gid)
+    row_to_element_gid = new_row_to_element_gid;
   offsets = new_offsets;
   slice_to_chunk = new_slice_to_chunk;
   particle_mask = new_particle_mask;

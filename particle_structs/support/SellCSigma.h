@@ -12,12 +12,14 @@
 #include <unordered_map>
 namespace particle_structs {
 
+
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
 #ifdef KOKKOS_ENABLED
- typedef Kokkos::View<int*, typename ExecSpace::device_type> kkLidView;
+  typedef Kokkos::View<int*, typename Kokkos::DefaultExecutionSpace::device_type> kkLidView;
 #endif
+
   SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
              int* particles_per_element, std::vector<int>* particle_id_bins, int* element_gids,
@@ -443,6 +445,14 @@ template <std::size_t N>
       scs[i][j] = 0;
 }
 
+template <class T>
+typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror deviceToHost(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> view) {
+  typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror hv = 
+    Kokkos::create_mirror_view(view);
+  Kokkos::deep_copy(hv, view);
+  return hv;
+}
+
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView new_process) {
   /********* Send # of particles being sent to each process *********/
@@ -451,59 +461,109 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
-  kkLidView num_sent_particles("num_sent_particles", comm_size);
+  kkLidView num_send_particles("num_send_particles", comm_size);
   auto count_sending_particles = SCS_LAMBDA(int element_id, int particle_id, bool mask) {
-    const int process = new_process[particle_id];
-    Kokkos::atomic_fetch_add(&(num_sent_particles[process]), mask);
+    const int process = new_process(particle_id);
+    Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask);
   };
   parallel_for(count_sending_particles);
   kkLidView num_recv_particles("num_recv_particles", comm_size);
-  MPI_Alltoall(num_sent_particles.data(), 1, MPI_INT, 
+  MPI_Alltoall(num_send_particles.data(), 1, MPI_INT, 
                num_recv_particles.data(), 1, MPI_INT, MPI_COMM_WORLD);
-  int num_new_particles = 0;
 
-  Kokkos::parallel_reduce("sum_new_particles", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
-      lsum += num_recv_particles[i];
-    }, num_new_particles);
-  num_new_particles -= num_ptcls;
-  printf("Rank: %d New Particles: %d\n", comm_rank, num_new_particles);
+  int num_sending_to = 0, num_receiving_from = 0;
+  Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
+      lsum += (num_send_particles(i) > 0);
+  }, num_sending_to);
+  Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
+      lsum += (num_recv_particles(i) > 0);
+  }, num_receiving_from);
 
-  /********* Create new particle_elements and particle_data *********/
-  int* new_particle_elements = NULL;
 
-  void* new_particle_data[num_types];
-  if (num_new_particles > 0) {
-    new_particle_elements = new int[num_new_particles];
-    CreateSCSArrays<DataTypes>(new_particle_data, num_new_particles);
-  }
-
-  /* /\********* Send particle information to new processes *********\/ */
-  //Perform an ex-sum on num_sent_particles & num_recv_particles
-  kkLidView offset_sent_particles("offset_sent_particles", comm_size+1);
+  /********** Send particle information to new processes **********/
+  //Perform an ex-sum on num_send_particles & num_recv_particles
+  kkLidView offset_send_particles("offset_send_particles", comm_size+1);
   kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
-    num += num_sent_particles[i];
-    offset_sent_particles[i+1] += num*final;
+    num += num_send_particles(i);
+    offset_send_particles(i+1) += num*final;
   });
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
-    num += num_recv_particles[i];
-    offset_recv_particles[i+1] += num*final;
+    num += num_recv_particles(i);
+    offset_recv_particles(i+1) += num*final;
   });
+  kkLidView::HostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
+  kkLidView::HostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 
-  
-  //Create an array of particles being sent
-  kkLidView send_element("send_element", offset_sent_particles[comm_size]);
+  //Create arrays for particles being sent
+  int np_send = offset_send_particles_host(comm_size);
+  kkLidView send_element("send_element", np_send);
+  void* send_particle_data[num_types];
+  //Allocate views for each data type into send_particle_data[type]
+  //CreateViews<DataTypes>(send_particle_data, np_send);
+  auto gatherParticlesToSend = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+    const int process = new_process[particle_id];
+    if (mask) {
+      const int index = Kokkos::atomic_fetch_add(&(offset_send_particles[process]),1);
+      send_element(index) = new_element(particle_id);
+      //Copy the values from scs_data[type][particle_id] into send_particle_data[type](index) for each data type
+      //CopySCSToView<DataTypes>(send_particle_data, index, scs_data, particle_id);
+    }
+  };
+  parallel_for(gatherParticlesToSend);
+
+  //Create arrays for particles being received
+  int np_recv = offset_recv_particles_host(comm_size);
+  kkLidView recv_element("recv_element", np_recv);
+  void* recv_particle_data[num_types];
+  //Allocate views for each data type into send_particle_data[type]
+  //CreateViews<DataTypes>(recv_particle_data, np_recv);
+
+  //Get pointers to the data for MPI calls
+  int* recv_element_data = recv_element.data();
+  int* send_element_data = send_element.data();
+  int send_num = 0, recv_num = 0;
+  int num_sends = num_sending_to * (num_types + 1);
+  int num_recvs = num_receiving_from * (num_types + 1);
+  MPI_Request* send_requests = new MPI_Request[num_sends];
+  MPI_Request* recv_requests = new MPI_Request[num_recvs];
   //Send the particles to each neighbor
+  //TODO? Combine new_element & scs_data arrays into one array to reduce number of sends/recvs
+  for (int i = 0; i < comm_size; ++i) {
+    if (i == comm_rank)
+      continue;
+    int num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
+    if (num_send > 0) {
+      //send all information from send_element_host between those two ranges
+      MPI_Isend(send_element_data + offset_send_particles_host(i), num_send, MPI_INT, i, 0,
+                MPI_COMM_WORLD, send_requests + send_num++);
+      //SendViews<DataTypes>(send_particle_data,offset_send_particles_host(i), 
+      //                     send_requests + send_num++);
+    }
+    int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
+    if (num_recv > 0) {
+      //recv all information into recv_element_host between those two ranges
+      MPI_Irecv(recv_element_data + offset_recv_particles_host(i), num_recv, MPI_INT, i, 0,
+                MPI_COMM_WORLD, recv_requests + recv_num++);
+      /* SendViews<DataTypes>(recv_particle_data,offset_recv_particles_host(i),  */
+      /*                      recv_requests + recv_num++); */
+    }
+  }
+  MPI_Waitall(num_sends, send_requests, MPI_STATUSES_IGNORE);
+  MPI_Waitall(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
+  delete [] send_requests;
+  delete [] recv_requests;
 
-  //Recv particles from ranks that send nonzero number of particles
+  /********** Set particles that went sent to non existent on this process *********/
+  auto removeSentParticles = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+    new_element(particle_id) -= (new_element(particle_id) + 1) * 
+                                (new_process(particle_id) != comm_rank);
+  };
+  parallel_for(removeSentParticles);
 
-  /* /\********* Combine and shift particles to their new destination *********\/ */
+  /********** Combine and shift particles to their new destination **********/
   /* rebuildSCS(new_element, new_particles_elements, new_particle_data); */
 
-  if (num_new_particles > 0) {
-    delete [] new_particle_elements;
-    DestroySCSArrays<DataTypes>(new_particle_data, 0);
-  }
 }
 
 template<class DataTypes, typename ExecSpace>

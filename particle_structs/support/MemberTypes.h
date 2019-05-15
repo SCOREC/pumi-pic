@@ -59,6 +59,16 @@ struct MemberTypeAtIndex<N,MemberTypes<Types...> > {
   using type = typename MemberTypeAtIndexImpl<N, Types...>::type;
 };
 
+//Get the type with array lengths stripped off
+template <class T> 
+struct BaseType {
+  using type=T;
+};
+template <class T, int N>
+struct BaseType<T[N]> {
+  using type = typename BaseType<T>::type;
+};
+
 }
 
 #endif

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "psAssert.h"
 #include "MemberTypes.h"
+#include "MemberTypeArray.h"
 #include "SCS_Macros.h"
 #include <Kokkos_Core.hpp>
 #include <mpi.h>
@@ -116,7 +117,7 @@ class SellCSigma {
 #endif
  private: 
   //Pointers to the start of each SCS for each data type
-  void* scs_data[num_types];
+  MemberTypeArray<DataTypes> scs_data;
 
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}
@@ -129,122 +130,8 @@ class SellCSigma {
  void constructOffsets(int nChunks, int nSlices, int* chunk_widths, int*& offs, int*& s2e);
 };
 
-template <class T>
-struct InitializeType {
-  InitializeType(T *scs_data, int size) {
-    for (int i =0; i < size; ++i)
-      scs_data[i] = 0;
-  }
-};
-template <class T, int N>
-struct InitializeType<T[N]> {
-  InitializeType(T (*scs_data)[N], int size) {
-    for (int i =0; i < size; ++i)
-      for (int j =0; j < N; ++j)
-        scs_data[i][j] = 0;
-  }
-};
 
 
-template <class T>
-struct CopyType {
-  CopyType(T *new_data, int new_index, T* old_data, int old_index) {
-    new_data[new_index] = old_data[old_index];
-  }
-};
-
-template <class T, int N>
-struct CopyType<T[N]> {
-  CopyType(T (*new_data)[N], int new_index, T (*old_data)[N], int old_index) {
-    for (int i =0; i < N; ++i)
-      new_data[new_index][i] = old_data[old_index][i];
-  }
-};
-
-//Implementation to construct SCS arrays of different types
-template <typename... Types>
-struct CreateSCSArraysImpl;
-
-template <>
-struct CreateSCSArraysImpl<> {
-  CreateSCSArraysImpl(void* scs_data[], int size) {}
-};
-
-template <typename T, typename... Types>
-struct CreateSCSArraysImpl<T,Types...> {
-  CreateSCSArraysImpl(void* scs_data[], int size) {
-    scs_data[0] = new T[size];
-    InitializeType<T>(static_cast<T*>(scs_data[0]),size);
-    CreateSCSArraysImpl<Types...>(scs_data+1,size);
-  }
-};
-
-//Call to construct SCS arrays of different types
-template <typename... Types>
-struct CreateSCSArrays;
-
-template <typename... Types>
-struct CreateSCSArrays<MemberTypes<Types...> > {
-  CreateSCSArrays(void* scs_data[], int size) {
-    CreateSCSArraysImpl<Types...>(scs_data,size);
-  }
-};
-
-template <typename... Types>
-struct CopySCSEntriesImpl;
-
-template <>
-struct CopySCSEntriesImpl<> {
-  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {}
-};
-
-template <class T, typename... Types>
-struct CopySCSEntriesImpl<T, Types...> {
-  CopySCSEntriesImpl(void* new_data[], int new_index, void* old_data[], int old_index) {
-    CopyType<T>(static_cast<T*>(new_data[0]),new_index, 
-		static_cast<T*>(old_data[0]), old_index);
-    CopySCSEntriesImpl<Types...>(new_data + 1, new_index, old_data + 1, old_index);
-  }
-};
-
-template <typename... Types>
-struct CopySCSEntries;
-
-template <typename... Types>
-struct CopySCSEntries<MemberTypes<Types...> > {
-  CopySCSEntries(void* new_data[], int new_index, void* old_data[], int old_index) {
-    CopySCSEntriesImpl<Types...>(new_data, new_index, old_data, old_index);
-  }
-};
-
-//Implementation to construct SCS arrays of different types
-template <typename... Types>
-struct DestroySCSArraysImpl;
-
-template <>
-struct DestroySCSArraysImpl<> {
-  DestroySCSArraysImpl(void* scs_data[], int) {}
-};
-
-template <typename T, typename... Types>
-struct DestroySCSArraysImpl<T,Types...> {
-  DestroySCSArraysImpl(void* scs_data[], int x) {
-    delete [] (T*)(scs_data[0]);
-    DestroySCSArraysImpl<Types...>(scs_data+1, x);
-  }
-};
-
-
-//Call to construct SCS arrays of different types
-template <typename... Types>
-struct DestroySCSArrays;
-
-template <typename... Types>
-struct DestroySCSArrays<MemberTypes<Types...> > {
-  DestroySCSArrays(void* scs_data[], int x) {
-    DestroySCSArraysImpl<Types...>(scs_data,x);
-  }
-};
 
 void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 
 	       std::pair<int, int>*& ptcl_pairs);
@@ -358,7 +245,7 @@ template<class DataTypes, typename ExecSpace>
   
   //Allocate the SCS
   particle_mask = new int[offsets[num_slices]];
-  CreateSCSArrays<DataTypes>(scs_data, offsets[num_slices]);
+  CreateArrays<DataTypes>(scs_data, offsets[num_slices]);
 
   //Fill the SCS
   int index = 0;
@@ -405,7 +292,7 @@ template<class DataTypes, typename ExecSpace>
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
-  DestroySCSArrays<DataTypes>((scs_data), 0);
+  DestroyArrays<DataTypes>({scs_data});
   
   delete [] slice_to_chunk;
   delete [] row_to_element;
@@ -656,8 +543,8 @@ template<class DataTypes, typename ExecSpace>
   //Allocate the Chunks
   int* new_particle_mask = new int[new_offsets[new_nslices]];
   std::memset(new_particle_mask,0,new_offsets[new_nslices]*sizeof(int));
-  void* new_scs_data[num_types];
-  CreateSCSArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
+  MemberTypeArray<DataTypes> new_scs_data;
+  CreateArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]);
   
   //Fill the SCS
   int* element_index = new int[new_nchunks * C];
@@ -679,7 +566,7 @@ template<class DataTypes, typename ExecSpace>
 	  int new_elem = new_element[particle];
           int new_row = element_to_new_row[new_elem];
 	  int new_index = element_index[new_row];
-	  CopySCSEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
+	  CopyEntries<DataTypes>(new_scs_data,new_index, scs_data, particle);
 	  element_index[new_row] += C;
 	  new_particle_mask[new_index] = 1;
 	}

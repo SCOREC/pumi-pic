@@ -4,7 +4,7 @@
 #include "MemberTypes.h"
 namespace particle_structs {
 
-  //This type represents an array for each type of the given DataTypes
+  //This type represents an array of arrays for each type of the given DataTypes
   template <class DataTypes> using MemberTypeArray = void*[DataTypes::size];
 
   //Initializes an array of a type
@@ -30,7 +30,7 @@ namespace particle_structs {
   template <typename... Types> struct CreateArraysImpl;
   //base case for when all types are made
   template <> struct CreateArraysImpl<> {
-    CreateArraysImpl(MemberTypeArray<MemberTypes<> >, int) {}
+    CreateArraysImpl(MemberTypeArray<MemberTypes<void> >, int) {}
   };
   template <typename T, typename... Types> struct CreateArraysImpl<T,Types...> {
     CreateArraysImpl(MemberTypeArray<MemberTypes<T, Types...> > data, int size) {
@@ -67,8 +67,8 @@ namespace particle_structs {
   //Implementation of copying entries from one MT array to another at different indices
   template <typename... Types> struct CopyEntriesImpl;
   template <> struct CopyEntriesImpl<> {
-    CopyEntriesImpl(MemberTypeArray<MemberTypes<> >, int, 
-                    MemberTypeArray<MemberTypes<> >, int) {}
+    CopyEntriesImpl(MemberTypeArray<MemberTypes<void> >, int, 
+                    MemberTypeArray<MemberTypes<void> >, int) {}
   };
   template <class T, typename... Types> struct CopyEntriesImpl<T, Types...> {
     CopyEntriesImpl(MemberTypeArray<MemberTypes<T, Types...> > new_data, int new_index, 
@@ -91,7 +91,7 @@ namespace particle_structs {
   //Implementation to deallocate arrays of different types
   template <typename... Types> struct DestroyArraysImpl;
   template <> struct DestroyArraysImpl<> {
-    DestroyArraysImpl(MemberTypeArray<MemberTypes<> >) {}
+    DestroyArraysImpl(MemberTypeArray<MemberTypes<void> >) {}
   };
   template <typename T, typename... Types> struct DestroyArraysImpl<T,Types...> {
     DestroyArraysImpl(MemberTypeArray<MemberTypes<T,Types...> > data) {

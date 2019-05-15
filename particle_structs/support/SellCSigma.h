@@ -7,6 +7,7 @@
 #include "psAssert.h"
 #include "MemberTypes.h"
 #include "MemberTypeArray.h"
+#include "MemberTypeLibraries.h"
 #include "SCS_Macros.h"
 #include <Kokkos_Core.hpp>
 #include <mpi.h>
@@ -365,7 +366,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
       lsum += (num_recv_particles(i) > 0);
   }, num_receiving_from);
-
+  num_sending_to--;
+  num_receiving_from--;
 
   /********** Send particle information to new processes **********/
   //Perform an ex-sum on num_send_particles & num_recv_particles
@@ -385,16 +387,17 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   //Create arrays for particles being sent
   int np_send = offset_send_particles_host(comm_size);
   kkLidView send_element("send_element", np_send);
-  void* send_particle_data[num_types];
-  //Allocate views for each data type into send_particle_data[type]
-  //CreateViews<DataTypes>(send_particle_data, np_send);
+  MemberTypeViews<DataTypes> send_particle;
+  //Allocate views for each data type into send_particle[type]
+  CreateViews<DataTypes>(send_particle, np_send);
   auto gatherParticlesToSend = SCS_LAMBDA(int element_id, int particle_id, int mask) {
     const int process = new_process[particle_id];
     if (mask) {
       const int index = Kokkos::atomic_fetch_add(&(offset_send_particles[process]),1);
       send_element(index) = new_element(particle_id);
-      //Copy the values from scs_data[type][particle_id] into send_particle_data[type](index) for each data type
-      //CopySCSToView<DataTypes>(send_particle_data, index, scs_data, particle_id);
+      //Copy the values from scs_data[type][particle_id] into send_particle[type](index) for each data type
+      //TODO Replace with view to view once scs_data is on the device
+      CopyArrayToView<DataTypes>(send_particle, index, scs_data, particle_id);
     }
   };
   parallel_for(gatherParticlesToSend);
@@ -402,9 +405,9 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   //Create arrays for particles being received
   int np_recv = offset_recv_particles_host(comm_size);
   kkLidView recv_element("recv_element", np_recv);
-  void* recv_particle_data[num_types];
-  //Allocate views for each data type into send_particle_data[type]
-  //CreateViews<DataTypes>(recv_particle_data, np_recv);
+  MemberTypeViews<DataTypes> recv_particle;
+  //Allocate views for each data type into recv_particle[type]
+  CreateViews<DataTypes>(recv_particle, np_recv);
 
   //Get pointers to the data for MPI calls
   int* recv_element_data = recv_element.data();
@@ -422,18 +425,21 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     int num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
     if (num_send > 0) {
       //send all information from send_element_host between those two ranges
-      MPI_Isend(send_element_data + offset_send_particles_host(i), num_send, MPI_INT, i, 0,
+      int start_index = offset_send_particles_host(i);
+      MPI_Isend(send_element_data + start_index, num_send, MPI_INT, i, 0,
                 MPI_COMM_WORLD, send_requests + send_num++);
-      //SendViews<DataTypes>(send_particle_data,offset_send_particles_host(i), 
-      //                     send_requests + send_num++);
+      SendViews<DataTypes>(send_particle, start_index, num_send, i, 1,
+                           send_requests + send_num);
+      send_num+=num_types;
     }
     int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
     if (num_recv > 0) {
       //recv all information into recv_element_host between those two ranges
       MPI_Irecv(recv_element_data + offset_recv_particles_host(i), num_recv, MPI_INT, i, 0,
                 MPI_COMM_WORLD, recv_requests + recv_num++);
-      /* SendViews<DataTypes>(recv_particle_data,offset_recv_particles_host(i),  */
-      /*                      recv_requests + recv_num++); */
+      RecvViews<DataTypes>(recv_particle,offset_recv_particles_host(i), num_recv, i, 1,
+                           recv_requests + recv_num++);
+      recv_num+=num_types;
     }
   }
   MPI_Waitall(num_sends, send_requests, MPI_STATUSES_IGNORE);

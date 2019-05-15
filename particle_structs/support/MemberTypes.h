@@ -63,10 +63,12 @@ struct MemberTypeAtIndex<N,MemberTypes<Types...> > {
 template <class T> 
 struct BaseType {
   using type=T;
+  static constexpr int size = 1;
 };
 template <class T, int N>
 struct BaseType<T[N]> {
   using type = typename BaseType<T>::type;
+  static constexpr int size = N * BaseType<T>::size;
 };
 
 }

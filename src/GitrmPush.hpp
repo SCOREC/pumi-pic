@@ -26,16 +26,16 @@
 inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mesh &mesh) {
 
   //TODO check
-  const auto angles = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::FACE, "angleBdryBfield")));
-  const auto potentials = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::FACE, "potential")));
-  const auto debyeLengths = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::FACE, "DebyeLength")));
-  const auto larmorRadii = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::FACE, "LarmorRadius")));
-  const auto childLangmuirDists = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist")));
+  const auto angles = o::Reals(
+      mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
+  const auto potentials = o::Reals(
+      mesh.get_array<o::Real>(o::FACE, "potential"));
+  const auto debyeLengths = o::Reals(
+      mesh.get_array<o::Real>(o::FACE, "DebyeLength"));
+  const auto larmorRadii = o::Reals(
+      mesh.get_array<o::Real>(o::FACE, "LarmorRadius"));
+  const auto childLangmuirDists = o::Reals(
+      mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist"));
 
 
   scs->transferToDevice();
@@ -126,8 +126,8 @@ OMEGA_H_INLINE void interpolateBField(const o::Reals &BField, const o::Vector<3>
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
   const o::Mesh &mesh, const o::Real dtime) {
 
-  const auto BField = o::Reals(o::deep_copy(
-      mesh.get_array<o::Real>(o::VERT, "BField")));
+  const auto BField = o::Reals(
+      mesh.get_array<o::Real>(o::VERT, "BField"));
 
   scs->transferToDevice();
   kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);

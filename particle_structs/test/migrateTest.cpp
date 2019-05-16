@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  printf("Starting rank %d\n", comm_rank);
+
   int ne = 5;
   int np = 20;
   int* gids = new int[ne];
@@ -39,7 +39,9 @@ int main(int argc, char* argv[]) {
   SCS* scs =
     new SCS(po, 5, 2, ne, np, ptcls_per_elem, ids, gids);
 
-  scs->printFormat();
+  char rank_str[100];
+  sprintf(rank_str,"Format for rank %d", comm_rank);
+  scs->printFormat(rank_str);
 
   scs->transferToDevice();
   
@@ -66,6 +68,8 @@ int main(int argc, char* argv[]) {
 
     scs->migrate(new_element, new_process);
   }
+
+  scs->printFormat(rank_str);
 
   delete scs;
   MPI_Finalize();

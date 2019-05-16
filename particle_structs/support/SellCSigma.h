@@ -43,7 +43,7 @@ class SellCSigma {
   template <std::size_t N>
   void zeroSCSArray(int size);
 
- void printFormat() const;
+  void printFormat(const char* prefix = "") const;
 
   /* Migrates each particle to new_process and to new_element
      Calls rebuildSCS to recreate the SCS after migrating particles
@@ -58,7 +58,8 @@ class SellCSigma {
   /*
     Rebuilds a new SCS where particles move to the element in new_element[i]
   */
-  void rebuildSCS(int* new_element, bool debug = false);
+  void rebuildSCS(int* new_element, kkLidView new_particle_elements = kkLidView(), 
+                  MemberTypeViews<DataTypes> new_particles = NULL);
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -462,8 +463,10 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   };
   parallel_for(removeSentParticles);
 
+  kkLidView::HostMirror new_element_host = deviceToHost(new_element);
+  int* new_element_data = new_element_host.data();
   /********** Combine and shift particles to their new destination **********/
-  //rebuildSCS(new_element, recv_element, recv_particle);
+  rebuildSCS(new_element_data, recv_element, recv_particle);
 
 }
 
@@ -475,7 +478,7 @@ void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
 
 
 template<class DataTypes, typename ExecSpace>
-  void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, bool debug) {
+  void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, kkLidView new_particle_elements, MemberTypeViews<DataTypes> new_particles) {
 
   int* new_particles_per_elem = new int[num_chunks*C];
   for (int i =0; i < num_elems; ++i)
@@ -536,23 +539,12 @@ template<class DataTypes, typename ExecSpace>
     createGlobalMapping(new_row_to_element, gid_mapping, 
                         new_row_to_element_gid, element_gid_to_row);
   delete [] gid_mapping;
-  if(debug) {
-    printf("\nSigma Sorted Particle Counts\n");
-    for (int i = 0; i < num_elems; ++i)
-      printf("Element %d: has %d particles\n", new_row_to_element[i], ptcls[i].first);
-  }
 
   //Create offsets for each slice
   int* new_offsets;
   int* new_slice_to_chunk;
   constructOffsets(new_nchunks, new_nslices, chunk_widths,new_offsets, new_slice_to_chunk);
   delete [] chunk_widths;
-
-  if(debug) {
-    printf("\nSlice Offsets\n");
-    for (int i = 0; i < new_nslices + 1; ++i)
-      printf("Slice %d starts at %d\n", i, new_offsets[i]);
-  }
 
   //Allocate the Chunks
   int* new_particle_mask = new int[new_offsets[new_nslices]];
@@ -607,25 +599,13 @@ template<class DataTypes, typename ExecSpace>
   particle_mask = new_particle_mask;
   for (size_t i = 0; i < num_types; ++i)
     scs_data[i] = new_scs_data[i];
-
-  if(debug) {
-    printf("\nSlices\n");
-    for (int i = 0; i < num_slices; ++i){
-      printf("Slice %d:", i);
-      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
-        printf(" %d", particle_mask[j]);
-        if (j % C == C - 1)
-          printf(" |");
-      }
-      printf("\n");
-    }
-  }
 }
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes,ExecSpace>::printFormat() const {
+void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {  
   char message[10000];
   char* cur = message;
+  cur += sprintf(cur, "%s\n", prefix);
   cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C, sigma, V);
   cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
   cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);

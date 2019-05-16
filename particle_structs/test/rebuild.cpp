@@ -78,7 +78,7 @@ bool shuffleParticlesTests() {
   }
 
   //Rebuild with no changes  
-  scs->rebuildSCS(new_element, true);
+  scs->rebuildSCS(new_element);
 
   values = scs->getSCS<0>();
 
@@ -96,7 +96,7 @@ bool shuffleParticlesTests() {
     }
   }
 
-  scs->rebuildSCS(new_element, true);
+  scs->rebuildSCS(new_element);
 
   values = scs->getSCS<0>();
 

@@ -23,20 +23,15 @@
 
 
 
-inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mesh &mesh) {
+inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, 
+  const o::Mesh &mesh) {
 
-  //TODO check
-  const auto angles = o::Reals(
-      mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
-  const auto potentials = o::Reals(
-      mesh.get_array<o::Real>(o::FACE, "potential"));
-  const auto debyeLengths = o::Reals(
-      mesh.get_array<o::Real>(o::FACE, "DebyeLength"));
-  const auto larmorRadii = o::Reals(
-      mesh.get_array<o::Real>(o::FACE, "LarmorRadius"));
-  const auto childLangmuirDists = o::Reals(
-      mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist"));
-
+  const auto angles = o::Reals( mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
+  const auto potentials = o::Reals(mesh.get_array<o::Real>(o::FACE, "potential"));
+  const auto debyeLengths = o::Reals(mesh.get_array<o::Real>(o::FACE, "DebyeLength"));
+  const auto larmorRadii = o::Reals(mesh.get_array<o::Real>(o::FACE, "LarmorRadius"));
+  const auto childLangmuirDists = o::Reals(mesh.get_array<o::Real>(
+                                  o::FACE, "ChildLangmuirDist"));
 
   scs->transferToDevice();
   kkFp3View ptclPos_d("ptclPos_d", scs->offsets[scs->num_slices]);
@@ -51,13 +46,12 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mes
   kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
   hostToDeviceFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
 
-  //TODO hostToDevice ...
   auto run = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask) { 
-    o::LO verbose = (elem%500==0)?3:0;
+    o::LO verbose = (elem%1000==0)?3:0;
 
     auto faceId = faceId_d[pid];
-    if(faceId < 0){
+    if(faceId < 0) {
       //TODO check
       efield_d(pid, 0) = 0;
       efield_d(pid, 1) = 0;
@@ -71,12 +65,11 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mes
     o::Real larmorRadius = larmorRadii[faceId];
     o::Real childLangmuirDist = childLangmuirDists[faceId];
 
-    // TODO utility function 
     o::Vector<3> pos{ptclPos_d(pid,0), ptclPos_d(pid,1), ptclPos_d(pid,2)};
     o::Vector<3> closest{closestPoint_d(pid,0), closestPoint_d(pid,1), 
       closestPoint_d(pid,2)};
     o::Vector<3> distVector = pos - closest; 
-    o::Vector<3> directionUnitVector = o::normalize(distVector);
+    o::Vector<3> dirUnitVector = o::normalize(distVector);
     o::Real md = p::osh_mag(distVector);
     o::Real Emag = 0;
 
@@ -96,9 +89,9 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mes
 
     if(p::almost_equal(md, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
       Emag = 0.0;
-      directionUnitVector = {0, 0, 0}; //TODO confirm
+      dirUnitVector = {0, 0, 0}; //TODO confirm
     }
-    auto exd = Emag*directionUnitVector;
+    auto exd = Emag*dirUnitVector;
     efield_d(pid, 0) = exd[0];
     efield_d(pid, 1) = exd[1];
     efield_d(pid, 2) = exd[2];
@@ -113,21 +106,94 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, const o::Mes
 }
 
 
-//TODO
-OMEGA_H_INLINE void interpolateBField(const o::Reals &BField, const o::Vector<3> &posPrev,
-  o::Vector<3> &bField) {
-  srand (time(NULL));
-  bField[0] = (double)(std::rand())/RAND_MAX;
-  bField[1] = (double)(std::rand())/RAND_MAX;
-  bField[2] = (double)(std::rand())/RAND_MAX;
+/** @brief Re-writing of interp2dCombined() in GITR
+ *  @see https://github.com/ORNL-Fusion/GITR/blob/master/src/interp2d.cpp
+ *  @param[in]  data, flat 3component array
+ *  @param[in] comp, component, from degree of freedom
+ *  @return value corresponding to comp
+ */
+OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::LO comp, 
+  const o::Real gridx0, const o::Real gridz0, const o::Real dx, const o::Real dz, 
+  const o::LO nx, const o::LO nz, const o::Vector<3> &pos) {
+  
+  if(nx*nz == 1)
+  {
+    return data[comp+0];
+  }
+
+  o::Real x = pos[0];
+  o::Real y = pos[1];
+  o::Real z = pos[2];   
+
+  o::Real fxz = 0;
+  o::Real fx_z1 = 0;
+  o::Real fx_z2 = 0; 
+  o::Real dim1 = 0;
+
+  if(USECYLSYMM > 0)
+    dim1 = sqrt(x*x + y*y);
+  else
+    dim1 = x;
+  
+  o::LO i = floor((dim1 - gridx0)/dx);
+  o::LO j = floor((z - gridz0)/dz);
+  
+  if (i < 0) i=0;
+  if (j < 0) j=0;
+
+  o::Real gridxi = gridx0 + i * dx;
+  o::Real gridxip1 = gridx0 + (i+1) * dx;    
+  o::Real gridzj = gridz0 + j * dz;
+  o::Real gridzjp1 = gridz0 + (j+1) * dz; 
+
+  if (i >=nx-1 && j>=nz-1) {
+      fxz = data[(nx-1+(nz-1)*nx)*3+comp];  //TODO this is wrong, include comp
+  }
+  else if (i >=nx-1) {
+      fx_z1 = data[(nx-1+j*nx)*3+comp];
+      fx_z2 = data[(nx-1+(j+1)*nx)*3+comp];
+      fxz = ((gridzjp1-z)*fx_z1+(z - gridzj)*fx_z2)/dz;
+  }
+  else if (j >=nz-1) {
+      fx_z1 = data[(i+(nz-1)*nx)*3+comp];
+      fx_z2 = data[(i+(nz-1)*nx)*3+comp];
+      fxz = ((gridxip1-dim1)*fx_z1+(dim1 - gridxi)*fx_z2)/dx;
+      
+  }
+  else {
+    fx_z1 = ((gridxip1-dim1)*data[(i+j*nx)*3+comp] + 
+            (dim1 - gridxi)*data[(i+1+j*nx)*3+comp])/dx;
+    fx_z2 = ((gridxip1-dim1)*data[(i+(j+1)*nx)*3+comp] + 
+            (dim1 - gridxi)*data[(i+1+(j+1)*nx)*3+comp])/dx; 
+    fxz = ((gridzjp1-z)*fx_z1+(z - gridzj)*fx_z2)/dz;
+  }
+  
+  return fxz;
 }
 
-    
+OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
+  o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
+  const o::Vector<3> &pos, o::Vector<3> &field) {
+
+  o::Real Ar = interpolate2dField(data3, 0, gridx0, gridz0, dx, dz, nx, nz, pos);
+  o::Real At = interpolate2dField(data3, 1, gridx0, gridz0, dx, dz, nx, nz, pos);
+  field[2] = interpolate2dField(data3, 2, gridx0, gridz0, dx, dz, nx, nz, pos);
+  if(USECYLSYMM > 0) {
+    o::Real theta = atan2(pos[1], pos[0]);   
+    field[0] = cos(theta)*Ar - sin(theta)*At;
+    field[1] = sin(theta)*Ar + cos(theta)*At;
+  }
+  else {
+    field[0] = Ar;
+    field[1] = At;
+  }
+}
+
+
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
   const o::Mesh &mesh, const o::Real dtime) {
 
-  const auto BField = o::Reals(
-      mesh.get_array<o::Real>(o::VERT, "BField"));
+  const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
 
   scs->transferToDevice();
   kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
@@ -140,42 +206,44 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   hostToDeviceFp(ptclPos_d, scs->getSCS<PCL_POS>());
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    o::LO verbose = (elem%500==0)?3:0;
+    o::LO verbose = (elem%1000==0)?3:0;
 
     //TODO check
-    Omega_h::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos
-    Omega_h::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //previous_pos
-    Omega_h::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
-    Omega_h::Vector<3> bField;
-    interpolateBField(BField, posPrev, bField); //previous_pos
+    o::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos
+    o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
+    o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
+    o::Vector<3> bField; //At previous_pos
+    //TODO check BField shape
+    interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
+                    posPrev, bField); //At previous_pos
 
     o::Real charge = 1; //TODO get using speciesID using enum
     o::Real amu = 184.0; //TODO //impurity_amu = 184.0
 
     OMEGA_H_CHECK(amu >0 && dtime>0); //TODO dtime
-    Omega_h::Real bFieldMag = p::osh_mag(bField);
-    Omega_h::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dtime*0.5;
-    Omega_h::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
+    o::Real bFieldMag = p::osh_mag(bField);
+    o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dtime*0.5;
+    o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
 
       //v_minus = v + q_prime*E;
-    Omega_h::Vector<3> qpE = qPrime*eField;
-    Omega_h::Vector<3> vMinus = vel - qpE;
+    o::Vector<3> qpE = qPrime*eField;
+    o::Vector<3> vMinus = vel - qpE;
 
     //v_prime = v_minus + q_prime*(v_minus x B)
-    Omega_h::Vector<3> vmxB = Omega_h::cross(vMinus,bField);
-    Omega_h::Vector<3> qpVmxB = qPrime*vmxB;
-    Omega_h::Vector<3> vPrime = vMinus + qpVmxB;
+    o::Vector<3> vmxB = o::cross(vMinus,bField);
+    o::Vector<3> qpVmxB = qPrime*vmxB;
+    o::Vector<3> vPrime = vMinus + qpVmxB;
 
     //v = v_minus + coeff*(v_prime x B)
-    Omega_h::Vector<3> vpxB = Omega_h::cross(vPrime, bField);
-    Omega_h::Vector<3> cVpxB = coeff*vpxB;
+    o::Vector<3> vpxB = o::cross(vPrime, bField);
+    o::Vector<3> cVpxB = coeff*vpxB;
     vel = vMinus + cVpxB;
 
     //v = v + q_prime*E
     vel = vel + qpE;
 
     //write
-    Omega_h::Vector<3> pre = {ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
+    o::Vector<3> pre = {ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
                               ptclPrevPos_d(pid, 2)}; //prev pos
     ptclPrevPos_d(pid, 0) = ptclPos_d(pid, 0);
     ptclPrevPos_d(pid, 1) = ptclPos_d(pid, 1);
@@ -190,10 +258,10 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     vel_d(pid, 2) = vel[2];
     
     if(verbose >2){
-      printf("prev_pos: %.3f %.3f %.3f \n", ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
+      printf("prev_pos: %.3f %.3f %.3f :: ", ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
         ptclPrevPos_d(pid, 2));
       printf("pre: %.3f %.3f %.3f \n", pre[0], pre[1], pre[2]);
-      printf("pos: %.3f %.3f %.3f \n", ptclPos_d(pid, 0), ptclPos_d(pid, 1), ptclPos_d(pid, 2));
+      printf("pos: %.3f %.3f %.3f ::", ptclPos_d(pid, 0), ptclPos_d(pid, 1), ptclPos_d(pid, 2));
       printf("vel: %.3f %.3f %.3f \n", vel_d(pid, 0), vel_d(pid, 1), vel_d(pid, 2));
     }
   };

@@ -143,8 +143,8 @@ inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
     auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
     auto center = average(cell_nodes2coords);
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if(e%500 == 0) 
-        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+      //if(e%500 == 0) 
+      //  printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
       for(int i=0; i<3; i++)
         x_scs_d(pid,i) = center[i];
     });

@@ -52,6 +52,7 @@ int main(int argc, char** argv) {
 
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
+  printf("\n*** Initialize Fields and Boundary data ***\n");
   gm.initFieldsNBoundary();
 
   // Add bdry faces to elements within 1mm
@@ -61,11 +62,13 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
+  printf("\n*** Calculate Distance To Bdry ***\n");
   gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
 
-
+  printf("\n*** Calculate EField ***\n");
   gitrm_getE(gp.scs, mesh);
+  printf("\n*** Boris Move ***\n");
   gitrm_borisMove(gp.scs, mesh, 1e-6);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());

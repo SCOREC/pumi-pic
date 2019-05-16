@@ -11,18 +11,22 @@ namespace p = pumipic;
 #define BIASED_SURFACE 0
 #endif
 
+#ifndef USECYLSYMM
+#define USECYLSYMM 0 // TODO
+#endif
+
 // The define is good for device too, or pass by template ?
-#ifndef DEPTH_DIST2_BDRY
-#define DEPTH_DIST2_BDRY 0.001 // 1mm
-#endif
+const o::LO  DEPTH_DIST2_BDRY = 0.001; // 1mm
+const o::LO BDRYFACE_SIZE = 100;
+const o::LO BFS_DATA_SIZE = 100;
 
-#ifndef BDRYFACE_SIZE
-#define BDRYFACE_SIZE 100
-#endif
-
-#ifndef BFS_DATA_SIZE
-#define BFS_DATA_SIZE 100
-#endif
+//TODO move these to suitable location
+static o::LO BGRIDX0 = 0;
+static o::LO BGRIDZ0 = 0;
+static o::LO BGRID_DX = 0;
+static o::LO BGRID_DZ = 0;
+static o::LO BGRID_NX = 0;
+static o::LO BGRID_NZ = 0;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };

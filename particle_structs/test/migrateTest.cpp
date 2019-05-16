@@ -49,12 +49,20 @@ int main(int argc, char* argv[]) {
     kkLidView new_process("new_process", scs->size());
     
     //Send half the particles right one process except on rank 0
-    auto setElmProcess = SCS_LAMBDA(int element_id, int particle_id, int mask) {
-      new_element[particle_id] = element_id;
-      new_process[particle_id] = (comm_rank + ((particle_id) > 9)) % comm_size;
-    };
-    if (comm_rank > 0)
+    if (comm_rank > 0) {
+      auto setElmProcess = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+        new_element[particle_id] = element_id;
+        new_process[particle_id] = (comm_rank + ((particle_id) > 9)) % comm_size;
+      };
       scs->parallel_for(setElmProcess);
+    }
+    else {
+      auto setElmProcess = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+        new_element[particle_id] = element_id;
+        new_process[particle_id] = comm_rank;
+      };
+      scs->parallel_for(setElmProcess);
+    }
 
     scs->migrate(new_element, new_process);
   }
@@ -62,6 +70,7 @@ int main(int argc, char* argv[]) {
   delete scs;
   MPI_Finalize();
   Kokkos::finalize();
-  printf("All tests passed\n");
+  if (comm_rank == 0)
+    printf("All tests passed\n");
   return 0;
 }

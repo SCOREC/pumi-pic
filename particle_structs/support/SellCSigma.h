@@ -352,7 +352,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   kkLidView num_send_particles("num_send_particles", comm_size);
   auto count_sending_particles = SCS_LAMBDA(int element_id, int particle_id, bool mask) {
     const int process = new_process(particle_id);
-    Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask);
+    Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask * (process != comm_rank));
   };
   parallel_for(count_sending_particles);
   kkLidView num_recv_particles("num_recv_particles", comm_size);
@@ -366,18 +366,16 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
       lsum += (num_recv_particles(i) > 0);
   }, num_receiving_from);
-  num_sending_to--;
-  num_receiving_from--;
   
-  printf("Rank %d. Num Sending: %d Num Receiving %d\n", comm_rank, num_sending_to, num_receiving_from);
-
   /********** Send particle information to new processes **********/
   //Perform an ex-sum on num_send_particles & num_recv_particles
   kkLidView offset_send_particles("offset_send_particles", comm_size+1);
+  kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
   kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
     num += num_send_particles(i);
     offset_send_particles(i+1) += num*final;
+    offset_send_particles_temp(i+1) += num*final;
   });
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
     num += num_recv_particles(i);
@@ -394,8 +392,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   CreateViews<DataTypes>(send_particle, np_send);
   auto gatherParticlesToSend = SCS_LAMBDA(int element_id, int particle_id, int mask) {
     const int process = new_process[particle_id];
-    if (mask) {
-      const int index = Kokkos::atomic_fetch_add(&(offset_send_particles[process]),1);
+    if (mask && process != comm_rank) {
+      const int index = Kokkos::atomic_fetch_add(&(offset_send_particles_temp[process]),1);
       send_element(index) = new_element(particle_id);
       //Copy the values from scs_data[type][particle_id] into send_particle[type](index) for each data type
       //TODO Replace with view to view once scs_data is on the device
@@ -424,23 +422,26 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   for (int i = 0; i < comm_size; ++i) {
     if (i == comm_rank)
       continue;
+    
+    //Sending
     int num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
     if (num_send > 0) {
-      //send all information from send_element_host between those two ranges
       int start_index = offset_send_particles_host(i);
       MPI_Isend(send_element_data + start_index, num_send, MPI_INT, i, 0,
-                MPI_COMM_WORLD, send_requests + send_num++);
+                MPI_COMM_WORLD, send_requests + send_num);
+      send_num++;
       SendViews<DataTypes>(send_particle, start_index, num_send, i, 1,
                            send_requests + send_num);
       send_num+=num_types;
     }
+    //Receiving
     int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
     if (num_recv > 0) {
-      //recv all information into recv_element_host between those two ranges
       MPI_Irecv(recv_element_data + offset_recv_particles_host(i), num_recv, MPI_INT, i, 0,
-                MPI_COMM_WORLD, recv_requests + recv_num++);
+                MPI_COMM_WORLD, recv_requests + recv_num);
+      recv_num++;
       RecvViews<DataTypes>(recv_particle,offset_recv_particles_host(i), num_recv, i, 1,
-                           recv_requests + recv_num++);
+                           recv_requests + recv_num);
       recv_num+=num_types;
     }
   }
@@ -449,15 +450,20 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   delete [] send_requests;
   delete [] recv_requests;
 
+  kkLidView::HostMirror recv_element_host = deviceToHost(recv_element);
+  for (int i = 0; i < recv_element_host.size(); ++i)
+    printf("Rank %d received particle in element %d\n", comm_rank, recv_element_host(i));
+
+  
   /********** Set particles that went sent to non existent on this process *********/
   auto removeSentParticles = SCS_LAMBDA(int element_id, int particle_id, int mask) {
-    new_element(particle_id) -= (new_element(particle_id) + 1) * 
+    new_element(particle_id) -= (new_element(particle_id) + 1) *
                                 (new_process(particle_id) != comm_rank);
   };
   parallel_for(removeSentParticles);
 
   /********** Combine and shift particles to their new destination **********/
-  /* rebuildSCS(new_element, new_particles_elements, new_particle_data); */
+  //rebuildSCS(new_element, recv_element, recv_particle);
 
 }
 

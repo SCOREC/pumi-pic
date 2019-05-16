@@ -2,12 +2,14 @@
 #define GITRM_MESH_HPP
 
 #include "pumipic_adjacency.hpp"
-#include "GitrmParticles.hpp"
+#include "GitrmParticles.hpp"  // For dist2bdry
 
 namespace o = Omega_h;
 namespace p = pumipic;
 
-
+#ifndef BIASED_SURFACE
+#define BIASED_SURFACE 0
+#endif
 
 // The define is good for device too, or pass by template ?
 #ifndef DEPTH_DIST2_BDRY
@@ -45,7 +47,7 @@ class GitrmMesh {
 public:
   //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
   GitrmMesh(o::Mesh &);
-  ~GitrmMesh();
+  ~GitrmMesh(){};
 
 
   GitrmMesh(GitrmMesh const&) = delete;
@@ -107,6 +109,12 @@ public:
    */
   o::LOs bdryFaceInds;
 
+public:
+  /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
+  *    ChildLangmuirDist
+  */
+  void initFieldsNBoundary();
+  void loadFieldsNBoundary();
 };
 
 
@@ -143,24 +151,27 @@ public:
  * TODO add description of data size of bdryFaces, bdryFaceInds and indexes
  */
 // TODO gitrm namespace ?
-inline void gitrm_findDistanceToBdry ( 
-  particle_structs::SellCSigma<Particle>* scs, 
-  const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords, 
+inline void gitrm_findDistanceToBdry( 
+  particle_structs::SellCSigma<Particle>* scs, o::Mesh &mesh,
   const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
-  const o::LO fsize, const o::LO fskip, const o::LO nel) {
-  
+  const o::LO fsize, const o::LO fskip) {
+
+  const auto nel = mesh.nelems();
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts(); 
+
   //fskip is 2, since 1st 2 are not part of face vertices
 
   OMEGA_H_CHECK(fsize > 0 && nel >0);
-  
-  Vector3d *scs_pos = scs->getSCS<0>();
   scs->transferToDevice();
-  kkFp3View pos_d("position_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(pos_d, scs_pos);
 
-  kkFpView d2bdry_d("d2bdry_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(d2bdry_d, scs->getSCS<3>() );
-  
+  kkFp3View pos_d("position_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(pos_d, scs->getSCS<PCL_POS>());
+
+  kkFp3View closestPoint_d("closestPoint_d", scs->offsets[scs->num_slices]);
+  hostToDeviceFp(closestPoint_d, scs->getSCS<PCL_BDRY_CLOSEPT>());
+
+
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     //if (mask <= 0) return; //TODO ?????
@@ -183,13 +194,13 @@ inline void gitrm_findDistanceToBdry (
     o::LO fid = -1;
     o::LO minRegion = -1;
 
-    if(verbose >2){
+    if(verbose >2) {
       printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
         bdryFaceInds[elem+1]);
     }
 
 
-    for( o::LO ii = 0; ii < nFaces; ++ii ){
+    for(o::LO ii = 0; ii < nFaces; ++ii) {
       
       // TODO put in a function
       o::LO ind = (beg + ii)*fsize;
@@ -242,16 +253,18 @@ inline void gitrm_findDistanceToBdry (
     }
 
     min = std::sqrt(min);
-    if(verbose >1){
+    if(verbose >1) {
       printf("\n*** el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
         elem, min, fid, fel, minRegion);
     }
-    d2bdry_d(pid) = min;
+    closestPoint_d(pid, 0) = point[0];
+    closestPoint_d(pid, 1) = point[1];
+    closestPoint_d(pid, 2) = point[2];    
   };
 
   scs->parallel_for(distRun);
 
-  deviceToHostFp(d2bdry_d, scs->getSCS<3>());
+  deviceToHostFp(closestPoint_d, scs->getSCS<PCL_BDRY_CLOSEPT>());
 
 }
 

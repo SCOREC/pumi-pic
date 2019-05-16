@@ -1,5 +1,6 @@
 #include "pumipic_adjacency.hpp"
 #include "GitrmMesh.hpp"
+#include "GitrmPush.hpp"
 #include "GitrmParticles.hpp"
 
 #include <Kokkos_Core.hpp>
@@ -51,6 +52,7 @@ int main(int argc, char** argv) {
 
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
+  gm.initFieldsNBoundary();
 
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
@@ -59,9 +61,12 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
-  gitrm_findDistanceToBdry(gp.scs, r2v, coords, gm.bdryFaces, gm.bdryFaceInds, 
-      SIZE_PER_FACE, FSKIP, ne);
+  gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
+      SIZE_PER_FACE, FSKIP);
 
+
+  gitrm_getE(gp.scs, mesh);
+  gitrm_borisMove(gp.scs, mesh, 1e-6);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());
   timer.reset();

@@ -24,13 +24,13 @@ using particle_structs::elemCoords;
 namespace o = Omega_h;
 namespace p = pumipic;
 
-
-//TODO modify to have all member data
-typedef MemberTypes < Vector3d, Vector3d, int,  double > Particle;
+// TODO: initialize these to its default values: ids =-1, reals=0
+typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, int, 
+       Vector3d, Vector3d> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PCL_POS1, PCL_POS2, PCL_ID, PCL_D2BDRY};
-
+enum {PCL_POS_PREV, PCL_POS, PCL_ID, PCL_BDRY_CLOSEPT,  PCL_BDRY_FACEID, 
+     PCL_EFIELD_PREV, PCL_VEL};
 
 class GitrmParticles {
 public:
@@ -48,6 +48,10 @@ public:
 // Copied from pseudoTestAndPush.cpp
 typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
+typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
+typedef Kokkos::View<Vector3d*, exe_space::device_type> kkFp3View;
+
+
 inline  void hostToDeviceLid(kkLidView d, lid_t *h) {
   kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);
   for (size_t i=0; i<hv.size(); ++i) {
@@ -64,7 +68,6 @@ inline void deviceToHostLid(kkLidView d, lid_t *h) {
   }
 }
 
-typedef Kokkos::View<fp_t*, exe_space::device_type> kkFpView;
 /** \brief helper function to transfer a host array to a device view */
 inline void hostToDeviceFp(kkFpView d, fp_t* h) {
   kkFpView::HostMirror hv = Kokkos::create_mirror_view(d);
@@ -73,7 +76,6 @@ inline void hostToDeviceFp(kkFpView d, fp_t* h) {
   Kokkos::deep_copy(d,hv);
 }
 
-typedef Kokkos::View<Vector3d*, exe_space::device_type> kkFp3View;
 /** \brief helper function to transfer a host array to a device view */
 inline void hostToDeviceFp(kkFp3View d, fp_t (*h)[3]) {
   kkFp3View::HostMirror hv = Kokkos::create_mirror_view(d);

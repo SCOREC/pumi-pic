@@ -17,12 +17,25 @@ GitrmMesh::GitrmMesh(o::Mesh &m):
   mesh(m) {
 }
 
-GitrmMesh::~GitrmMesh(){
+
+void GitrmMesh::loadFieldsNBoundary() {
 
 }
 
+void GitrmMesh::initFieldsNBoundary() {
+  auto nv = mesh.nverts();
+  mesh.add_tag(o::VERT, "BField", 3, o::Reals(3*nv, 0.0));
+
+  auto nf = mesh.nfaces();
+  mesh.add_tag(o::FACE, "angleBdryBfield", 1, o::Reals(nf, 0));
+  mesh.add_tag(o::FACE, "potential", 1, o::Reals(nf, 0));
+  mesh.add_tag(o::FACE, "DebyeLength", 1, o::Reals(nf, 0));
+  mesh.add_tag(o::FACE, "LarmorRadius", 1, o::Reals(nf, 0));
+  mesh.add_tag(o::FACE, "ChildLangmuirDist", 1, o::Reals(nf, 0));
+}
+
 // These are only for temporary writing during pre-processing
-void GitrmMesh::initNearBdryDistData(){
+void GitrmMesh::initNearBdryDistData() {
   OMEGA_H_CHECK(BDRYFACE_SIZE > 0);
   OMEGA_H_CHECK(SIZE_PER_FACE > 0);
   auto nel = mesh.nelems();
@@ -37,7 +50,7 @@ void GitrmMesh::initNearBdryDistData(){
 
 
 void GitrmMesh::calculateCsrIndices(const o::Write<o::LO> &numBdryFaceIds, const bool counted,
-    o::LOs &bdryFaceInds, o::LO &totalBdryFaces){
+    o::LOs &bdryFaceInds, o::LO &totalBdryFaces) {
   OMEGA_H_CHECK(counted);
 
   // This is done on host, since ordered sum of all previous element ids required for CSR.
@@ -86,7 +99,7 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   //Num of faces
   o::Int sum = 0;
   o::Int e = 0;
-  for(e=0; e < nel; ++e){
+  for(e=0; e < nel; ++e) {
     bdryFaceIndsCsr[e] = sum; // * S;
      sum += numBdryFaceIdsH[e];
   }
@@ -106,7 +119,7 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   o::Write<o::Real> bdryFacesCsrW(numAddedBdryFaces * S, 0);
   
   //Copy data
-  auto convert = OMEGA_H_LAMBDA(o::LO elem){
+  auto convert = OMEGA_H_LAMBDA(o::LO elem) {
     // Index points to data counting spread out face or x,y,z components. ?
     // This calculates face number from the above. 
 
@@ -129,14 +142,14 @@ void GitrmMesh::convert2ReadOnlyCSR() {
     o::Real fdat[9] = {0};
 
     // Looping over implicit face numbers
-    for(o::LO i = beg; i < end; ++i){
+    for(o::LO i = beg; i < end; ++i) {
       p::get_face_data_by_id(face_verts, coords, bdryFaceIds[bfi], fdat, 0);
 
       // Face index is x by size_per_face 
       bdryFacesCsrW[i*S] = static_cast<o::Real>(bdryFaceIds[bfi]);
       bdryFacesCsrW[i*S+1] = static_cast<o::Real>(bdryFaceElemIds[bfi]);
-//printf(" f_%d  el_%d\n", bdryFaceIds[bfi], bdryFaceElemIds[bfi]);
-      for(o::LO j = FSKIP; j < S; ++j){
+      //printf(" f_%d  el_%d\n", bdryFaceIds[bfi], bdryFaceElemIds[bfi]);
+      for(o::LO j = FSKIP; j < S; ++j) {
         //bdryFacesCsrW[i*S + j] = bdryFacesW[bfd + j-1]; //TODO check this
         bdryFacesCsrW[i*S + j] = fdat[j - FSKIP];
       }
@@ -165,16 +178,16 @@ void GitrmMesh::copyBdryFacesToSelf() {
   auto &bdryFlags = this->bdryFlags;
 
   o::LO verbose = 2;
-  auto fillBdry = OMEGA_H_LAMBDA(o::LO elem){
+  auto fillBdry = OMEGA_H_LAMBDA(o::LO elem) {
 
     // Find  bdry faces: # and id
     o::LO nbdry = 0; 
     o::LO bdryFids[4];
     const auto beg_face = elem *4;
     const auto end_face = beg_face +4;
-    for(o::LO fi = beg_face; fi < end_face; ++fi){//not 0..3
+    for(o::LO fi = beg_face; fi < end_face; ++fi) {//not 0..3
       const auto fid = down_r2f[fi];
-      if(verbose>2){
+      if(verbose>2) {
               printf( "exposed: e_%d, i_%d, fid_%d => %d\n", elem, fi, fid, side_is_exposed[fid]);
       }
       if(side_is_exposed[fid]) {
@@ -190,7 +203,7 @@ void GitrmMesh::copyBdryFacesToSelf() {
     if(verbose>2) printf("\nelem:%d, nbdry: %d \n", elem, nbdry);
 
     //Only boundary faces
-    for(o::LO fi = 0; fi < nbdry; ++fi){
+    for(o::LO fi = 0; fi < nbdry; ++fi) {
       auto fid = bdryFids[fi];
       auto fv2v = o::gather_verts<3>(face_verts, fid); //Few<LO, 3>
 
@@ -257,7 +270,7 @@ void GitrmMesh::preProcessDistToBdry() {
   initNearBdryDistData();
   copyBdryFacesToSelf();
 
-  auto fill = OMEGA_H_LAMBDA(o::LO elem){
+  auto fill = OMEGA_H_LAMBDA(o::LO elem) {
     o::LO verbose = 0;
     // This has to be init by copyBdryFacesToSameElem.
     o::LO update = bdryFlags[elem];
@@ -295,7 +308,7 @@ void GitrmMesh::preProcessDistToBdry() {
 
     auto dface_ind = dual_elems[elem]; //first interior
 
-    for(auto fi = 0; fi < nIn; ++fi){
+    for(auto fi = 0; fi < nIn; ++fi) {
 
       //Check all adjacent elements
       auto adj_elem  = dual_faces[dface_ind];
@@ -310,7 +323,7 @@ void GitrmMesh::preProcessDistToBdry() {
       if(verbose >2) 
         printf("\n **tot:%d , SizeAdj_of_%d = %d \n", tot, adj_elem, sizeAdj);
 
-      for(o::LO ai=0; ai < sizeAdj; ++ai){
+      for(o::LO ai=0; ai < sizeAdj; ++ai) {
         bool found = false;
         auto index = BDRYFACE_SIZE*adj_elem + ai;
         auto adj_fid = bdryFaceIds[index];
@@ -360,7 +373,7 @@ void GitrmMesh::preProcessDistToBdry() {
         bdryFaceElemIds[ind] = adj_fElid;
         ++tot;
 
-        if(verbose >2){ 
+        if(verbose >2) { 
           if(numBdryFaceIds[elem]>0)
             printf(" %d:: %d;ids ", elem, numBdryFaceIds[elem]);
           printf("tot = %d\n", tot);
@@ -375,7 +388,7 @@ void GitrmMesh::preProcessDistToBdry() {
 
       // After copying is done
       auto dface_ind = dual_elems[elem];
-      for(o::LO i=0; i<4-nbf; ++i){
+      for(o::LO i=0; i<4-nbf; ++i) {
         auto adj_elem  = dual_faces[dface_ind];
         o::LO val = 1;
         Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
@@ -401,7 +414,7 @@ void GitrmMesh::preProcessDistToBdry() {
   
    
    Kokkos::parallel_reduce("BdryFillCheck", nel, 
-       KOKKOS_LAMBDA(const int& i, o::LO & lsum ) {
+       KOKKOS_LAMBDA(const int& i, o::LO & lsum) {
      lsum += bdryFlags[i];
    }, total);
 
@@ -413,7 +426,7 @@ void GitrmMesh::preProcessDistToBdry() {
 }
 
 
-void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums){
+void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums) {
   auto &numBdryFaceIds = this->numBdryFaceIds;
   auto &bdryFaceIds = this->bdryFaceIds;
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
@@ -436,7 +449,7 @@ void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums){
 }
 
 
-void GitrmMesh::printBdryFacesCSR(bool printIds, o::LO minNums){
+void GitrmMesh::printBdryFacesCSR(bool printIds, o::LO minNums) {
   auto &bdryFaceIds = this->bdryFaceIds;
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
   auto &bdryFaceInds = this->bdryFaceInds;

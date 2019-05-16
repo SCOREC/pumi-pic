@@ -37,7 +37,7 @@ namespace particle_structs {
       //Allocate Array
       data[0] = new T[size];
       //Initialize all values to the default constructor
-      SetTypeArray<T>(static_cast<T*>(data[0]), size, T());
+      SetTypeArray<T>(static_cast<T*>(data[0]), size, typename BaseType<T>::type());
       //Create the remaining types
       CreateArraysImpl<Types...>(data+1,size);
     }

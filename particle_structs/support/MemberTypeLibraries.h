@@ -53,6 +53,34 @@ namespace particle_structs {
   };
 
   //TODO Make these functions device/host functions
+  template <class T> struct CopyArrayToViewActual {
+    CopyArrayToViewActual(MemberTypeView<T> v, int view_index, T* array, int array_index) {
+      v(view_index) = array[array_index];
+    }
+  };
+  template <class T, int N> struct CopyArrayToViewActual<T[N]> {
+    CopyArrayToViewActual(MemberTypeView<T[N]> v, int view_index, T (*array)[N], int array_index) {
+      for (int i = 0; i < N; ++i)
+        v(view_index, i) = array[array_index][i];
+    }
+  };
+  template <class T, int N, int M> struct CopyArrayToViewActual<T[N][M]> {
+    CopyArrayToViewActual(MemberTypeView<T[N][M]> v, int view_index, T (*array)[N][M], int array_index) {
+      for (int i = 0; i < N; ++i)
+        for (int j = 0; j < M; ++j)
+          v(view_index, i,j) = array[array_index][i][j];
+    }
+  };
+  template <class T, int N, int M, int P> struct CopyArrayToViewActual<T[N][M][P]> {
+    CopyArrayToViewActual(MemberTypeView<T[N][M][P]> v, int view_index, T (*array)[N][M][P], 
+                          int array_index) {
+      for (int i = 0; i < N; ++i)
+        for (int j = 0; j < M; ++j)
+          for (int k = 0; k < P; ++k)
+            v(view_index, i, j, k) = array[array_index][i][j][k];
+    }
+  };
+ 
   template <typename... Types> struct CopyArrayToViewImpl;
   template <> struct CopyArrayToViewImpl<> {
     CopyArrayToViewImpl(MemberTypeViewsConst<MemberTypes<void> > views, int view_index, 
@@ -62,8 +90,8 @@ namespace particle_structs {
     CopyArrayToViewImpl(MemberTypeViewsConst<MemberTypes<T,Types...> > views, int view_index, 
                         MemberTypeArray<MemberTypes<T, Types...> > arrays, int array_index) {
       MemberTypeView<T> v = *static_cast<MemberTypeView<T> const*>(views[0]);
-      CopyType<T>(v(view_index),
-                  static_cast<T*>(arrays[0])[array_index]);
+      T* arr = static_cast<T*>(arrays[0]);
+      CopyArrayToViewActual<T>(v, view_index, arr, array_index);
       CopyArrayToViewImpl<Types...>(views+1, view_index, arrays+1, array_index);
     }
   };
@@ -84,7 +112,7 @@ namespace particle_structs {
     SendViewsImpl(MemberTypeViews<MemberTypes<T, Types...> > views, int offset, int size, 
                   int dest, int tag, MPI_Request* reqs) {
       MemberTypeView<T> v = *static_cast<MemberTypeView<T>*>(views[0]);
-      T* data = v.data();
+      typename BaseType<T>::type* data = v.data();
       int size_per_entry = BaseType<T>::size;
       MPI_Datatype mpi_type = MpiType<typename BaseType<T>::type>::mpitype;
       MPI_Isend(data + offset, size_per_entry * size, mpi_type, dest, tag, MPI_COMM_WORLD, reqs);
@@ -109,7 +137,7 @@ namespace particle_structs {
     RecvViewsImpl(MemberTypeViews<MemberTypes<T, Types...> > views, int offset, int size, 
                   int dest, int tag, MPI_Request* reqs) {
       MemberTypeView<T> v = *static_cast<MemberTypeView<T>*>(views[0]);
-      T* data = v.data();
+      typename BaseType<T>::type* data = v.data();
       int size_per_entry = BaseType<T>::size;
       MPI_Datatype mpi_type = MpiType<typename BaseType<T>::type>::mpitype;
       MPI_Irecv(data + offset, size_per_entry * size, mpi_type, dest, tag, MPI_COMM_WORLD, reqs);

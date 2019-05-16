@@ -368,6 +368,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   }, num_receiving_from);
   num_sending_to--;
   num_receiving_from--;
+  
+  printf("Rank %d. Num Sending: %d Num Receiving %d\n", comm_rank, num_sending_to, num_receiving_from);
 
   /********** Send particle information to new processes **********/
   //Perform an ex-sum on num_send_particles & num_recv_particles

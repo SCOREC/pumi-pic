@@ -494,6 +494,11 @@ template<class DataTypes, typename ExecSpace>
       }
     }
   }
+  //Add new particles to counts
+  for (int i = 0; i < new_particle_elements.size(); ++i) {
+    new_particles_per_elem[new_particle_elements[i]]++;
+    ++activePtcls;
+  }
 
   //If there are no particles left, then destroy the structure
   if(!activePtcls) {
@@ -578,6 +583,15 @@ template<class DataTypes, typename ExecSpace>
 	}
       }
     }
+  }
+  for (int i = 0; i < new_particle_elements.size(); ++i) {
+    int new_elem = new_particle_elements[i];
+    int new_row = element_to_new_row[new_elem];
+    int new_index = element_index[new_row];
+    new_particle_mask[new_index] = 1;
+    element_index[new_row] += C;
+    //TODO copy the data once the scs is on the device
+    //CopyViewToView<DataTypes>(new_scs_data, new_index, new_particles, i);
   }
   delete [] element_index;
   delete [] element_to_new_row;

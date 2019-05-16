@@ -52,7 +52,7 @@ namespace particle_structs {
     }
   };
 
-  //TODO Make these functions device/host functions
+  //TODO Make these functions device&host functions
   template <class T> struct CopyArrayToViewActual {
     CopyArrayToViewActual(MemberTypeView<T> v, int view_index, T* array, int array_index) {
       v(view_index) = array[array_index];

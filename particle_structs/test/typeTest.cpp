@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
   typedef Kokkos::DefaultExecutionSpace exe_space;
   Kokkos::TeamPolicy<exe_space> po(128, 4);
   int ts = po.team_size();
-  SellCSigma<Type2, exe_space>* scs = new SellCSigma<Type2, exe_space>(po, 1, 10000, ne, np, ptcls_per_elem, ids, NULL, 1);
+  SellCSigma<Type2, exe_space>* scs = new SellCSigma<Type2, exe_space>(po, 1, 10000, ne, np, ptcls_per_elem, ids, NULL);
 
   int* scs_first = scs->getSCS<0>();
   double* scs_second = scs->getSCS<1>();

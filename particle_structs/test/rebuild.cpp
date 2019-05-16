@@ -54,7 +54,7 @@ bool shuffleParticlesTests() {
   Kokkos::TeamPolicy<exe_space> po(128, 4);
   int ts = po.team_size();
   SellCSigma<Type, exe_space>* scs =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL, true);
+    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
   SellCSigma<Type, exe_space>* scs2 =
     new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
   delete [] ptcls_per_elem;

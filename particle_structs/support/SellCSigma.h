@@ -24,8 +24,7 @@ class SellCSigma {
 
   SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
-             int* particles_per_element, std::vector<int>* particle_id_bins, int* element_gids,
-             bool debug=false);
+             int* particles_per_element, std::vector<int>* particle_id_bins, int* element_gids);
   ~SellCSigma();
 
   //Returns the size per data type of the scs including padding
@@ -203,11 +202,10 @@ template<class DataTypes, typename ExecSpace>
   PS_ALWAYS_ASSERT(index == nSlices + 1);
 }
 template<class DataTypes, typename ExecSpace>
-  SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
+ SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 					       int sig, int v, int ne, int np,
 					       int* ptcls_per_elem, std::vector<int>* ids,
-                                               int* element_gids,
-					       bool debug)  : policy(p) {
+                                               int* element_gids)  : policy(p) {
   C = policy.team_size();
   sigma = sig;
   V = v;
@@ -229,21 +227,9 @@ template<class DataTypes, typename ExecSpace>
     createGlobalMapping(row_to_element, element_gids, row_to_element_gid, element_gid_to_row);
   }
 
-  if(debug) {
-    printf("\nSigma Sorted Particle Counts\n");
-    for (int i = 0; i < num_elems; ++i)
-      printf("Element %d: has %d particles\n", row_to_element[i], ptcls[i].first);
-  }
-
   //Create offsets into each chunk/vertical slice
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk);
   delete [] chunk_widths;
-
-  if(debug) {
-    printf("\nSlice Offsets\n");
-    for (int i = 0; i < num_slices + 1; ++i)
-      printf("Slice %d starts at %d\n", i, offsets[i]);
-  }
   
   //Allocate the SCS
   particle_mask = new int[offsets[num_slices]];
@@ -274,19 +260,6 @@ template<class DataTypes, typename ExecSpace>
       }
     }
     start+=width;
-  }
-
-  if(debug) {
-    printf("\nSlices\n");
-    for (i = 0; i < num_slices; ++i){
-      printf("Slice %d:", i);
-      for (int j = offsets[i]; j < offsets[i + 1]; ++j) {
-        printf(" %d", particle_mask[j]);
-        if (j % C == C - 1)
-          printf(" |");
-      }
-      printf("\n");
-    }
   }
 
   delete [] ptcls;

@@ -1,3 +1,4 @@
+#include <string>
 #include "pumipic_adjacency.hpp"
 #include "GitrmMesh.hpp"
 #include "GitrmPush.hpp"
@@ -34,10 +35,20 @@ int main(int argc, char** argv) {
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
 
-  if(argc != 2)
+  if(argc < 2)
   {
-    std::cout << "Usage: " << argv[0] << " <mesh>\n";
+    std::cout << "Usage: " << argv[0] << " <mesh> [<BField_file>]\n";
     exit(1);
+  }
+  if(argc < 3)
+  {
+    std::cout << "\n\n ****** WARNING: No BField file provided ! \n\n\n";
+  }
+
+  std::string bFile;
+  
+  if(argc >2){
+      bFile = argv[2];
   }
 
   auto lib = Omega_h::Library(&argc, &argv);
@@ -52,8 +63,9 @@ int main(int argc, char** argv) {
 
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
-  printf("\n*** Initialize Fields and Boundary data ***\n");
-  gm.initFieldsNBoundary();
+  std::cout << "\n Initialize Fields and Boundary data ***\n";
+  
+  gm.initFieldsNBoundary(bFile);
 
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
@@ -62,13 +74,14 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
-  printf("\n*** Calculate Distance To Bdry ***\n");
+  printf("\n  Calculate Distance To Bdry ***\n");
   gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
 
-  printf("\n*** Calculate EField ***\n");
-  gitrm_getE(gp.scs, mesh);
-  printf("\n*** Boris Move ***\n");
+  printf("\n  Calculate EField ***\n");
+
+  gitrm_calculateE(gp.scs, mesh);
+  std::cout << "\n  Boris Move  \n";
   gitrm_borisMove(gp.scs, mesh, 1e-6);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());

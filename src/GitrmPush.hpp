@@ -23,7 +23,7 @@
 
 
 
-inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs, 
+inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs, 
   const o::Mesh &mesh) {
 
   const auto angles = o::Reals( mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
@@ -67,15 +67,14 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs,
 
     o::Vector<3> pos{ptclPos_d(pid,0), ptclPos_d(pid,1), ptclPos_d(pid,2)};
     o::Vector<3> closest{closestPoint_d(pid,0), closestPoint_d(pid,1), 
-      closestPoint_d(pid,2)};
+                         closestPoint_d(pid,2)};
     o::Vector<3> distVector = pos - closest; 
     o::Vector<3> dirUnitVector = o::normalize(distVector);
     o::Real md = p::osh_mag(distVector);
     o::Real Emag = 0;
 
     if(BIASED_SURFACE) {
-      Emag = pot/(2.0*childLangmuirDist)*
-              exp(-md/(2.0*childLangmuirDist));
+      Emag = pot/(2.0*childLangmuirDist)* exp(-md/(2.0*childLangmuirDist));
     }
     else { 
       o::Real fd = 0.98992 + 5.1220E-03 * angle - 7.0040E-04 * pow(angle,2.0) +
@@ -106,7 +105,8 @@ inline void gitrm_getE(particle_structs::SellCSigma<Particle>* scs,
 }
 
 
-/** @brief Re-writing of interp2dCombined() in GITR
+/** @brief Re-writing of interp2dCombined() in GITR, but grid values are not used.
+ *  @warning This function is only for regular structured grid of data
  *  @see https://github.com/ORNL-Fusion/GITR/blob/master/src/interp2d.cpp
  *  @param[in]  data, flat 3component array
  *  @param[in] comp, component, from degree of freedom
@@ -147,7 +147,7 @@ OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::LO comp
   o::Real gridzjp1 = gridz0 + (j+1) * dz; 
 
   if (i >=nx-1 && j>=nz-1) {
-      fxz = data[(nx-1+(nz-1)*nx)*3+comp];  //TODO this is wrong, include comp
+      fxz = data[(nx-1+(nz-1)*nx)*3+comp];
   }
   else if (i >=nx-1) {
       fx_z1 = data[(nx-1+j*nx)*3+comp];
@@ -213,7 +213,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
     o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
     o::Vector<3> bField; //At previous_pos
-    //TODO check BField shape
+    // BField is 3 component array
     interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
                     posPrev, bField); //At previous_pos
 
@@ -225,7 +225,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dtime*0.5;
     o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
 
-      //v_minus = v + q_prime*E;
+    //v_minus = v + q_prime*E;
     o::Vector<3> qpE = qPrime*eField;
     o::Vector<3> vMinus = vel - qpE;
 
@@ -242,7 +242,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     //v = v + q_prime*E
     vel = vel + qpE;
 
-    //write
+    // Update particle data
     o::Vector<3> pre = {ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
                               ptclPrevPos_d(pid, 2)}; //prev pos
     ptclPrevPos_d(pid, 0) = ptclPos_d(pid, 0);

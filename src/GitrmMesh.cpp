@@ -1,7 +1,9 @@
+#include <fstream>
+
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
 #include "Omega_h_reduce.hpp"
-//#include "Omega_h_atomics.hpp"
+//#include "Omega_h_atomics.hpp"  //No such file
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
 #include <Kokkos_Core.hpp>
@@ -22,7 +24,151 @@ void GitrmMesh::loadFieldsNBoundary() {
 
 }
 
-void GitrmMesh::initFieldsNBoundary() {
+
+void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
+  std::ifstream ifs(bFile);
+  if (!ifs.is_open()) {
+    std::cout << "Error opening BField file " << bFile << '\n';
+    //exit(1);
+  }
+  // std::cout << "Processing  BField file " << bFile << '\n';
+  o::LO verbose = 0;
+
+  int n = 0;
+  int nR = 0;
+  int nZ = 0;
+  o::Real rMin = 0;
+  o::Real rMax = 0;
+  o::Real zMin = 0;
+  o::Real zMax = 0;
+  bool br, bt, bz;
+  br = bt = bz = false;
+  o::LO ind = 0;
+  std::string sd = "";
+
+  std::string line;
+  std::string s1, s2, s3;
+  while(std::getline(ifs, line)) {
+    if(verbose >3)
+      std::cout << "Processing  line " << line << '\n';
+    std::stringstream ss(line);
+    ss >> s1 >> s2 >> s3;
+    if(verbose >3)
+      std::cout << "str " << s1 << s2 << s3 << " :"  << line << "\n";
+
+    if(s1 == "nR") {
+      nR = std::stoi(s3);
+    }
+    else if(s1 == "nZ") {
+      nZ = std::stoi(s3);
+    }
+    else if(s1 == "rMin") {
+      rMin = std::stod(s3);
+    }    
+    else if(s1 == "rMax") {
+      rMax = std::stod(s3);
+    } 
+    else if(s1 == "zMin") {
+      zMin = std::stod(s3);
+    } 
+    else if(s1 == "zMax") {
+      zMax = std::stod(s3);
+    }
+    else if(s1 == "br") {
+      std::stringstream brs(s3);
+      //Don't do it for all components
+      data = new o::Real[3*nR*nZ];
+      ind = 0;
+      while(brs >> sd){
+        data[3*ind] = std::stod(sd);
+        ++ind;
+      }
+      br = true;
+    }
+    else if(br) {
+      if(s1 == "bt") {
+        br = false;
+        bt = true;
+      }
+      else {
+        std::stringstream brs(s1);
+        while(brs >> sd){
+          data[3*ind] = std::stod(sd);
+          ++ind;
+        }
+      }
+    }
+
+    if(s1 == "bt") {
+      std::stringstream bts(s3);
+      ind = 0;
+      while(bts >> sd){
+        data[3*ind+1] = std::stod(sd);
+        ++ind;
+      }
+      bt = true;
+    }
+    else if(bt) {
+      if(s1 == "bz") {
+        bt = false;
+        bz = true;
+      }
+      else {
+        std::stringstream bts(s1);
+        while(bts >> sd) {
+          data[3*ind+1] = std::stod(sd);
+          ++ind;
+        }
+      }
+    }
+
+    if(s1 == "bz") {
+      std::stringstream bzs(s3);
+      ind = 0;
+      while(bzs >> sd){
+        data[3*ind+2] = std::stod(sd);
+        ++ind;
+      }
+      bz = true;
+    }
+    else if(bz) {
+      if(s1 == "Density_m3") {
+        bz = false;
+      }
+      else {
+        std::stringstream bzs(s1);
+        while(bzs >> sd) {
+          data[3*ind+2] = std::stod(sd);
+          ++ind;
+        }
+      }
+    }
+
+    s1 = s2 = s3 = "";
+    sd = "";
+  }
+
+  if(verbose >2){
+    std::cout << "\n\n " << nR << " " << nZ << " " << rMin<< " "<< rMax 
+              << " "<< zMin << " "<< zMax << "\n\n";
+  }
+}
+
+void GitrmMesh::loadBField(o::Mesh &mesh, const std::string &bFile) {
+
+  o::Real *data; // no delete[] data ?
+
+  processBFieldFile(bFile, data);
+
+  // bFields Set tag
+  // TODO this is wrong
+  //mesh.set_tag(o::VERT, "BField", data);
+
+}
+
+
+
+void GitrmMesh::initFieldsNBoundary(const std::string &bFile) {
   auto nv = mesh.nverts();
   mesh.add_tag(o::VERT, "BField", 3, o::Reals(3*nv, 0.0));
 
@@ -32,6 +178,10 @@ void GitrmMesh::initFieldsNBoundary() {
   mesh.add_tag(o::FACE, "DebyeLength", 1, o::Reals(nf, 0));
   mesh.add_tag(o::FACE, "LarmorRadius", 1, o::Reals(nf, 0));
   mesh.add_tag(o::FACE, "ChildLangmuirDist", 1, o::Reals(nf, 0));
+
+  // Load fields
+  loadBField(mesh, bFile);
+
 }
 
 // These are only for temporary writing during pre-processing

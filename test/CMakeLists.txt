@@ -14,8 +14,8 @@ endfunction(make_test)
 #make_test(pseudoPushAndSearch pseudoPushAndSearch.cpp)
 #make_test(particleToMesh pseudoPtclToMesh.cpp)
 #make_test(distToBdryPre dist2BdryPre.cpp)
-make_test(distToBdry dist2Bdry.cpp)
-
+#make_test(distToBdry dist2Bdry.cpp)
+make_test(borisMove dist2Bdry.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

@@ -117,8 +117,10 @@ public:
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
-  void initFieldsNBoundary();
+  void initFieldsNBoundary(const std::string &);
   void loadFieldsNBoundary();
+  void loadBField(o::Mesh &, const std::string &);
+  void processBFieldFile( const std::string &, o::Real *);
 };
 
 
@@ -258,7 +260,7 @@ inline void gitrm_findDistanceToBdry(
 
     min = std::sqrt(min);
     if(verbose >1) {
-      printf("\n*** el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
+      printf("\n  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
         elem, min, fid, fel, minRegion);
     }
     closestPoint_d(pid, 0) = point[0];

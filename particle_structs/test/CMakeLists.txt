@@ -4,6 +4,8 @@ function(make_test exename srcname)
 endfunction(make_test)
 
 
+make_test(deviceDefaultTest device_default_test.cpp)
+
 make_test(typeTest typeTest.cpp)
 
 make_test(rebuild rebuild.cpp)

@@ -9,40 +9,52 @@
 #include "MemberTypeArray.h"
 #include "MemberTypeLibraries.h"
 #include "SCS_Macros.h"
+#include "SCS_Types.h"
 #include <Kokkos_Core.hpp>
+#include <Kokkos_UnorderedMap.hpp>
+#include <Kokkos_Pair.hpp>
+#include <Kokkos_Sort.hpp>
 #include <mpi.h>
 #include <unordered_map>
 namespace particle_structs {
+
+template <typename ExecSpace> 
+using PairView=Kokkos::View<Kokkos::pair<lid_t,lid_t>*, typename ExecSpace::device_type>;
 
 
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
-#ifdef KOKKOS_ENABLED
-  typedef Kokkos::View<int*, typename Kokkos::DefaultExecutionSpace::device_type> kkLidView;
-#endif
+  typedef Kokkos::TeamPolicy<ExecSpace> PolicyType ;
+  typedef Kokkos::View<lid_t*, typename ExecSpace::device_type> kkLidView;
+  typedef Kokkos::View<gid_t*, typename ExecSpace::device_type> kkGidView;
+  typedef typename kkLidView::HostMirror kkLidHostMirror;
 
-  SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
+
+  SellCSigma(PolicyType& p,
 	     int sigma, int vertical_chunk_size, int num_elements, int num_particles,
              int* particles_per_element, std::vector<int>* particle_id_bins, int* element_gids);
+  SellCSigma(PolicyType& p,
+	     lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
+             kkLidView particles_per_element, kkGidView element_gids);
   ~SellCSigma();
 
-  //Returns the size per data type of the scs including padding
-  int size() const { return offsets[num_slices];}
+  //Returns the capacity of the scs including padding
+  lid_t capacity() const { return offsets[num_slices];}
+  //Returns the number of rows in the scs including padded rows
+  lid_t numRows() const {return num_chunks * C;}
 
   //Gets the Nth member type SCS
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
-  //Zeroes the values of the member type N
-  template <std::size_t N>
-  void zeroSCS();
-
-  //Zeroes the values of the member type N that is an array with size entries
-  template <std::size_t N>
-  void zeroSCSArray(int size);
+ /*
+   tempalte <std::size_t N>
+   typename SCS<DataTypes, N> get();
+  */
 
   void printFormat(const char* prefix = "") const;
+  void printFormatDevice(const char* prefix = "") const;
 
   /* Migrates each particle to new_process and to new_element
      Calls rebuildSCS to recreate the SCS after migrating particles
@@ -62,10 +74,9 @@ class SellCSigma {
 
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
-  typedef ExecSpace ExecutionSpace;
 
   //The User defined kokkos policy
-  Kokkos::TeamPolicy<ExecutionSpace> policy;
+  PolicyType policy;
   //Chunk size
   int C;
   //Vertical slice size
@@ -84,25 +95,29 @@ class SellCSigma {
   //  This only matters for vertical slicing so that each slice can determine which row
   //  it is a part of.
   int* slice_to_chunk;
+  kkLidView slice_to_chunk_v;
   //particle_mask true means there is a particle at this location, false otherwise
   int* particle_mask;
-
+  kkLidView particle_mask_v;
   //offsets into the scs structure
   int* offsets;
+  kkLidView offsets_v;
 
   //map from row to element
   // row = slice_to_chunk[slice] + row_in_chunk
   int* row_to_element;
+  kkLidView row_to_element_v;
 
   //mappings from row to element gid and back to row
   int* row_to_element_gid;
- typedef std::unordered_map<int, int> GID_Mapping;
- GID_Mapping element_gid_to_row;
-
+  kkLidView row_to_element_gid_v;
+  typedef std::unordered_map<int, int> GID_Mapping;
+  GID_Mapping element_gid_to_row;
+  typedef Kokkos::UnorderedMap<gid_t, lid_t, typename ExecSpace::device_type> GID_Mapping_KK;
+  GID_Mapping_KK element_gid_to_row_v;
  //Kokkos Views
 #ifdef KOKKOS_ENABLED
   void transferToDevice();
-
   template <typename FunctionType>
   void parallel_for(FunctionType& fn);
 
@@ -119,23 +134,53 @@ class SellCSigma {
  private: 
   //Pointers to the start of each SCS for each data type
   MemberTypeArray<DataTypes> scs_data;
+  MemberTypeViews<DataTypes> scs_data_v;
 
   SellCSigma() {throw 1;}
   SellCSigma(const SellCSigma&) {throw 1;}
   SellCSigma& operator=(const SellCSigma&) {throw 1;}
- void destroySCS(bool destroyGid2Row=true);
+  void destroySCS(bool destroyGid2Row=true);
 
- void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, 
-                      int*& row_element);
- void createGlobalMapping(int* row2Elm, int* elmGid, int*& row2ElmGid, GID_Mapping& elmGid2Row);
- void constructOffsets(int nChunks, int nSlices, int* chunk_widths, int*& offs, int*& s2e);
+  void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, 
+                       int*& row_element);
+  void constructChunks(PairView<ExecSpace> ptcls, int& nchunks,
+                       kkLidView& chunk_widths, kkLidView& row_element);
+
+  void createGlobalMapping(int* row2Elm, int* elmGid, int*& row2ElmGid, GID_Mapping& elmGid2Row);
+  void createGlobalMapping(kkLidView row2Elm, kkGidView elmGid, kkLidView& row2ElmGid, 
+                           GID_Mapping_KK& elmGid2Row);
+  void constructOffsets(int nChunks, int nSlices, int* chunk_widths, int*& offs, int*& s2e);
+  void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths, 
+                        kkLidView& offs, kkLidView& s2e);
 };
-
-
 
 
 void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 
 	       std::pair<int, int>*& ptcl_pairs);
+
+
+template <typename ExecSpace> 
+PairView<ExecSpace> sigmaSort(lid_t num_elems, 
+                              Kokkos::View<lid_t*,typename ExecSpace::device_type> ptcls_per_elem, 
+                              int sigma){
+  //Make temporary copy of the particle counts for sorting
+  PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+    ptcl_pairs(i).first = ptcls_per_elem(i);
+    ptcl_pairs(i).second = i;
+  });
+  /*
+    Sorting Disabled due to kokkos problems
+  int i;
+  if (sigma > 1) {
+    for (i = 0; i < num_elems - sigma; i+=sigma) {
+      Kokkos::sort(ptcl_pairs, i, i + sigma);
+    }
+    Kokkos::sort(ptcl_pairs, i, num_elems);
+  }
+  */
+  return ptcl_pairs;
+}
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls, int& nchunks, 
@@ -163,6 +208,38 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(std::pair<int,int>* ptcls
     row_element[i] = i;
   }
 }
+template<class DataTypes, typename ExecSpace> 
+void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls, int& nchunks, 
+                                                       kkLidView& chunk_widths,
+                                                       kkLidView& row_element) {
+  nchunks = num_elems / C + (num_elems % C != 0);
+  Kokkos::resize(chunk_widths, nchunks);
+  Kokkos::resize(row_element, nchunks * C);
+
+  //Add chunks for vertical slicing
+  typedef Kokkos::TeamPolicy<> TeamPolicy;
+  const TeamPolicy pol(nchunks, C);
+  Kokkos::parallel_for(pol, KOKKOS_LAMBDA(const TeamPolicy::member_type& thread) {
+    const int chunk = thread.league_rank();
+    const int chunk_row = thread.team_rank();
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, C), KOKKOS_LAMBDA(const int& j) {
+      row_element(chunk_row) = ptcls(chunk_row).second;
+      //NOTE this is happening twice per chunk_row
+    });
+    int maxL;
+    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(thread, C), KOKKOS_LAMBDA(const int& j, lid_t& mx) {
+      //TODO remove conditional
+      if (ptcls(chunk_row).first > mx)
+        mx = ptcls(chunk_row).first;
+      }, Kokkos::Max<lid_t>(maxL));
+    chunk_widths(chunk) = maxL;
+  });
+
+  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, nchunks * C), KOKKOS_LAMBDA(const int& i) {
+    row_element(i) = i;
+  });
+}
+
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(int* row2Elm, int* elmGid,
@@ -178,6 +255,23 @@ void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(int* row2Elm, int* el
     row2ElmGid[j] = -1;
   }
 }
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(kkLidView row2Elm, kkGidView elmGid,
+                                                           kkLidView& row2ElmGid, 
+                                                           GID_Mapping_KK& elmGid2Row) {
+  Kokkos::resize(row2ElmGid, num_chunks*C);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int& i) {
+    const int elm = row2Elm(i);
+    const int gid = elmGid(elm);
+    row2ElmGid(i) = gid;
+    elmGid2Row.insert(gid, i);
+  });
+  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, num_chunks*C), KOKKOS_LAMBDA(const int& i) {
+    row2ElmGid(i) = -1;
+  });
+}
+
 
 template<class DataTypes, typename ExecSpace>
  void SellCSigma<DataTypes, ExecSpace>::constructOffsets(int nChunks, int nSlices, 
@@ -201,6 +295,44 @@ template<class DataTypes, typename ExecSpace>
   }
   PS_ALWAYS_ASSERT(index == nSlices + 1);
 }
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nSlices, 
+                                                        kkLidView chunk_widths, kkLidView& offs,
+                                                        kkLidView& s2c) {
+  kkLidView slices_per_chunk("slices_per_chunk", nChunks);
+  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const int& i) {
+    slices_per_chunk(i) = chunk_widths(i) / V + (chunk_widths(i) % V != 0);
+  });
+  Kokkos::parallel_reduce(nChunks, KOKKOS_LAMBDA(const int& i, lid_t& sum) {
+      sum+= slices_per_chunk(i);
+  }, nSlices);
+  kkLidView offset_nslices("offset_nslices",nChunks+1);
+  Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const int& i, int& cur, const bool final) {
+    cur += slices_per_chunk(i);
+    offset_nslices(i+1) += cur * final;
+  });
+
+  Kokkos::resize(offs,nSlices + 1);
+  Kokkos::resize(s2c, nSlices);
+  kkLidView slice_size("slice_size", nSlices);
+  const int nat_size = V*C;
+  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const int& i) {
+    const int start = offset_nslices(i);
+    const int end = offset_nslices(i+1);
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(start,end), KOKKOS_LAMBDA(const int& j) {
+      s2c(j) = i;
+      const lid_t rem = chunk_widths(i) % V;
+      slice_size(j) = (j!=end-1)*nat_size  + (j==end-1)*(rem + (rem==0) * V) * C;
+    });
+  });
+
+  Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const int& i, lid_t& cur, const bool final) {
+    cur += slice_size(i);
+    offs(i+1) += cur * final;
+  });
+}
+
 template<class DataTypes, typename ExecSpace>
  SellCSigma<DataTypes, ExecSpace>::SellCSigma(Kokkos::TeamPolicy<ExecSpace>& p,
 					       int sig, int v, int ne, int np,
@@ -266,6 +398,61 @@ template<class DataTypes, typename ExecSpace>
 }
 
 template<class DataTypes, typename ExecSpace>
+SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne, 
+                                             lid_t np, kkLidView ptcls_per_elem, 
+                                             kkGidView element_gids)  : policy(p) {
+  C = policy.team_size();
+  sigma = sig;
+  V = v;
+  num_elems = ne;
+  num_ptcls = np;
+  
+  printf("Building SCS with C: %d sigma: %d V: %d\n",C,sigma,V);
+
+  //Perform sorting
+  PairView<ExecSpace> ptcls = sigmaSort<ExecSpace>(num_elems,ptcls_per_elem, sigma);
+
+  
+  // Number of chunks without vertical slicing
+  kkLidView chunk_widths;
+  constructChunks(ptcls, num_chunks, chunk_widths, row_to_element_v);
+
+  if (element_gids.size() > 0) {
+    createGlobalMapping(row_to_element_v, element_gids, row_to_element_gid_v, element_gid_to_row_v);
+  }
+
+  //Create offsets into each chunk/vertical slice
+  constructOffsets(num_chunks, num_slices, chunk_widths, offsets_v, slice_to_chunk_v);
+  
+  /* //Allocate the SCS */
+  //TODO get the last value of a view from the device
+  Kokkos::resize(particle_mask_v, offsets_v(num_slices));
+  CreateViews<DataTypes>(scs_data_v, offsets_v(num_slices));
+
+  //Fill the SCS
+  const int league_size = num_slices;
+  const int team_size = C;
+  typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
+  const team_policy policy(league_size, team_size);
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
+    const int slice = thread.league_rank();
+    const int slice_row = thread.team_rank();
+    const int rowLen = (offsets_v(slice+1)-offsets_v(slice))/team_size;
+    const int start = offsets_v(slice) + slice_row;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (int& j) {
+      const int row = slice_to_chunk_v(slice) * team_size + slice_row;
+      const int element_id = row_to_element_v(row);
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) {
+        const int particle_id = start+(p*team_size);
+        //TODO? examine ways to avoid the &&
+        particle_mask_v(particle_id) =  element_id < num_elems && p < ptcls(element_id).first;
+      });
+    });
+  });
+}
+
+
+template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
   DestroyArrays<DataTypes>({scs_data});
   
@@ -286,26 +473,10 @@ SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
 
 template<class DataTypes, typename ExecSpace>
 template <std::size_t N>
-  typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,ExecSpace>::getSCS() {
+typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,ExecSpace>::getSCS() {
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
 }
 
-template<class DataTypes, typename ExecSpace>
-template <std::size_t N>
-  void SellCSigma<DataTypes,ExecSpace>::zeroSCS() {
-  typename MemberTypeAtIndex<N,DataTypes>::type* scs = getSCS<N>();
-  for (int i =0; i < offsets[num_slices]; ++i)
-    scs[i] = 0;
-}
-
-template<class DataTypes, typename ExecSpace>
-template <std::size_t N>
-  void SellCSigma<DataTypes,ExecSpace>::zeroSCSArray(int size) {
-  typename MemberTypeAtIndex<N,DataTypes>::type* scs = getSCS<N>();
-  for (int i =0; i < offsets[num_slices]; ++i)
-    for (int j=0; j < size; ++j)
-      scs[i][j] = 0;
-}
 
 template <class T>
 typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror deviceToHost(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> view) {
@@ -355,8 +526,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     num += num_recv_particles(i);
     offset_recv_particles(i+1) += num*final;
   });
-  kkLidView::HostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
-  kkLidView::HostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
+  kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
+  kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 
   //Create arrays for particles being sent
   int np_send = offset_send_particles_host(comm_size);
@@ -424,7 +595,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   delete [] send_requests;
   delete [] recv_requests;
 
-  kkLidView::HostMirror recv_element_host = deviceToHost(recv_element);
+  kkLidHostMirror recv_element_host = deviceToHost(recv_element);
   for (int i = 0; i < recv_element_host.size(); ++i)
     printf("Rank %d received particle in element %d\n", comm_rank, recv_element_host(i));
 
@@ -436,7 +607,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   };
   parallel_for(removeSentParticles);
 
-  kkLidView::HostMirror new_element_host = deviceToHost(new_element);
+  kkLidHostMirror new_element_host = deviceToHost(new_element);
   int* new_element_data = new_element_host.data();
   /********** Combine and shift particles to their new destination **********/
   rebuildSCS(new_element_data, recv_element, recv_particle);
@@ -589,7 +760,7 @@ template<class DataTypes, typename ExecSpace>
 }
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {  
+void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {
   char message[10000];
   char* cur = message;
   cur += sprintf(cur, "%s\n", prefix);
@@ -618,6 +789,48 @@ void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {
       if ((j - offsets[i]) % C == 0)
         cur += sprintf(cur," |");
       cur += sprintf(cur," %d", particle_mask[j]);
+    }
+    cur += sprintf(cur,"\n");
+  }
+  printf("%s", message);
+}
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::printFormatDevice(const char* prefix) const {
+  //Transfer everything to the host
+  kkLidHostMirror slice_to_chunk_host = deviceToHost(slice_to_chunk_v);
+  kkLidHostMirror row_to_element_gid_host = deviceToHost(row_to_element_gid_v);
+  kkLidHostMirror row_to_element_host = deviceToHost(row_to_element_v);
+  kkLidHostMirror offsets_host = deviceToHost(offsets_v);
+  kkLidHostMirror particle_mask_host = deviceToHost(particle_mask_v);
+  char message[10000];
+  char* cur = message;
+  cur += sprintf(cur, "%s\n", prefix);
+  cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C, sigma, V);
+  cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
+  cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+  int last_chunk = -1;
+  for (int i = 0; i < num_slices; ++i) {
+    int chunk = slice_to_chunk_host(i);
+    if (chunk != last_chunk) {
+      last_chunk = chunk;
+      cur += sprintf(cur,"  Chunk %d. Elements", chunk);
+      if (row_to_element_gid_host.size() > 0)
+        cur += sprintf(cur,"(GID)");
+      cur += sprintf(cur,":");
+      for (int row = chunk*C; row < (chunk+1)*C; ++row) {
+        cur += sprintf(cur," %d", row_to_element_host(row));
+        if (row_to_element_gid_host.size() > 0) {
+          cur += sprintf(cur,"(%d)", row_to_element_gid_host(row));
+        }
+      }
+      cur += sprintf(cur,"\n");
+    }
+    cur += sprintf(cur,"    Slice %d", i);
+    for (int j = offsets_host(i); j < offsets_host(i+1); ++j) {
+      if ((j - offsets_host(i)) % C == 0)
+        cur += sprintf(cur," |");
+      cur += sprintf(cur," %d", particle_mask_host(j));
     }
     cur += sprintf(cur,"\n");
   }

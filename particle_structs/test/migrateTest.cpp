@@ -47,8 +47,8 @@ int main(int argc, char* argv[]) {
   
   {
     typedef SCS::kkLidView kkLidView;
-    kkLidView new_element("new_element", scs->size());
-    kkLidView new_process("new_process", scs->size());
+    kkLidView new_element("new_element", scs->capacity());
+    kkLidView new_process("new_process", scs->capacity());
     
     //Send half the particles right one process except on rank 0
     if (comm_rank > 0) {

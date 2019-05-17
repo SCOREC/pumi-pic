@@ -1,5 +1,5 @@
 #include "SellCSigma.h"
-
+#include <Kokkos_Core.hpp>
 namespace particle_structs {
 
 void sigmaSort(int num_elems, int* ptcls_per_elem, int sigma, 

@@ -62,7 +62,7 @@ bool shuffleParticlesTests() {
 
   scs->printFormat();
 
-  int* new_element = new int[scs->size()];
+  int* new_element = new int[scs->capacity()];
   int* values = scs->getSCS<0>();
   int* values2 = scs2->getSCS<0>();
   for (int i =0; i < scs->num_slices; ++i) {
@@ -142,7 +142,7 @@ bool resortElementsTest(int comm_rank, int comm_size) {
   int* values = scs->getSCS<0>();
 
   //Remove all particles from first element
-  int* new_element = new int[scs->size()];
+  int* new_element = new int[scs->capacity()];
   for (int i =0; i < scs->num_slices; ++i) {
     for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
       for (int k = 0; k < ts; ++k) {

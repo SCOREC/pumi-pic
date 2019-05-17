@@ -31,6 +31,7 @@ namespace particle_structs {
   //This type represents an array of views for each type of the given DataTypes
   template <typename DataTypes> using MemberTypeViews = void*[DataTypes::size];
   template <typename DataTypes> using MemberTypeViewsConst = void* const*;
+  //TODO don't use default execution space
   template <typename T> using MemberTypeView = 
     Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>;
 
@@ -40,14 +41,16 @@ namespace particle_structs {
   };
   template <typename T, typename... Types> struct CreateViewsImpl<T, Types...> {
     CreateViewsImpl(MemberTypeViews<MemberTypes<T, Types...> > views, int size) {
+      
       views[0] = new MemberTypeView<T>("datatype_view", size);
+      MemberTypeView<T> view = *static_cast<MemberTypeView<T>*>(views[0]);
       CreateViewsImpl<Types...>(views+1, size);
     }
   };
 
   template <typename... Types> struct CreateViews;
   template <typename... Types> struct CreateViews<MemberTypes<Types...> > {
-    CreateViews(MemberTypeViews<MemberTypes<Types...> > views, int size) {
+    CreateViews(MemberTypeViews<MemberTypes<Types...> >& views, int size) {
       CreateViewsImpl<Types...>(views, size);
     }
   };

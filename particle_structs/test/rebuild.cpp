@@ -13,6 +13,8 @@ using particle_structs::distribute_particles;
 using particle_structs::distribute_elements;
 
 typedef MemberTypes<int> Type;
+typedef Kokkos::DefaultExecutionSpace exe_space;
+typedef SellCSigma<Type,exe_space> SCS;
 
 bool shuffleParticlesTests();
 bool resortElementsTest(int comm_rank, int comm_size);
@@ -50,70 +52,77 @@ bool shuffleParticlesTests() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  typedef Kokkos::DefaultExecutionSpace exe_space;
   Kokkos::TeamPolicy<exe_space> po(128, 4);
+
+  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+  SCS::kkGidView element_gids_v("", 0);
+  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
+
   int ts = po.team_size();
-  SellCSigma<Type, exe_space>* scs =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
-  SellCSigma<Type, exe_space>* scs2 =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, NULL);
+  SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
+  SCS* scs2 = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v,  element_gids_v);
   delete [] ptcls_per_elem;
   delete [] ids;
 
   scs->printFormat();
 
-  int* new_element = new int[scs->capacity()];
+  SCS::kkLidView new_element("new_element", scs->capacity());
+/*
   int* values = scs->getSCS<0>();
   int* values2 = scs2->getSCS<0>();
-  for (int i =0; i < scs->num_slices; ++i) {
-    for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-      for (int k = 0; k < ts; ++k) {
-	if (scs->particle_mask[j+k]) {
-	  new_element[j + k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
-	  values[j + k] = j + k;
-	  values2[j + k] = j + k;
-	}
-      }
-    }
-  }
+*/
+  auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    new_element(particle_id) = scs->row_to_element_v(element_id);
+  };
+  scs->parallel_for(sendToSelf);
+  // for (int i =0; i < scs->num_slices; ++i) {
+  //   for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
+  //     for (int k = 0; k < ts; ++k) {
+  //       if (scs->particle_mask[j+k]) {
+  //         new_element[j + k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
+  //         //values[j + k] = j + k;
+  //         //values2[j + k] = j + k;
+  //       }
+  //     }
+  //   }
+  // }
+/*
+//Rebuild with no changes  
+scs->rebuildSCS(new_element);
 
-  //Rebuild with no changes  
-  scs->rebuildSCS(new_element);
+values = scs->getSCS<0>();
 
-  values = scs->getSCS<0>();
+for (int i =0; i < scs2->num_slices; ++i) {
+for (int j = scs2->offsets[i]; j < scs2->offsets[i+1]; j+= ts) {
+for (int k = 0; k < ts; ++k) {
+if (scs2->particle_mask[j+k]) {
+if (values[j + k] != values2[j + k]) {
+printf("Value mismatch at particle %d: %d != %d\n", j + k, values[j+k], values2[j+k]);
+return false;
+}
+new_element[j + k] = scs->row_to_element[ne - (scs->slice_to_chunk[i] * scs->C + k) - 1];
+}
+}
+}
+}
 
-  for (int i =0; i < scs2->num_slices; ++i) {
-    for (int j = scs2->offsets[i]; j < scs2->offsets[i+1]; j+= ts) {
-      for (int k = 0; k < ts; ++k) {
-	if (scs2->particle_mask[j+k]) {
-	  if (values[j + k] != values2[j + k]) {
-	    printf("Value mismatch at particle %d: %d != %d\n", j + k, values[j+k], values2[j+k]);
-            return false;
-          }
-	  new_element[j + k] = scs->row_to_element[ne - (scs->slice_to_chunk[i] * scs->C + k) - 1];
-	}
-      }
-    }
-  }
+scs->rebuildSCS(new_element);
 
-  scs->rebuildSCS(new_element);
+values = scs->getSCS<0>();
 
-  values = scs->getSCS<0>();
+//This should be backwards
+for (int i =0; i < scs->num_slices; ++i) {
+for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
+for (int k = 0; k < ts; ++k) {
+if (scs->particle_mask[j+k]) {
+printf("Particle %d has value %d\n", j + k, values[j + k]);
+}
+}
+}
+}
 
-  //This should be backwards
-  for (int i =0; i < scs->num_slices; ++i) {
-    for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-      for (int k = 0; k < ts; ++k) {
-	if (scs->particle_mask[j+k]) {
-	  printf("Particle %d has value %d\n", j + k, values[j + k]);
-	}
-      }
-    }
-  }
-
-  scs->printFormat();
-
-  delete [] new_element;
+scs->printFormat();
+*/
   delete scs;
   delete scs2;
   return true;
@@ -146,7 +155,7 @@ bool resortElementsTest(int comm_rank, int comm_size) {
   for (int i =0; i < scs->num_slices; ++i) {
     for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
       for (int k = 0; k < ts; ++k) {
-	if (scs->particle_mask[j+k]) {
+        if (scs->particle_mask[j+k]) {
           values[j+k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
           if (scs->slice_to_chunk[i] == 0 && (j+k - scs->offsets[i]) % scs->C == 0)
             new_element[j + k] = -1;
@@ -164,7 +173,7 @@ bool resortElementsTest(int comm_rank, int comm_size) {
   for (int i =0; i < scs->num_slices; ++i) {
     for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
       for (int k = 0; k < ts; ++k) {
-	if (scs->particle_mask[j+k]) {
+        if (scs->particle_mask[j+k]) {
           int should_be = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
           if (values[j+k] != should_be) {
             printf("Value mismatch at particle %d: %d != %d\n", j + k, values[j+k], should_be);

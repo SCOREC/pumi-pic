@@ -10,6 +10,7 @@
 #include "MemberTypeLibraries.h"
 #include "SCS_Macros.h"
 #include "SCS_Types.h"
+#include "Segment.h"
 #include <Kokkos_Core.hpp>
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
@@ -49,8 +50,13 @@ class SellCSigma {
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
  
-  /* template <std::size_t N> */
-  /* typename SCS<DataTypes, N> get(); */
+
+ template <std::size_t N> 
+ Segment<DataTypes, N, ExecSpace> get() {
+   using Type=typename MemberTypeAtIndex<N, DataTypes>::type;
+   MemberTypeView<Type>* view = static_cast<MemberTypeView<Type>*>(scs_data_v[N]);
+   return Segment<DataTypes, N, ExecSpace>(*view);
+ }
 
   void printFormat(const char* prefix = "") const;
   void printFormatDevice(const char* prefix = "") const;
@@ -65,10 +71,14 @@ class SellCSigma {
     Calls rebuildSCS if there is not enough space for the shuffle
   */
   void reshuffleSCS(int* new_element);
+  void reshuffle(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
+                 MemberTypeViews<DataTypes> new_particles = NULL);
   /*
     Rebuilds a new SCS where particles move to the element in new_element[i]
   */
   void rebuildSCS(int* new_element, kkLidView new_particle_elements = kkLidView(), 
+                  MemberTypeViews<DataTypes> new_particles = NULL);
+  void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(), 
                   MemberTypeViews<DataTypes> new_particles = NULL);
 
   //Number of Data types
@@ -481,7 +491,6 @@ typename MemberTypeAtIndex<N,DataTypes>::type* SellCSigma<DataTypes,ExecSpace>::
   return static_cast<typename MemberTypeAtIndex<N,DataTypes>::type*>(scs_data[N]);
 }
 
-
 template <class T>
 typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror deviceToHost(Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type> view) {
   typename Kokkos::View<T*, Kokkos::DefaultExecutionSpace::device_type>::HostMirror hv = 
@@ -624,9 +633,17 @@ void SellCSigma<DataTypes,ExecSpace>::reshuffleSCS(int* new_element) {
   rebuildSCS(new_element);
 }
 
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element, 
+                                                kkLidView new_particle_elements, 
+                                                MemberTypeViews<DataTypes> new_particles) {
+  //For now call rebuild
+  rebuild(new_element, new_particle_elements, new_particles);
+}
+
 
 template<class DataTypes, typename ExecSpace>
-  void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, kkLidView new_particle_elements, MemberTypeViews<DataTypes> new_particles) {
+void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, kkLidView new_particle_elements, MemberTypeViews<DataTypes> new_particles) {
 
   int* new_particles_per_elem = new int[num_chunks*C];
   for (int i =0; i < num_elems; ++i)
@@ -761,6 +778,146 @@ template<class DataTypes, typename ExecSpace>
   particle_mask = new_particle_mask;
   for (size_t i = 0; i < num_types; ++i)
     scs_data[i] = new_scs_data[i];
+}
+
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element, 
+                                              kkLidView new_particle_elements, 
+                                              MemberTypeViews<DataTypes> new_particles) {
+
+  /* int* new_particles_per_elem = new int[num_chunks*C]; */
+  /* for (int i =0; i < num_elems; ++i) */
+  /*   new_particles_per_elem[i] = 0; */
+  /* int activePtcls = 0; */
+  /* for (int slice = 0; slice < num_slices; ++slice) { */
+  /*   for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) { */
+  /*     for (int k = 0; k < C; ++k) { */
+  /*       if (particle_mask[j+k] && new_element[j+k] != -1) { */
+  /*         new_particles_per_elem[new_element[j+k]] += particle_mask[j+k]; */
+  /*         ++activePtcls; */
+  /*       } */
+  /*     } */
+  /*   } */
+  /* } */
+  /* //Add new particles to counts */
+  /* for (int i = 0; i < new_particle_elements.size(); ++i) { */
+  /*   new_particles_per_elem[new_particle_elements[i]]++; */
+  /*   ++activePtcls; */
+  /* } */
+
+  /* //If there are no particles left, then destroy the structure */
+  /* if(!activePtcls) { */
+  /*   delete [] new_particles_per_elem; */
+  /*   destroySCS(); */
+  /*   num_ptcls = 0; */
+  /*   num_chunks = 0; */
+  /*   num_slices = 0; */
+  /*   row_to_element = 0; */
+  /*   row_to_element_gid = 0; */
+  /*   offsets = 0; */
+  /*   slice_to_chunk = 0; */
+  /*   particle_mask = 0; */
+  /*   for (size_t i = 0; i < num_types; ++i) */
+  /*     scs_data[i] = 0; */
+  /*   return; */
+  /* } */
+  /* int new_num_ptcls = activePtcls; */
+  /* //Perform sorting */
+  /* std::pair<int, int>* ptcls; */
+  /* sigmaSort(num_elems, new_particles_per_elem, sigma, ptcls); */
+
+
+  /* //Create chunking and count slices */
+  /* int* chunk_widths; */
+  /* int new_nchunks, new_nslices; */
+  /* int* new_row_to_element; */
+  /* constructChunks(ptcls, new_nchunks,new_nslices,chunk_widths,new_row_to_element); */
+
+  /* //Create a mapping from element to new scs row index */
+  /* //Also recreate the original gid mapping */
+  /* int* element_to_new_row = new int[num_chunks * C]; */
+  /* int* gid_mapping = new int[num_chunks * C]; */
+  /* for (int i = 0; i < num_chunks * C; ++i) { */
+  /*   element_to_new_row[new_row_to_element[i]] = i; */
+  /*   if (row_to_element_gid) */
+  /*     gid_mapping[row_to_element[i]] = row_to_element_gid[i]; */
+  /* } */
+
+  /* int* new_row_to_element_gid; */
+  /* element_gid_to_row.clear(); */
+  /* if (row_to_element_gid) */
+  /*   createGlobalMapping(new_row_to_element, gid_mapping,  */
+  /*                       new_row_to_element_gid, element_gid_to_row); */
+  /* delete [] gid_mapping; */
+
+  /* //Create offsets for each slice */
+  /* int* new_offsets; */
+  /* int* new_slice_to_chunk; */
+  /* constructOffsets(new_nchunks, new_nslices, chunk_widths,new_offsets, new_slice_to_chunk); */
+  /* delete [] chunk_widths; */
+
+  /* //Allocate the Chunks */
+  /* int* new_particle_mask = new int[new_offsets[new_nslices]]; */
+  /* std::memset(new_particle_mask,0,new_offsets[new_nslices]*sizeof(int)); */
+  /* MemberTypeArray<DataTypes> new_scs_data; */
+  /* CreateArrays<DataTypes>(new_scs_data, new_offsets[new_nslices]); */
+  
+  /* //Fill the SCS */
+  /* int* element_index = new int[new_nchunks * C]; */
+  /* int chunk = -1; */
+  /* for (int i =0; i < new_nslices; ++i) { */
+  /*   if ( new_slice_to_chunk[i] == chunk) */
+  /*     continue; */
+  /*   chunk = new_slice_to_chunk[i]; */
+  /*   for (int e = 0; e < C; ++e) { */
+  /*     element_index[chunk*C + e] = new_offsets[i] + e; */
+  /*   } */
+  /* } */
+
+  /* for (int slice = 0; slice < num_slices; ++slice) { */
+  /*   for (int j = offsets[slice]; j < offsets[slice+1]; j+= C) { */
+  /*     for (int k = 0; k < C; ++k) { */
+  /*       int particle = j + k; */
+  /*       if (particle_mask[particle] && new_element[particle] != -1) { */
+  /*         int new_elem = new_element[particle]; */
+  /*         int new_row = element_to_new_row[new_elem]; */
+  /*         int new_index = element_index[new_row]; */
+  /*         CopyEntries<DataTypes>(new_scs_data,new_index, scs_data, particle); */
+  /*         element_index[new_row] += C; */
+  /*         new_particle_mask[new_index] = 1; */
+  /*       } */
+  /*     } */
+  /*   } */
+  /* } */
+  /* for (int i = 0; i < new_particle_elements.size(); ++i) { */
+  /*   int new_elem = new_particle_elements[i]; */
+  /*   int new_row = element_to_new_row[new_elem]; */
+  /*   int new_index = element_index[new_row]; */
+  /*   new_particle_mask[new_index] = 1; */
+  /*   element_index[new_row] += C; */
+  /*   //TODO copy the data once the scs is on the device */
+  /*   //CopyViewToView<DataTypes>(new_scs_data, new_index, new_particles, i); */
+  /* } */
+  /* delete [] element_index; */
+  /* delete [] element_to_new_row; */
+  /* delete [] ptcls; */
+  /* delete [] new_particles_per_elem; */
+
+  /* //Destroy old scs  */
+  /* destroySCS(false); */
+
+  /* //set scs to point to new values */
+  /* num_ptcls = new_num_ptcls; */
+  /* num_chunks = new_nchunks; */
+  /* num_slices = new_nslices; */
+  /* row_to_element = new_row_to_element; */
+  /* if (row_to_element_gid) */
+  /*   row_to_element_gid = new_row_to_element_gid; */
+  /* offsets = new_offsets; */
+  /* slice_to_chunk = new_slice_to_chunk; */
+  /* particle_mask = new_particle_mask; */
+  /* for (size_t i = 0; i < num_types; ++i) */
+  /*   scs_data[i] = new_scs_data[i]; */
 }
 
 template<class DataTypes, typename ExecSpace>

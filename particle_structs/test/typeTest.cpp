@@ -25,10 +25,8 @@ int main(int argc, char** argv) {
   PS_ALWAYS_ASSERT(Type2::memsize == sizeof(int) + sizeof(double));
   printf("Type3: %lu\n",Type3::memsize);
   PS_ALWAYS_ASSERT(Type3::memsize == 3*sizeof(int) + 2*sizeof(double) + sizeof(char));
-
   printf("Type3 start of doubles: %lu\n",Type3::sizeToIndex<1>());
   PS_ALWAYS_ASSERT(Type3::sizeToIndex<1>() == 3*sizeof(int));
-
 
   int ne = 5;
   int np = 10;

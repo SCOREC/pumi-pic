@@ -48,10 +48,9 @@ class SellCSigma {
   template <std::size_t N>
   typename MemberTypeAtIndex<N,DataTypes>::type* getSCS();
 
- /*
-   tempalte <std::size_t N>
-   typename SCS<DataTypes, N> get();
-  */
+ 
+  /* template <std::size_t N> */
+  /* typename SCS<DataTypes, N> get(); */
 
   void printFormat(const char* prefix = "") const;
   void printFormatDevice(const char* prefix = "") const;
@@ -401,6 +400,7 @@ template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne, 
                                              lid_t np, kkLidView ptcls_per_elem, 
                                              kkGidView element_gids)  : policy(p) {
+  particle_mask = NULL;
   C = policy.team_size();
   sigma = sig;
   V = v;
@@ -454,16 +454,20 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
-  DestroyArrays<DataTypes>({scs_data});
-  
-  delete [] slice_to_chunk;
-  delete [] row_to_element;
-  delete [] offsets;
-  delete [] particle_mask;
-  if (row_to_element_gid)
-    delete [] row_to_element_gid;
-  if (destroyGid2Row)
-    element_gid_to_row.clear();
+  if (particle_mask) {
+    DestroyArrays<DataTypes>({scs_data});
+    delete [] slice_to_chunk;
+    delete [] row_to_element;
+    delete [] offsets;
+    delete [] particle_mask;
+    if (row_to_element_gid)
+      delete [] row_to_element_gid;
+    if (destroyGid2Row)
+      element_gid_to_row.clear();
+  }
+  else {
+    //DestroyViews<DataTypes>(scs_data_v);
+  }
 }
 template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
@@ -881,10 +885,10 @@ void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn) {
   const int team_size = C;
   typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
   const team_policy policy(league_size, team_size);
-  auto offsets_cpy = offsets_d;
-  auto slice_to_chunk_cpy = slice_to_chunk_d;
-  auto row_to_element_cpy = row_to_element_d;
-  auto particle_mask_cpy = particle_mask_d;
+  auto offsets_cpy = offsets_v;
+  auto slice_to_chunk_cpy = slice_to_chunk_v;
+  auto row_to_element_cpy = row_to_element_v;
+  auto particle_mask_cpy = particle_mask_v;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
     const int slice = thread.league_rank();
     const int slice_row = thread.team_rank();

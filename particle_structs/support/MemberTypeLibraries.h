@@ -153,4 +153,24 @@ namespace particle_structs {
     }
   };
 
+  //Implementation to deallocate views of different types
+  template <typename... Types> struct DestroyViewsImpl;
+  template <> struct DestroyViewsImpl<> {
+    DestroyViewsImpl(MemberTypeView<MemberTypes<void> >) {}
+  };
+  template <typename T, typename... Types> struct DestroyViewsImpl<T,Types...> {
+    DestroyViewsImpl(MemberTypeView<MemberTypes<T,Types...> > data) {
+      delete static_cast<MemberTypeView<T>*>(data[0]);
+      DestroyViewsImpl<Types...>(data+1);
+    }
+  };
+
+  //Call to deallocate arrays of different types
+  template <typename... Types> struct DestroyViews;
+  template <typename... Types> struct DestroyViews<MemberTypes<Types...> > {
+    DestroyViews(MemberTypeView<MemberTypes<Types...> > data) {
+      DestroyViewsImpl<Types...>({data});
+    }
+  };
+
 }

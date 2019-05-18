@@ -56,53 +56,56 @@ namespace particle_structs {
   };
 
   //TODO Make these functions device&host functions
-  template <class T> struct CopyArrayToViewActual {
-    CopyArrayToViewActual(MemberTypeView<T> v, int view_index, T* array, int array_index) {
-      v(view_index) = array[array_index];
+  template <class T> struct CopyViewToViewActual {
+    CopyViewToViewActual(MemberTypeView<T> dst, int dst_index,
+                          MemberTypeView<T> src, int src_index) {
+      dst(dst_index) = src(src_index);
     }
   };
-  template <class T, int N> struct CopyArrayToViewActual<T[N]> {
-    CopyArrayToViewActual(MemberTypeView<T[N]> v, int view_index, T (*array)[N], int array_index) {
+  template <class T, int N> struct CopyViewToViewActual<T[N]> {
+    CopyViewToViewActual(MemberTypeView<T[N]> dst, int dst_index,
+                          MemberTypeView<T[N]> src, int src_index) {
       for (int i = 0; i < N; ++i)
-        v(view_index, i) = array[array_index][i];
+        dst(dst_index, i) = src(src_index, i);
     }
   };
-  template <class T, int N, int M> struct CopyArrayToViewActual<T[N][M]> {
-    CopyArrayToViewActual(MemberTypeView<T[N][M]> v, int view_index, T (*array)[N][M], int array_index) {
+  template <class T, int N, int M> struct CopyViewToViewActual<T[N][M]> {
+    CopyViewToViewActual(MemberTypeView<T[N][M]> dst, int dst_index,
+                         MemberTypeView<T[N][M]> src, int src_index) {
       for (int i = 0; i < N; ++i)
         for (int j = 0; j < M; ++j)
-          v(view_index, i,j) = array[array_index][i][j];
+          src(src_index, i, j) = dst(dst_index, i, j);
     }
   };
-  template <class T, int N, int M, int P> struct CopyArrayToViewActual<T[N][M][P]> {
-    CopyArrayToViewActual(MemberTypeView<T[N][M][P]> v, int view_index, T (*array)[N][M][P], 
-                          int array_index) {
+  template <class T, int N, int M, int P> struct CopyViewToViewActual<T[N][M][P]> {
+    CopyViewToViewActual(MemberTypeView<T[N][M][P]> dst, int dst_index,
+                         MemberTypeView<T[N][M][P]> src, int src_index) {
       for (int i = 0; i < N; ++i)
         for (int j = 0; j < M; ++j)
           for (int k = 0; k < P; ++k)
-            v(view_index, i, j, k) = array[array_index][i][j][k];
+            dst(dst_index, i, j, k) = src(src_index, i, j, k);
     }
   };
  
-  template <typename... Types> struct CopyArrayToViewImpl;
-  template <> struct CopyArrayToViewImpl<> {
-    CopyArrayToViewImpl(MemberTypeViewsConst<MemberTypes<void> > views, int view_index, 
-                    MemberTypeArray<MemberTypes<void> > arrays, int array_index) {}
+  template <typename... Types> struct CopyViewToViewImpl;
+  template <> struct CopyViewToViewImpl<> {
+    CopyViewToViewImpl(MemberTypeViewsConst<MemberTypes<void> >, int, 
+                       MemberTypeViewsConst<MemberTypes<void> >, int) {}
   };
-  template <typename T, typename... Types> struct CopyArrayToViewImpl<T,Types...> {
-    CopyArrayToViewImpl(MemberTypeViewsConst<MemberTypes<T,Types...> > views, int view_index, 
-                        MemberTypeArray<MemberTypes<T, Types...> > arrays, int array_index) {
-      MemberTypeView<T> v = *static_cast<MemberTypeView<T> const*>(views[0]);
-      T* arr = static_cast<T*>(arrays[0]);
-      CopyArrayToViewActual<T>(v, view_index, arr, array_index);
-      CopyArrayToViewImpl<Types...>(views+1, view_index, arrays+1, array_index);
+  template <typename T, typename... Types> struct CopyViewToViewImpl<T,Types...> {
+    CopyViewToViewImpl(MemberTypeViewsConst<MemberTypes<T, Types...> > dsts, int dst_index, 
+                       MemberTypeViewsConst<MemberTypes<T, Types...> > srcs, int src_index) {
+      MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
+      MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
+      CopyViewToViewActual<T>(dst, dst_index, src, src_index);
+      CopyViewToViewImpl<Types...>(dsts+1, dst_index, srcs+1, src_index);
     }
   };
-  template <typename... Types> struct CopyArrayToView;
-  template <typename... Types> struct CopyArrayToView<MemberTypes<Types...> > {
-    CopyArrayToView(MemberTypeViewsConst<MemberTypes<Types...> > views, int view_index, 
-                    MemberTypeArray<MemberTypes<Types...> > arrays, int array_index) {
-      CopyArrayToViewImpl<Types...>(views, view_index, arrays, array_index);
+  template <typename... Types> struct CopyViewToView;
+  template <typename... Types> struct CopyViewToView<MemberTypes<Types...> > {
+    CopyViewToView(MemberTypeViewsConst<MemberTypes<Types...> > dsts, int dst_index, 
+                   MemberTypeViewsConst<MemberTypes<Types...> > srcs, int src_index) {
+      CopyViewToViewImpl<Types...>(dsts, dst_index, srcs, src_index);
     }
   };
 

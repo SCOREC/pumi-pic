@@ -125,7 +125,7 @@ const char* distribute_name(int strat) {
   }
 }
 
-bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, int* gids) {
+bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, gid_t* gids) {
   //For now only building a ring of elements
   //Assumes the number of elements on each process is the same
   int starting_index = (ne-1) * comm_rank;

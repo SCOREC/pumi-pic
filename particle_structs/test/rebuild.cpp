@@ -17,29 +17,22 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef SellCSigma<Type,exe_space> SCS;
 
 bool shuffleParticlesTests();
-bool resortElementsTest(int comm_rank, int comm_size);
+bool resortElementsTest();
 
 int main(int argc, char* argv[]) {
-  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
-  int comm_rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   
   bool passed = true;
-  if (comm_rank == 0) {
-    if (!shuffleParticlesTests()) {
-      passed = false;
-      printf("[ERROR] shuffleParticlesTests() failed\n");
-    }
+  if (!shuffleParticlesTests()) {
+    passed = false;
+    printf("[ERROR] shuffleParticlesTests() failed\n");
   }
-  if (!resortElementsTest(comm_rank, comm_size)) {
+  if (!resortElementsTest()) {
     passed = false;
     printf("[ERROR] resortElementsTest() failed\n");
   }
 
   Kokkos::finalize();
-  MPI_Finalize();
   if (passed)
     printf("All tests passed\n");
   return 0;
@@ -58,133 +51,121 @@ bool shuffleParticlesTests() {
   SCS::kkGidView element_gids_v("", 0);
   particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
 
-  int ts = po.team_size();
   SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
   SCS* scs2 = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v,  element_gids_v);
   delete [] ptcls_per_elem;
   delete [] ids;
 
-  scs->printFormat();
+  scs->printFormatDevice();
 
   SCS::kkLidView new_element("new_element", scs->capacity());
-/*
-  int* values = scs->getSCS<0>();
-  int* values2 = scs2->getSCS<0>();
-*/
+
+  auto values = scs->get<0>();
+  auto values2 = scs2->get<0>();
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = scs->row_to_element_v(element_id);
+    values(particle_id) = particle_id;
+    values2(particle_id) = particle_id;
   };
   scs->parallel_for(sendToSelf);
-  // for (int i =0; i < scs->num_slices; ++i) {
-  //   for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-  //     for (int k = 0; k < ts; ++k) {
-  //       if (scs->particle_mask[j+k]) {
-  //         new_element[j + k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
-  //         //values[j + k] = j + k;
-  //         //values2[j + k] = j + k;
-  //       }
-  //     }
-  //   }
-  // }
-/*
-//Rebuild with no changes  
-scs->rebuildSCS(new_element);
 
-values = scs->getSCS<0>();
+  //Rebuild with no changes  
+  scs->rebuild(new_element);
 
-for (int i =0; i < scs2->num_slices; ++i) {
-for (int j = scs2->offsets[i]; j < scs2->offsets[i+1]; j+= ts) {
-for (int k = 0; k < ts; ++k) {
-if (scs2->particle_mask[j+k]) {
-if (values[j + k] != values2[j + k]) {
-printf("Value mismatch at particle %d: %d != %d\n", j + k, values[j+k], values2[j+k]);
-return false;
-}
-new_element[j + k] = scs->row_to_element[ne - (scs->slice_to_chunk[i] * scs->C + k) - 1];
-}
-}
-}
-}
+  scs->printFormatDevice();
 
-scs->rebuildSCS(new_element);
+  values = scs->get<0>();
 
-values = scs->getSCS<0>();
+  SCS::kkLidView fail("fail",1);
+  auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+    if (mask) {
+      if (values(ptcl_id) != values2(ptcl_id))
+        fail(0) = 1;
+    }
+  };
+  scs->parallel_for(checkParticles);
+  //TODO move to host
+  if (fail(0) == 1) {
+    printf("Value mismatch on at least one particle\n");
+    return false;
+  }
+  auto moveParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+    new_element(ptcl_id) = scs->row_to_element_v((elm_id + 2) % ne);
+  };
+  scs->parallel_for(moveParticles);
 
-//This should be backwards
-for (int i =0; i < scs->num_slices; ++i) {
-for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-for (int k = 0; k < ts; ++k) {
-if (scs->particle_mask[j+k]) {
-printf("Particle %d has value %d\n", j + k, values[j + k]);
-}
-}
-}
-}
+  scs->rebuild(new_element);
 
-scs->printFormat();
-*/
+  values = scs->get<0>();
+
+  auto printParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+    if (mask)
+      printf("Particle %d has value %d\n", ptcl_id, values(ptcl_id));
+  };
+  scs->parallel_for(printParticles);
+  scs->printFormatDevice();
+  
   delete scs;
   delete scs2;
   return true;
 }
 
 
-bool resortElementsTest(int comm_rank, int comm_size) {
+bool resortElementsTest() {
   int ne = 5;
   int np = 20;
-  int* gids = new int[ne];
-  distribute_elements(ne, 0, comm_rank, comm_size, gids);
+  particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
+  distribute_elements(ne, 0, 0, 1, gids);
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  typedef Kokkos::DefaultExecutionSpace exe_space;
+  
   Kokkos::TeamPolicy<exe_space> po(128, 4);
-  int ts = po.team_size();
-  SellCSigma<Type, exe_space>* scs =
-    new SellCSigma<Type, exe_space>(po, 5, 2, ne, np, ptcls_per_elem, ids, gids);
+  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+  SCS::kkGidView element_gids_v("element_gids_v", ne);
+  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
+  particle_structs::hostToDevice(element_gids_v, gids);
+
+  SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
   delete [] ptcls_per_elem;
   delete [] ids;
   delete [] gids;
 
-  scs->printFormat();
+  scs->printFormatDevice();
 
-  int* values = scs->getSCS<0>();
+  auto values = scs->get<0>();
 
+  SCS::kkLidView new_element("new_element", scs->capacity());
   //Remove all particles from first element
-  int* new_element = new int[scs->capacity()];
-  for (int i =0; i < scs->num_slices; ++i) {
-    for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-      for (int k = 0; k < ts; ++k) {
-        if (scs->particle_mask[j+k]) {
-          values[j+k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
-          if (scs->slice_to_chunk[i] == 0 && (j+k - scs->offsets[i]) % scs->C == 0)
-            new_element[j + k] = -1;
-          else
-            new_element[j + k] = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
-        }
+  auto moveParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+    if (mask) {
+      values(ptcl_id) = elm_id;
+      if (ptcl_id % 4 == 0 && ptcl_id < 8)
+        new_element(ptcl_id) = -1;
+      else
+        new_element(ptcl_id) = elm_id;
+    }
+  };
+  scs->parallel_for(moveParticles);
+  scs->rebuild(new_element);
+
+  scs->printFormatDevice();
+
+  values = scs->get<0>();
+  SCS::kkLidView fail("", 1);
+  auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+    if (mask) {
+      if (values(ptcl_id) != elm_id) {
+        fail(0) = 1;
       }
     }
-  }
-  scs->rebuildSCS(new_element);
+  };
+  scs->parallel_for(checkParticles);
 
-  scs->printFormat();
-
-  values = scs->getSCS<0>();
-  for (int i =0; i < scs->num_slices; ++i) {
-    for (int j = scs->offsets[i]; j < scs->offsets[i+1]; j+= ts) {
-      for (int k = 0; k < ts; ++k) {
-        if (scs->particle_mask[j+k]) {
-          int should_be = scs->row_to_element[scs->slice_to_chunk[i] * scs->C + k];
-          if (values[j+k] != should_be) {
-            printf("Value mismatch at particle %d: %d != %d\n", j + k, values[j+k], should_be);
-            return false;
-
-          }
-        }
-      }
-    }
+  if (fail(0) == 1) {
+    printf("Value mismatch on some particles\n");
+    return false;
   }
   delete scs;
-  delete [] new_element;
   return true;
 }

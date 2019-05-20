@@ -144,14 +144,14 @@ class SellCSigma {
  kkLidView num_elems_d;
  kkLidView row_to_element_d;
  kkLidView particle_mask_d;
-
 #endif
+
  private: 
   //Pointers to the start of each SCS for each data type
   MemberTypeArray<DataTypes> scs_data;
   MemberTypeViews<DataTypes> scs_data_v;
 
-  void destroySCS(bool destroyGid2Row=true);
+  void destroy(bool destroyGid2Row=true);
 
   void constructChunks(std::pair<int,int>* ptcls, int& nchunks, int& nslices, int*& chunk_widths, 
                        int*& row_element);
@@ -466,7 +466,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
+void SellCSigma<DataTypes, ExecSpace>::destroy(bool destroyGid2Row) {
   if (particle_mask) {
     DestroyArrays<DataTypes>(scs_data+0);
     delete [] slice_to_chunk;
@@ -484,7 +484,7 @@ void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
 }
 template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
-  destroySCS();
+  destroy();
 }
 
 
@@ -680,7 +680,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, kkLidView new
   //If there are no particles left, then destroy the structure
   if(!activePtcls) {
     delete [] new_particles_per_elem;
-    destroySCS();
+    destroy();
     num_ptcls = 0;
     num_chunks = 0;
     num_slices = 0;
@@ -776,7 +776,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuildSCS(int* new_element, kkLidView new
   delete [] new_particles_per_elem;
 
   //Destroy old scs 
-  destroySCS(false);
+  destroy(false);
 
   //set scs to point to new values
   num_ptcls = new_num_ptcls;
@@ -817,7 +817,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
 
   //If there are no particles left, then destroy the structure
   if(activePtcls == 0) {
-    destroySCS();
+    destroy();
     num_ptcls = 0;
     num_chunks = 0;
     num_slices = 0;
@@ -891,7 +891,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   });
 
   //Destroy old scs
-  destroySCS(false);
+  destroy(false);
 
   //set scs to point to new values
   num_ptcls = new_num_ptcls;

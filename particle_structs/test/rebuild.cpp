@@ -63,7 +63,7 @@ bool shuffleParticlesTests() {
   auto values = scs->get<0>();
   auto values2 = scs2->get<0>();
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    new_element(particle_id) = scs->row_to_element_v(element_id);
+    new_element(particle_id) = element_id;
     values(particle_id) = particle_id;
     values2(particle_id) = particle_id;
   };
@@ -90,7 +90,7 @@ bool shuffleParticlesTests() {
     return false;
   }
   auto moveParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    new_element(ptcl_id) = scs->row_to_element_v((elm_id + 2) % ne);
+    new_element(ptcl_id) = (elm_id + 2) % ne;
   };
   scs->parallel_for(moveParticles);
 

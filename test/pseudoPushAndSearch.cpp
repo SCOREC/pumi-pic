@@ -323,7 +323,7 @@ void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
 }
 
 int main(int argc, char** argv) {
-  Kokkos::initialize(argc,argv);
+  auto lib = Omega_h::Library(&argc, &argv);
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
   printf("Kokkos execution space memory %s name %s\n",
@@ -340,7 +340,6 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
-  auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::gmsh::read(argv[1], world);
   const auto r2v = mesh.ask_elem_verts();

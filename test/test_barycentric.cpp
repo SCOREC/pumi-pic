@@ -43,9 +43,8 @@ int main(int argc, char** argv) {
       return 1;
   }
 
-  Omega_h::Matrix<3, 4> tet;
-  Omega_h::Vector<3> point;
-  Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
+  Omega_h::Real tet_h[12];
+  float bcc_h[4];
   std::string s;
 
   std::stringstream ss1(argv[1]);
@@ -62,13 +61,19 @@ int main(int argc, char** argv) {
     while(sts.good())
     {
       getline(sts, s, ',');
-      tet[i][j++] = atof(s.c_str());
+      tet_h[(i*3)+j] = atof(s.c_str());
+      j++;
     }
     ++i;
     j=0;
   }
+  Omega_h::Matrix<3, 4> tet {
+    tet_h[0], tet_h[1], tet_h[2],
+    tet_h[3], tet_h[4], tet_h[5],
+    tet_h[6], tet_h[7], tet_h[8],
+    tet_h[9], tet_h[10], tet_h[11]};
 
-
+  Omega_h::Vector<3> point;
   if(argc==4)
   {
     std::stringstream ss2(argv[2]);
@@ -83,9 +88,10 @@ int main(int argc, char** argv) {
     while(ss3.good())
     {
       getline(ss3, s, ',');
-      bcc[i++] = atof(s.c_str());
+      bcc_h[i++] = atof(s.c_str());
     }
   }
+  Omega_h::Write<Omega_h::Real> bcc({bcc_h[0], bcc_h[1], bcc_h[2], bcc_h[3]});
 
   if(argc==2)
   {

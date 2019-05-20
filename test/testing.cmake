@@ -27,9 +27,6 @@ mpi_test(linetri_intersection_1 1   ./linetri_intersection)
 mpi_test(linetri_intersection_2 1
   ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )
 
-mpi_test(push_and_search_1 1
-  ./push_and_search ${TEST_DATA_DIR}/cube.msh )
-
 mpi_test(pseudoPushAndSearch_t1 1
   ./pseudoPushAndSearch --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
 

@@ -106,7 +106,7 @@ void push(SellCSigma<Particle>* scs, int np, fp_t distance,
   p::hostToDeviceFp(position_d, scs_initial_position);
   p::kkFp3View new_position_d("new_position_d", capacity);
   p::hostToDeviceFp(new_position_d, scs_pushed_position);
-  
+
   fp_t disp[4] = {distance,dx,dy,dz};
   p::kkFpView disp_d("direction_d", 4);
   p::hostToDeviceFp(disp_d, disp);
@@ -285,6 +285,43 @@ void setTargetPtclCoords(SellCSigma<Particle>* scs) {
   p::deviceToHostFp(xtgt_scs_d, scs->getSCS<1>());
 }
 
+void computeAvgPtclDensity(o::Mesh& mesh, SellCSigma<Particle>* scs){
+  //transfer the SCS structure to the device
+  scs->transferToDevice();
+  //create an array to store the number of particles in each element
+  o::Write<o::LO> elmPtclCnt_w(mesh.nelems(),0);
+  //parallel loop over elements and particles
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+
+    Kokkos::atomic_fetch_add(&(elmPtclCnt_w[e]), 1);
+  };
+  scs->parallel_for(lamb);
+  o::Write<o::Real> epc_w(mesh.nelems(),0);
+  const auto convert = OMEGA_H_LAMBDA(o::LO i) {
+     epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
+   };
+  o::parallel_for(mesh.nelems(), convert, "convert_to_real");
+  o::Reals epc(epc_w);
+  mesh.add_tag(o::REGION, "element_particle_count", 1, o::Reals(epc));
+  //get the list of elements adjacent to each vertex
+  auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
+  //create a device writeable array to store the computed density
+  o::Write<o::Real> ad_w(mesh.nverts(),0);
+  const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
+    const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
+    const auto firstElm = verts2elems.a2ab[i];
+    o::Real vertVal = 0.00;
+    for (int j = 0; j < deg; j++){
+      const auto elm = verts2elems.ab2b[firstElm+j];
+      vertVal += epc[elm];
+    }
+    ad_w[i] = vertVal / deg;
+  };
+  o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
+  o::Read<o::Real> ad_r(ad_w);
+  mesh.set_tag(o::VERT, "avg_density", ad_r);
+}
+
 int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
@@ -328,7 +365,7 @@ int main(int argc, char** argv) {
     if(ptcls_per_elem[i]>0)
       printf("ppe[%d] %d\n", i, ptcls_per_elem[i]);
 
-  //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
+  //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
@@ -349,7 +386,7 @@ int main(int argc, char** argv) {
 
   //run search to move the particles to their starting elements
   search(mesh,scs);
- 
+
   //define parameters controlling particle motion
   //move the particles in +y direction by 1/20th of the
   //pisces model's height
@@ -364,6 +401,7 @@ int main(int argc, char** argv) {
 
   o::LOs elmTags(ne, 0, "elmTagVals");
   mesh.add_tag(o::REGION, "has_particles", 1, elmTags);
+  mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
@@ -372,6 +410,7 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "iter %d\n", iter);
+    computeAvgPtclDensity(mesh, scs);
     timer.reset();
     push(scs, scs->num_ptcls, distance, dx, dy, dz);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());

@@ -30,8 +30,11 @@ message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if (ENABLE_KOKKOS)
   find_package(KokkosCore REQUIRED)
+  find_package(KokkosContainers REQUIRED)
+
   set(KOKKOS_ENABLED true)
   include_directories(${KokkosCore_INCLUDE_DIRS})
+  include_directories(${KokkosContainers_INCLUDE_DIRS})
 
   message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
   set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})
@@ -87,8 +90,9 @@ if (ENABLE_KOKKOS)
     $<INSTALL_INTERFACE:include>)
   target_include_directories(particleStructs PRIVATE ${KokkosCore_INCLUDE_DIRS})
   target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
+  target_include_directories(particleStructs PRIVATE ${KokkosContainers_INCLUDE_DIRS})
   target_link_libraries(particleStructs PRIVATE
-    ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES})
+    ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES} ${KokkosContainers_LIBRARIES})
 
   include(${CMAKE_CURRENT_LIST_DIR}/cmake/detect_kokkos_opts.cmake)
   detect_kokkos_opts()

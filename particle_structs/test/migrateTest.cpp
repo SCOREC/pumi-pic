@@ -88,9 +88,10 @@ int main(int argc, char* argv[]) {
     auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       if (mask != double3_slice(ptcl_id, 2))
         fail(0) = 1;
-      if (comm_rank != int_slice(ptcl_id) && elm_id != 0)
+      if (mask && comm_rank != int_slice(ptcl_id) && elm_id != 0) {
         fail(0) = 1;
-      if (int_slice(ptcl_id) != double3_slice(ptcl_id, 0))
+      }
+      if (mask && int_slice(ptcl_id) != double3_slice(ptcl_id, 0))
         fail(0) = 1;
     };
     scs->parallel_for(checkValues);

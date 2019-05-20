@@ -115,18 +115,17 @@ class SellCSigma {
   typedef Kokkos::UnorderedMap<gid_t, lid_t, typename ExecSpace::device_type> GID_Mapping;
   GID_Mapping element_gid_to_lid;
 
-
- private: 
-  //Pointers to the start of each SCS for each data type
-  MemberTypeViews<DataTypes> scs_data;
-
-  void destroy(bool destroyGid2Row=true);
-
   void constructChunks(PairView<ExecSpace> ptcls, int& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element);
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths, 
                         kkLidView& offs, kkLidView& s2e);
+private: 
+  //Pointers to the start of each SCS for each data type
+  MemberTypeViews<DataTypes> scs_data;
+
+  void destroy(bool destroyGid2Row=true);
+
 };
 
 
@@ -161,27 +160,30 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
   Kokkos::resize(chunk_widths, nchunks);
   Kokkos::resize(row_element, nchunks * C);
 
+  int C_local = C;
+  int num_elems_local = num_elems;
   //Add chunks for vertical slicing
   typedef Kokkos::TeamPolicy<> TeamPolicy;
-  const TeamPolicy pol(nchunks, C);
+  const TeamPolicy pol(nchunks, C_local);
   Kokkos::parallel_for(pol, KOKKOS_LAMBDA(const TeamPolicy::member_type& thread) {
     const int chunk = thread.league_rank();
     const int chunk_row = thread.team_rank();
-    const int row = chunk*C + chunk_row;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, C), KOKKOS_LAMBDA(const int& j) {
+    const int row = chunk*C_local + chunk_row;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, C_local), [=] (int& i) {
       //TODO conditional
-      if (row < num_elems)
+      if (row < num_elems_local)
         row_element(row) = ptcls(row).second;
     });
     int maxL;
-    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(thread, C), KOKKOS_LAMBDA(const int& j, lid_t& mx) {
+    Kokkos::parallel_reduce(Kokkos::TeamThreadRange(thread, C), [=] (const int& j, lid_t& mx) {
       //TODO remove conditional
-      if (row < num_elems && ptcls(row).first > mx)
+      if (row < num_elems_local && ptcls(row).first > mx)
         mx = ptcls(row).first;
       }, Kokkos::Max<lid_t>(maxL));
     chunk_widths(chunk) = maxL;
   });
-  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, nchunks * C), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems_local, nchunks * C_local),
+                       KOKKOS_LAMBDA(const int& i) {
     row_element(i) = i;
   });
 }
@@ -224,7 +226,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const int& i) {
     const int start = offset_nslices(i);
     const int end = offset_nslices(i+1);
-    Kokkos::parallel_for(Kokkos::RangePolicy<>(start,end), KOKKOS_LAMBDA(const int& j) {
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(start,end), [=] (const int& j) {
       s2c(j) = i;
       const lid_t rem = chunk_widths(i) % V;
       slice_size(j) = (j!=end-1)*nat_size  + (j==end-1)*(rem + (rem==0) * V) * C;
@@ -239,7 +241,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
 template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne, 
                                              lid_t np, kkLidView ptcls_per_elem, 
-                                             kkGidView element_gids)  : policy(p) {//element_gid_to_lid(ne) {
+                                             kkGidView element_gids)  : policy(p), element_gid_to_lid(ne) {
   C = policy.team_size();
   sigma = sig;
   V = v;
@@ -422,17 +424,10 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   /********** Convert the received element from element gid to element lid *********/
   Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const int& i) {
     const gid_t gid = recv_element(i);
-    // const int index = element_gid_to_lid.find(gid);
-    // printf("DEBUGGGGG Rank %d received element %ld which is %d\n", comm_rank, gid,
-    //        index);
-    //recv_element(i) = element_gid_to_lid.value_at(index);
+    const int index = element_gid_to_lid.find(gid);
+    recv_element(i) = element_gid_to_lid.value_at(index);
   });
   
-  //DEBUG
-  kkLidHostMirror recv_element_host = deviceToHost(recv_element);
-  for (int i = 0; i < recv_element_host.size(); ++i)
-    printf("Rank %d received particle in element %d\n", comm_rank, recv_element_host(i));
-
   /********** Set particles that went sent to non existent on this process *********/
   auto removeSentParticles = SCS_LAMBDA(int element_id, int particle_id, int mask) {
     const bool notSent = new_process(particle_id) != comm_rank;

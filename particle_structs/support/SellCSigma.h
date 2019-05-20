@@ -468,7 +468,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
   if (particle_mask) {
-    DestroyArrays<DataTypes>({scs_data});
+    DestroyArrays<DataTypes>(scs_data+0);
     delete [] slice_to_chunk;
     delete [] row_to_element;
     delete [] offsets;
@@ -479,7 +479,7 @@ void SellCSigma<DataTypes, ExecSpace>::destroySCS(bool destroyGid2Row) {
       element_gid_to_row.clear();
   }
   else {
-    //DestroyViews<DataTypes>(scs_data_v);
+    DestroyViews<DataTypes>(scs_data_v+0);
   }
 }
 template<class DataTypes, typename ExecSpace>
@@ -609,6 +609,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   MPI_Waitall(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
   delete [] send_requests;
   delete [] recv_requests;
+  DestroyViews<DataTypes>(send_particle+0);
 
   /********** Convert the received element from element gid to element lid *********/
   Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const int& i) {
@@ -635,6 +636,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   /********** Combine and shift particles to their new destination **********/
   rebuild(new_element, recv_element, recv_particle);
 
+  DestroyViews<DataTypes>(recv_particle+0);
 }
 
 template<class DataTypes, typename ExecSpace>

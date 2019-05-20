@@ -34,12 +34,14 @@ int main(int argc, char* argv[]) {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-
+  delete [] ids;
   {
     SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
     SCS::kkGidView element_gids_v("element_gids_v", ne);
     particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
     particle_structs::hostToDevice(element_gids_v, gids);
+    delete [] ptcls_per_elem;
+    delete [] gids;
     Kokkos::TeamPolicy<exe_space> po(4, 4);
     SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
 

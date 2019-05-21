@@ -11,6 +11,8 @@ using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
 using particle_structs::distribute_particles;
 using particle_structs::distribute_elements;
+using particle_structs::getLastValue;
+using particle_structs::lid_t;
 
 typedef MemberTypes<int> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;
@@ -45,7 +47,8 @@ bool shuffleParticlesTests() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  Kokkos::TeamPolicy<exe_space> po(128, 4);
+  int C = 4;
+  Kokkos::TeamPolicy<exe_space> po(128, C);
 
   SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
   SCS::kkGidView element_gids_v("", 0);
@@ -79,13 +82,14 @@ bool shuffleParticlesTests() {
   SCS::kkLidView fail("fail",1);
   auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     if (mask) {
-      if (values(ptcl_id) != values2(ptcl_id))
+      if (values(ptcl_id) % C != values2(ptcl_id) % C) {
+        printf("Particle mismatch at %d (%d != %d)\n", ptcl_id, values(ptcl_id), values2(ptcl_id));
         fail(0) = 1;
+      }
     }
   };
   scs->parallel_for(checkParticles);
-  //TODO move to host
-  if (fail(0) == 1) {
+  if (getLastValue<lid_t>(fail) == 1) {
     printf("Value mismatch on at least one particle\n");
     return false;
   }
@@ -162,7 +166,7 @@ bool resortElementsTest() {
   };
   scs->parallel_for(checkParticles);
 
-  if (fail(0) == 1) {
+  if (getLastValue<lid_t>(fail) == 1) {
     printf("Value mismatch on some particles\n");
     return false;
   }

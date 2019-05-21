@@ -1,4 +1,5 @@
 #include <fstream>
+#include <algorithm>
 
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
@@ -25,22 +26,18 @@ void GitrmMesh::loadFieldsNBoundary() {
 }
 
 
-void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
+// BField is to be stored on vertices in 3D; source is 2D
+void GitrmMesh::processBFieldFile(const std::string &bFile, 
+    o::HostWrite<o::Real> &data, o::Real &rMin, o::Real &rMax, 
+    o::Real &zMin,  o::Real &zMax, int &nR, int &nZ) {
   std::ifstream ifs(bFile);
   if (!ifs.is_open()) {
     std::cout << "Error opening BField file " << bFile << '\n';
     //exit(1);
   }
-  // std::cout << "Processing  BField file " << bFile << '\n';
   o::LO verbose = 0;
 
   int n = 0;
-  int nR = 0;
-  int nZ = 0;
-  o::Real rMin = 0;
-  o::Real rMax = 0;
-  o::Real zMin = 0;
-  o::Real zMax = 0;
   bool br, bt, bz;
   br = bt = bz = false;
   o::LO ind = 0;
@@ -51,35 +48,50 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
   while(std::getline(ifs, line)) {
     if(verbose >3)
       std::cout << "Processing  line " << line << '\n';
+    std::replace (line.begin(), line.end(), ',' , ' ');
+    std::replace (line.begin(), line.end(), ';' , ' ');
+
     std::stringstream ss(line);
-    ss >> s1 >> s2 >> s3;
+    ss >> s1;
     if(verbose >3)
-      std::cout << "str " << s1 << s2 << s3 << " :"  << line << "\n";
+      std::cout << "str s1:" << s1 << "\n";
+   
+    if(s1.find_first_not_of(' ') == std::string::npos ){
+      s1 = "";
+      continue;
+    }
 
     if(s1 == "nR") {
+      ss >> s2 >> s3;
       nR = std::stoi(s3);
     }
     else if(s1 == "nZ") {
+      ss >> s2 >> s3;
       nZ = std::stoi(s3);
     }
     else if(s1 == "rMin") {
+      ss >> s2 >> s3;
       rMin = std::stod(s3);
     }    
     else if(s1 == "rMax") {
+      ss >> s2 >> s3;
       rMax = std::stod(s3);
     } 
     else if(s1 == "zMin") {
+      ss >> s2 >> s3;
       zMin = std::stod(s3);
     } 
     else if(s1 == "zMax") {
+      ss >> s2 >> s3;
       zMax = std::stod(s3);
     }
     else if(s1 == "br") {
-      std::stringstream brs(s3);
-      //Don't do it for all components
-      data = new o::Real[3*nR*nZ];
+      // br,bt,bz(nZ, nR)
+      // If "br" is not seen before other components, it is error
+      ss >> s2;
+      data = o::HostWrite<o::Real>(3*nR*nZ);
       ind = 0;
-      while(brs >> sd){
+      while(ss >> sd){
         data[3*ind] = std::stod(sd);
         ++ind;
       }
@@ -91,8 +103,7 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
         bt = true;
       }
       else {
-        std::stringstream brs(s1);
-        while(brs >> sd){
+        while(ss >> sd){
           data[3*ind] = std::stod(sd);
           ++ind;
         }
@@ -100,9 +111,9 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
     }
 
     if(s1 == "bt") {
-      std::stringstream bts(s3);
       ind = 0;
-      while(bts >> sd){
+      ss >> s2;
+      while(ss >> sd){
         data[3*ind+1] = std::stod(sd);
         ++ind;
       }
@@ -113,9 +124,8 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
         bt = false;
         bz = true;
       }
-      else {
-        std::stringstream bts(s1);
-        while(bts >> sd) {
+      else { 
+        while(ss >> sd) {
           data[3*ind+1] = std::stod(sd);
           ++ind;
         }
@@ -123,9 +133,9 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
     }
 
     if(s1 == "bz") {
-      std::stringstream bzs(s3);
       ind = 0;
-      while(bzs >> sd){
+      ss >> s2;
+      while(ss >> sd){
         data[3*ind+2] = std::stod(sd);
         ++ind;
       }
@@ -136,8 +146,7 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
         bz = false;
       }
       else {
-        std::stringstream bzs(s1);
-        while(bzs >> sd) {
+        while(ss >> sd) {
           data[3*ind+2] = std::stod(sd);
           ++ind;
         }
@@ -152,35 +161,83 @@ void GitrmMesh::processBFieldFile(const std::string &bFile, o::Real *data) {
     std::cout << "\n\n " << nR << " " << nZ << " " << rMin<< " "<< rMax 
               << " "<< zMin << " "<< zMax << "\n\n";
   }
+
 }
 
 void GitrmMesh::loadBField(o::Mesh &mesh, const std::string &bFile) {
+  int verbose = 4;
+  std::cout<< "Loading BField.. \n" ;
+  // Not per vertex; but for input BField:  br,bt,bz[nZ*nR]
+  o::HostWrite<o::Real> readInData;
+  o::Real rMin = 0; 
+  o::Real zMin = 0; 
+  o::Real rMax = 0; 
+  o::Real zMax = 0; 
+  o::LO nR = 0;
+  o::LO nZ = 0;
+  processBFieldFile(bFile, readInData, rMin, rMax, zMin, zMax, nR, nZ);
+  OMEGA_H_CHECK(nR >0 && nZ >0);
+  o::Real dr = (rMax - rMin)/nR;
+  o::Real dz = (zMax - zMin)/nZ;
 
-  o::Real *data; // no delete[] data ?
+  // bFields interpolate at vertices and Set tag
+  //auto tagB =  o::Write<o::Real>(mesh.nverts()*3, 0);
+  o::HostWrite<o::Real> tagB(3*mesh.nverts());
+  o::Vector<3> fv{0,0,0};
+  o::Vector<3> pos{0,0,0};
+  const auto coords = mesh.coords(); //Reals
+  // coords' size is 3* nverts
+  for(int iv=0; iv < mesh.nverts(); ++iv){
+    for(int j=0; j<3; ++j){
+      pos[j] = coords[3*iv+j];
 
-  processBFieldFile(bFile, data);
+      if(verbose > 3 && iv<5){
+        std::cout<< " iv:" << iv << " " << pos[j]<< " \n";
+      }
+    }
 
-  // bFields Set tag
-  // TODO this is wrong
-  //mesh.set_tag(o::VERT, "BField", data);
+    if(verbose > 3 && iv<2){
+      std::cout<< " :" << rMin << ":" <<zMin<<  ":" <<dr<<  ":" <<
+        dz<<  ":" <<nR<<  ":" <<nZ << "\n";
+    }
 
+    //Cylindrical symmetry = true
+    p::interp2dVectorHost(readInData, rMin, zMin, dr, dz, nR, nZ, pos, fv, true);
+    for(int j=0; j<3; ++j){ //components
+      tagB[3*iv+j] = fv[j]; 
+
+      if(verbose > 3 && iv<10){
+        std::cout<<" tagB[" << 3*iv+j << "]=" << tagB[3*iv+j]<< " \n";
+      }
+    }
+  }
+
+  mesh.set_tag(o::VERT, "BField", o::Reals(tagB));
 }
 
 
-
+// Tags are not removed anywhere
 void GitrmMesh::initFieldsNBoundary(const std::string &bFile) {
   auto nv = mesh.nverts();
-  mesh.add_tag(o::VERT, "BField", 3, o::Reals(3*nv, 0.0));
-
+  mesh.add_tag<o::Real>(o::VERT, "BField", 3);
   auto nf = mesh.nfaces();
-  mesh.add_tag(o::FACE, "angleBdryBfield", 1, o::Reals(nf, 0));
-  mesh.add_tag(o::FACE, "potential", 1, o::Reals(nf, 0));
-  mesh.add_tag(o::FACE, "DebyeLength", 1, o::Reals(nf, 0));
-  mesh.add_tag(o::FACE, "LarmorRadius", 1, o::Reals(nf, 0));
-  mesh.add_tag(o::FACE, "ChildLangmuirDist", 1, o::Reals(nf, 0));
+  mesh.add_tag<o::Real>(o::FACE, "angleBdryBfield", 1);
+  mesh.add_tag<o::Real>(o::FACE, "potential", 1);
+  mesh.add_tag<o::Real>(o::FACE, "DebyeLength", 1);
+  mesh.add_tag<o::Real>(o::FACE, "LarmorRadius", 1);
+  mesh.add_tag<o::Real>(o::FACE, "ChildLangmuirDist", 1);
 
   // Load fields
   loadBField(mesh, bFile);
+
+
+  //TODO temp
+  auto temp =  o::Write<o::Real>(mesh.nfaces(), 0);
+  mesh.set_tag(o::FACE, "angleBdryBfield", o::Reals(temp));
+  mesh.set_tag(o::FACE, "potential", o::Reals(temp));
+  mesh.set_tag(o::FACE, "DebyeLength",  o::Reals(temp));
+  mesh.set_tag(o::FACE, "LarmorRadius", o::Reals(temp));
+  mesh.set_tag(o::FACE, "ChildLangmuirDist",  o::Reals(temp));
 
 }
 

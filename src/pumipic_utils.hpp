@@ -24,7 +24,191 @@
 
 #include "pumipic_constants.hpp"
 
+namespace o=Omega_h;
+
+
 namespace pumipic{
+
+
+
+/** @brief To interpolate field ONE component at atime from 3D data
+ *  @warning This function is only for regular structured grid of data
+ *  @param[in]  data, 3component array (intended for 3 component tag), but 
+ *  interpolation is done on 1 comp, at a time,
+ *  @param[in] comp, component, from degree of freedom
+ *  @return value corresponding to comp
+ */
+OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::LO comp, 
+  const o::Real gridx0, const o::Real gridz0, const o::Real dx, const o::Real dz, 
+  const o::LO nx, const o::LO nz, const o::Vector<3> &pos, const bool cylSymm = false) {
+  
+  if(nx*nz == 1)
+  {
+    return data[comp];
+  }
+
+  o::Real x = pos[0];
+  o::Real y = pos[1];
+  o::Real z = pos[2];   
+
+  o::Real fxz = 0;
+  o::Real fx_z1 = 0;
+  o::Real fx_z2 = 0; 
+  o::Real dim1 = x;
+
+  if(cylSymm)
+    dim1 = sqrt(x*x + y*y);
+
+  
+  o::LO i = floor((dim1 - gridx0)/dx);
+  o::LO j = floor((z - gridz0)/dz);
+  
+  if (i < 0) i=0;
+  if (j < 0) j=0;
+
+  o::Real gridXi = gridx0 + i * dx;
+  o::Real gridXip1 = gridx0 + (i+1) * dx;    
+  o::Real gridZj = gridz0 + j * dz;
+  o::Real gridZjp1 = gridz0 + (j+1) * dz; 
+
+  if (i >=nx-1 && j>=nz-1) {
+      fxz = data[(nx-1+(nz-1)*nx)*3+comp];
+  }
+  else if (i >=nx-1) {
+      fx_z1 = data[(nx-1+j*nx)*3+comp];
+      fx_z2 = data[(nx-1+(j+1)*nx)*3+comp];
+      fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+  }
+  else if (j >=nz-1) {
+      fx_z1 = data[(i+(nz-1)*nx)*3+comp];
+      fx_z2 = data[(i+(nz-1)*nx)*3+comp];
+      fxz = ((gridXip1-dim1)*fx_z1+(dim1 - gridXi)*fx_z2)/dx;
+      
+  }
+  else {
+    fx_z1 = ((gridXip1-dim1)*data[(i+j*nx)*3+comp] + 
+            (dim1 - gridXi)*data[(i+1+j*nx)*3+comp])/dx;
+    fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*3+comp] + 
+            (dim1 - gridXi)*data[(i+1+(j+1)*nx)*3+comp])/dx; 
+    fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+  }
+  
+  return fxz;
+}
+
+// Duplicate for host only
+// This is using 2D grid and data
+inline o::Real interpolate2dFieldHost(const o::HostWrite<o::Real> &data, const o::LO comp, 
+  const o::Real gridx0, const o::Real gridz0, const o::Real dx, const o::Real dz, 
+  const o::LO nx, const o::LO nz, const o::Vector<3> &pos, const bool cylSymm = false) {
+  
+  bool verbose = 0;
+  if(nx*nz == 1)
+  {
+    return data[comp];
+  }
+
+  o::Real x = pos[0];
+  o::Real y = pos[1];
+  o::Real z = pos[2];   
+
+  o::Real fxz = 0;
+  o::Real fx_z1 = 0;
+  o::Real fx_z2 = 0; 
+  o::Real dim1 = x;
+
+  if(cylSymm){
+      dim1 = sqrt(x*x + y*y);
+  }
+
+  OMEGA_H_CHECK(dx >0 && dz>0);
+
+  o::LO i = floor((dim1 - gridx0)/dx);
+  o::LO j = floor((z - gridz0)/dz);
+  
+  if (i < 0) i=0;
+  if (j < 0) j=0;
+
+  o::Real gridXi = gridx0 + i * dx;
+  o::Real gridXip1 = gridx0 + (i+1) * dx;    
+  o::Real gridZj = gridz0 + j * dz;
+  o::Real gridZjp1 = gridz0 + (j+1) * dz; 
+
+  if (i >=nx-1 && j>=nz-1) {
+    fxz = data[(nx-1+(nz-1)*nx)*3+comp];
+    if(verbose > 3){
+      std::cout << "if : " << fxz << "\n";
+    }
+  }
+  else if (i >=nx-1) {
+    fx_z1 = data[(nx-1+j*nx)*3+comp];
+    fx_z2 = data[(nx-1+(j+1)*nx)*3+comp];
+    fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+    if(verbose > 3){
+      std::cout << "i >=nx-1 : " << fxz << "\n";
+    }
+  }
+  else if (j >=nz-1) {
+    fx_z1 = data[(i+(nz-1)*nx)*3+comp];
+    fx_z2 = data[(i+(nz-1)*nx)*3+comp];
+    fxz = ((gridXip1-dim1)*fx_z1+(dim1 - gridXi)*fx_z2)/dx;
+    if(verbose > 3){
+      std::cout << "j >=nz-1 : " << fxz << "\n";
+    }
+  }
+  else {
+    fx_z1 = ((gridXip1-dim1)*data[(i+j*nx)*3+comp] + 
+            (dim1 - gridXi)*data[(i+1+j*nx)*3+comp])/dx;
+    fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*3+comp] + 
+            (dim1 - gridXi)*data[(i+1+(j+1)*nx)*3+comp])/dx; 
+    fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+    if(verbose > 3){
+      std::cout << "else: " << fxz << fx_z1 << fx_z2 << 
+        gridXip1-dim1 << " " << dim1 - gridXi << 
+        " " << (i+j*nx)*3+comp << " " << data[(i+j*nx)*3+comp]
+        << " " << data[(i+1+j*nx)*3+comp] << "\n";
+    }
+  }
+  if(verbose > 3){
+    std::cout << "fxz " << fxz << " gridXi:" << gridXi <<" gridXip1:"
+    <<gridXip1 <<" gridZj:"<< gridZj<<" gridZjp1:"<<gridZjp1
+    << " i: " << i << " j:" << j  << " dim1:"<< dim1 << " x:" 
+    << x << " y:" << y << " dx:" << dx << " gridx0:" << gridx0 <<"\n";
+  }
+  return fxz;
+}
+
+
+
+OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
+  o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
+  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
+
+  field[0] = interpolate2dField(data3, 0, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  field[1] = interpolate2dField(data3, 1, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  field[2] = interpolate2dField(data3, 2, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  if(cylSymm) {
+    o::Real theta = atan2(pos[1], pos[0]);   
+    field[0] = cos(theta)*field[0] - sin(theta)*field[1];
+    field[1] = sin(theta)*field[0] + cos(theta)*field[1];
+  }
+}
+
+
+// Duplicate for host only
+inline void interp2dVectorHost (const o::HostWrite<o::Real> &data3, o::Real gridx0, 
+  o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
+  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
+
+  field[0] = interpolate2dFieldHost(data3, 0, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  field[1] = interpolate2dFieldHost(data3, 1, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  field[2] = interpolate2dFieldHost(data3, 2, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm);
+  if(cylSymm) {
+    o::Real theta = atan2(pos[1], pos[0]);   
+    field[0] = cos(theta)*field[0] - sin(theta)*field[1];
+    field[1] = sin(theta)*field[0] + cos(theta)*field[1];
+  }
+}
 
 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,

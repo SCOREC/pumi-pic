@@ -120,7 +120,8 @@ public:
   void initFieldsNBoundary(const std::string &);
   void loadFieldsNBoundary();
   void loadBField(o::Mesh &, const std::string &);
-  void processBFieldFile( const std::string &, o::Real *);
+  void processBFieldFile(const std::string &, o::HostWrite<o::Real>&, 
+    o::Real&, o::Real&, o::Real&, o::Real&, int&, int&);
 };
 
 

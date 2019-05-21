@@ -58,15 +58,16 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   Omega_h::Int ne = mesh.nelems();
-  fprintf(stderr, "number of elements %d \n", ne);
+  fprintf(stderr, "Number of elements %d \n", ne);
 
 
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
-  std::cout << "\n Initialize Fields and Boundary data ***\n";
+  std::cout << "\nInitialize Fields and Boundary data..\n";
   
   gm.initFieldsNBoundary(bFile);
 
+  std::cout << "\nPreprocessing Distance to boundary ...\n";
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
@@ -74,14 +75,14 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
-  printf("\n  Calculate Distance To Bdry ***\n");
+  printf("\nCalculate Distance To Bdry..\n");
   gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
 
-  printf("\n  Calculate EField ***\n");
+  printf("\nCalculate EField ..\n");
 
   gitrm_calculateE(gp.scs, mesh);
-  std::cout << "\n  Boris Move  \n";
+  std::cout << "\nBoris Move  \n";
   gitrm_borisMove(gp.scs, mesh, 1e-6);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());

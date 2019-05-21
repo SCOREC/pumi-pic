@@ -26,7 +26,7 @@
 inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs, 
   const o::Mesh &mesh) {
 
-  const auto angles = o::Reals( mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
+  const auto angles = o::Reals(mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
   const auto potentials = o::Reals(mesh.get_array<o::Real>(o::FACE, "potential"));
   const auto debyeLengths = o::Reals(mesh.get_array<o::Real>(o::FACE, "DebyeLength"));
   const auto larmorRadii = o::Reals(mesh.get_array<o::Real>(o::FACE, "LarmorRadius"));
@@ -105,90 +105,6 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 }
 
 
-/** @brief Re-writing of interp2dCombined() in GITR, but grid values are not used.
- *  @warning This function is only for regular structured grid of data
- *  @see https://github.com/ORNL-Fusion/GITR/blob/master/src/interp2d.cpp
- *  @param[in]  data, flat 3component array
- *  @param[in] comp, component, from degree of freedom
- *  @return value corresponding to comp
- */
-OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::LO comp, 
-  const o::Real gridx0, const o::Real gridz0, const o::Real dx, const o::Real dz, 
-  const o::LO nx, const o::LO nz, const o::Vector<3> &pos) {
-  
-  if(nx*nz == 1)
-  {
-    return data[comp+0];
-  }
-
-  o::Real x = pos[0];
-  o::Real y = pos[1];
-  o::Real z = pos[2];   
-
-  o::Real fxz = 0;
-  o::Real fx_z1 = 0;
-  o::Real fx_z2 = 0; 
-  o::Real dim1 = 0;
-
-  if(USECYLSYMM > 0)
-    dim1 = sqrt(x*x + y*y);
-  else
-    dim1 = x;
-  
-  o::LO i = floor((dim1 - gridx0)/dx);
-  o::LO j = floor((z - gridz0)/dz);
-  
-  if (i < 0) i=0;
-  if (j < 0) j=0;
-
-  o::Real gridxi = gridx0 + i * dx;
-  o::Real gridxip1 = gridx0 + (i+1) * dx;    
-  o::Real gridzj = gridz0 + j * dz;
-  o::Real gridzjp1 = gridz0 + (j+1) * dz; 
-
-  if (i >=nx-1 && j>=nz-1) {
-      fxz = data[(nx-1+(nz-1)*nx)*3+comp];
-  }
-  else if (i >=nx-1) {
-      fx_z1 = data[(nx-1+j*nx)*3+comp];
-      fx_z2 = data[(nx-1+(j+1)*nx)*3+comp];
-      fxz = ((gridzjp1-z)*fx_z1+(z - gridzj)*fx_z2)/dz;
-  }
-  else if (j >=nz-1) {
-      fx_z1 = data[(i+(nz-1)*nx)*3+comp];
-      fx_z2 = data[(i+(nz-1)*nx)*3+comp];
-      fxz = ((gridxip1-dim1)*fx_z1+(dim1 - gridxi)*fx_z2)/dx;
-      
-  }
-  else {
-    fx_z1 = ((gridxip1-dim1)*data[(i+j*nx)*3+comp] + 
-            (dim1 - gridxi)*data[(i+1+j*nx)*3+comp])/dx;
-    fx_z2 = ((gridxip1-dim1)*data[(i+(j+1)*nx)*3+comp] + 
-            (dim1 - gridxi)*data[(i+1+(j+1)*nx)*3+comp])/dx; 
-    fxz = ((gridzjp1-z)*fx_z1+(z - gridzj)*fx_z2)/dz;
-  }
-  
-  return fxz;
-}
-
-OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
-  o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
-  const o::Vector<3> &pos, o::Vector<3> &field) {
-
-  o::Real Ar = interpolate2dField(data3, 0, gridx0, gridz0, dx, dz, nx, nz, pos);
-  o::Real At = interpolate2dField(data3, 1, gridx0, gridz0, dx, dz, nx, nz, pos);
-  field[2] = interpolate2dField(data3, 2, gridx0, gridz0, dx, dz, nx, nz, pos);
-  if(USECYLSYMM > 0) {
-    o::Real theta = atan2(pos[1], pos[0]);   
-    field[0] = cos(theta)*Ar - sin(theta)*At;
-    field[1] = sin(theta)*Ar + cos(theta)*At;
-  }
-  else {
-    field[0] = Ar;
-    field[1] = At;
-  }
-}
-
 
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
   const o::Mesh &mesh, const o::Real dtime) {
@@ -214,7 +130,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
     o::Vector<3> bField; //At previous_pos
     // BField is 3 component array
-    interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
+    p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
                     posPrev, bField); //At previous_pos
 
     o::Real charge = 1; //TODO get using speciesID using enum

@@ -164,7 +164,6 @@ namespace particle_structs {
     int ret = MPI_Irecv(view_host.data(), size * size_per_entry, MpiType<BT<T> >::mpitype, 
                         sender, tag, comm, req);
     lambda_map[req] = [=]() { 
-      printf("Executing Irecv copying for %d %d\n", sender, tag);
       Kokkos::deep_copy(new_view, view_host);
       Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
         CopyViewToView<T, ExecSpace>(view,i+offset, new_view, i);

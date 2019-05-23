@@ -40,12 +40,13 @@ int main(int argc, char** argv) {
   Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.world());
   int dim = mesh.dim();
   Omega_h::Read<Omega_h::GO> global_ids = mesh.globals(dim);
+  Omega_h::HostRead<Omega_h::GO> global_ids_h(global_ids);
   int nge = mesh.nglobal_ents(dim);
   int* owners = new int[nge];
   for (int i = 0; i < nge; ++i)
     owners[i] = 0;
   for (int i = 0; i < mesh.nelems(); ++i)
-    owners[global_ids[i]] = rank;
+    owners[global_ids_h[i]] = rank;
   int* recv_owners = new int[nge];
   MPI_Reduce(owners, recv_owners, nge, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   

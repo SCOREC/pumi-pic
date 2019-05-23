@@ -99,25 +99,25 @@ namespace pumipic {
     for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumArray(mesh.nents(i), *(buf_ents[i]));
     if (debug >= 1)
-      printf("Rank %ld has <v e f r> %ld %ld %ld %ld\n", rank, 
+      printf("Rank %d has <v e f r> %ld %ld %ld %ld\n", rank, 
              num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
 
     /**************** Create numberings for the entities on the picpart **************/
-    Omega_h::LOs** ent_ids = new Omega_h::LOs*[dim+1];
+    Omega_h::LOs ent_ids[4];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
       auto num = numberValidEntries(mesh.nents(i), *(buf_ents[i]));
-      *(ent_ids[i]) = num;
+      ent_ids[i] = num;
     }
 
     //************Build a new mesh as the picpart**************
     //Gather coordinates
     //Pad the array by 1 set of coordinates
     Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
-    gatherCoords(mesh, *(ent_ids[0]), new_coords);
+    gatherCoords(mesh, ent_ids[0], new_coords);
 
     for (int i = dim; i >= 0; --i)
-      buildAndClassify(mesh,picpart,i,num_ents[i], *(ent_ids[i]), *(ent_ids[0]), new_coords);
+      buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
     Omega_h::finalize_classification(picpart);
 
     delete [] num_ents;
@@ -125,7 +125,7 @@ namespace pumipic {
     //****************Convert Tags to the picpart***********
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
     Omega_h::Write<Omega_h::LO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::LOs new_elem_ids = *(ent_ids[dim]);
+    Omega_h::LOs new_elem_ids = ent_ids[dim];
     Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
     const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = new_elem_ids[elem_id];
@@ -143,10 +143,8 @@ namespace pumipic {
     //Cleanup
     for (int i = 0; i <= dim; ++i) {
       delete buf_ents[i];
-      delete ent_ids[i];
     }
     delete [] buf_ents;
-    delete [] ent_ids;
   }
 }
 
@@ -247,7 +245,7 @@ namespace {
   }
 
   Omega_h::LOs numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid) {
-    Omega_h::Read<Omega_h::LO> is_valid_r(is_valid);
+    Omega_h::LOs is_valid_r(is_valid);
     return Omega_h::offset_scan(is_valid_r);
   }
 

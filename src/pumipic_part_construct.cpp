@@ -14,6 +14,8 @@
 #include <Omega_h_build.hpp>
 #include <Omega_h_compare.hpp>
 #include <Omega_h_reduce.hpp>
+#include <Omega_h_int_scan.hpp> //exclusive scan
+#include <Omega_h_scan.hpp> //parallel_scan
 
 namespace {
   void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
@@ -25,12 +27,11 @@ namespace {
   void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO>& has_part, 
                    Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& buf);
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr);
-  void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& is_valid,
-                          Omega_h::Write<Omega_h::LO>& numbering);
-  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& vert_ids,
+  Omega_h::LOs numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid);
+  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
                     Omega_h::Write<Omega_h::Real>& new_coords);
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::Write<Omega_h::LO>& ent_ids, Omega_h::Write<Omega_h::LO>& vert_ids,
+                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
                         Omega_h::Write<Omega_h::Real>& new_coords);
 }
 
@@ -62,17 +63,18 @@ namespace pumipic {
     };
     Omega_h::parallel_for(ne, initVisit, "initVisit");
     Omega_h::Write<Omega_h::LO> has_part(comm_size);
-    for (int i = 0; i < comm_size; ++i)
+    Omega_h::parallel_for(comm_size, OMEGA_H_LAMBDA(Omega_h::LO i) {
       has_part[i] = (i == rank);
+    });
     int bridge_dim = 0;
     bfsBufferLayers(mesh, bridge_dim, safe_layers, ghost_layers, is_safe, is_visited, 
                     owner, has_part);
 
     if (debug >= 2) {
-      for (int i = 0; i < comm_size; ++i) {
+      Omega_h::parallel_for(comm_size, OMEGA_H_LAMBDA(Omega_h::LO i) {
         if (has_part[i])
           printf("Rank %d is keeping %d\n", rank, i);
-      }
+      });
     }
     if (debug >= 3) {
       //*************Render the 0th rank after BFS*************//
@@ -93,19 +95,19 @@ namespace pumipic {
       setSafeEnts(mesh, i, ne, has_part, owner, *(buf_ents[i]));
   
     //Gather number of entities remaining in the picpart
-    Omega_h::Write<Omega_h::LO> num_ents(dim+1,0);
+    Omega_h::GO* num_ents = new Omega_h::GO[dim+1];
     for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumArray(mesh.nents(i), *(buf_ents[i]));
     if (debug >= 1)
-      printf("Rank %d has <v e f r> %d %d %d %d\n", rank, 
+      printf("Rank %ld has <v e f r> %ld %ld %ld %ld\n", rank, 
              num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
 
     /**************** Create numberings for the entities on the picpart **************/
-    Omega_h::Write<Omega_h::LO>** ent_ids = new Omega_h::Write<Omega_h::LO>*[dim+1];
+    Omega_h::LOs** ent_ids = new Omega_h::LOs*[dim+1];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
-      ent_ids[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i), -1);
-      numberValidEntries(mesh.nents(i), *(buf_ents[i]), *(ent_ids[i]));
+      auto num = numberValidEntries(mesh.nents(i), *(buf_ents[i]));
+      *(ent_ids[i]) = num;
     }
 
     //************Build a new mesh as the picpart**************
@@ -118,10 +120,12 @@ namespace pumipic {
       buildAndClassify(mesh,picpart,i,num_ents[i], *(ent_ids[i]), *(ent_ids[0]), new_coords);
     Omega_h::finalize_classification(picpart);
 
+    delete [] num_ents;
+
     //****************Convert Tags to the picpart***********
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
     Omega_h::Write<Omega_h::LO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO>& new_elem_ids = *(ent_ids[dim]);
+    Omega_h::LOs new_elem_ids = *(ent_ids[dim]);
     Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
     const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = new_elem_ids[elem_id];
@@ -153,21 +157,25 @@ namespace {
                              Omega_h::Write<Omega_h::LO>& elem_gid) {
     const int comm_size = rank_offset_nelms.size();
     //TODO put this on device
-    for (int i = 0; i < owner.size(); ++i) {
-      ++rank_offset_nelms[owner[i]+1];
-    }
-    
+    Omega_h::parallel_for(owner.size(), OMEGA_H_LAMBDA(Omega_h::LO i) {
+      const auto owner_idx = owner[i]+1;
+      Kokkos::atomic_fetch_add(&rank_offset_nelms[owner_idx],1);
+    });
+   
     //Exclusive sum over elems per rank
-    for (int i = 1; i <= comm_size; ++i) {
-      rank_offset_nelms[i] += rank_offset_nelms[i-1];
-    }
+    Omega_h::Read<Omega_h::LO> rank_offset_nelms_r(rank_offset_nelms);
+    auto rank_offsets = Omega_h::offset_scan(rank_offset_nelms_r);
     //Globally number the elements
-    int* elem_gid_rank = new int[comm_size];
-    for (int i = 0; i < comm_size; ++i)
-      elem_gid_rank[i] = rank_offset_nelms[i];
-    for (int i = 0; i < owner.size(); ++i) {
-      elem_gid[i] = elem_gid_rank[owner[i]]++;
-    }
+    Omega_h::Write<Omega_h::LO> elem_gid_rank(comm_size,-1);
+    Omega_h::parallel_for(comm_size, OMEGA_H_LAMBDA(Omega_h::LO i) {
+      elem_gid_rank[i] = rank_offsets[i];
+    });
+    Omega_h::parallel_for(owner.size(), OMEGA_H_LAMBDA(Omega_h::LO i) {
+      const auto elm_owner = owner[i];
+      const auto elm_rank = elem_gid_rank[elm_owner];
+      elem_gid[i] = elm_rank;
+      elem_gid_rank[elm_owner] = elm_rank+1;
+    });
   }
 
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
@@ -233,31 +241,24 @@ namespace {
   }
 
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr) {
-    Omega_h::LO sum = 0;
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-    Kokkos::parallel_reduce(size, KOKKOS_LAMBDA(const int i, Omega_h::LO& lsum) {
-        lsum += arr[i] > 0 ;
-      }, sum);
-#endif
+    Omega_h::Read<Omega_h::LO> arr_r(arr);
+    Omega_h::LO sum = Omega_h::get_sum(arr_r);
     return sum;
   }
-  void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& is_valid, 
-                          Omega_h::Write<Omega_h::LO>& numbering) {
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-    Kokkos::parallel_scan(size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
-      num += is_valid[i];
-      numbering[i] += num * final * is_valid[i];
-    });
-#endif
+
+  Omega_h::LOs numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid) {
+    Omega_h::Read<Omega_h::LO> is_valid_r(is_valid);
+    return Omega_h::offset_scan(is_valid_r);
   }
 
-  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& vert_ids,
+  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
                     Omega_h::Write<Omega_h::Real>& new_coords) {
+    const auto meshDim = mesh.dim();
     Omega_h::Reals n2c = mesh.coords();
     auto gatherCoordsL = OMEGA_H_LAMBDA(Omega_h::LO vert_id)  {
       const Omega_h::LO first_vert = vert_id * 3;
       const Omega_h::LO first_new_vert = vert_ids[vert_id]*3;
-      const int deg = (first_new_vert >=0) * mesh.dim();
+      const int deg = (first_new_vert >=0 ) * meshDim;
       for (int i = 0; i < deg; ++i)
         new_coords[first_new_vert + i] = n2c[first_vert + i];
     };
@@ -265,7 +266,7 @@ namespace {
   }
 
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::Write<Omega_h::LO>& ent_ids, Omega_h::Write<Omega_h::LO>& vert_ids,
+                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
                         Omega_h::Write<Omega_h::Real>& new_coords) {
     Omega_h::Write<Omega_h::LO> ent2v((num_ents) * (dim + 1));
     Omega_h::Write<Omega_h::LO> ent_class(num_ents);

@@ -34,12 +34,10 @@ mpi_test(pseudoPushAndSearch_t2 1
 
 #MPI+X testing
 mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube)
-
-mpi_test(print_partition_pisces_4 4 
-         ./print_partition ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces)
-
 mpi_test(ptn_loading_cube 2 ./ptn_loading ${TEST_DATA_DIR}/cube.msh testing_cube_2.ptn 1 3)
 
-mpi_test(ptn_loading_pisces 4 
+mpi_test(print_partition_pisces_4 4
+         ./print_partition ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces)
+mpi_test(ptn_loading_pisces 4
          ./ptn_loading ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn 1 3)
 

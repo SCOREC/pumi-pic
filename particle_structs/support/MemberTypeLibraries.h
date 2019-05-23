@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ViewComm.h"
+#include "SupportKK.h"
 #include "MemberTypeArray.h"
 #include "SCS_Macros.h"
 #include "SCS_Types.h"
@@ -8,26 +10,6 @@
 #include <cstdlib>
 
 namespace particle_structs {
-
-  template <typename T> struct MpiType;
-#define CREATE_MPITYPE(type, mpi_type) \
-  template <> struct MpiType<type> { \
-    static constexpr int mpitype = mpi_type; \
-  }
-  CREATE_MPITYPE(char, MPI_CHAR);
-  CREATE_MPITYPE(short, MPI_SHORT);
-  CREATE_MPITYPE(int, MPI_INT);
-  CREATE_MPITYPE(long, MPI_LONG);
-  CREATE_MPITYPE(unsigned char, MPI_UNSIGNED_CHAR);
-  CREATE_MPITYPE(unsigned short, MPI_UNSIGNED_SHORT);
-  CREATE_MPITYPE(unsigned int, MPI_UNSIGNED);
-  CREATE_MPITYPE(unsigned long int, MPI_UNSIGNED_LONG);
-  CREATE_MPITYPE(float, MPI_FLOAT);
-  CREATE_MPITYPE(double, MPI_DOUBLE);
-  CREATE_MPITYPE(long double, MPI_LONG_DOUBLE);
-  CREATE_MPITYPE(long long int, MPI_LONG_LONG_INT);
-
-#undef CREATE_MPI_TYPE
 
   //This type represents an array of views for each type of the given DataTypes
   template <typename DataTypes> using MemberTypeViews = void*[DataTypes::size];
@@ -53,38 +35,6 @@ namespace particle_structs {
   template <typename... Types> struct CreateViews<MemberTypes<Types...> > {
     CreateViews(MemberTypeViews<MemberTypes<Types...> >& views, int size) {
       CreateViewsImpl<Types...>(views, size);
-    }
-  };
-
-  //TODO Make these functions device&host functions
-  template <class T> struct CopyViewToViewActual {
-    KOKKOS_INLINE_FUNCTION CopyViewToViewActual(MemberTypeView<T> dst, int dst_index,
-                                                MemberTypeView<T> src, int src_index) {
-      dst(dst_index) = src(src_index);
-    }
-  };
-  template <class T, int N> struct CopyViewToViewActual<T[N]> {
-    KOKKOS_INLINE_FUNCTION CopyViewToViewActual(MemberTypeView<T[N]> dst, int dst_index,
-                                                MemberTypeView<T[N]> src, int src_index) {
-      for (int i = 0; i < N; ++i)
-        dst(dst_index, i) = src(src_index, i);
-    }
-  };
-  template <class T, int N, int M> struct CopyViewToViewActual<T[N][M]> {
-    KOKKOS_INLINE_FUNCTION CopyViewToViewActual(MemberTypeView<T[N][M]> dst, int dst_index,
-                                                MemberTypeView<T[N][M]> src, int src_index) {
-      for (int i = 0; i < N; ++i)
-        for (int j = 0; j < M; ++j)
-          src(src_index, i, j) = dst(dst_index, i, j);
-    }
-  };
-  template <class T, int N, int M, int P> struct CopyViewToViewActual<T[N][M][P]> {
-    KOKKOS_INLINE_FUNCTION CopyViewToViewActual(MemberTypeView<T[N][M][P]> dst, int dst_index,
-                                                MemberTypeView<T[N][M][P]> src, int src_index) {
-      for (int i = 0; i < N; ++i)
-        for (int j = 0; j < M; ++j)
-          for (int k = 0; k < P; ++k)
-            dst(dst_index, i, j, k) = src(src_index, i, j, k);
     }
   };
  
@@ -115,7 +65,7 @@ namespace particle_structs {
         const int arr_index = scs_to_array(ptcl_id);
         if (mask && arr_index != comm_rank) {
           const int index = Kokkos::atomic_fetch_add(&array_indices_tmp(arr_index), 1);
-          CopyViewToViewActual<T>(dst, index, src, ptcl_id);
+          CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, ptcl_id);
         }
       };
       scs->parallel_for(copySCSToArray);
@@ -162,7 +112,7 @@ namespace particle_structs {
         if (mask && new_elem != -1) {
           const lid_t new_row = elem_to_scs(new_elem);
           const int index = Kokkos::atomic_fetch_add(&scs_indices_tmp(new_row), C);
-          CopyViewToViewActual<T>(dst, index, src, ptcl_id);
+          CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, ptcl_id);
         }
       };
       scs->parallel_for(copySCSToSCS);
@@ -210,7 +160,7 @@ namespace particle_structs {
         const lid_t new_elem = new_element(i);
         const lid_t new_row = elem_to_scs(new_elem);
         const int index = Kokkos::atomic_fetch_add(&scs_indices_tmp(new_row), C);
-        CopyViewToViewActual<T>(dst, index, src, i);
+        CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, i);
       });
       CopyNewParticlesToSCSImpl<SCS, Types...>(scs, dsts+1, srcs+1, new_element, elem_to_scs, scs_indices);
     }
@@ -235,10 +185,7 @@ namespace particle_structs {
     SendViewsImpl(MemberTypeViews<MemberTypes<T, Types...> > views, int offset, int size, 
                   int dest, int tag, MPI_Request* reqs) {
       MemberTypeView<T> v = *static_cast<MemberTypeView<T>*>(views[0]);
-      typename BaseType<T>::type* data = v.data();
-      int size_per_entry = BaseType<T>::size;
-      MPI_Datatype mpi_type = MpiType<typename BaseType<T>::type>::mpitype;
-      MPI_Isend(data + offset, size_per_entry * size, mpi_type, dest, tag, MPI_COMM_WORLD, reqs);
+      PS_Comm_Isend(v, offset, size, dest, tag, MPI_COMM_WORLD, reqs);
       SendViewsImpl<Types...>(views+1, offset, size, dest, tag + 1, reqs + 1);
     }
   };
@@ -260,10 +207,7 @@ namespace particle_structs {
     RecvViewsImpl(MemberTypeViews<MemberTypes<T, Types...> > views, int offset, int size, 
                   int dest, int tag, MPI_Request* reqs) {
       MemberTypeView<T> v = *static_cast<MemberTypeView<T>*>(views[0]);
-      typename BaseType<T>::type* data = v.data();
-      int size_per_entry = BaseType<T>::size;
-      MPI_Datatype mpi_type = MpiType<typename BaseType<T>::type>::mpitype;
-      MPI_Irecv(data + offset, size_per_entry * size, mpi_type, dest, tag, MPI_COMM_WORLD, reqs);
+      PS_Comm_Irecv(v, offset, size, dest, tag, MPI_COMM_WORLD, reqs);
       RecvViewsImpl<Types...>(views+1, offset, size, dest, tag + 1, reqs + 1);
     }
   };

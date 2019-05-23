@@ -11,6 +11,7 @@
 #include "SCS_Macros.h"
 #include "SCS_Types.h"
 #include "SupportKK.h"
+#include "ViewComm.h"
 #include "Segment.h"
 #include <Kokkos_Core.hpp>
 #include <Kokkos_UnorderedMap.hpp>
@@ -368,8 +369,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   };
   parallel_for(count_sending_particles);
   kkLidView num_recv_particles("num_recv_particles", comm_size);
-  MPI_Alltoall(num_send_particles.data(), 1, MPI_INT, 
-               num_recv_particles.data(), 1, MPI_INT, MPI_COMM_WORLD);
+  PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, MPI_COMM_WORLD);
 
   int num_sending_to = 0, num_receiving_from = 0;
   Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
@@ -402,11 +402,12 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   MemberTypeViews<DataTypes> send_particle;
   //Allocate views for each data type into send_particle[type]
   CreateViews<DataTypes>(send_particle, np_send);
+  auto element_to_gid_local = element_to_gid;
   auto gatherParticlesToSend = SCS_LAMBDA(int element_id, int particle_id, int mask) {
-    const int process = new_process[particle_id];
+    const int process = new_process(particle_id);
     if (mask && process != comm_rank) {
-      const int index = Kokkos::atomic_fetch_add(&(offset_send_particles_temp[process]),1);
-      send_element(index) = element_to_gid(new_element(particle_id));
+      const int index = Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process)),1);
+      send_element(index) = element_to_gid_local(new_element(particle_id));
     }
   };
   parallel_for(gatherParticlesToSend);
@@ -423,8 +424,6 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   CreateViews<DataTypes>(recv_particle, np_recv);
 
   //Get pointers to the data for MPI calls
-  int* recv_element_data = recv_element.data();
-  int* send_element_data = send_element.data();
   int send_num = 0, recv_num = 0;
   int num_sends = num_sending_to * (num_types + 1);
   int num_recvs = num_receiving_from * (num_types + 1);
@@ -440,8 +439,10 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     int num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
     if (num_send > 0) {
       int start_index = offset_send_particles_host(i);
-      MPI_Isend(send_element_data + start_index, num_send, MPI_INT, i, 0,
-                MPI_COMM_WORLD, send_requests + send_num);
+      /* MPI_Isend(send_element_data + start_index, num_send, MPI_INT, i, 0, */
+      /*           MPI_COMM_WORLD, send_requests + send_num); */
+      PS_Comm_Isend(send_element, start_index, num_send, i, 0, MPI_COMM_WORLD, 
+                    send_requests +send_num);
       send_num++;
       SendViews<DataTypes>(send_particle, start_index, num_send, i, 1,
                            send_requests + send_num);
@@ -450,25 +451,29 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     //Receiving
     int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
     if (num_recv > 0) {
-      MPI_Irecv(recv_element_data + offset_recv_particles_host(i), num_recv, MPI_INT, i, 0,
-                MPI_COMM_WORLD, recv_requests + recv_num);
+      int start_index = offset_recv_particles_host(i);
+      /* MPI_Irecv(recv_element_data + start_index, num_recv, MPI_INT, i, 0, */
+      /*           MPI_COMM_WORLD, recv_requests + recv_num); */
+      PS_Comm_Irecv(recv_element, start_index, num_recv, i, 0, MPI_COMM_WORLD, 
+                    recv_requests + recv_num);
       recv_num++;
-      RecvViews<DataTypes>(recv_particle,offset_recv_particles_host(i), num_recv, i, 1,
+      RecvViews<DataTypes>(recv_particle,start_index, num_recv, i, 1,
                            recv_requests + recv_num);
       recv_num+=num_types;
     }
   }
   MPI_Waitall(num_sends, send_requests, MPI_STATUSES_IGNORE);
-  MPI_Waitall(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
+  PS_Comm_Waitall<ExecSpace>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
   delete [] send_requests;
   delete [] recv_requests;
   DestroyViews<DataTypes>(send_particle+0);
 
   /********** Convert the received element from element gid to element lid *********/
+  auto element_gid_to_lid_local = element_gid_to_lid;
   Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const int& i) {
     const gid_t gid = recv_element(i);
-    const int index = element_gid_to_lid.find(gid);
-    recv_element(i) = element_gid_to_lid.value_at(index);
+    const int index = element_gid_to_lid_local.find(gid);
+    recv_element(i) = element_gid_to_lid_local.value_at(index);
   });
   
   /********** Set particles that went sent to non existent on this process *********/

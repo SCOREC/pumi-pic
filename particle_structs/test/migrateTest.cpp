@@ -86,27 +86,33 @@ int main(int argc, char* argv[]) {
     double3_slice = scs->get<1>();
     SCS::kkLidView fail("fail", 1);
     auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
-      if (mask != double3_slice(ptcl_id, 2))
-        fail(0) = 1;
-      if (mask && comm_rank != int_slice(ptcl_id) && elm_id != 0) {
+      if (mask != double3_slice(ptcl_id, 2)) {
+        printf("mask failure on ptcl %d (%d, %f)\n", ptcl_id, mask, double3_slice(ptcl_id,2));
         fail(0) = 1;
       }
-      if (mask && int_slice(ptcl_id) != double3_slice(ptcl_id, 0))
+      if (mask && comm_rank != int_slice(ptcl_id) && elm_id != 0) {
+        printf("rank failure on ptcl %d\n", ptcl_id);
         fail(0) = 1;
+      }
+      if (mask && int_slice(ptcl_id) != double3_slice(ptcl_id, 0)) {
+        printf("int/double failure on ptcl %d\n", ptcl_id);
+        fail(0) = 1;
+      }
     };
     scs->parallel_for(checkValues);
     MPI_Barrier(MPI_COMM_WORLD);
-    if (fail(0) == 1) {
+    scs->printFormatDevice(rank_str);
+
+    int f = particle_structs::getLastValue(fail);
+    if (f == 1) {
       printf("Migration of values failed on rank %d\n", comm_rank);
       return EXIT_FAILURE;
     }
-
-    scs->printFormatDevice(rank_str);
-
     delete scs;
   }
-  MPI_Finalize();
   Kokkos::finalize();
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Finalize();
   if (comm_rank == 0)
     printf("All tests passed\n");
   return 0;

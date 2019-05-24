@@ -16,7 +16,7 @@
 #include <Omega_h_reduce.hpp>
 #include <Omega_h_int_scan.hpp> //exclusive scan
 #include <Omega_h_scan.hpp> //parallel_scan
-
+#include <Kokkos_Core.hpp>
 namespace {
   void createGlobalNumbering(Omega_h::Write<Omega_h::LO>& owner,
                              Omega_h::Write<Omega_h::LO>& rank_offset_nelms,
@@ -105,13 +105,13 @@ namespace pumipic {
     Omega_h::LOs ent_ids[4];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
-      Omega_h::Write<Omega_h::LO> numbering(mesh.nents(i));
+      Omega_h::Write<Omega_h::LO> numbering(mesh.nents(i), -1);
       const auto size = mesh.nents(i);
       auto is_valid = *(buf_ents[i]);
       Omega_h::LOs is_valid_r(is_valid);
       auto offset = Omega_h::offset_scan(is_valid_r);
       Omega_h::parallel_for(size, OMEGA_H_LAMBDA(Omega_h::LO i) {
-          if(is_valid[i])
+          if(is_valid_r[i])
             numbering[i] = offset[i];
       });
       ent_ids[i] = numbering;
@@ -247,11 +247,9 @@ namespace {
 
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr) {
     Omega_h::LO sum = 0;
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
     Kokkos::parallel_reduce(size, OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
         lsum += arr[i] > 0 ;
       }, sum);
-#endif
     return sum;
   }
 

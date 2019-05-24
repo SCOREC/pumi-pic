@@ -27,7 +27,6 @@ namespace {
   void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO>& has_part, 
                    Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& buf);
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr);
-  Omega_h::LOs numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid);
   void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
                     Omega_h::Write<Omega_h::Real>& new_coords);
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
@@ -106,8 +105,16 @@ namespace pumipic {
     Omega_h::LOs ent_ids[4];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
-      auto num = numberValidEntries(mesh.nents(i), *(buf_ents[i]));
-      ent_ids[i] = num;
+      Omega_h::Write<Omega_h::LO> numbering(mesh.nents(i));
+      const auto size = mesh.nents(i);
+      auto is_valid = *(buf_ents[i]);
+      Omega_h::LOs is_valid_r(is_valid);
+      auto offset = Omega_h::offset_scan(is_valid_r);
+      Omega_h::parallel_for(size, OMEGA_H_LAMBDA(Omega_h::LO i) {
+          if(is_valid[i])
+            numbering[i] = offset[i];
+      });
+      ent_ids[i] = numbering;
     }
 
     //************Build a new mesh as the picpart**************
@@ -246,11 +253,6 @@ namespace {
       }, sum);
 #endif
     return sum;
-  }
-
-  Omega_h::LOs numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid) {
-    Omega_h::LOs is_valid_r(is_valid);
-    return Omega_h::offset_scan(is_valid_r);
   }
 
   void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,

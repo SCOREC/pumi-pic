@@ -239,8 +239,12 @@ namespace {
   }
 
   Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr) {
-    Omega_h::Read<Omega_h::LO> arr_r(arr);
-    Omega_h::LO sum = Omega_h::get_sum(arr_r);
+    Omega_h::LO sum = 0;
+#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
+    Kokkos::parallel_reduce(size, OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
+        lsum += arr[i] > 0 ;
+      }, sum);
+#endif
     return sum;
   }
 

@@ -61,8 +61,14 @@ set(PS_SOURCES
 
 set(PS_HEADERS
   support/SCS_Macros.h
-  support/SellCSigma.h
+  support/SCS_Types.h
+  support/SupportKK.h
+  support/ViewComm.h
   support/MemberTypes.h
+  support/MemberTypeArray.h
+  support/MemberTypeLibraries.h
+  support/SellCSigma.h
+  support/Segment.h
   support/psAssert.h
   algorithms/psParams.h
   algorithms/psTypes.h

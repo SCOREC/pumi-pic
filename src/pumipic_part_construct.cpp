@@ -238,7 +238,8 @@ namespace {
         const auto firstEnt = elm_id * deg;
         for (int j = 0; j < deg; ++j) {
           const auto ent = downAdj.ab2b[firstEnt+j];
-          buf[ent] |= is_buffered;
+          if( is_buffered )
+            buf[ent] = 1;
         }
       };
       Omega_h::parallel_for(size, setSafeEnts, "setSafeEnts");
@@ -258,8 +259,8 @@ namespace {
     const auto meshDim = mesh.dim();
     Omega_h::Reals n2c = mesh.coords();
     auto gatherCoordsL = OMEGA_H_LAMBDA(Omega_h::LO vert_id)  {
-      const Omega_h::LO first_vert = vert_id * 3;
-      const Omega_h::LO first_new_vert = vert_ids[vert_id]*3;
+      const Omega_h::LO first_vert = vert_id * meshDim;
+      const Omega_h::LO first_new_vert = vert_ids[vert_id]*meshDim;
       const int deg = (first_new_vert >=0 ) * meshDim;
       for (int i = 0; i < deg; ++i)
         new_coords[first_new_vert + i] = n2c[first_vert + i];

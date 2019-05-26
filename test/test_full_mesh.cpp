@@ -14,7 +14,7 @@
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc, argv);
-
+  {
   Omega_h::Library lib = Omega_h::Library(&argc, &argv);
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -54,13 +54,14 @@ int main(int argc, char** argv) {
 
   pumipic::Mesh picparts(mesh,owner);
 
-  int fail = 0;
   for (int i = 0; i <= mesh.dim(); ++i) {
     if (mesh.nents(i) != picparts.mesh()->nents(i)) {
       fprintf(stderr, "Entity counts do not match on process %d for dimension %d (%d != %d)\n",
               rank, i, mesh.nents(i), picparts.mesh()->nents(i));
+      return EXIT_FAILURE;
     }
   }
-
-  return fail;
+  }
+  Kokkos::finalize();
+  return EXIT_SUCCESS;
 }

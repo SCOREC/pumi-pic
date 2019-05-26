@@ -13,6 +13,8 @@
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc, argv);
+  
+  {
   Omega_h::Library lib = Omega_h::Library(&argc, &argv);
   
   int rank = lib.world()->rank();;
@@ -74,5 +76,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
     return EXIT_FAILURE;
   }
+  }
+  Kokkos::finalize();
   return 0;
 }

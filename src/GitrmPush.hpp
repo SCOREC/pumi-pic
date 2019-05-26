@@ -96,11 +96,11 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
     efield_d(pid, 2) = exd[2];
 
     if(verbose >2)
-     printf("efield %.5f %.5f %.5f \n", efield_d(pid, 0), efield_d(pid, 1), efield_d(pid, 2));
+      printf("efield %.5f %.5f %.5f \n", efield_d(pid, 0), efield_d(pid, 1), efield_d(pid, 2));
 
   };
   scs->parallel_for(run);
-
+  exe_space::fence();
   deviceToHostFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
 }
 
@@ -110,6 +110,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   const o::Mesh &mesh, const o::Real dtime) {
 
   const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
+  const auto EField = o::Reals( mesh.get_array<o::Real>(o::VERT, "EField"));
 
   scs->transferToDevice();
   kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
@@ -129,6 +130,14 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
     o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
     o::Vector<3> bField; //At previous_pos
+
+    if(USEPRESHEATHEFIELD) {
+      o::Vector<3> psheathE;
+      p::interp2dVector(EField, EGRIDX0, EGRIDZ0, EGRID_DX, EGRID_DZ, EGRID_NX, EGRID_NZ, 
+        posPrev, psheathE);
+      eField = eField + psheathE;
+    }
+
     // BField is 3 component array
     p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
                     posPrev, bField); //At previous_pos
@@ -174,15 +183,17 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     vel_d(pid, 2) = vel[2];
     
     if(verbose >2){
-      printf("prev_pos: %.3f %.3f %.3f :: ", ptclPrevPos_d(pid, 0), ptclPrevPos_d(pid, 1), 
-        ptclPrevPos_d(pid, 2));
+      printf("prev_pos: %.3f %.3f %.3f :: ", ptclPrevPos_d(pid, 0), 
+        ptclPrevPos_d(pid, 1), ptclPrevPos_d(pid, 2));
       printf("pre: %.3f %.3f %.3f \n", pre[0], pre[1], pre[2]);
-      printf("pos: %.3f %.3f %.3f ::", ptclPos_d(pid, 0), ptclPos_d(pid, 1), ptclPos_d(pid, 2));
+      printf("pos: %.3f %.3f %.3f ::", ptclPos_d(pid, 0), ptclPos_d(pid, 1), 
+        ptclPos_d(pid, 2));
       printf("vel: %.3f %.3f %.3f \n", vel_d(pid, 0), vel_d(pid, 1), vel_d(pid, 2));
     }
   };
 
   scs->parallel_for(boris);
+  exe_space::fence();
   deviceToHostFp(ptclPos_d, scs->getSCS<PCL_POS>());
   deviceToHostFp(ptclPrevPos_d, scs->getSCS<PCL_POS_PREV>());
   deviceToHostFp(vel_d, scs->getSCS<PCL_VEL>());

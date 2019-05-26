@@ -37,7 +37,8 @@ int main(int argc, char** argv) {
 
   if(argc < 2)
   {
-    std::cout << "Usage: " << argv[0] << " <mesh> [<BField_file>]\n";
+    std::cout << "Usage: " << argv[0] 
+      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_file_density]\n";
     exit(1);
   }
   if(argc < 3)
@@ -45,15 +46,24 @@ int main(int argc, char** argv) {
     std::cout << "\n\n ****** WARNING: No BField file provided ! \n\n\n";
   }
 
-  std::string bFile;
-  
-  if(argc >2){
-      bFile = argv[2];
-  }
+  std::string bFile, eFile, profFile, profFileDensity;
+  bFile = eFile = profFile = profFileDensity = "";
 
+  if(argc >2) {
+    bFile = argv[2];
+  }
+  if(argc >3) {
+    eFile = argv[3];
+  }
+  if(argc >4) {
+    profFile = argv[4];
+  }
+  if(argc > 5) {
+    profFileDensity  = argv[5];
+  }
+  
   auto lib = Omega_h::Library(&argc, &argv);
-  const auto world = lib.world();
-  auto mesh = Omega_h::gmsh::read(argv[1], world);
+  auto mesh = Omega_h::gmsh::read(argv[1], lib.self()); //lib.world()
   const auto r2v = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
 
@@ -63,9 +73,17 @@ int main(int argc, char** argv) {
 
   GitrmMesh gm(mesh);
   Kokkos::Timer timer;
+
+  OMEGA_H_CHECK(!profFile.empty());
+  std::cout << "\n adding Tags And Loadin Data ..\n";
+  gm.addTagAndLoadData(profFile, profFileDensity);
+
   std::cout << "\nInitialize Fields and Boundary data..\n";
-  
-  gm.initFieldsNBoundary(bFile);
+  OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
+  gm.initEandBFields(bFile, eFile);
+
+  std::cout << "\nInitialize Boundary faces ...\n";
+  gm.initBoundaryFaces();
 
   std::cout << "\nPreprocessing Distance to boundary ...\n";
   // Add bdry faces to elements within 1mm

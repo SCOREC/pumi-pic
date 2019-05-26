@@ -11,22 +11,44 @@ namespace p = pumipic;
 #define BIASED_SURFACE 0
 #endif
 
+// TODO
+#ifndef BIAS_POTENTIAL
+#define BIAS_POTENTIAL 0
+#endif
+
+#ifndef USEPRESHEATHEFIELD
+#define USEPRESHEATHEFIELD 0
+#endif
+
 #ifndef USECYLSYMM
 #define USECYLSYMM 0 // TODO
 #endif
 
+// protoMPEx/input/gitrInput.cfg
+static constexpr o::LO BACKGROUND_Z = 1;
+static constexpr o::Real BACKGROUND_AMU = 2.0;
+
+
 // The define is good for device too, or pass by template ?
-const o::LO  DEPTH_DIST2_BDRY = 0.001; // 1mm
-const o::LO BDRYFACE_SIZE = 100;
-const o::LO BFS_DATA_SIZE = 100;
+static constexpr o::Real  DEPTH_DIST2_BDRY = 0.001; // 1mm
+static constexpr o::LO BDRYFACE_SIZE = 100;
+static constexpr o::LO BFS_DATA_SIZE = 100;
 
 //TODO move these to suitable location
-static o::LO BGRIDX0 = 0;
-static o::LO BGRIDZ0 = 0;
-static o::LO BGRID_DX = 0;
-static o::LO BGRID_DZ = 0;
-static o::LO BGRID_NX = 0;
-static o::LO BGRID_NZ = 0;
+static o::Real BGRIDX0 = 0;
+static o::Real BGRIDZ0 = 0;
+static o::Real BGRID_DX = 0;
+static o::Real BGRID_DZ = 0;
+static o::Real BGRID_NX = 0;
+static o::Real BGRID_NZ = 0;
+static o::Real EGRIDX0 = 0;
+static o::Real EGRIDZ0 = 0;
+static o::Real EGRID_DX = 0;
+static o::Real EGRID_DZ = 0;
+static o::Real EGRID_NX = 0;
+static o::Real EGRID_NZ = 0;
+
+
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };
@@ -46,7 +68,7 @@ enum {INTERIOR=1, EXPOSED=2};
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
 
-
+struct FieldStruct;
 class GitrmMesh {
 public:
   //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
@@ -117,13 +139,42 @@ public:
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
-  void initFieldsNBoundary(const std::string &);
-  void loadFieldsNBoundary();
-  void loadBField(o::Mesh &, const std::string &);
-  void processBFieldFile(const std::string &, o::HostWrite<o::Real>&, 
-    o::Real&, o::Real&, o::Real&, o::Real&, int&, int&);
+  void initEandBFields(const std::string &, const std::string &);
+  void parseFileFieldData( std::stringstream &, std::string, 
+    std::string, bool, o::HostWrite<o::Real> &, int &, bool &, int, int);
+  void parseGridLimits(std::stringstream &, std::string, std::string, bool, 
+    bool &, bool &, double &, double &);
+  void processFieldFile(const std::string &, o::HostWrite<o::Real> &, 
+    FieldStruct &, int);
+  void load3DFieldOnVtxFromFile(const std::string &, FieldStruct &);
+  void addTagAndLoadData(const std::string &, const std::string &);
+  void initBoundaryFaces();
+
+  void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct &);
+  void load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs);
 };
 
+struct FieldStruct {
+  // Implicit call w/o ctr def. not working 
+  FieldStruct(std::string n, std::string snr, std::string snz, std::string sgr,
+    std::string sgz,std::string sr, std::string st, std::string sz):
+    name(n), nrName(snr), nzName(snz), gridR(sgr), gridZ(sgz), rName(sr), 
+    tName(st), zName(sz) {}
+  std::string name;
+  std::string nrName;// "nR"
+  std::string nzName; // "nZ"
+  std::string gridR;
+  std::string gridZ;
+  std::string rName;
+  std::string tName;
+  std::string zName;
+  o::Real rMin = 0;
+  o::Real rMax = 0;
+  o::Real zMin = 0;
+  o::Real zMax = 0;
+  int nR = 0;
+  int nZ = 0;
+};
 
  // Not used, since this function call from lambda, to modify data, 
  // forces passed argument data to be const

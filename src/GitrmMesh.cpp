@@ -20,226 +20,609 @@ GitrmMesh::GitrmMesh(o::Mesh &m):
   mesh(m) {
 }
 
+void GitrmMesh::parseFileFieldData(std::stringstream &ss, std::string sFirst, 
+   std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
+   bool &dataLine, int iComp=0, int nComp=1) {
+  
+  int verbose = 0;
 
-void GitrmMesh::loadFieldsNBoundary() {
+  if(verbose >5) {
+    std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
+  }
+  std::string s2 = "", sd = "";
 
+  if(sFirst == fieldName) {
+    ind = 0;
+    ss >> s2;
+    OMEGA_H_CHECK("=" == s2);
+    dataLine = true;
+    if(verbose >5) {
+      std::cout << " dataLine: " << dataLine << "\n";
+    }    
+  }
+
+  if(dataLine) {
+    if(verbose >5) {
+      std::cout << " dataLine:: " << dataLine << "\n";
+    }    
+    if(sFirst != fieldName) {
+      sd = sFirst;
+      data[nComp*ind+iComp] = std::stod(sd);
+      if(verbose >5) {
+        std::cout << " sd: " << sd << " nComp*ind+iComp:" << nComp*ind+iComp 
+                  << " " << std::stod(sd) << "\n";
+      }     
+      ++ind;
+    }
+
+    while(ss >> sd){
+      if(verbose >5) {
+        std::cout << " sd: " << sd << " nComp*ind+iComp:" << nComp*ind+iComp 
+                  << " " << std::stod(sd) << "\n";
+      }
+      data[nComp*ind+iComp] = std::stod(sd);
+      ++ind;
+    } 
+
+    if(verbose >5) {
+      std::cout << " \n";
+    }
+    if(semi){
+      dataLine = false;
+    }
+  }
 }
 
 
-// BField is to be stored on vertices in 3D; source is 2D
-void GitrmMesh::processBFieldFile(const std::string &bFile, 
-    o::HostWrite<o::Real> &data, o::Real &rMin, o::Real &rMax, 
-    o::Real &zMin,  o::Real &zMax, int &nR, int &nZ) {
-  std::ifstream ifs(bFile);
+void GitrmMesh::parseGridLimits(std::stringstream &ss, std::string sfirst, 
+  std::string gridName, bool semi, bool &foundMin, bool &gridLine, 
+  double &min, double &max){
+  
+  int verbose = 3;
+  std::string s2, s3, sd;
+  
+  if(sfirst == gridName) {
+    ss >> s2 >> s3;
+    if(!s3.empty()){
+      OMEGA_H_CHECK("=" == s2);
+      if(verbose >3) {
+        std::cout << " gridLimit:min " << s2 << " " << s3 << "\n";
+      }
+      min = std::stod(s3);
+      foundMin = true;
+    }
+    else {
+      foundMin = false;
+    }
+    gridLine = true;
+  }
+  
+  if(gridLine) {
+    if(!(foundMin || sfirst == gridName)) {
+      // s1 is either '=' or number, since grid name already seen.
+      if(verbose >3) {
+        std::cout << " gridLimit:min: " << sfirst << "\n";
+      }      
+      min = std::stod(sfirst);
+      foundMin = true;
+    }
+    //TODO Last, only checking line with ';'. If only ';' in last line, this breaks
+    if(semi) {
+      // If this is the only and last entry in this line
+      sd = sfirst;
+      //If ss is done, the above sd will be kept
+      while(ss >> sd){
+      }
+      if(verbose >3) {
+        std::cout << " gridLimit:max " << sd <<  "\n";
+      }
+      max = std::stod(sd);
+      gridLine = false;
+
+      if(verbose >3) {
+        std::cout << "mim,max: " << min << " "<< max << "\n";
+      }
+    }
+    if(verbose >4) {
+      std::cout << " ** sfirst " << sfirst << " " << min << " "<< max << "\n";
+    }
+  }
+}
+
+
+
+// Depends on semi colon at the end of field
+void GitrmMesh::processFieldFile(const std::string &fName,
+    o::HostWrite<o::Real> &data, FieldStruct &fs, int nComp) {
+
+  o::LO verbose = 3;
+
+  OMEGA_H_CHECK(nComp>0 && nComp<4);
+  std::ifstream ifs(fName);
   if (!ifs.is_open()) {
-    std::cout << "Error opening BField file " << bFile << '\n';
+    std::cout << "Error opening BField file " << fName << '\n';
     //exit(1);
   }
-  o::LO verbose = 0;
 
-  int n = 0;
-  bool br, bt, bz;
-  br = bt = bz = false;
-  o::LO ind = 0;
-  std::string sd = "";
-
+  int n = 0, ind0 = 0, ind1 = 0, ind2 = 0;
+  bool foundMinR, gridLineR, foundMinZ, gridLineZ, dataInit;
+  bool fr, ft, fz, gridR, gridZ, rMin, zMin, doneNr, doneNz;
+  bool dataLine0, dataLine1, dataLine2;
+  bool foundComp0, foundComp1, foundComp2, foundMin0, foundMin1;
   std::string line;
   std::string s1, s2, s3;
+
+  foundComp0 = foundComp1 = foundComp2 = foundMin0 = foundMin1 = false;
+  dataLine0 = dataLine1 = dataLine2 = false;
+  foundMinR = gridLineR = foundMinZ = gridLineZ = dataInit = false;
+  fr = ft = fz = gridR = gridZ = rMin = zMin = doneNr = doneNz = false;
+
   while(std::getline(ifs, line)) {
-    if(verbose >3)
+    if(verbose >4)
       std::cout << "Processing  line " << line << '\n';
+
+    bool semi = (line.find(';') != std::string::npos);
+
     std::replace (line.begin(), line.end(), ',' , ' ');
     std::replace (line.begin(), line.end(), ';' , ' ');
 
     std::stringstream ss(line);
+
+    //First string or number of any line is got here
     ss >> s1;
-    if(verbose >3)
-      std::cout << "str s1:" << s1 << "\n";
+    
+    if(verbose >5){
+          std::cout << "str s1:" << s1 << "\n";
+    }
    
-    if(s1.find_first_not_of(' ') == std::string::npos ){
+    // Skip blank line
+    if(s1.find_first_not_of(' ') == std::string::npos) {
       s1 = "";
       continue;
     }
 
-    if(s1 == "nR") {
+    if(s1 == fs.nrName) {
       ss >> s2 >> s3;
-      nR = std::stoi(s3);
+      fs.nR = std::stoi(s3);
+      doneNr = true;
     }
-    else if(s1 == "nZ") {
+    else if(s1 == fs.nzName) {
       ss >> s2 >> s3;
-      nZ = std::stoi(s3);
+      fs.nZ = std::stoi(s3);
+      doneNz = true;
     }
-    else if(s1 == "rMin") {
-      ss >> s2 >> s3;
-      rMin = std::stod(s3);
-    }    
-    else if(s1 == "rMax") {
-      ss >> s2 >> s3;
-      rMax = std::stod(s3);
-    } 
-    else if(s1 == "zMin") {
-      ss >> s2 >> s3;
-      zMin = std::stod(s3);
-    } 
-    else if(s1 == "zMax") {
-      ss >> s2 >> s3;
-      zMax = std::stod(s3);
-    }
-    else if(s1 == "br") {
-      // br,bt,bz(nZ, nR)
-      // If "br" is not seen before other components, it is error
-      ss >> s2;
-      data = o::HostWrite<o::Real>(3*nR*nZ);
-      ind = 0;
-      while(ss >> sd){
-        data[3*ind] = std::stod(sd);
-        ++ind;
-      }
-      br = true;
-    }
-    else if(br) {
-      if(s1 == "bt") {
-        br = false;
-        bt = true;
-      }
-      else {
-        while(ss >> sd){
-          data[3*ind] = std::stod(sd);
-          ++ind;
-        }
+    
+    if((!dataInit) && doneNr && doneNz) {
+      data = o::HostWrite<o::Real>(nComp*fs.nR*fs.nZ);
+      dataInit = true;
+      if(verbose >3) {
+        std::cout << " nR,nZ: " << fs.nR << " "<< fs.nZ << " \n";
       }
     }
 
-    if(s1 == "bt") {
-      ind = 0;
-      ss >> s2;
-      while(ss >> sd){
-        data[3*ind+1] = std::stod(sd);
-        ++ind;
-      }
-      bt = true;
+    parseGridLimits(ss, s1, fs.gridR, semi, foundMinR, gridLineR, fs.rMin, fs.rMax);
+    if(!foundMin0 && foundMinR) {
+      foundMin0 = true;
+    } 
+    parseGridLimits(ss, s1, fs.gridZ, semi, foundMinZ, gridLineZ, fs.zMin, fs.zMax);
+    if(!foundMin1 && foundMinZ) {
+      foundMin1 = true;
     }
-    else if(bt) {
-      if(s1 == "bz") {
-        bt = false;
-        bz = true;
+    if(dataInit) {
+      parseFileFieldData(ss, s1, fs.rName, semi, data, ind0, dataLine0, 0, nComp);
+    } 
+    if(!foundComp0 && dataLine0) {
+      foundComp0 = true;
+    } 
+    // 2nd component
+    if(nComp >1) {
+      if(dataInit){
+        parseFileFieldData(ss, s1, fs.zName, semi, data, ind1, dataLine1, 1, nComp);
       }
-      else { 
-        while(ss >> sd) {
-          data[3*ind+1] = std::stod(sd);
-          ++ind;
-        }
-      }
+      if(!foundComp1 && dataLine1) {
+        foundComp1 = true;
+      } 
     }
-
-    if(s1 == "bz") {
-      ind = 0;
-      ss >> s2;
-      while(ss >> sd){
-        data[3*ind+2] = std::stod(sd);
-        ++ind;
+    // 3rd component
+    if(nComp >2) {
+      if(dataInit){
+        parseFileFieldData(ss, s1, fs.tName, semi, data, ind2, dataLine2, 2, nComp);
       }
-      bz = true;
-    }
-    else if(bz) {
-      if(s1 == "Density_m3") {
-        bz = false;
-      }
-      else {
-        while(ss >> sd) {
-          data[3*ind+2] = std::stod(sd);
-          ++ind;
-        }
-      }
+      if(!foundComp2 && dataLine2) {
+        foundComp2 = true;
+      } 
     }
 
     s1 = s2 = s3 = "";
-    sd = "";
   }
 
   if(verbose >2){
-    std::cout << "\n\n " << nR << " " << nZ << " " << rMin<< " "<< rMax 
-              << " "<< zMin << " "<< zMax << "\n\n";
+    std::cout << "\n foundMin0 : " << foundMin0  << 
+      " foundMin1 : " << foundMin1 << "\n";
+  }
+  OMEGA_H_CHECK(foundMin0 && foundMin1);
+  OMEGA_H_CHECK(dataInit);
+
+  if(verbose >2){
+    std::cout << "\n " << fs.rName << ": " << foundComp0  << "\n";
+  }
+  OMEGA_H_CHECK(foundComp0);
+  if(nComp > 1){
+    if(verbose >2){
+      std::cout << " fs.zName: " << foundComp1 << "\n";
+    }
+    OMEGA_H_CHECK(foundComp0 && foundComp1);
+  }
+  if(nComp > 2){
+    if(verbose >2){
+      std::cout << " fs.tName: " << foundComp2 << "\n";
+    }
+    OMEGA_H_CHECK(foundComp0 && foundComp1 && foundComp2);
   }
 
+  if(verbose >2){
+    std::cout << "\n " << fs.nR << " " << fs.nZ << " " << fs.rMin<< " "<< fs.rMax 
+              << " "<< fs.zMin << " "<< fs.zMax << "\n\n";
+  }
+
+  if(ifs.is_open()) {
+    ifs.close();
+  }
 }
 
-void GitrmMesh::loadBField(o::Mesh &mesh, const std::string &bFile) {
-  int verbose = 4;
-  std::cout<< "Loading BField.. \n" ;
-  // Not per vertex; but for input BField:  br,bt,bz[nZ*nR]
+
+void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
+  o::LO verbose = 3;
+
+  std::cout<< "processing File to load " << fs.name << "\n" ;
+  // Not per vertex; but for input EField: [nZ*nR]
   o::HostWrite<o::Real> readInData;
-  o::Real rMin = 0; 
-  o::Real zMin = 0; 
-  o::Real rMax = 0; 
-  o::Real zMax = 0; 
-  o::LO nR = 0;
-  o::LO nZ = 0;
-  processBFieldFile(bFile, readInData, rMin, rMax, zMin, zMax, nR, nZ);
-  OMEGA_H_CHECK(nR >0 && nZ >0);
+
+  processFieldFile(file, readInData, fs, 3);
+  std::string tagName = fs.name;
+  o::Real rMin = fs.rMin;
+  o::Real rMax = fs.rMax;
+  o::Real zMin = fs.zMin;
+  o::Real zMax = fs.zMax;
+  int nR = fs.nR;
+  int nZ = fs.nZ;
+  OMEGA_H_CHECK(fs.nR >0 && fs.nZ >0);
   o::Real dr = (rMax - rMin)/nR;
   o::Real dz = (zMax - zMin)/nZ;
-
-  // bFields interpolate at vertices and Set tag
-  //auto tagB =  o::Write<o::Real>(mesh.nverts()*3, 0);
-  o::HostWrite<o::Real> tagB(3*mesh.nverts());
-  o::Vector<3> fv{0,0,0};
-  o::Vector<3> pos{0,0,0};
-  const auto coords = mesh.coords(); //Reals
-  // coords' size is 3* nverts
-  for(int iv=0; iv < mesh.nverts(); ++iv){
-    for(int j=0; j<3; ++j){
-      pos[j] = coords[3*iv+j];
-
-      if(verbose > 3 && iv<5){
-        std::cout<< " iv:" << iv << " " << pos[j]<< " \n";
-      }
-    }
-
-    if(verbose > 3 && iv<2){
-      std::cout<< " :" << rMin << ":" <<zMin<<  ":" <<dr<<  ":" <<
-        dz<<  ":" <<nR<<  ":" <<nZ << "\n";
-    }
-
-    //Cylindrical symmetry = true
-    p::interp2dVectorHost(readInData, rMin, zMin, dr, dz, nR, nZ, pos, fv, true);
-    for(int j=0; j<3; ++j){ //components
-      tagB[3*iv+j] = fv[j]; 
-
-      if(verbose > 3 && iv<10){
-        std::cout<<" tagB[" << 3*iv+j << "]=" << tagB[3*iv+j]<< " \n";
-      }
-    }
+  if(verbose >2){
+    printf(" dr%.5f , dz%.5f , rMax%.5f , rMin%.5f , zMax%.5f, zMin%.5f \n",
+        dr, dz, rMax, rMin,zMax , zMin);
   }
 
-  mesh.set_tag(o::VERT, "BField", o::Reals(tagB));
+  // Interpolate at vertices and Set tag
+  //auto tag =  o::Write<o::Real>(mesh.nverts()*3, 0);
+  o::Write<o::Real> tag_d(3*mesh.nverts());
+
+  const auto coords = mesh.coords(); //Reals
+  const auto readInData_d = o::Reals(readInData);
+
+  auto fill = OMEGA_H_LAMBDA(o::LO iv) {
+    o::Vector<3> fv{0,0,0};
+    o::Vector<3> pos{0,0,0};
+    // coords' size is 3* nverts
+    for(o::LO j=0; j<3; ++j){
+      pos[j] = coords[3*iv+j];
+      if(verbose > 3 && iv<5){
+        printf(" iv:%d %.5f \n", iv, pos[j]);
+      }
+    }
+    //Cylindrical symmetry = true
+    p::interp2dVector(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, fv, true);
+    for(o::LO j=0; j<3; ++j){ //components
+      tag_d[3*iv+j] = fv[j]; 
+
+      if(verbose > 3 && iv<10){
+        printf(" tag_d[%d]= %.5f\n", 3*iv+j, tag_d[3*iv+j]);
+      }
+    }
+
+  };
+  o::parallel_for(mesh.nverts(), fill, "Fill E/B Tag");
+
+  exe_space::fence();
+  o::HostWrite<o::Real> tag(tag_d);
+  mesh.set_tag(o::VERT, tagName, o::Reals(tag));
 }
 
-
-// Tags are not removed anywhere
-void GitrmMesh::initFieldsNBoundary(const std::string &bFile) {
-  auto nv = mesh.nverts();
+// TODO Remove Tags after use
+// TODO pass parameters in a compact form, libconfig ?
+void GitrmMesh::initEandBFields(const std::string &bFile, const std::string &eFile) {
   mesh.add_tag<o::Real>(o::VERT, "BField", 3);
-  auto nf = mesh.nfaces();
-  mesh.add_tag<o::Real>(o::FACE, "angleBdryBfield", 1);
-  mesh.add_tag<o::Real>(o::FACE, "potential", 1);
-  mesh.add_tag<o::Real>(o::FACE, "DebyeLength", 1);
-  mesh.add_tag<o::Real>(o::FACE, "LarmorRadius", 1);
-  mesh.add_tag<o::Real>(o::FACE, "ChildLangmuirDist", 1);
+  mesh.add_tag<o::Real>(o::VERT, "EField", 3);
 
-  // Load fields
-  loadBField(mesh, bFile);
+  // Load BField
+  FieldStruct fb{"BField", "nR", "nZ", "r", "z", "br", "bt", "bz"};
+  load3DFieldOnVtxFromFile(bFile, fb); 
+
+  //TODO this is not a good way
+  BGRIDX0 = fb.rMin;
+  BGRIDZ0 = fb.zMin;
+  BGRID_NX = fb.nR;
+  BGRID_NZ = fb.nZ;
+  BGRID_DX = (fb.rMax - fb.rMin)/fb.nR;
+  BGRID_DZ = (fb.zMax - fb.zMin)/fb.nZ;
+
+  // Load EField
+  FieldStruct fel{"EField", "nR", "nZ", "gridR", "gridZ", "er", "et", "ez"};
+  load3DFieldOnVtxFromFile(eFile, fel);
+ //TODO this is not a good way
+  EGRIDX0 = fel.rMin;
+  EGRIDZ0 = fel.zMin;
+  EGRID_NX = fel.nR;
+  EGRID_NZ = fel.nZ;
+  EGRID_DX = (fel.rMax - fel.rMin)/fel.nR;
+  EGRID_DZ = (fel.zMax - fel.zMin)/fel.nZ; 
+}
 
 
-  //TODO temp
-  auto temp =  o::Write<o::Real>(mesh.nfaces(), 0);
-  mesh.set_tag(o::FACE, "angleBdryBfield", o::Reals(temp));
-  mesh.set_tag(o::FACE, "potential", o::Reals(temp));
-  mesh.set_tag(o::FACE, "DebyeLength",  o::Reals(temp));
-  mesh.set_tag(o::FACE, "LarmorRadius", o::Reals(temp));
-  mesh.set_tag(o::FACE, "ChildLangmuirDist",  o::Reals(temp));
+void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file, 
+  FieldStruct &fs) {
+  const auto coords = mesh.coords();
+  const auto face_verts = mesh.ask_verts_of(2);
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+
+  o::LO verbose = 5;
+  if(verbose >0)
+    std::cout << "Loading "<< fs.name << "\n";
+
+  // Huge numbers, not suitable for Real if Real is redefined not to be double
+  o::HostWrite<double> readInData;
+
+  processFieldFile(file, readInData, fs, 1); // 1= nComp
+  std::string tagName = fs.name;
+  o::Real rMin = fs.rMin;
+  o::Real rMax = fs.rMax;
+  o::Real zMin = fs.zMin;
+  o::Real zMax = fs.zMax;
+  int nR = fs.nR;
+  int nZ = fs.nZ;
+  OMEGA_H_CHECK(fs.nR >0 && fs.nZ >0);
+  o::Real dr = (rMax - rMin)/nR;
+  o::Real dz = (zMax - zMin)/nZ;
+  if(verbose >3){
+    printf(" dr%.5f , dz%.5f , rMax%.5f , rMin%.5f , zMax%.5f, zMin%.5f \n",
+        dr, dz, rMax, rMin,zMax , zMin);
+  }
+  //Interpolate at vertices and Set tag
+  //auto tag =  o::Write<o::Real>(mesh.nverts()*3, 0);
+  o::Write<o::Real> tag_d(mesh.nfaces());
+
+  const auto readInData_d = o::Reals(readInData);
+
+  auto fill = OMEGA_H_LAMBDA(o::LO fid) {
+
+    //TODO check if serial numbers are faceids
+    if(!side_is_exposed[fid]) {
+      tag_d[fid] = 0;
+      return;
+    }
+
+    o::Vector<3> pos{{0}};
+    // TODO storing fields at centroid may not be best for long tets.
+    p::find_face_centroid(fid, coords, face_verts, pos);
+
+    //Cylindrical symmetry = true ? TODO
+    o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, true);
+    tag_d[fid] = val; 
+
+    if(verbose > 4 && fid<10){
+      printf(" tag_d[%d]= %.5f\n", fid, val);
+    }
+
+  };
+  o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
+
+  exe_space::fence();
+  o::HostWrite<o::Real> tag(tag_d);
+  mesh.set_tag(o::FACE, tagName, o::Reals(tag));
+ 
+}
+
+void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
+  o::LO verbose = 3;
+
+  std::cout<< "processing File to load " << fs.name << "\n" ;
+  // Not per vertex; but for input EField: [nZ*nR]
+  o::HostWrite<o::Real> readInData;
+
+  processFieldFile(file, readInData, fs, 1);
+  std::string tagName = fs.name;
+  o::Real rMin = fs.rMin;
+  o::Real rMax = fs.rMax;
+  o::Real zMin = fs.zMin;
+  o::Real zMax = fs.zMax;
+  int nR = fs.nR;
+  int nZ = fs.nZ;
+  OMEGA_H_CHECK(fs.nR >0 && fs.nZ >0);
+  o::Real dr = (rMax - rMin)/nR;
+  o::Real dz = (zMax - zMin)/nZ;
+  if(verbose >2){
+    printf(" dr%.5f , dz%.5f , rMax%.5f , rMin%.5f , zMax%.5f, zMin%.5f \n",
+        dr, dz, rMax, rMin,zMax , zMin);
+  }
+  // Interpolate at vertices and Set tag
+  o::Write<o::Real> tag_d(mesh.nverts());
+
+  const auto coords = mesh.coords(); //Reals
+  const auto readInData_d = o::Reals(readInData);
+
+  auto fill = OMEGA_H_LAMBDA(o::LO iv) {
+    o::Vector<3> pos{0,0,0};
+    // coords' size is 3* nverts
+    for(o::LO j=0; j<3; ++j){
+      pos[j] = coords[3*iv+j];
+      if(verbose > 3 && iv<5){
+        printf(" iv:%d %.5f \n", iv, pos[j]);
+      }
+    }
+
+    //Cylindrical symmetry = true ? TODO
+    o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, true);
+    tag_d[iv] = val; 
+
+    if(verbose > 4 && iv<10){
+      printf(" tag_d[%d]= %.5f\n", iv, val);
+    }
+  };
+  o::parallel_for(mesh.nverts(), fill, "Fill Tag");
+
+  exe_space::fence();
+  o::HostWrite<o::Real> tag(tag_d);
+  mesh.set_tag(o::VERT, tagName, o::Reals(tag));
+}
+
+
+void GitrmMesh::addTagAndLoadData(const std::string &profileFile, 
+  const std::string &profileFileDensity) {
+
+  mesh.add_tag<o::Real>(o::FACE, "ne", 1); 
+  mesh.add_tag<o::Real>(o::FACE, "density", 1); //=ni 
+  mesh.add_tag<o::Real>(o::FACE, "Tion", 1);
+  mesh.add_tag<o::Real>(o::FACE, "Tel", 1);
+
+  mesh.add_tag<o::Real>(o::VERT, "densityVtx", 1);
+  mesh.add_tag<o::Real>(o::VERT, "neVtx", 1);
+  mesh.add_tag<o::Real>(o::VERT, "TionVtx", 1);
+  mesh.add_tag<o::Real>(o::VERT, "TelVtx", 1);
+
+  FieldStruct fd{"density", "n_x", "n_z", "gridx", "gridz", "ni", "", ""};
+  loadScalarFieldOnBdryFaceFromFile(profileFileDensity, fd); 
+
+  FieldStruct fdv{"densityVtx", "n_x", "n_z", "gridx", "gridz", "ni", "", ""};
+  load1DFieldOnVtxFromFile(profileFileDensity, fdv);
+
+  FieldStruct fne{"ne", "nR", "nZ", "gridR", "gridZ", "ne", "", ""};
+  loadScalarFieldOnBdryFaceFromFile(profileFile, fne); 
+
+  FieldStruct fnev{"neVtx", "nR", "nZ", "gridR", "gridZ", "ne", "", ""};
+  load1DFieldOnVtxFromFile(profileFile, fnev);
+
+
+  // Load ion Temperature
+  FieldStruct fti{"Tion", "nR", "nZ", "gridR", "gridZ", "ti", "", ""};
+  loadScalarFieldOnBdryFaceFromFile(profileFile, fti); 
+
+  FieldStruct ftiv{"TionVtx", "nR", "nZ", "gridR", "gridZ", "ti", "", ""};
+  load1DFieldOnVtxFromFile(profileFile, ftiv);
+
+  // Load electron Temperature
+  FieldStruct fte{"Tel", "nR", "nZ", "gridR", "gridZ", "te", "", ""};
+  loadScalarFieldOnBdryFaceFromFile(profileFile, fte); 
+
+  FieldStruct ftev{"TelVtx", "nR", "nZ", "gridR", "gridZ", "te", "", ""};
+  load1DFieldOnVtxFromFile(profileFile, ftev);
 
 }
+
+
+void GitrmMesh::initBoundaryFaces() {
+  const auto coords = mesh.coords();
+  const auto face_verts = mesh.ask_verts_of(2);
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+
+  const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
+  const auto density = o::Reals(mesh.get_array<o::Real>(o::FACE, "density")); //=ni
+  const auto ne = o::Reals(mesh.get_array<o::Real>(o::FACE, "ne"));
+  const auto te = o::Reals(mesh.get_array<o::Real>(o::FACE, "Tel"));
+  const auto ti = o::Reals(mesh.get_array<o::Real>(o::FACE, "Tion"));
+
+  o::Write<o::Real> angle_d(mesh.nfaces());
+  o::Write<o::Real> debyeLength_d(mesh.nfaces());
+  o::Write<o::Real> larmorRadius_d(mesh.nfaces());
+  o::Write<o::Real> childLangmuirDist_d(mesh.nfaces());
+  o::Write<o::Real> flux_d(mesh.nfaces());
+  o::Write<o::Real> impacts_d(mesh.nfaces());
+  o::Write<o::Real> potential_d(mesh.nfaces());
+
+
+  const o::LO background_Z = BACKGROUND_Z;
+  const o::Real background_amu = BACKGROUND_AMU;
+  auto fill = OMEGA_H_LAMBDA(o::LO fid) {
+
+    //TODO check if serial numbers are faceids
+    if(!side_is_exposed[fid]) {
+      return;
+    }
+    o::Vector<3> B{{0}};
+    o::Vector<3> pos{{0}};
+    p::find_face_centroid(fid, coords, face_verts, pos);
+    p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX,
+                     BGRID_NZ, pos, B, true); 
+    o::Vector<3> surfNorm{{0}};
+    p::find_face_normal(fid, coords, face_verts, surfNorm);
+    
+    o::Real magB = o::norm(B);
+    o::Real magSurfNorm = o::norm(surfNorm);
+    o::Real angleBS = p::osh_dot(B, surfNorm);
+    o::Real theta = acos(angleBS/(magB*magSurfNorm));
+    if (theta > o::PI * 0.5) {
+      theta = abs(theta - (o::PI));
+    }
+
+    angle_d[fid] = theta*180.0/o::PI;
+
+    o::Real tion = ti[fid];
+    o::Real tel = te[fid];
+    o::Real nel = ne[fid];
+    o::Real dens = density[fid];  //3.0E+19 ?
+    o::Real pot = BIAS_POTENTIAL;
+
+    o::Real dlen = 0;
+    if(p::almost_equal(nel, 0.0)){
+      dlen = 1e12f;
+    }
+    else {
+      dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
+    }
+    debyeLength_d[fid] = dlen;
+
+    larmorRadius_d[fid] = 1.44e-4*sqrt(background_amu*tion/2)/(background_Z*magB);
+    flux_d[fid] = 0.25* dens *sqrt(8.0*tion*1.60217662e-19/(o::PI*background_amu));
+    impacts_d[fid] = 0.0;
+
+    if(BIASED_SURFACE) {
+      o::Real cld = 0;
+      if(tel > 0.0) {
+        cld = dlen * pow(abs(pot)/tel, 0.75);
+      }
+      else { 
+        cld = 1e12;
+      }
+      childLangmuirDist_d[fid] = cld;
+    }
+    else {
+      pot = 3.0*tel; 
+    }
+    potential_d[fid] = pot;
+
+  };
+
+  o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
+
+  exe_space::fence();
+  o::HostWrite<o::Real> angle(angle_d);
+  o::HostWrite<o::Real> debyeLength(debyeLength_d);
+  o::HostWrite<o::Real> larmorRadius(larmorRadius_d);
+  o::HostWrite<o::Real> childLangmuirDist(childLangmuirDist_d);
+  o::HostWrite<o::Real> flux(flux_d);
+  o::HostWrite<o::Real> impacts(impacts_d);
+  o::HostWrite<o::Real> potential(potential_d);
+
+  mesh.add_tag<o::Real>(o::FACE, "angleBdryBfield", 1, o::Reals(angle));
+  mesh.add_tag<o::Real>(o::FACE, "DebyeLength", 1, o::Reals(debyeLength));
+  mesh.add_tag<o::Real>(o::FACE, "LarmorRadius", 1, o::Reals(larmorRadius));
+  mesh.add_tag<o::Real>(o::FACE, "ChildLangmuirDist", 1, o::Reals(childLangmuirDist));
+  mesh.add_tag<o::Real>(o::FACE, "flux", 1, o::Reals(flux));
+  mesh.add_tag<o::Real>(o::FACE, "impacts", 1, o::Reals(impacts));
+  mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential));
+
+}
+
 
 // These are only for temporary writing during pre-processing
 void GitrmMesh::initNearBdryDistData() {
@@ -395,7 +778,7 @@ void GitrmMesh::copyBdryFacesToSelf() {
     for(o::LO fi = beg_face; fi < end_face; ++fi) {//not 0..3
       const auto fid = down_r2f[fi];
       if(verbose>2) {
-              printf( "exposed: e_%d, i_%d, fid_%d => %d\n", elem, fi, fid, side_is_exposed[fid]);
+        printf( "exposed: e_%d, i_%d, fid_%d => %d\n", elem, fi, fid, side_is_exposed[fid]);
       }
       if(side_is_exposed[fid]) {
         bdryFids[nbdry] = fid;

@@ -39,27 +39,8 @@ namespace pumipic {
     template <class T>
     void reduceCommArray(int dim, Op op, Omega_h::Write<T> array);
 
-    
-  private:
-    Omega_h::Mesh* picpart;
-
-    //PICpart information
-    int num_cores[4]; //number of core parts that make up the picpart (The element dimension is smaller than others because of copied entities on the "part" boundary) (doesnt include self)
-    Omega_h::HostWrite<Omega_h::LO> buffered_parts[4]; // doesnt include self
-    Omega_h::Read<Omega_h::GO> global_ids_per_dim[4]; //Global id of each element
-    Omega_h::Read<Omega_h::LO> is_ent_safe; //Safety tag on each element
-
-    //Per Dimension communication information
-    Omega_h::Read<Omega_h::LO> offset_ents_per_rank_per_dim[4]; //An exclusive sum of ents per rank in the picpart
-    Omega_h::Read<Omega_h::LO> ent_to_comm_arr_index_per_dim[4]; //mapping from ent to comm arr index
-    Omega_h::Read<Omega_h::LO> ent_owner_per_dim[4]; //owning rank of each entity
-    Omega_h::Read<Omega_h::LO> ent_local_rank_id_per_dim[4]; //mapping from ent to local index of the core it belongs to.
-
-    //Restrict default constructors to crash when called.
-    Mesh() {throw std::runtime_error("Cannot build empty PIC part mesh.");}
-    Mesh(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
-    Mesh& operator=(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
-
+    //Users should not run the following functions. 
+    //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
     void constructPICPart(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner,
                           Omega_h::Write<Omega_h::GO> elem_gid,
@@ -71,5 +52,27 @@ namespace pumipic {
     void setupComm(int dim, Omega_h::LOs global_ents_per_rank,
                    Omega_h::LOs picpart_ents_per_rank,
                    Omega_h::Write<Omega_h::LO> ent_owners);
+
+  private:
+    Omega_h::CommPtr commptr;
+    Omega_h::Mesh* picpart;
+
+    //PICpart information
+    int num_cores[4]; //number of core parts that make up the picpart (The element dimension is smaller than others because of copied entities on the "part" boundary) (doesnt include self)
+    Omega_h::HostWrite<Omega_h::LO> buffered_parts[4]; // doesnt include self
+    Omega_h::GOs global_ids_per_dim[4]; //Global id of each element
+    Omega_h::LOs is_ent_safe; //Safety tag on each element
+
+    //Per Dimension communication information
+    Omega_h::LO num_ents_per_dim[4];
+    Omega_h::LOs offset_ents_per_rank_per_dim[4]; //An exclusive sum of ents per rank in the picpart
+    Omega_h::LOs ent_to_comm_arr_index_per_dim[4]; //mapping from ent to comm arr index
+    Omega_h::LOs ent_owner_per_dim[4]; //owning rank of each entity
+    Omega_h::LOs ent_local_rank_id_per_dim[4]; //mapping from ent to local index of the core it belongs to.
+
+    //Restrict default constructors to crash when called.
+    Mesh() {throw std::runtime_error("Cannot build empty PIC part mesh.");}
+    Mesh(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
+    Mesh& operator=(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
   };
 }

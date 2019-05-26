@@ -14,7 +14,7 @@
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc, argv);
-
+  {
   Omega_h::Library lib = Omega_h::Library(&argc, &argv);
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
   char vtk_name[80];
   sprintf(vtk_name, "picpart%d",rank);
   Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
-
+  }
+  Kokkos::finalize();
   return 0;
 }

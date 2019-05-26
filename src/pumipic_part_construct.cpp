@@ -257,21 +257,17 @@ namespace {
   //TODO Replace with omega_h reduce/scan
   Omega_h::LO sumPositives(Omega_h::LO size, Omega_h::Write<Omega_h::LO> arr) {
     Omega_h::LO sum = 0;
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
     Kokkos::parallel_reduce(size, KOKKOS_LAMBDA(const int i, Omega_h::LO& lsum) {
         lsum += arr[i] > 0 ;
       }, sum);
-#endif
     return sum;
   }
   void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid, 
                           Omega_h::Write<Omega_h::LO> numbering) {
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
     Kokkos::parallel_scan(size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
       num += is_valid[i];
       numbering[i] += num * final * is_valid[i];
     });
-#endif
   }
 
   void gatherCoords(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> vert_ids,

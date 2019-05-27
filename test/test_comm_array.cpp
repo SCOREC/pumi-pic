@@ -1,22 +1,13 @@
 #include <fstream>
-#include <iostream>
-#include <cmath>
-#include <utility>
 
 #include <Omega_h_for.hpp>
-#include <Omega_h_file.hpp>  //gmsh
-#include <Omega_h_array.hpp>
-#include <Omega_h_mesh.hpp>
-
+#include <Omega_h_file.hpp>
 #include <pumipic_mesh.hpp>
 #include <Kokkos_Core.hpp>
 
 int main(int argc, char** argv) {
-  Kokkos::initialize(argc, argv);
-  
-  {
-  Omega_h::Library lib = Omega_h::Library(&argc, &argv);
-  
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
   int rank = lib.world()->rank();;
   if (argc != 3) {
     if (!rank)
@@ -76,7 +67,5 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
     return EXIT_FAILURE;
   }
-  }
-  Kokkos::finalize();
   return 0;
 }

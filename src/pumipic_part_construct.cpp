@@ -1,17 +1,9 @@
 #include "pumipic_mesh.hpp"
 #include <Omega_h_for.hpp>
-#include <Omega_h_file.hpp>  //gmsh
-#include <Omega_h_tag.hpp>
-#include <Omega_h_adj.hpp>
-#include <Omega_h_array.hpp>
-#include <Omega_h_array_ops.hpp>
 #include <Omega_h_element.hpp>
 #include <Omega_h_class.hpp>
-#include <Omega_h_mesh.hpp>
-#include <Omega_h_reduce.hpp>
 #include <Omega_h_build.hpp>
 #include <Omega_h_int_scan.hpp>
-#include <Kokkos_Core.hpp>
 
 namespace {
   Omega_h::LOs calculateOwnerOffset(Omega_h::Write<Omega_h::LO> owner, int comm_size);

@@ -4,12 +4,14 @@ set(HEADERS
   pumipic_utils.hpp
   pumipic_constants.hpp
   pumipic_mesh.hpp
+  pumipic_library.hpp
 )
 
 set(SOURCES
   pumipic_part_construct.cpp
   pumipic_comm.cpp
   pumipic_mesh.cpp
+  pumipic_library.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

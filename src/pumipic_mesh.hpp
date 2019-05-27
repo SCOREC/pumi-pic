@@ -1,10 +1,15 @@
 #pragma once
 #include <Omega_h_mesh.hpp>
-#include <Omega_h_array.hpp>
-#include <stdexcept>
+#include "pumipic_library.hpp"
+
 namespace pumipic {
   class Mesh {
   public:
+    //Delete default compilers
+    Mesh() = delete; 
+    Mesh(const Mesh&) = delete;
+      Mesh& operator=(const Mesh&) = delete;
+
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO> partition_vector);
     //Constructs PIC parts with a core and buffer all parts within buffer_layers
@@ -70,9 +75,5 @@ namespace pumipic {
     Omega_h::LOs ent_owner_per_dim[4]; //owning rank of each entity
     Omega_h::LOs ent_local_rank_id_per_dim[4]; //mapping from ent to local index of the core it belongs to.
 
-    //Restrict default constructors to crash when called.
-    Mesh() {throw std::runtime_error("Cannot build empty PIC part mesh.");}
-    Mesh(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
-    Mesh& operator=(const Mesh&) {throw std::runtime_error("Cannot copy PIC part mesh.");}
   };
 }

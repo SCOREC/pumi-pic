@@ -1,11 +1,5 @@
 #include "pumipic_mesh.hpp"
 #include <Omega_h_for.hpp>
-#include <Omega_h_tag.hpp>
-#include <Omega_h_adj.hpp>
-#include <Omega_h_array.hpp>
-#include <Omega_h_mesh.hpp>
-#include <Omega_h_build.hpp>
-#include <Omega_h_reduce.hpp>
 namespace pumipic {
   void Mesh::setupComm(int dim, Omega_h::LOs global_ents_per_rank,
                     Omega_h::LOs picpart_ents_per_rank,

@@ -24,15 +24,127 @@
 
 #include "pumipic_constants.hpp"
 
-namespace o=Omega_h;
-
+namespace o = Omega_h;
 
 namespace pumipic{
 
-// TODO use this to replace many arguments to the interpolate2dField(..)
-struct FieldStruct {
 
-};
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
+    Omega_h::Real tol=EPSILON)
+{
+  return std::abs(a-b) <= tol;
+}
+
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
+    Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<n; ++i)
+  {
+    if(!almost_equal(a[i],b[i]))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<a.size(); ++i)
+  {
+    if(a[i] < -tol) // TODO set default the right tolerance
+     return false;
+  }
+  return true;
+}
+
+template <class T> OMEGA_H_DEVICE Omega_h::LO 
+min_index(const T a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+{
+  Omega_h::LO ind=0;
+  Omega_h::Real min = a[0];
+  for(Omega_h::LO i=0; i<n-1; ++i)
+  {
+    if(min > a[i+1])
+    {
+      min = a[i+1];
+      ind = i+1;
+    }
+  }
+  return ind;
+}
+
+OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
+   const Omega_h::Vector<3> &b)
+{
+  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
+}
+
+OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
+{
+  return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+}
+
+
+OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
+ const Omega_h::LO n, Omega_h::Real tol=EPSILON)
+{
+  for(Omega_h::LO i=0; i<n; ++i)
+  {
+    if(std::abs(a[i]-b[i]) > tol)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
+     const Omega_h::Vector<DIM> &vb)
+{
+  for(Omega_h::LO i=0; i<DIM; ++i)
+  {
+    if((va.data()[i] < 0 && vb.data()[i] > 0) ||
+       (va.data()[i] > 0 && vb.data()[i] < 0))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
+{
+  printf("M0 %.4f, %.4f, %.4f\n", M[0][0], M[0][1], M[0][2]);
+  printf("M1 %.4f, %.4f, %.4f\n", M[1][0], M[1][1], M[1][2]);
+  printf("M2 %.4f, %.4f, %.4f\n", M[2][0], M[2][1], M[2][2]);
+  printf("M3 %.4f, %.4f, %.4f\n", M[3][0], M[3][1], M[3][2]);
+}
+
+
+inline void print_array(const double* a, int n=3, std::string name=" ")
+{
+  if(name!=" ")
+    std::cout << name << ": ";
+  for(int i=0; i<n; ++i)
+    std::cout << a[i] << ", ";
+  std::cout <<"\n";
+}
+
+inline void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
+{
+  std::string str = line_break ? ")\n" : "); ";
+  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
+}
+
+inline void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
+     Omega_h::Write<Omega_h::Real> &bcc)
+{
+    print_matrix(M);  //include file problem ?
+    print_osh_vector(dest, "point");
+    print_array(bcc.data(), 4, "BCoords");
+}
+
 
 /** @brief To interpolate field ONE component at atime from 3D data
  *  @warning This function is only for regular structured grid of data
@@ -110,15 +222,7 @@ OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::Real gr
   if(verbose > 3) {
     std::cout << " dim1(x):" << dim1 << " pos1:" << pos[1] << " pos2 " << pos[2] 
     << " i: " << i << " j:" << j << " dx: " <<  dx << " gridx0:" << gridx0 
-    << " nx " << nx << " nz:" << nz 
-    << " gridXi:" << gridXi << " gridXip1:" << gridXip1 <<" gridZj:" << gridZj 
-    <<" gridZjp1: " << gridZjp1  
-
-    << ": gridXip1-dim1 " << gridXip1-dim1 << " dim1 - gridXi " 
-    << dim1 - gridXi <<  " (i+j*nx)*3+comp " << (i+j*nx)*nComp+comp 
-    << " data[(i+j*nx)*3+comp] " << data[(i+j*nx)*nComp+comp]
-    << " data[(i+1+j*nx)*3+comp] " << data[(i+1+j*nx)*nComp+comp]
-    << " " << fx_z1 << " " << fx_z2 << " fxz " << fxz << "\n";
+    << " nx " << nx << " nz:" << nz << " fxz " << fxz << "\n";
   }
   return fxz;
 }
@@ -142,6 +246,7 @@ OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0,
   }
 }
 
+
 OMEGA_H_INLINE void find_face_centroid(const o::LO fid, const o::Reals &coords, 
    const o::LOs &face_verts, o::Vector<3> &pos){
 
@@ -161,7 +266,7 @@ OMEGA_H_INLINE void find_face_normal(const o::LO fid, const o::Reals &coords,
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
-  //TODO check if y and z are in required order
+  //TODO check if face is flipped
 
   o::Vector<3> a = abc[0];
   o::Vector<3> b = abc[1];
@@ -170,131 +275,13 @@ OMEGA_H_INLINE void find_face_normal(const o::LO fid, const o::Reals &coords,
   snorm = o::cross(b - a, c - a);
 }
 
-
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=EPSILON)
-{
-  return std::abs(a-b) <= tol;
-}
-
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
-    Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(!almost_equal(a[i],b[i]))
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
-OMEGA_H_INLINE bool all_positive(const Omega_h::Real *a, Omega_h::LO n=1, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(a[i] < -tol) // TODO set default the right tolerance
-     return false;
-  }
-  return true;
-}
-
-OMEGA_H_INLINE Omega_h::LO min_index(Omega_h::Real *a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  Omega_h::LO ind=0;
-  Omega_h::Real min = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(min > a[i+1])
-    {
-      min = a[i+1];
-      ind = i+1;
-    }
-  }
-  return ind;
-}
-
-
-OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b)
-{
-  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
-}
-
+// o::cross ??
 OMEGA_H_INLINE void osh_cross(const Omega_h::Vector<3> &a,
    const Omega_h::Vector<3> &b, Omega_h::Vector<3> &c)
 {
   c[0] = a[1]*b[2] - a[2]*b[1];
   c[1] = - a[0]*b[2] + a[2]*b[0];
   c[2] = a[0]*b[1] - a[1]*b[0];
-}
-
-
-OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
-{
-  return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-}
-
-
-OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
- const Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(std::abs(a[i]-b[i]) > tol)
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
-OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
-     const Omega_h::Vector<DIM> &vb)
-{
-  for(Omega_h::LO i=0; i<DIM; ++i)
-  {
-    if((va.data()[i] < 0 && vb.data()[i] > 0) ||
-       (va.data()[i] > 0 && vb.data()[i] < 0))
-    {
-      return false;
-    }
-  }
-  return true;
-}
-
-
-OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
-{
-  std::cout << "M0  " << M[0].data()[0] << ", " << M[0].data()[1] << ", " << M[0].data()[2] <<"\n";
-  std::cout << "M1  " << M[1].data()[0] << ", " << M[1].data()[1] << ", " << M[1].data()[2] <<"\n";
-  std::cout << "M2  " << M[2].data()[0] << ", " << M[2].data()[1] << ", " << M[2].data()[2] <<"\n";
-  std::cout << "M3  " << M[3].data()[0] << ", " << M[3].data()[1] << ", " << M[3].data()[2] <<"\n";
-}
-
-
-OMEGA_H_INLINE void print_array(const double* a, int n=3, std::string name=" ")
-{
-  if(name!=" ")
-    std::cout << name << ": ";
-  for(int i=0; i<n; ++i)
-    std::cout << a[i] << ", ";
-  std::cout <<"\n";
-}
-
-OMEGA_H_INLINE void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
-{
-  std::string str = line_break ? ")\n" : "); ";
-  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
-}
-
-OMEGA_H_INLINE void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
-     Omega_h::Write<Omega_h::Real> &bcc)
-{
-    print_matrix(M);  //include file problem ?
-    print_osh_vector(dest, "point");
-    print_array(bcc.data(), 4, "BCoords");
 }
 
 } //namespace

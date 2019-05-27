@@ -48,7 +48,7 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask) { 
-    o::LO verbose = (elem%1000==0)?3:0;
+    o::LO verbose = 3;//(elem%1000==0)?3:0;
 
     auto faceId = faceId_d[pid];
     if(faceId < 0) {
@@ -96,14 +96,14 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
     efield_d(pid, 2) = exd[2];
 
     if(verbose >2)
-      printf("efield %.5f %.5f %.5f \n", efield_d(pid, 0), efield_d(pid, 1), efield_d(pid, 2));
+      printf("efield %.5f %.5f %.5f \n", efield_d(pid, 0), efield_d(pid, 1), 
+        efield_d(pid, 2));
 
   };
   scs->parallel_for(run);
   exe_space::fence();
   deviceToHostFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
 }
-
 
 
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
@@ -123,7 +123,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   hostToDeviceFp(ptclPos_d, scs->getSCS<PCL_POS>());
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    o::LO verbose = (elem%1000==0)?3:0;
+    o::LO verbose = 3;//(elem%1000==0)?3:0;
 
     //TODO check
     o::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos

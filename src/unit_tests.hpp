@@ -8,9 +8,13 @@
 #include <typeinfo>
 #include <sstream>
 
+#include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
+#include "Omega_h_adj.hpp"
+//#include "Omega_h_array.hpp"
 #include "Omega_h_array_ops.hpp"
+#include "Omega_h_element.hpp"
 #include "Omega_h_scalar.hpp" //divide
 #include "Omega_h_mark.hpp"
 #include "Omega_h_fail.hpp" //assert
@@ -28,7 +32,7 @@ namespace g = pumipic;
 bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
     const Omega_h::Vector<3> &p, const double *v, int pos=-1, bool intent=0)
 {
-  Omega_h::Write<Omega_h::Real> bcc(4, -1.0);
+  Omega_h::Vector<4> bcc;
   g::find_barycentric_tet(M, p, bcc);
   if(pos == -1)
   {
@@ -39,7 +43,6 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
     g::print_osh_vector(M[3], "", false);
     g::print_osh_vector(p, " P");
     g::print_array(bcc.data(), 4, "BCC");
-  
 #endif // DEBUG
 
     //assumes size of v is 4
@@ -173,7 +176,7 @@ bool test_barycentric_tri()
 {
   const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{2.0, 0.0, 0.0}, p3{1.0,1.0,0.0};
   const Omega_h::Matrix<3, 3> M{p1, p2, p3};
-  Omega_h::Write<Omega_h::Real> bc{-1, -1, -1};
+  Omega_h::Vector<3> bc{-1, -1, -1};
 
   const Omega_h::Vector<3> bcc1{1.0, 0.0, 0.0};
   const Omega_h::Vector<3> bcc2{0.0, 1.0, 0.0};
@@ -267,39 +270,45 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
     const auto coords = m.coords();
     std::cout << "\n#Coords: size=" << coords.size() << " (3 x verts)\n\t";
 
-    for(int i=0; i<coords.size() && i<20 ; ++i)
-      std::cout << coords[i] << ", ";
-    std::cout << "\n";
+    
+    auto printCoords = OMEGA_H_LAMBDA(o::LO i) {
+      if( i<20 )
+        printf("coords[%2d] %.4f\n", i, coords[i]);
+    };
+    o::parallel_for(coords.size(), printCoords, "printCoords");
 
     const auto mesh2verts = m.ask_elem_verts();
     std::cout << "#ask_elem_verts: " << mesh2verts.size() << "\n"; //LOs
-    for(int ielem=0; ielem<m.nelems() && ielem<2; ++ielem)
-    {
-      auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
-      const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
-      g::print_matrix(M);
-      std::cout << "Vertex IDS :\n";
-      for(int i=0; i<4; ++i)
-      {
-         std::cout << ttv2v[i] << ", ";
+    auto printElems = OMEGA_H_LAMBDA(o::LO ielem) {
+      if(ielem<2) {
+        auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
+        const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
+        g::print_matrix(M);
+        printf("Vertex IDS :");
+        for(int i=0; i<4; ++i)
+        {
+           printf("%4d, ", ttv2v[i]);
+        }
+        printf(";\n");
       }
-      std::cout << "; \n";
-    }
+    };
     std::cout << "\n\n";
+    o::parallel_for(m.nelems(), printElems, "printElems");
   }
 
   const auto downs = m.ask_down(3, 2);
   std::cout << "#down(3,2): #ab2b " << downs.ab2b.size() << "\n";
-  for(int i=0; i<downs.ab2b.size()-1 && i<10; ++i)
-  {
-     std::cout << downs.ab2b[i] << ", ";
-   }
-  std::cout << "; \n";
-
+  o::parallel_for(downs.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i < 10 )
+      printf("%5d %5d\n", i, downs.ab2b[i]);
+  });
 
   std::cout << "ask_down(2,1): " <<  m.ask_down(2,1).ab2b.size();
-  for(int i=0; i<20 && i<m.ask_down(2,1).ab2b.size(); ++i)
-       std::cout << " " << m.ask_down(2,1).ab2b[i];
+  const auto downs21 = m.ask_down(2, 1);
+  o::parallel_for(downs21.ab2b.size(), OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, downs21.ab2b[i]);
+  });
   std::cout << "\n";
 
 
@@ -308,57 +317,58 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
             << " ; #ab2b " << ups.ab2b.size() << "\n";
 
   std::cout <<  "  ups:a2ab\n\t";
-  for(int i=0; i<ups.a2ab.size()-1 && i<20; ++i)
-  {
-     std::cout << ups.a2ab[i] << ", ";
-  }
+  o::parallel_for(ups.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, ups.a2ab[i]);
+  });
   std::cout << ";\n ups:ab2b\n\t";
-  for(int i=0; i<ups.ab2b.size()-1 && i<20; ++i)
-  {
-     std::cout << ups.ab2b[i] << ", ";
-  }
-   std::cout << "; \n";
+  o::parallel_for(ups.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, ups.ab2b[i]);
+  });
+  std::cout << "; \n";
 
 
   auto up12 = m.ask_up(1, 2);
   std::cout << "\nask_up(1, 2):a2ab " <<  up12.a2ab.size();
-  for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
-     std::cout << " " << up12.a2ab[i];
+  o::parallel_for(up12.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, up12.a2ab[i]);
+  });
   std::cout << "\n";
   std::cout << "\nask_up(1, 2):ab2b " <<  up12.ab2b.size();
-  for(int i=0; i<20 && i<up12.ab2b.size(); ++i)
-     std::cout << " " << up12.ab2b[i]; //12 :0 1 ;0 2; 1 2; 0 3; 1 3; 2 3
+  o::parallel_for(up12.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, up12.ab2b[i]);
+  });
   std::cout << "\n Entries";
-  for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
-     std::cout << " " << up12.ab2b[up12.a2ab[i]];
+  o::parallel_for(up12.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<20 )
+      printf("%5d %5d\n", i, up12.ab2b[up12.a2ab[i]]);
+  });
   std::cout << "\n";
 
 
   const auto dual = m.ask_dual();
   std::cout << "#dual: #a2ab " << dual.a2ab.size() //last is size=end_index+1 ?
             << " ; #ab2b " << dual.ab2b.size() ;
-  std::cout << " ; dual.a2ab[0,1]:" << dual.a2ab[0] << "," << dual.a2ab[1] << "\n";
 
   //dual print
   std::cout <<  "  Duals:\n\t";
-  for(int i=0; i<dual.a2ab.size()-1 && i<5; ++i)
-  {
-     std::cout << dual.a2ab[i] << ": ";
-     for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
-        std::cout << dual.ab2b[j] <<", ";
-     std::cout << "; ";
-  }
+  o::parallel_for(dual.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+    if( i<5 ) {
+      for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
+        printf("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
+    }
+  });
 
   if(dual.a2ab.size()>5)
   {
-     std::cout <<  ".......";
-     for(int i=dual.a2ab.size()-5; i<dual.a2ab.size()-1; ++i)
-     {
-       std::cout << dual.a2ab[i] << ": ";
-       for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
-          std::cout << dual.ab2b[j] <<", ";
-       std::cout << "; ";
-    }
+    std::cout <<  ".......";
+    o::parallel_for(dual.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
+      for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
+        printf("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
+    });
   }
   std::cout <<  "\n";
 
@@ -366,79 +376,20 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   auto side_is_exposed = mark_exposed_sides(&m);
   std::cout << "#size exposed faces: "<< side_is_exposed.size() <<"\n";
   std::cout <<  "  Exposed:\n\t";
-  for(int i=0; i<side_is_exposed.size() && i<10; ++i)
-  {
-     if(side_is_exposed[i])
-       std::cout << 1 << ", ";
-     else
-       std::cout << 0 << ", ";
-     //   std::cout << dual.ab2b[j] <<", ";
-  }
+  o::parallel_for(side_is_exposed.size(), OMEGA_H_LAMBDA(o::LO i) {
+    if( i < 10 ) {
+      printf("%5d %2d\n", i, side_is_exposed[i]>0);
+    }
+  });
 
   if(side_is_exposed.size()>10)
   {
-     std::cout <<  ".......";
-     for(int i=side_is_exposed.size()-10; i<side_is_exposed.size(); ++i)
-     {
-       if(side_is_exposed[i])
-         std::cout << 1 << ", ";
-       else
-         std::cout << 0 << ", ";
-     }
+    std::cout <<  "\n.......";
+    o::parallel_for(side_is_exposed.size(), OMEGA_H_LAMBDA(o::LO i) {
+      printf("%5d %2d\n", i, side_is_exposed[i]>0);
+    });
   }
-  std::cout << "\n";
 
-}
-
-//TODO add checks
-void test_unit(Omega_h::Mesh &m)
-{
-    Omega_h::build_from_elems2verts(&m, OMEGA_H_SIMPLEX, 3, Omega_h::LOs({0, 1, 2, 3}), 4);
-    print_mesh_stat(m, false);
-
-    auto up23 = m.ask_up(2, 3);  // // AdjPtr[][]
-    std::cout <<  "up(2,3): faceID elemID\n";
-    for(int i=0; i<up23.a2ab.size()-1 ; ++i) //NOTE: size is +1 ???
-     {
-       auto face = up23.a2ab[i];
-       std::cout << face << " " << up23.ab2b[face] << " ; "; //0 0 ::  1 0 ::  2 0 ::  3 0
-     }
-    std::cout <<  "\n";
-
-    auto up12 = m.ask_up(1, 2);
-    std::cout << "\nask_up(1, 2):a2ab " <<  up12.a2ab.size();
-    for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
-       std::cout << " " << up12.a2ab[i];
-    std::cout << "\n";
-    std::cout << "\nask_up(1, 2):ab2b " <<  up12.ab2b.size();
-    for(int i=0; i<20 && i<up12.ab2b.size(); ++i)
-       std::cout << " " << up12.ab2b[i]; //12 :0 1 ;0 2; 1 2; 0 3; 1 3; 2 3
-    std::cout << "\n Entries";
-    for(int i=0; i<20 && i<up12.a2ab.size(); ++i)
-       std::cout << " " << up12.ab2b[up12.a2ab[i]];
-    std::cout << "\n";
-
-
-    OMEGA_H_CHECK(m.ask_down(3, 0).ab2b == Omega_h::LOs({0, 1, 2, 3})); //AdjPtr[][]
-    auto down32 = m.ask_down(3, 2);  // 0 1 3 2
-    auto down31 = m.ask_down(3, 1);  // 0 3 1 2 4 5
-    auto down21 = m.ask_down(2, 1);  //1 3 0 ;0 4 2; 1 2 5; 3 5 4 (size=12)
-    auto down20 = m.ask_down(2, 0);  //  0 2 1 0 1 3 2 0 3 1 2 3
-    auto down10 = m.ask_down(1, 0); // 0 1 2 0 0 3 1 2 1 3 2 3
-
-    std::cout <<  "Down(2,0).ab2b:\n";
-    for(int i=0; i<down20.ab2b.size() && i<20; ++i)
-    {
-      std::cout << " " << down20.ab2b[i];
-    }
-    std::cout <<  "\nDown(2,1).ab2b:\n";
-    for(int i=0; i<down21.ab2b.size() && i<20; ++i)
-    {
-      std::cout << " " << down21.ab2b[i];
-    }
-
-    std::cout <<  "\n----------------\n";
-    //const auto coords = m.coords(); //no tag_base for coords
 }
 
 #endif

@@ -521,6 +521,8 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 
 
 void GitrmMesh::initBoundaryFaces() {
+  int verbose = 4;
+  
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -543,7 +545,7 @@ void GitrmMesh::initBoundaryFaces() {
   const o::LO background_Z = BACKGROUND_Z;
   const o::Real background_amu = BACKGROUND_AMU;
   auto fill = OMEGA_H_LAMBDA(o::LO fid) {
-
+    
     //TODO check if serial numbers are faceids
     if(!side_is_exposed[fid]) {
       return;
@@ -552,7 +554,12 @@ void GitrmMesh::initBoundaryFaces() {
     o::Vector<3> pos{{0}};
     p::find_face_centroid(fid, coords, face_verts, pos);
     p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX,
-                     BGRID_NZ, pos, B, true); 
+                     BGRID_NZ, pos, B, true);
+
+    if(verbose > 3 && fid<5){
+      printf(" BField[%d]:  %.5f %.5f %.5f \n", fid, pos[0], pos[1], pos[2]);
+    }
+
     o::Vector<3> surfNorm{{0}};
     p::find_face_normal(fid, coords, face_verts, surfNorm);
     

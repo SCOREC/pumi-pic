@@ -2,6 +2,8 @@
 
 #include <Omega_h_library.hpp>
 #include <Kokkos_Core.hpp>
+#include <mpi.h>
+
 namespace pumipic {
   class Library {
   public:

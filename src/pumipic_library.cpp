@@ -1,13 +1,8 @@
 #include "pumipic_library.hpp"
 
-#include <Kokkos_Core.hpp>
-#include <mpi.h>
-namespace {
-}
-
 namespace pumipic {
 
-  Library::Library(int* argc, char*** argv) {
+Library::Library(int* argc, char*** argv) {
   int is_mpi_init;
   MPI_Initialized(&is_mpi_init);
   own_mpi = !is_mpi_init;

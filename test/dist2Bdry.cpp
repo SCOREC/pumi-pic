@@ -25,10 +25,10 @@ void printTimerResolution() {
 //TODO this update has to be in Boris Move ?, or kept track of inside it
 void updatePtclPositions(SellCSigma<Particle>* scs) {
   scs->transferToDevice();
-  kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
-  kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
-  hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
+  p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
+  p::kkFp3View xtgt_scs_d("xtgt_scs_d", scs->offsets[scs->num_slices]);
+  p::hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
@@ -40,8 +40,8 @@ void updatePtclPositions(SellCSigma<Particle>* scs) {
       xtgt_scs_d(pid,2) = 0;
     });
   });
-  deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
-  deviceToHostFp(x_scs_d, scs->getSCS<0>() );
+  p::deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
+  p::deviceToHostFp(x_scs_d, scs->getSCS<0>() );
 }
 
 void rebuild(SellCSigma<Particle>* scs, o::LOs elem_ids) {
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
   printf("\nCalculate EField ..\n");
   gitrm_calculateE(gp.scs, mesh);
   std::cout << "\nBoris Move  \n";
-  gitrm_borisMove(gp.scs, mesh, 1e-6);
+  gitrm_borisMove(gp.scs, mesh, gm, 1e-6);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());
   timer.reset();

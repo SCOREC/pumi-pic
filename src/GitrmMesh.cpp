@@ -324,7 +324,7 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
   };
   o::parallel_for(mesh.nverts(), fill, "Fill E/B Tag");
 
-  exe_space::fence();
+  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::VERT, tagName, o::Reals(tag));
 }
@@ -417,7 +417,7 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
   };
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  exe_space::fence();
+  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::FACE, tagName, o::Reals(tag));
  
@@ -471,7 +471,7 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
   };
   o::parallel_for(mesh.nverts(), fill, "Fill Tag");
 
-  exe_space::fence();
+  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::VERT, tagName, o::Reals(tag));
 }
@@ -522,7 +522,7 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 
 void GitrmMesh::initBoundaryFaces() {
   int verbose = 4;
-  
+
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -556,8 +556,8 @@ void GitrmMesh::initBoundaryFaces() {
     p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX,
                      BGRID_NZ, pos, B, true);
 
-    if(verbose > 3 && fid<5){
-      printf(" BField[%d]:  %.5f %.5f %.5f \n", fid, pos[0], pos[1], pos[2]);
+    if(verbose > 3 && fid%50==0){
+      printf(" BField[%d]:  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
     }
 
     o::Vector<3> surfNorm{{0}};
@@ -611,7 +611,7 @@ void GitrmMesh::initBoundaryFaces() {
 
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  exe_space::fence();
+  p::exe_space::fence();
   o::HostWrite<o::Real> angle(angle_d);
   o::HostWrite<o::Real> debyeLength(debyeLength_d);
   o::HostWrite<o::Real> larmorRadius(larmorRadius_d);

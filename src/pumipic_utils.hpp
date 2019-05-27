@@ -131,10 +131,12 @@ inline void print_array(const double* a, int n=3, std::string name=" ")
   std::cout <<"\n";
 }
 
-inline void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
+inline void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", 
+  bool line_break=true)
 {
   std::string str = line_break ? ")\n" : "); ";
-  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
+  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " 
+    << v.data()[2] << str;
 }
 
 inline void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,

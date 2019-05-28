@@ -48,8 +48,8 @@ namespace pumipic {
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
     void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner[4],
-                          Omega_h::Write<Omega_h::GO> elem_gid,
-                          Omega_h::LOs rank_offset_nelms,
+                          Omega_h::GOs ent_gid_per_dim[4],
+                          Omega_h::LOs rank_offset_nents_per_dim[4],
                           Omega_h::Write<Omega_h::LO> has_part,
                           Omega_h::Write<Omega_h::LO> is_safe);
 

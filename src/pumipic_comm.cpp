@@ -3,7 +3,7 @@
 namespace pumipic {
   void Mesh::setupComm(int dim, Omega_h::LOs global_ents_per_rank,
                     Omega_h::LOs picpart_ents_per_rank,
-                    Omega_h::Write<Omega_h::LO> ent_owners) {
+                    Omega_h::LOs ent_owners) {
     int nents = picpart->nents(dim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
     Omega_h::Write<Omega_h::LO> comm_arr_index(nents,0);

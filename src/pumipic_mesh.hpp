@@ -47,7 +47,7 @@ namespace pumipic {
     //Users should not run the following functions. 
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
-    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner,
+    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner[4],
                           Omega_h::Write<Omega_h::GO> elem_gid,
                           Omega_h::LOs rank_offset_nelms,
                           Omega_h::Write<Omega_h::LO> has_part,
@@ -56,7 +56,7 @@ namespace pumipic {
     //Communication setup
     void setupComm(int dim, Omega_h::LOs global_ents_per_rank,
                    Omega_h::LOs picpart_ents_per_rank,
-                   Omega_h::Write<Omega_h::LO> ent_owners);
+                   Omega_h::LOs ent_owners);
 
   private:
     Omega_h::CommPtr commptr;

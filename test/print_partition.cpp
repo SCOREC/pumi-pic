@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-  Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.world());
+  Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.world());
   int dim = mesh.dim();
   Omega_h::Read<Omega_h::GO> global_ids = mesh.globals(dim);
   Omega_h::HostRead<Omega_h::GO> global_ids_h(global_ids);

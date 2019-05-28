@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
   int ghost_layers = atoi(argv[4]);
 
   //**********Load the mesh in serial everywhere*************//
-  Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.self());
+  Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   int dim = mesh.dim();
   int ne = mesh.nents(dim);
   if (rank == 0)
@@ -45,5 +45,9 @@ int main(int argc, char** argv) {
   
   pumipic::Mesh picparts(mesh,owner,ghost_layers, safe_layers);
 
+  char vtk_name[100];
+  sprintf(vtk_name, "picpart%d", rank);
+  Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
+  
   return 0;
 }

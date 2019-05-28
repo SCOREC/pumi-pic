@@ -152,7 +152,7 @@ namespace pumipic {
     //TODO create communication information for each entity dimension
     commptr = lib->world();
     Omega_h::LOs picpart_offset_nelms = calculateOwnerOffset(new_ent_owners, comm_size);
-    setupComm(3, rank_offset_nelms, picpart_offset_nelms, new_ent_owners);
+    setupComm(dim, rank_offset_nelms, picpart_offset_nelms, new_ent_owners);
   }
 }
 

@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
   }
 
   //**********Load the mesh in serial everywhere*************//
-  Omega_h::Mesh mesh = Omega_h::gmsh::read(argv[1], lib.self());
+  Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   int dim = mesh.dim();
   int ne = mesh.nents(dim);
   if (rank == 0)

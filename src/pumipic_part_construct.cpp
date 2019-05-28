@@ -150,32 +150,43 @@ namespace pumipic {
 
     delete [] num_ents;
 
-    //****************Convert Tags to the picpart***********
-    Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
-    Omega_h::GOs elm_gid = ent_gid_per_dim[dim];
+    /****************Convert Safe tag to the picpart***********/
     Omega_h::LOs elm_ids = ent_ids[dim];
-    Omega_h::LOs elm_owners = owner_dim[dim];
-    const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
+    Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
+    const auto convertSafeToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = elm_ids[elem_id];
-      //TODO remove this conditional using padding?
       if (new_elem >= 0) {
         new_safe[new_elem] = is_safe[elem_id];
-        new_elem_gid[new_elem] = elm_gid[elem_id];
-        new_ent_owners[new_elem] = elm_owners[elem_id];
       }
     };
-    Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
+    Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
     picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
-    global_ids_per_dim[dim] = Omega_h::GOs(new_elem_gid);
     is_ent_safe = Omega_h::LOs(new_safe);
 
-    //**************** Build communication information ********************//
-    //TODO create communication information for each entity dimension
-    commptr = lib->world();
-    Omega_h::LOs picpart_offset_nelms = calculateOwnerOffset(new_ent_owners, comm_size);
-    setupComm(dim, rank_offset_nents[dim], picpart_offset_nelms, new_ent_owners);
+    /****************Convert gids of each dim to the picpart***********/
+    for (int i = 0; i <= dim; ++i) {
+      Omega_h::Write<Omega_h::GO> new_ent_gid(picpart->nents(i), 0);
+      Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nents(i), 0);
+      Omega_h::GOs ent_gid = ent_gid_per_dim[i];
+      Omega_h::LOs ent_ids_cpy = ent_ids[i];
+      Omega_h::LOs ent_owners = owner_dim[i];
+      const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
+        const Omega_h::LO new_ent = ent_ids_cpy[ent_id];
+        //TODO remove this conditional using padding?
+        if (new_ent >= 0) {
+          new_ent_gid[new_ent] = ent_gid[ent_id];
+          new_ent_owners[new_ent] = ent_owners[ent_id];
+        }
+      };
+      Omega_h::parallel_for(mesh.nents(i), convertArraysToPicpart, "convertArraysToPicpart");
+      global_ids_per_dim[i] = Omega_h::GOs(new_ent_gid);
+
+      //**************** Build communication information ********************//
+      commptr = lib->world();
+      Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
+      if (i == dim)
+        setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
+    }
   }
 }
 

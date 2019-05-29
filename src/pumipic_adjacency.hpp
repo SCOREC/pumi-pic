@@ -233,7 +233,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   return found;
 }
 
-OMEGA_H_DEVICE o::Vector<3> makeVector3(int pid, kkFp3View xyz) {
+template <typename Segment>
+OMEGA_H_DEVICE o::Vector<3> makeVector3(int pid, Segment xyz) {
   o::Vector<3> v;
   for(int i=0; i<3; ++i)
     v[i] = xyz(pid,i);
@@ -254,7 +255,7 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 //How to avoid redefining the MemberType? each application will define it
 //differently. Templating search_mesh with
 //template < typename ParticleType >
-//results in an error on getSCS<> as an unresolved function.
+//results in an error on get<> as an unresolved function.
 //typedef particle_structs::MemberTypes<Vector3d, Vector3d, int> ParticleType;
 
 template < class ParticleType>
@@ -271,15 +272,11 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   const auto dual_faces = dual.ab2b;
   const auto dual_elems = dual.a2ab;
 
-  scs->transferToDevice();  //TODO user tuples should be allocated on device by default
-  const auto scsCapacity = scs->offsets[scs->num_slices];
-  kkFp3View x_scs_d("x_scs_d", scsCapacity);
-  hostToDeviceFp(x_scs_d, scs->template getSCS<0>() );
-  kkFp3View xtgt_scs_d("xtgt_scs_d", scsCapacity);
-  hostToDeviceFp(xtgt_scs_d, scs->template getSCS<1>() );
+  const auto scsCapacity = scs->capacity();
+  auto x_scs_d = scs->template get<0>();
+  auto xtgt_scs_d = scs->template get<1>();
 
-  kkLidView pid_d("pid_d", scsCapacity);
-  hostToDeviceLid(pid_d, scs->template getSCS<2>() );
+  auto pid_d = scs->template get<2>();
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");

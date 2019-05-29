@@ -57,13 +57,13 @@ class SellCSigma {
   void printFormatDevice(const char* prefix = "") const;
 
   /* Migrates each particle to new_process and to new_element
-     Calls rebuildSCS to recreate the SCS after migrating particles
+     Calls rebuild to recreate the SCS after migrating particles
   */
   void migrate(kkLidView new_element, kkLidView new_process);
 
   /*
     Reshuffles the scs values to the element in new_element[i]
-    Calls rebuildSCS if there is not enough space for the shuffle
+    Calls rebuild if there is not enough space for the shuffle
   */
   void reshuffle(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                  MemberTypeViews<DataTypes> new_particles = NULL);
@@ -213,6 +213,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
   lid_t* widths = new lid_t[nchunks];
   Kokkos::parallel_reduce(num_elems, maxer, widths);
   hostToDevice<lid_t>(chunk_widths, widths);
+  delete [] widths;
 }
 
 template<class DataTypes, typename ExecSpace>
@@ -345,7 +346,8 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroy(bool destroyGid2Row) {
-  DestroyViews<DataTypes>(scs_data+0);
+  if (num_ptcls > 0)
+    DestroyViews<DataTypes>(scs_data+0);
   if (destroyGid2Row)
     element_gid_to_lid.clear();
 }

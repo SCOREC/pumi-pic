@@ -6,7 +6,7 @@
 #include <SCS_Macros.h>
 #include "pumipic_adjacency.hpp"
 #include "unit_tests.hpp"
-
+#include "pumipic_library.hpp"
 namespace o = Omega_h;
 namespace p = pumipic;
 
@@ -44,7 +44,8 @@ void setPosition(SCS* scs,
 }
 
 int main(int argc, char** argv) {
-  auto lib = o::Library(&argc, &argv);
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
   const auto world = lib.world();
   auto mesh = o::gmsh::read(argv[1], world);
 

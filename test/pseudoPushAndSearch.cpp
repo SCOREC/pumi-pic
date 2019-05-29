@@ -6,6 +6,7 @@
 #include <SCS_Macros.h>
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
+#include "pumipic_library.hpp"
 
 #define NUM_ITERATIONS 30
 
@@ -26,7 +27,7 @@ namespace p = pumipic;
 // computed (pre adjacency search) positions, and
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
-typedef SellCSigma<Particle, Kokkos::DefaultExecutionSpace> SCS;
+typedef SellCSigma<Particle> SCS;
 
 void render(o::Mesh& mesh, int iter) {
   fprintf(stderr, "%s\n", __func__);
@@ -288,7 +289,8 @@ void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
 }
 
 int main(int argc, char** argv) {
-  auto lib = Omega_h::Library(&argc, &argv);
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
   printf("Kokkos execution space memory %s name %s\n",
@@ -337,8 +339,7 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  const bool debug = false;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
 						       ptcls_per_elem, element_gids);

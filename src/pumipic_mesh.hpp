@@ -62,18 +62,38 @@ namespace pumipic {
     Omega_h::CommPtr commptr;
     Omega_h::Mesh* picpart;
 
-    //PICpart information
-    int num_cores[4]; //number of core parts that make up the picpart (The element dimension is smaller than others because of copied entities on the "part" boundary) (doesnt include self)
-    Omega_h::HostWrite<Omega_h::LO> buffered_parts[4]; // doesnt include self
-    Omega_h::GOs global_ids_per_dim[4]; //Global id of each element
-    Omega_h::LOs is_ent_safe; //Safety tag on each element
+    //*********************PICpart information**********************/
+    //Number of core parts that are buffered (doesn't include self)
+    int num_cores[4];
+    //Global ID of each mesh entity per dimension
+    Omega_h::GOs global_ids_per_dim[4];
+    //Safe tag defined on the mesh elements
+    Omega_h::LOs is_ent_safe;
 
     //Per Dimension communication information
-    Omega_h::LO num_ents_per_dim[4];
-    Omega_h::LOs offset_ents_per_rank_per_dim[4]; //An exclusive sum of ents per rank in the picpart
-    Omega_h::LOs ent_to_comm_arr_index_per_dim[4]; //mapping from ent to comm arr index
-    Omega_h::LOs ent_owner_per_dim[4]; //owning rank of each entity
-    Omega_h::LOs ent_local_rank_id_per_dim[4]; //mapping from ent to local index of the core it belongs to.
-
+    //List of core parts that are buffered (doesn't include self)
+    Omega_h::HostWrite<Omega_h::LO> buffered_parts[4];
+    //Exclusive sum of number of entites per rank of buffered_parts/boundary_parts
+    //   for each entity dimension
+    Omega_h::LOs offset_ents_per_rank_per_dim[4];
+    //Mapping from entity id to comm array index
+    Omega_h::LOs ent_to_comm_arr_index_per_dim[4];
+    //The owning part of each entity per dimension
+    Omega_h::LOs ent_owner_per_dim[4];
+    //Mapping from entity id to local index of the core it belongs to
+    //  Note: This is stored in case needed, but is not used beyond setup.
+    Omega_h::LOs ent_local_rank_id_per_dim[4];
+    //NOTE: Bounding means that the rank 'owns' at least one entity on the picpart boundary of the bounded part
+    //List (per dimension) of parts that only the boundary exist in the picpart
+    //  Note: boundary_parts[mesh_dim] is empty
+    Omega_h::HostWrite<Omega_h::LO> boundary_parts[4];
+    //List (per dimension) of parts that have the boundary of this core
+    //  Note: bounded_parts[mesh_dim] is empty
+    Omega_h::HostWrite<Omega_h::LO> bounded_parts[4];
+    //Exclusive sum of number of bounded entities to send to bounded parts
+    // size = bounded_parts.size()+1
+    Omega_h::LOs offset_bounded_ents_per_rank_per_dim[4];
+    //Mapping for each rank this part bounds
+    Omega_h::LOs bounded_ents_to_comm_array_per_dim[4];
   };
 }

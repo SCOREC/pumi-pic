@@ -184,7 +184,7 @@ namespace pumipic {
       //**************** Build communication information ********************//
       commptr = lib->world();
       Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
-      if (i == dim)
+      if (i == 3)
         setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
     }
   }

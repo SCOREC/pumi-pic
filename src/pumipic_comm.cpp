@@ -33,8 +33,6 @@ namespace pumipic {
     Omega_h::parallel_for(nents, calculateCommArrayIndices, "calculateCommArrayIndices");
 
     offset_ents_per_rank_per_dim[dim] = Omega_h::LOs(picpart_ents_per_rank);
-    Omega_h::HostRead<Omega_h::LO> offset_host(offset_ents_per_rank_per_dim[dim]);
-    num_ents_per_dim[dim] = offset_host[commptr->size()];
     ent_to_comm_arr_index_per_dim[dim] = Omega_h::LOs(comm_arr_index);
     ent_owner_per_dim[dim] = Omega_h::LOs(ent_owners);
     ent_local_rank_id_per_dim[dim] = Omega_h::LOs(ent_rank_lids);
@@ -43,7 +41,8 @@ namespace pumipic {
   template <class T>
   typename Omega_h::Write<T> Mesh::createCommArray(int dim, int num_entries_per_entity,
                                                    T default_value) {
-    int size = num_entries_per_entity * num_ents_per_dim[dim];
+    int nents = picpart->nents(dim);
+    int size = num_entries_per_entity * nents;
     return Omega_h::Write<T>(size,default_value);
   }
 

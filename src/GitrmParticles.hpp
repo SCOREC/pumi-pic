@@ -32,15 +32,16 @@ typedef MemberTypes < Vector3d, Vector3d, int,  int, Vector3d,
 // 'Particle' definition retrieval positions. 
 enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_BDRY_FACEID, PTCL_BDRY_CLOSEPT, 
      PTCL_EFIELD_PREV, PTCL_VEL};
+typedef SellCSigma<Particle> SCS;
 
 class GitrmParticles {
 public:
-  GitrmParticles(o::Mesh &m);
+  GitrmParticles(o::Mesh &m, const int np);
   ~GitrmParticles();
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
 
-  void defineParticles();
+  void defineParticles(const int numPerElem=100);
   void initImpurityPtcls(const o::LO n, o::Real theta, o::Real phi,
      const o::Real r, const o::LO maxLoops = 100, const o::Real outer=2);
 
@@ -60,12 +61,9 @@ inline void setPtclIds(SellCSigma<Particle>* scs) {
   scs->transferToDevice();
   p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
   p::hostToDeviceLid(pid_d, scs->getSCS<PTCL_ID>() );
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      pid_d(pid) = pid;
-    });
-  });
+  auto lam = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+    pid_d(pid) = pid;
+  };
   p::deviceToHostLid(pid_d, scs->getSCS<PTCL_ID>() );
 }
 

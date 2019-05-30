@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
   //gm.printBdryFacesCSR(false, 20);
 
 
-  GitrmParticles gp(mesh); // (const char* param_file);
+  GitrmParticles gp(mesh, 10); // (const char* param_file);
 gp.initImpurityPtcls(100, 110, 0, 1.5, 5);
 
   printf("\nCalculate Distance To Bdry..\n");

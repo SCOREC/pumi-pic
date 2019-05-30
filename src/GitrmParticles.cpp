@@ -6,7 +6,8 @@
 #include "unit_tests.hpp"
 
 #include <Omega_h_library.hpp>
-#include <Omega_h_random.hpp>
+
+#include "pumipic_kktypes.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
@@ -14,9 +15,8 @@
 #include <Kokkos_Core.hpp>
 #include <chrono>
 #include <thread>
+//#include "pumipic_library.hpp"
 
-
-#define NUM_ITERATIONS 20
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -30,12 +30,10 @@ using particle_structs::elemCoords;
 namespace o = Omega_h;
 namespace p = pumipic;
 
-
-
 //TODO remove mesh argument, once Singleton gm is used
-GitrmParticles::GitrmParticles(o::Mesh &m):
+GitrmParticles::GitrmParticles(o::Mesh &m, const int np):
   mesh(m) {
-  defineParticles();
+  //defineParticles(np);
 }
 
 GitrmParticles::~GitrmParticles(){
@@ -43,20 +41,19 @@ GitrmParticles::~GitrmParticles(){
 }
 
 
-void GitrmParticles::defineParticles(){
+void GitrmParticles::defineParticles(const int numPtcls){
 
   //GitrmMesh &gm = GitrmMesh::getInstance();
   //o::Mesh &mesh = gm.mesh;
   auto ne = mesh.nelems();
 
-  const int numPtcls = ne;  //TODO
-
   fprintf(stderr, "number of elements %d number of particles %d\n",
       ne, numPtcls);
   int* ptcls_per_elem = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
+  std::vector<int>* ids = new std::vector<int>[numPtcls];
   for(int i=0; i<ne; i++)
-    ptcls_per_elem[i] = 1;
+    ptcls_per_elem[i] = 0;
+
   for(int i=0; i<numPtcls; i++)
     ids[i].push_back(i);
 
@@ -76,13 +73,14 @@ void GitrmParticles::defineParticles(){
   delete [] ids;
   //Set initial and target positions so search will
   // find the parent elements
-  setInitialPtclCoords(mesh, scs);
+//  setInitialPtclCoords(mesh, scs);
+
   setPtclIds(scs);
 }
 
 // spherical coordinates (wikipedia), radius r=1.5m, inclination theta[0,pi] from the z dir,
 // azimuth angle phi[0, 2π) from the Cartesian x-axis (so that the y-axis has phi = +90°).
-void GitrmParticles::initImpurityPtcls(const o::LO np, o::Real theta, o::Real phi, 
+void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::Real phi, 
     const o::Real r, const o::LO maxLoops, const o::Real outer){
 
   o::LO debug = 4;
@@ -213,6 +211,41 @@ void GitrmParticles::initImpurityPtcls(const o::LO np, o::Real theta, o::Real ph
   o::HostRead<o::LO> elemId_fh(elem_face);
   printf("ELEM_final %d xpt: %.3f %.3f %.3f\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
   OMEGA_H_CHECK(elemId_fh[0] >= 0);
+  auto initialElement = elemId_fh[0];
+
+
+  auto ne = mesh.nelems();
+  p::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  //Element gids is left empty since there is no partitioning of the mesh yet
+  SCS::kkGidView element_gids;
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    ptcls_per_elem(i) = 0;
+    if (i == initialElement)
+      ptcls_per_elem(i) = numPtcls;
+  });
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    const int np = ptcls_per_elem(i);
+    if (np > 0)
+      printf("ppe[%d] %d\n", i, np);
+  });
+
+  //'sigma', 'V', and the 'policy' control the layout of the SCS structure
+  //in memory and can be ignored until performance is being evaluated.  These
+  //are reasonable initial settings for OpenMP.
+  const int sigma = INT_MAX; // full sorting
+  const int V = 1024;
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  //Create the particle structure
+  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, 
+                              numPtcls, ptcls_per_elem, element_gids);
+
+  //Set initial and target positions so search will
+  // find the parent elements
+  //setInitialPtclCoords(mesh, scs);
+  setPtclIds(scs);
+  //setTargetPtclCoords(scs);
+
+
 
 
   //Set particle coordinates. Initialized only on one face. TODO confirm this ? 

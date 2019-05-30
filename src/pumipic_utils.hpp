@@ -272,7 +272,7 @@ OMEGA_H_DEVICE void find_face_centroid(const o::LO fid, const o::Reals &coords,
 
 
 OMEGA_H_DEVICE void find_face_normal(const o::LO fid, const o::Reals &coords, 
-   const o::LOs &face_verts, o::Vector<3> &snorm){
+   const o::LOs &face_verts, o::Vector<3> &fnorm){
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
@@ -282,17 +282,9 @@ OMEGA_H_DEVICE void find_face_normal(const o::LO fid, const o::Reals &coords,
   o::Vector<3> b = abc[1];
   o::Vector<3> c = abc[2];
 
-  snorm = o::cross(b - a, c - a);
+  fnorm = o::cross(b - a, c - a);
 }
 
-// fallback since o::cross has no const
-OMEGA_H_INLINE void osh_cross(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b, Omega_h::Vector<3> &c)
-{
-  c[0] = a[1]*b[2] - a[2]*b[1];
-  c[1] = - a[0]*b[2] + a[2]*b[0];
-  c[2] = a[0]*b[1] - a[1]*b[0];
-}
 
 } //namespace
 #endif

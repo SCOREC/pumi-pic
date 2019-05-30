@@ -390,8 +390,8 @@ bool search_mesh(o::Mesh& mesh, particle_structs::SellCSigma< ParticleType >* sc
                     pid, face_id, elem_ids_next[pid]);
                 }
                 // No 'break' here, since other faces to be checked.
-                // TODO This occurs by error, and this fallback option to be used for debugging
-                // by setting correct tolerances that match with it in other function calls.
+                // The min_ind is stored as fallback option.  
+                // TODO debugg using right tolerances.
               }
             }
 

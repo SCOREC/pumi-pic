@@ -7,6 +7,10 @@
 namespace o = Omega_h;
 namespace p = pumipic;
 
+#ifndef USE_3D_FIELDS
+#define USE_3D_FIELDS 0
+#endif
+
 #ifndef BIASED_SURFACE
 #define BIASED_SURFACE 0
 #endif
@@ -65,21 +69,6 @@ public:
   void operator =(GitrmMesh const&) = delete;
 
   
- //TODO move these to suitable location
-  o::Real BGRIDX0 = 0;
-  o::Real BGRIDZ0 = 0;
-  o::Real BGRID_DX = 0;
-  o::Real BGRID_DZ = 0;
-  o::Real BGRID_NX = 0;
-  o::Real BGRID_NZ = 0;
-  o::Real EGRIDX0 = 0;
-  o::Real EGRIDZ0 = 0;
-  o::Real EGRID_DX = 0;
-  o::Real EGRID_DZ = 0;
-  o::Real EGRID_NX = 0;
-  o::Real EGRID_NZ = 0;
-
-
 /** @brief preProcessDistToBdry: Space for a fixed # of Bdry faces is assigned per element.
   * First step: Boundary faces are added to its own element data.
   * When new faces are added, the owner element updates flags of adj.elements.
@@ -152,6 +141,23 @@ public:
 
   void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct &);
   void load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs);
+    
+ //TODO move these to suitable location
+  // Used in boundary init and if 2D field is used for particles
+  o::Real BGRIDX0 = 0;
+  o::Real BGRIDZ0 = 0;
+  o::Real BGRID_DX = 0;
+  o::Real BGRID_DZ = 0;
+  o::LO BGRID_NX = 0;
+  o::LO BGRID_NZ = 0;
+  o::Real EGRIDX0 = 0;
+  o::Real EGRIDZ0 = 0;
+  o::Real EGRID_DX = 0;
+  o::Real EGRID_DZ = 0;
+  o::LO EGRID_NX = 0;
+  o::LO EGRID_NZ = 0;
+  o::Reals Efield_2d;
+  o::Reals Bfield_2d;
 };
 
 struct FieldStruct {
@@ -224,10 +230,10 @@ inline void gitrm_findDistanceToBdry(
   scs->transferToDevice();
 
   p::kkFp3View pos_d("position_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(pos_d, scs->getSCS<PCL_POS>());
+  p::hostToDeviceFp(pos_d, scs->getSCS<PTCL_POS>());
 
   p::kkFp3View closestPoint_d("closestPoint_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PCL_BDRY_CLOSEPT>());
+  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>());
 
 
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
@@ -322,7 +328,7 @@ inline void gitrm_findDistanceToBdry(
 
   scs->parallel_for(distRun);
 
-  p::deviceToHostFp(closestPoint_d, scs->getSCS<PCL_BDRY_CLOSEPT>());
+  p::deviceToHostFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>());
 
 }
 

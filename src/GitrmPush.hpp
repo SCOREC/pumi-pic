@@ -22,9 +22,10 @@
 #include "pumipic_constants.hpp"
 
 
-
+// Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
+//  Does BField vary along boundary ?
 inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs, 
-  const o::Mesh &mesh) {
+  o::Mesh &mesh) {
 
   const auto angles = o::Reals(mesh.get_array<o::Real>(o::FACE, "angleBdryBfield"));
   const auto potentials = o::Reals(mesh.get_array<o::Real>(o::FACE, "potential"));
@@ -35,16 +36,16 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 
   scs->transferToDevice();
   p::kkFp3View ptclPos_d("ptclPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PCL_POS>());
+  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PTCL_POS>());
   
   p::kkFp3View closestPoint_d("closestPoint_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PCL_BDRY_CLOSEPT>()); 
+  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>()); 
 
   p::kkLidView faceId_d("faceId_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceLid(faceId_d, scs->getSCS<PCL_BDRY_FACEID>());
+  p::hostToDeviceLid(faceId_d, scs->getSCS<PTCL_BDRY_FACEID>());
   
   p::kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
+  p::hostToDeviceFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask) { 
@@ -59,6 +60,8 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
       return;
     }
 
+    // TODO angle is between surface normal and magnetic field at center of face
+    // If  face is long, BField is not accurate. Calculate at closest point ?
     o::Real angle = angles[faceId];
     o::Real pot = potentials[faceId];
     o::Real debyeLength = debyeLengths[faceId];
@@ -73,6 +76,10 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
     o::Real md = p::osh_mag(distVector);
     o::Real Emag = 0;
 
+    /*
+    // Calculate angle at closest point, instead of using it for centroid of a long tet
+    //TODO what about other quantities ????????????????
+    */
     if(verbose >4){
       printf("CalcE: %.5f %.5f %.5f %.5f %.5f \n", angle, pot, debyeLength, 
         larmorRadius, childLangmuirDist);
@@ -107,71 +114,87 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
     efield_d(pid, 2) = exd[2];
 
     if(verbose >2) {
-          printf("efield %.5f %.5f %.5f \n", efield_d(pid, 0), efield_d(pid, 1), 
-            efield_d(pid, 2));
+          printf("efield %.5f %.5f %.5f \n", exd[0], exd[1], exd[2]);
     }
 
   };
   scs->parallel_for(run);
-  p::exe_space::fence();
-  p::deviceToHostFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
+  p::deviceToHostFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
 }
 
+// NOTE: for extruded mesh, TETs are too long that particle's projected position
+// onto nearest poloidal plane is to be used to interpolate fields from 
+// vertices of corresponding face of the TET. For a non-extruded mesh this projection
+// is not possible and interpolation from all points of the TET is to be used.
 
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
-  const o::Mesh &mesh, const GitrmMesh &gm, const o::Real dtime) {
+  o::Mesh &mesh, const GitrmMesh &gm, const o::Real dtime) {
 
-  o::Real EGRIDX0 = gm.EGRIDX0; 
-  o::Real EGRIDZ0 = gm.EGRIDZ0;
-  o::Real EGRID_DX = gm.EGRID_DX;
-  o::Real EGRID_DZ = gm.EGRID_DZ;
-  o::Real EGRID_NX = gm.EGRID_NX;
-  o::Real EGRID_NZ = gm.EGRID_NZ;
-  o::Real BGRIDX0 = gm.BGRIDX0; 
-  o::Real BGRIDZ0 = gm.BGRIDZ0;
-  o::Real BGRID_DX = gm.BGRID_DX;
-  o::Real BGRID_DZ = gm.BGRID_DZ;
-  o::Real BGRID_NX = gm.BGRID_NX;
-  o::Real BGRID_NZ = gm.BGRID_NZ;
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts();
 
+
+  // Only 3D field from mesh tags
+  const o::LO USE_3D_FIELD = USE_3D_FIELDS;
   const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
   const auto EField = o::Reals( mesh.get_array<o::Real>(o::VERT, "EField"));
 
+  // Only if used 2D field read from file
+  o::Real  exz[] = {gm.EGRIDX0, gm.EGRIDZ0, gm.EGRID_DX, gm.EGRID_DZ};
+  o::Real  bxz[] = {gm.BGRIDX0, gm.BGRIDZ0, gm.BGRID_DX, gm.BGRID_DZ};
+  o::LO ebn[] = {gm.EGRID_NX, gm.EGRID_NZ, gm.BGRID_NX, gm.BGRID_NZ};
+  const auto &EField_2d = gm.Efield_2d;
+  const auto &BField_2d = gm.Bfield_2d;
+
   scs->transferToDevice();
   p::kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(efield_d, scs->getSCS<PCL_EFIELD_PREV>());
+  p::hostToDeviceFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
   p::kkFp3View vel_d("vel_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(vel_d, scs->getSCS<PCL_VEL>());
+  p::hostToDeviceFp(vel_d, scs->getSCS<PTCL_VEL>());
   p::kkFp3View ptclPrevPos_d("ptclPrevPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPrevPos_d, scs->getSCS<PCL_POS_PREV>());
+  p::hostToDeviceFp(ptclPrevPos_d, scs->getSCS<PTCL_POS_PREV>());
   p::kkFp3View ptclPos_d("ptclPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PCL_POS>());
+  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PTCL_POS>());
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    o::LO verbose = (elem%100==0)?4:0;
+    o::LO verbose = (elem%50==0)?4:0;
     
     o::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos
     o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
     o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
     o::Vector<3> bField; //At previous_pos
 
+    if(verbose >3) {
+      printf("vel_current: %.3f %.3f %.3f \n", vel[0], vel[1], vel[2]);
+    }
+    
+    o::Vector<4> bcc{{0}};
+    if(USE_3D_FIELD) {
+      p::findBCCoordsInTet(coords, mesh2verts, posPrev, elem, bcc);
+    }
+
     if(USEPRESHEATHEFIELD) {
       o::Vector<3> psheathE;
-      if(verbose >4)
-        printf("EGRIDX0=%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,\n", 
-            EGRIDX0, EGRIDZ0, EGRID_DX, EGRID_DZ, EGRID_NX, EGRID_NZ);
 
-      p::interp2dVector(EField, EGRIDX0, EGRIDZ0, EGRID_DX, EGRID_DZ, EGRID_NX, EGRID_NZ, 
-        posPrev, psheathE);
+      if(USE_3D_FIELD) { // for 2D field TODO
+        p::interpolate3dFieldTet(EField, bcc, elem, psheathE);//At previous_pos
+      } else {
+        p::interp2dVector(EField_2d, exz[0], exz[1], exz[2], exz[3], ebn[0], ebn[1],
+          posPrev, psheathE, true);
+      }
+
       eField = eField + psheathE;
     }
-    if(verbose >4)
-       printf("BGRIDX0=%.4f, BGRIDZ0=%.4f, BGRID_DX=%.4f, BGRID_DZ=%.4f, BGRID_NX=%.4f, BGRID_N=%.4f \n", 
-        BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ);
-    // BField is 3 component array
-    p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX, BGRID_NZ, 
-                    posPrev, bField); //At previous_pos
 
+    // BField is 3 component array
+    if(USE_3D_FIELD) {
+      p::interpolate3dFieldTet(BField, bcc, elem, bField);//At previous_pos      
+    } else {
+      p::interp2dVector(BField_2d,  bxz[0], bxz[1], bxz[2], bxz[3], ebn[2], ebn[3], 
+         posPrev, bField, true); //At previous_pos
+    }
+
+//TODO
     o::Real charge = 1; //TODO get using speciesID using enum
     o::Real amu = 184.0; //TODO //impurity_amu = 184.0
 
@@ -212,21 +235,18 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     vel_d(pid, 1) = vel[1];
     vel_d(pid, 2) = vel[2];
     
-    if(verbose >2){
-      printf("prev_pos: %.3f %.3f %.3f :: ", ptclPrevPos_d(pid, 0), 
-        ptclPrevPos_d(pid, 1), ptclPrevPos_d(pid, 2));
-      printf("pre: %.3f %.3f %.3f \n", pre[0], pre[1], pre[2]);
-      printf("pos: %.3f %.3f %.3f ::", ptclPos_d(pid, 0), ptclPos_d(pid, 1), 
-        ptclPos_d(pid, 2));
-      printf("vel: %.3f %.3f %.3f \n", vel_d(pid, 0), vel_d(pid, 1), vel_d(pid, 2));
+    if(verbose >3){
+      printf(" e,p: %d %d :: pos: %.3f %.3f %.3f ::", elem, pid, ptclPos_d(pid, 0), 
+        ptclPos_d(pid, 1), ptclPos_d(pid, 2));
+      printf("prev_pos: %.3f %.3f %.3f ::", pre[0], pre[1], pre[2]);
+      printf("vel_next: %.3f %.3f %.3f \n", vel[0], vel[1], vel[2]);
     }
   };
 
   scs->parallel_for(boris);
-  p::exe_space::fence();
-  p::deviceToHostFp(ptclPos_d, scs->getSCS<PCL_POS>());
-  p::deviceToHostFp(ptclPrevPos_d, scs->getSCS<PCL_POS_PREV>());
-  p::deviceToHostFp(vel_d, scs->getSCS<PCL_VEL>());
+  p::deviceToHostFp(ptclPos_d, scs->getSCS<PTCL_POS>());
+  p::deviceToHostFp(ptclPrevPos_d, scs->getSCS<PTCL_POS_PREV>());
+  p::deviceToHostFp(vel_d, scs->getSCS<PTCL_VEL>());
 }
 
 #endif //define

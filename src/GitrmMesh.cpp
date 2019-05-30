@@ -144,18 +144,15 @@ void GitrmMesh::processFieldFile(const std::string &fName,
     //exit(1);
   }
 
-  int n = 0, ind0 = 0, ind1 = 0, ind2 = 0;
+  int ind0 = 0, ind1 = 0, ind2 = 0;
   bool foundMinR, gridLineR, foundMinZ, gridLineZ, dataInit;
-  bool fr, ft, fz, gridR, gridZ, rMin, zMin, doneNr, doneNz;
-  bool dataLine0, dataLine1, dataLine2;
+  bool dataLine0, dataLine1, dataLine2, doneNr, doneNz;
   bool foundComp0, foundComp1, foundComp2, foundMin0, foundMin1;
-  std::string line;
-  std::string s1, s2, s3;
+  std::string line, s1, s2, s3;
 
   foundComp0 = foundComp1 = foundComp2 = foundMin0 = foundMin1 = false;
-  dataLine0 = dataLine1 = dataLine2 = false;
+  doneNr = doneNz = dataLine0 = dataLine1 = dataLine2 = false;
   foundMinR = gridLineR = foundMinZ = gridLineZ = dataInit = false;
-  fr = ft = fz = gridR = gridZ = rMin = zMin = doneNr = doneNz = false;
 
   while(std::getline(ifs, line)) {
     if(verbose >4)
@@ -295,11 +292,16 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
   }
 
   // Interpolate at vertices and Set tag
-  //auto tag =  o::Write<o::Real>(mesh.nverts()*3, 0);
   o::Write<o::Real> tag_d(3*mesh.nverts());
 
   const auto coords = mesh.coords(); //Reals
   const auto readInData_d = o::Reals(readInData);
+
+  // temporary
+  if(fs.name == "BField")
+    Bfield_2d = readInData_d;
+  if(fs.name == "EField")
+    Efield_2d = readInData_d;
 
   auto fill = OMEGA_H_LAMBDA(o::LO iv) {
     o::Vector<3> fv{0,0,0};
@@ -311,7 +313,7 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
         printf(" iv:%d %.5f \n", iv, pos[j]);
       }
     }
-    //Cylindrical symmetry = true
+    //TODO Cylindrical symmetry = true
     p::interp2dVector(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, fv, true);
     for(o::LO j=0; j<3; ++j){ //components
       tag_d[3*iv+j] = fv[j]; 
@@ -323,8 +325,6 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
 
   };
   o::parallel_for(mesh.nverts(), fill, "Fill E/B Tag");
-
-  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::VERT, tagName, o::Reals(tag));
 }
@@ -417,7 +417,6 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
   };
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::FACE, tagName, o::Reals(tag));
  
@@ -462,7 +461,8 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
     }
 
     //Cylindrical symmetry = true ? TODO
-    o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, true);
+    o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
+      nR, nZ, pos, true);
     tag_d[iv] = val; 
 
     if(verbose > 4 && iv<10){
@@ -471,7 +471,6 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
   };
   o::parallel_for(mesh.nverts(), fill, "Fill Tag");
 
-  p::exe_space::fence();
   o::HostWrite<o::Real> tag(tag_d);
   mesh.set_tag(o::VERT, tagName, o::Reals(tag));
 }
@@ -527,7 +526,10 @@ void GitrmMesh::initBoundaryFaces() {
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
+  o::Real bxz[4] = {BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ};
+  o::LO bnz[2] = {BGRID_NX, BGRID_NZ};
+  const auto &Bfield_2dm = Bfield_2d;
+
   const auto density = o::Reals(mesh.get_array<o::Real>(o::FACE, "density")); //=ni
   const auto ne = o::Reals(mesh.get_array<o::Real>(o::FACE, "ne"));
   const auto te = o::Reals(mesh.get_array<o::Real>(o::FACE, "Tel"));
@@ -546,18 +548,20 @@ void GitrmMesh::initBoundaryFaces() {
   const o::Real background_amu = BACKGROUND_AMU;
   auto fill = OMEGA_H_LAMBDA(o::LO fid) {
     
-    //TODO check if serial numbers are faceids
+    //Serial numbers are faceids ?
     if(!side_is_exposed[fid]) {
       return;
     }
     o::Vector<3> B{{0}};
     o::Vector<3> pos{{0}};
     p::find_face_centroid(fid, coords, face_verts, pos);
-    p::interp2dVector(BField, BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ, BGRID_NX,
-                     BGRID_NZ, pos, B, true);
 
+    // TODO angle is between surface normal and magnetic field at center of face
+    // If  face is long, BField is not accurate. Calculate at closest point ?
+    p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
+         pos, B, true);
     if(verbose > 3 && fid%50==0){
-      printf(" BField[%d]:  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
+      printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
     }
 
     o::Vector<3> surfNorm{{0}};
@@ -611,7 +615,6 @@ void GitrmMesh::initBoundaryFaces() {
 
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  p::exe_space::fence();
   o::HostWrite<o::Real> angle(angle_d);
   o::HostWrite<o::Real> debyeLength(debyeLength_d);
   o::HostWrite<o::Real> larmorRadius(larmorRadius_d);
@@ -755,7 +758,6 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   };
   o::parallel_for(nel, convert, "Convert to CSR write");
   //CSR data. Conversion is making RO object on device by passing device data.
-  // No fence needed, since not copying to host.
   bdryFaces = o::Reals(bdryFacesCsrW);
 
 }

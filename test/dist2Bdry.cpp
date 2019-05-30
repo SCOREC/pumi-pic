@@ -157,6 +157,8 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh); // (const char* param_file);
+gp.initImpurityPtcls(100, 110, 0, 1.5, 5);
+
   printf("\nCalculate Distance To Bdry..\n");
   gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
@@ -165,14 +167,14 @@ int main(int argc, char** argv) {
   printf("\nCalculate EField ..\n");
   gitrm_calculateE(gp.scs, mesh);
   std::cout << "\nBoris Move  \n";
-  gitrm_borisMove(gp.scs, mesh, gm, 1e-6);
+  gitrm_borisMove(gp.scs, mesh, gm, 1e-8);
 
   fprintf(stderr, "time (seconds) %f\n", timer.seconds());
   timer.reset();
 
   //p::test_find_closest_point_on_triangle();
 
-  // Omega_h::vtk::write_parallel("pisces", &mesh, mesh.dim());
+  Omega_h::vtk::write_parallel("torus", &mesh, mesh.dim());
 
 
   fprintf(stderr, "done\n");

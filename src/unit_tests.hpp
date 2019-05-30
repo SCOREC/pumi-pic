@@ -244,8 +244,7 @@ void test_line_tri_intx()
   for(int i=0; i<4; ++i)
   {
     g::get_face_coords( M, i, face);
-    Omega_h::LO edge = -1;
-    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, edge);
+    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint);
     if(res)
     {
 #if DEBUG>0

@@ -30,8 +30,8 @@ typedef MemberTypes < Vector3d, Vector3d, int,  int, Vector3d,
        Vector3d, Vector3d> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PCL_POS_PREV, PCL_POS, PCL_ID, PCL_BDRY_FACEID, PCL_BDRY_CLOSEPT, 
-     PCL_EFIELD_PREV, PCL_VEL};
+enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_BDRY_FACEID, PTCL_BDRY_CLOSEPT, 
+     PTCL_EFIELD_PREV, PTCL_VEL};
 
 class GitrmParticles {
 public:
@@ -41,6 +41,8 @@ public:
   void operator=(GitrmParticles const&) = delete;
 
   void defineParticles();
+  void initImpurityPtcls(const o::LO n, o::Real theta, o::Real phi,
+     const o::Real r, const o::LO maxLoops = 100, const o::Real outer=2);
 
   SellCSigma<Particle>* scs;
   o::Mesh &mesh;
@@ -57,14 +59,14 @@ inline void setPtclIds(SellCSigma<Particle>* scs) {
   fprintf(stderr, "%s\n", __func__);
   scs->transferToDevice();
   p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceLid(pid_d, scs->getSCS<2>() );
+  p::hostToDeviceLid(pid_d, scs->getSCS<PTCL_ID>() );
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
     PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
       pid_d(pid) = pid;
     });
   });
-  p::deviceToHostLid(pid_d, scs->getSCS<2>() );
+  p::deviceToHostLid(pid_d, scs->getSCS<PTCL_ID>() );
 }
 
 inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
@@ -78,11 +80,11 @@ inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   //set particle positions and parent element ids
   scs->transferToDevice();
   p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_d, scs->getSCS<PCL_POS_PREV>() );
+  p::hostToDeviceFp(x_scs_d, scs->getSCS<PTCL_POS_PREV>() );
 
   //TODO
   p::kkFp3View x_scs_pos_d("x_scs_pos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_pos_d, scs->getSCS<PCL_POS>() );
+  p::hostToDeviceFp(x_scs_pos_d, scs->getSCS<PTCL_POS>() );
 
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
@@ -97,16 +99,13 @@ inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
       }
     });
   });
-  p::deviceToHostFp(x_scs_d, scs->getSCS<PCL_POS_PREV>() );
+  p::deviceToHostFp(x_scs_d, scs->getSCS<PTCL_POS_PREV>() );
 
   //TODO Temp for replacing a Boris move call ?
-  p::deviceToHostFp(x_scs_pos_d, scs->getSCS<PCL_POS>() );
+  p::deviceToHostFp(x_scs_pos_d, scs->getSCS<PTCL_POS>() );
 }
 
-// spherical coordinates
-//inline void GitrmParticles::initParticles(o::Real theta, o::Real phi){
 
-//}
 
 #endif //define
 

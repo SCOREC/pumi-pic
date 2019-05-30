@@ -28,19 +28,27 @@ namespace o = Omega_h;
 
 namespace pumipic{
 
+/*
+NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
+device operator because, in Omega_h host functions are not defined 
+when Kokkos/CUDA is enabled.
+The above is true for all functions using device-only stuff.
+It is safe to define OMEGA_H_DEVICE for functions, unless these are not
+used for host only (openmp) compilation.
 
+*/
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON)
 {
   return std::abs(a-b) <= tol;
 }
 
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, Omega_h::LO n=3,
-    Omega_h::Real tol=EPSILON)
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, 
+  Omega_h::LO n=3, Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n; ++i)
   {
-    if(!almost_equal(a[i],b[i]))
+    if(!almost_equal(a[i],b[i], tol))
     {
       return false;
     }
@@ -148,14 +156,15 @@ inline void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> 
 }
 
 
-/** @brief To interpolate field ONE component at atime from 3D data
- *  @warning This function is only for regular structured grid of data
- *  @param[in]  data, 3component array (intended for 3 component tag), but 
- *  interpolation is done on 1 comp, at a time,
- *  @param[in] comp, component, from degree of freedom
+/** @brief To interpolate field ONE component at atime from 
+ *    nComp-component(dof) 2D data
+ *  @warning This function is only for regular structured grid of data.
+ *  @param[in]  data, n-component(dof) array (intended for 3 component tag), but 
+ *    interpolation is done on 1 comp, at a time,
+ *  @param[in] comp, nth component, out of degree of freedom
  *  @return value corresponding to comp
  */
-OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::Real gridx0, 
+OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, const o::Real gridx0, 
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, 
   const o::LO nz, const o::Vector<3> &pos, const bool cylSymm = false, 
   const o::LO nComp = 1, const o::LO comp = 0) {
@@ -229,18 +238,17 @@ OMEGA_H_INLINE o::Real interpolate2dField(const o::Reals &data, const o::Real gr
   return fxz;
 }
 
-// NOTE: for extruded mesh, TETs are too long that particle's projected position
-// onto nearest poloidal plane is to be used to interpolate fields from 
-// vertices of corresponding face of the TET. For a non-extruded mesh this projection
-// is not possible and interpolation from all points of the TET is to be used.
 
-OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
+OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
   o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
 
-  field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0);
-  field[1] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1);
-  field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2);
+  field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
+    nz, pos, cylSymm, 3, 0);
+  field[1] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
+    nz, pos, cylSymm, 3, 1);
+  field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
+    nz, pos, cylSymm, 3, 2);
   if(cylSymm) {
     o::Real theta = atan2(pos[1], pos[0]);   
     field[0] = cos(theta)*field[0] - sin(theta)*field[1];
@@ -249,7 +257,7 @@ OMEGA_H_INLINE void interp2dVector (const o::Reals &data3, o::Real gridx0,
 }
 
 
-OMEGA_H_INLINE void find_face_centroid(const o::LO fid, const o::Reals &coords, 
+OMEGA_H_DEVICE void find_face_centroid(const o::LO fid, const o::Reals &coords, 
    const o::LOs &face_verts, o::Vector<3> &pos){
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
@@ -263,7 +271,7 @@ OMEGA_H_INLINE void find_face_centroid(const o::LO fid, const o::Reals &coords,
 }
 
 
-OMEGA_H_INLINE void find_face_normal(const o::LO fid, const o::Reals &coords, 
+OMEGA_H_DEVICE void find_face_normal(const o::LO fid, const o::Reals &coords, 
    const o::LOs &face_verts, o::Vector<3> &snorm){
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
@@ -277,7 +285,7 @@ OMEGA_H_INLINE void find_face_normal(const o::LO fid, const o::Reals &coords,
   snorm = o::cross(b - a, c - a);
 }
 
-// o::cross ??
+// fallback since o::cross has no const
 OMEGA_H_INLINE void osh_cross(const Omega_h::Vector<3> &a,
    const Omega_h::Vector<3> &b, Omega_h::Vector<3> &c)
 {

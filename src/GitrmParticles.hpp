@@ -9,8 +9,8 @@
 #include <SCS_Macros.h>
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
-#include <chrono>
-#include <thread>
+#include "pumipic_library.hpp"
+
 
 
 using particle_structs::fp_t;
@@ -41,11 +41,15 @@ public:
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
 
-  void defineParticles(const int numPerElem=100);
-  void initImpurityPtcls(const o::LO n, o::Real theta, o::Real phi,
-     const o::Real r, const o::LO maxLoops = 100, const o::Real outer=2);
-
-  SellCSigma<Particle>* scs;
+  void defineParticles(const int elId, const int numPtcls=100);
+  void findInitBdryElemId(o::Real theta, o::Real phi, const o::Real r,
+     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
+     const o::LO maxLoops = 100, const o::Real outer=2);
+  void setImpurityPtclInitCoords(o::Write<o::LO> &);
+  void initImpurityPtcls(const o::LO numPtcls,o::Real theta, o::Real phi, 
+    const o::Real r, const o::LO maxLoops = 100, const o::Real outer=2);
+  
+  SCS* scs;
   o::Mesh &mesh;
 };
 
@@ -55,19 +59,19 @@ OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
   return o::gather_vectors<4, 3>(a, v);
 }
 
-
-inline void setPtclIds(SellCSigma<Particle>* scs) {
+inline void setPtclIds(SCS* scs) {
   fprintf(stderr, "%s\n", __func__);
-  scs->transferToDevice();
-  p::kkLidView pid_d("pid_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceLid(pid_d, scs->getSCS<PTCL_ID>() );
-  auto lam = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    pid_d(pid) = pid;
-  };
-  p::deviceToHostLid(pid_d, scs->getSCS<PTCL_ID>() );
+  auto pid_d = scs->get<2>();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      pid_d(pid) = pid;
+    });
+  });
 }
 
-inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
+
+inline void setInitialPtclCoords(o::Mesh& mesh, SCS* scs) {
   //get centroid of parent element and set the child particle coordinates
   //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
   //It isn't clear why the template parameter for gather_[verts|vectors] was
@@ -76,34 +80,41 @@ inline void setInitialPtclCoords(o::Mesh& mesh, SellCSigma<Particle>* scs) {
   auto cells2nodes = mesh.get_adj(o::REGION, o::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   //set particle positions and parent element ids
-  scs->transferToDevice();
-  p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_d, scs->getSCS<PTCL_POS_PREV>() );
-
-  //TODO
-  p::kkFp3View x_scs_pos_d("x_scs_pos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_pos_d, scs->getSCS<PTCL_POS>() );
-
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+  auto x_scs_d = scs->get<0>();
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
     auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
     auto center = average(cell_nodes2coords);
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if(e%500 == 0) 
-        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
-      for(int i=0; i<3; i++) {
+    if(mask > 0) {
+      printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+      for(int i=0; i<3; i++)
         x_scs_d(pid,i) = center[i];
-        x_scs_pos_d(pid,i) = center[i];
-      }
-    });
-  });
-  p::deviceToHostFp(x_scs_d, scs->getSCS<PTCL_POS_PREV>() );
-
-  //TODO Temp for replacing a Boris move call ?
-  p::deviceToHostFp(x_scs_pos_d, scs->getSCS<PTCL_POS>() );
+    }
+  };
+  scs->parallel_for(lamb);
 }
 
-
+inline void setTargetPtclCoords(SCS* scs) {
+  fprintf(stderr, "%s\n", __func__);
+  const auto capacity = scs->capacity();
+  auto xtgt_scs_d = scs->get<1>();
+  const fp_t insetFaceDiameter = 0.5;
+  const fp_t insetFacePlane = 0.201; // just above the inset bottom face
+  const fp_t insetFaceRim = -0.25; // in x
+  const fp_t insetFaceCenter = 0; // in x and z
+  fp_t x_delta = insetFaceDiameter / (capacity-1);
+  printf("x_delta %.4f\n", x_delta);
+  if( scs->num_ptcls == 1 )
+    x_delta = 0;
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      xtgt_scs_d(pid,0) = insetFaceCenter;
+      xtgt_scs_d(pid,1) = insetFacePlane;
+      xtgt_scs_d(pid,2) = insetFaceRim + (x_delta * pid);
+    }
+  };
+  scs->parallel_for(lamb);
+}
 
 #endif //define
 

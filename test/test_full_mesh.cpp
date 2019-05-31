@@ -1,6 +1,7 @@
 #include <fstream>
 
-#include <Omega_h_file.hpp>  //gmsh
+#include <Omega_h_file.hpp> 
+
 #include <pumipic_mesh.hpp>
 
 int main(int argc, char** argv) {
@@ -8,17 +9,15 @@ int main(int argc, char** argv) {
   Omega_h::Library& lib = pic_lib.omega_h_lib();
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (argc != 5) {
+  if (argc != 3) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition filename> "
-              "<# of safe layers> <# of buffer layers>\n", argv[0]);
+      fprintf(stderr, "Usage: %s <mesh> <partition filename>\n", argv[0]);
+    MPI_Finalize();
     return EXIT_FAILURE;
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  int safe_layers = atoi(argv[3]);
-  int ghost_layers = atoi(argv[4]);
 
   //**********Load the mesh in serial everywhere*************//
   Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.self());
@@ -34,6 +33,7 @@ int main(int argc, char** argv) {
   if (!in_str) {
     if (!rank)
       fprintf(stderr,"Cannot open file %s\n", argv[2]);
+    MPI_Finalize();
     return EXIT_FAILURE;
   }
   int own;
@@ -42,12 +42,15 @@ int main(int argc, char** argv) {
     host_owners[index++] = own;
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
-  
-  pumipic::Mesh picparts(mesh,owner,ghost_layers, safe_layers);
 
-  char vtk_name[100];
-  sprintf(vtk_name, "picpart%d", rank);
-  Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
-  
-  return 0;
+  pumipic::Mesh picparts(mesh,owner);
+
+  for (int i = 0; i <= mesh.dim(); ++i) {
+    if (mesh.nents(i) != picparts.mesh()->nents(i)) {
+      fprintf(stderr, "Entity counts do not match on process %d for dimension %d (%d != %d)\n",
+              rank, i, mesh.nents(i), picparts.mesh()->nents(i));
+      return EXIT_FAILURE;
+    }
+  }
+  return EXIT_SUCCESS;
 }

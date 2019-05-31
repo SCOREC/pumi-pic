@@ -6,16 +6,15 @@
 #include "unit_tests.hpp"
 
 #include <Omega_h_library.hpp>
-
 #include "pumipic_kktypes.hpp"
+#include "pumipic_adjacency.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
+#include <MemberTypes.h>
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
-#include <chrono>
-#include <thread>
-//#include "pumipic_library.hpp"
+#include "pumipic_library.hpp"
 
 
 using particle_structs::fp_t;
@@ -23,9 +22,6 @@ using particle_structs::lid_t;
 using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -40,48 +36,56 @@ GitrmParticles::~GitrmParticles(){
   delete scs;
 }
 
+// Initialized in only one element
+void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
 
-void GitrmParticles::defineParticles(const int numPtcls){
+  o::Int ne = mesh.nelems();
 
-  //GitrmMesh &gm = GitrmMesh::getInstance();
-  //o::Mesh &mesh = gm.mesh;
-  auto ne = mesh.nelems();
+  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  //Element gids is left empty since there is no partitioning of the mesh yet
+  SCS::kkGidView element_gids;
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    ptcls_per_elem(i) = 0;
+    if (i == elId)
+      ptcls_per_elem(i) = numPtcls;
+  });
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    const int np = ptcls_per_elem(i);
+    if (np > 0)
+      printf("ppe[%d] %d\n", i, np);
+  });
 
-  fprintf(stderr, "number of elements %d number of particles %d\n",
-      ne, numPtcls);
-  int* ptcls_per_elem = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[numPtcls];
-  for(int i=0; i<ne; i++)
-    ptcls_per_elem[i] = 0;
-
-  for(int i=0; i<numPtcls; i++)
-    ids[i].push_back(i);
-
-  //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
+  //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  const bool debug = false;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
-  fprintf(stderr, "Sell-C-sigma C %d V %d sigma %d\n", policy.team_size(), V, sigma);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
   scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-                   ptcls_per_elem,
-                   ids, debug);
-  delete [] ptcls_per_elem;
-  delete [] ids;
-  //Set initial and target positions so search will
-  // find the parent elements
-//  setInitialPtclCoords(mesh, scs);
+                   ptcls_per_elem, element_gids);
 
+}
+
+void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::Real phi, 
+    const o::Real r, const o::LO maxLoops, const o::Real outer) {
+  o::Write<o::LO> elemAndFace(3, -1); 
+  o::LO initEl = -1;
+  findInitBdryElemId(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
+  defineParticles(initEl, numPtcls);
+
+  setImpurityPtclInitCoords(elemAndFace);
   setPtclIds(scs);
+
+  //setTargetPtclCoords(scs);
+
 }
 
 // spherical coordinates (wikipedia), radius r=1.5m, inclination theta[0,pi] from the z dir,
 // azimuth angle phi[0, 2π) from the Cartesian x-axis (so that the y-axis has phi = +90°).
-void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::Real phi, 
-    const o::Real r, const o::LO maxLoops, const o::Real outer){
+void GitrmParticles::findInitBdryElemId(o::Real theta, o::Real phi, const o::Real r,
+     o::LO &initEl, o::Write<o::LO> &elemAndFace, const o::LO maxLoops, 
+     const o::Real outer){
 
   o::LO debug = 4;
 
@@ -111,7 +115,6 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
   printf("\nDirection:x,y,z: %f %f %f\n xe,ye,ze: %f %f %f\n", x,y,z, xe,ye,ze);
 
   // Beginning element id of this x,y,z
-  o::Write<o::LO> elem_face(3, -1); 
   auto lamb = OMEGA_H_LAMBDA(const int elem) {
     auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
     auto M = p::gatherVectors4x3(coords, tetv2v);
@@ -120,21 +123,21 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
     o::Vector<4> bcc;
     p::find_barycentric_tet(M, orig, bcc);
     if(p::all_positive(bcc, 0)) {
-      elem_face[0] = elem;
+      elemAndFace[0] = elem;
       if(debug > 3)
         printf("ORIGIN detected in elem %d \n", elem);
     }
   };
   o::parallel_for(mesh.nelems(), lamb, "init_impurity_ptcl1");
-  o::HostRead<o::LO> elemId_bh(elem_face);
+  o::HostRead<o::LO> elemId_bh(elemAndFace);
   printf("ELEM_beg %d \n", elemId_bh[0]);
 
   OMEGA_H_CHECK(elemId_bh[0] >= 0);
 
-  // Search final elem_face on bdry, on 1 thread on device(issue [] on host) 
+  // Search final elemAndFace on bdry, on 1 thread on device(issue [] on host) 
   o::Write<o::Real> xpt(1, -1); 
   auto lamb2 = OMEGA_H_LAMBDA(const int e) {
-    auto elem = elem_face[0];
+    auto elem = elemAndFace[0];
     const o::Vector<3> dest{xe, ye, ze};
     o::Vector<3> orig{x,y,z};   
     o::Vector<4> bcc;
@@ -173,8 +176,8 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
 
         if(detected && side_is_exposed[face_id]) {
           found = true;
-          elem_face[1] = elem;
-          elem_face[2] = face_id;
+          elemAndFace[1] = elem;
+          elemAndFace[2] = face_id;
 
           for(o::LO i=0; i<3; ++i)
             xpt[i] = xpoint[i];
@@ -208,61 +211,36 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
 
   o::HostRead<o::Real> xpt_h(xpt);
 
-  o::HostRead<o::LO> elemId_fh(elem_face);
+  o::HostRead<o::LO> elemId_fh(elemAndFace);
+  initEl = elemId_fh[1];
   printf("ELEM_final %d xpt: %.3f %.3f %.3f\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
   OMEGA_H_CHECK(elemId_fh[0] >= 0);
-  auto initialElement = elemId_fh[0];
 
+}
 
-  auto ne = mesh.nelems();
-  p::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  //Element gids is left empty since there is no partitioning of the mesh yet
-  SCS::kkGidView element_gids;
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
-    ptcls_per_elem(i) = 0;
-    if (i == initialElement)
-      ptcls_per_elem(i) = numPtcls;
-  });
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
-    const int np = ptcls_per_elem(i);
-    if (np > 0)
-      printf("ppe[%d] %d\n", i, np);
-  });
+void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
 
-  //'sigma', 'V', and the 'policy' control the layout of the SCS structure
-  //in memory and can be ignored until performance is being evaluated.  These
-  //are reasonable initial settings for OpenMP.
-  const int sigma = INT_MAX; // full sorting
-  const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, 
-                              numPtcls, ptcls_per_elem, element_gids);
+  const auto dual = mesh.ask_dual();
+  const auto down_r2f = mesh.ask_down(3, 2);
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto face_verts =  mesh.ask_verts_of(2);
 
-  //Set initial and target positions so search will
-  // find the parent elements
-  //setInitialPtclCoords(mesh, scs);
-  setPtclIds(scs);
-  //setTargetPtclCoords(scs);
-
-
-
+  const auto down_r2fs = down_r2f.ab2b;
+  const auto dual_faces = dual.ab2b;
+  const auto dual_elems = dual.a2ab;
 
   //Set particle coordinates. Initialized only on one face. TODO confirm this ? 
-  scs->transferToDevice();
-  p::kkFp3View x_scs_d("x_scs_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_d, scs->getSCS<PTCL_POS>() );
+  auto x_scs_d = scs->get<PTCL_POS>();
+  auto x_scs_prev_d = scs->get<PTCL_POS_PREV>();
+  auto vel_d = scs->get<PTCL_VEL>();
 
-  p::kkFp3View x_scs_prev_d("x_scs_prev_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(x_scs_prev_d, scs->getSCS<PTCL_POS_PREV>());
-
-  p::kkFp3View vel_d("vel_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(vel_d, scs->getSCS<PTCL_VEL>() );
   srand(time(NULL));
 
   auto init = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    if(elem == elem_face[1]) {
-      const auto faceId = elem_face[2];
+    if(elem == elemAndFace[1]) {
+      const auto faceId = elemAndFace[2];
       const auto fv2v = o::gather_verts<3>(face_verts, faceId);
       const auto face = p::gatherVectors3x3(coords, fv2v);
       o::Vector<3> fnorm;
@@ -295,8 +273,4 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
 
   };
   scs->parallel_for(init);
-  p::deviceToHostFp(x_scs_d, scs->getSCS<PTCL_POS>());
-  p::deviceToHostFp(x_scs_prev_d, scs->getSCS<PTCL_POS_PREV>());
-  p::deviceToHostFp(vel_d, scs->getSCS<PTCL_VEL>());
-
 }

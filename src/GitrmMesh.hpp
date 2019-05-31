@@ -227,15 +227,9 @@ inline void gitrm_findDistanceToBdry(
   //fskip is 2, since 1st 2 are not part of face vertices
 
   OMEGA_H_CHECK(fsize > 0 && nel >0);
-  scs->transferToDevice();
-
-  p::kkFp3View pos_d("position_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(pos_d, scs->getSCS<PTCL_POS>());
-
-  p::kkFp3View closestPoint_d("closestPoint_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>());
-
-
+  auto pos_d = scs->get<PTCL_POS>();
+  auto closestPoint_d = scs->get<PTCL_BDRY_CLOSEPT>();
+  
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     //if (mask <= 0) return; //TODO ?????
@@ -327,8 +321,6 @@ inline void gitrm_findDistanceToBdry(
   };
 
   scs->parallel_for(distRun);
-
-  p::deviceToHostFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>());
 
 }
 

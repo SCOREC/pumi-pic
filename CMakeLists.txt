@@ -45,6 +45,8 @@ endif()
 #deps
 find_package(KokkosCore REQUIRED)
 include_directories(${KokkosCore_INCLUDE_DIRS})
+find_package(KokkosContainers REQUIRED)
+include_directories(${KokkosContainers_INCLUDE_DIRS})
 
 message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
 set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})

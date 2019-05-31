@@ -34,24 +34,16 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
   const auto childLangmuirDists = o::Reals(mesh.get_array<o::Real>(
                                   o::FACE, "ChildLangmuirDist"));
 
-  scs->transferToDevice();
-  p::kkFp3View ptclPos_d("ptclPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PTCL_POS>());
-  
-  p::kkFp3View closestPoint_d("closestPoint_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(closestPoint_d, scs->getSCS<PTCL_BDRY_CLOSEPT>()); 
-
-  p::kkLidView faceId_d("faceId_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceLid(faceId_d, scs->getSCS<PTCL_BDRY_FACEID>());
-  
-  p::kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
+  auto ptclPos_d = scs->get<PTCL_POS>();
+  auto closestPoint_d = scs->get<PTCL_BDRY_CLOSEPT>();
+  auto faceId_d = scs->get<PTCL_BDRY_FACEID>();
+  auto efield_d  = scs->get<PTCL_EFIELD_PREV>();
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask) { 
     o::LO verbose = (elem %100 ==0)?3:0;
 
-    auto faceId = faceId_d[pid];
+    auto faceId = faceId_d(pid);
     if(faceId < 0) {
       //TODO check
       efield_d(pid, 0) = 0;
@@ -119,7 +111,6 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 
   };
   scs->parallel_for(run);
-  p::deviceToHostFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
 }
 
 // NOTE: for extruded mesh, TETs are too long that particle's projected position
@@ -146,18 +137,13 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   const auto &EField_2d = gm.Efield_2d;
   const auto &BField_2d = gm.Bfield_2d;
 
-  scs->transferToDevice();
-  p::kkFp3View efield_d("efield_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(efield_d, scs->getSCS<PTCL_EFIELD_PREV>());
-  p::kkFp3View vel_d("vel_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(vel_d, scs->getSCS<PTCL_VEL>());
-  p::kkFp3View ptclPrevPos_d("ptclPrevPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPrevPos_d, scs->getSCS<PTCL_POS_PREV>());
-  p::kkFp3View ptclPos_d("ptclPos_d", scs->offsets[scs->num_slices]);
-  p::hostToDeviceFp(ptclPos_d, scs->getSCS<PTCL_POS>());
+  auto ptclPos_d = scs->get<PTCL_POS>();
+  auto efield_d  = scs->get<PTCL_EFIELD_PREV>();
+  auto ptclPrevPos_d = scs->get<PTCL_POS_PREV>();
+  auto vel_d = scs->get<PTCL_VEL>();
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    o::LO verbose = (elem%50==0)?4:0;
+    o::LO verbose = 4;//(elem%50==0)?4:0;
     
     o::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos
     o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
@@ -239,14 +225,11 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       printf(" e,p: %d %d :: pos: %.3f %.3f %.3f ::", elem, pid, ptclPos_d(pid, 0), 
         ptclPos_d(pid, 1), ptclPos_d(pid, 2));
       printf("prev_pos: %.3f %.3f %.3f ::", pre[0], pre[1], pre[2]);
-      printf("vel_next: %.3f %.3f %.3f \n", vel[0], vel[1], vel[2]);
+      //printf("vel_next: %.3f %.3f %.3f \n", vel[0], vel[1], vel[2]);
     }
   };
 
   scs->parallel_for(boris);
-  p::deviceToHostFp(ptclPos_d, scs->getSCS<PTCL_POS>());
-  p::deviceToHostFp(ptclPrevPos_d, scs->getSCS<PTCL_POS_PREV>());
-  p::deviceToHostFp(vel_d, scs->getSCS<PTCL_VEL>());
 }
 
 #endif //define

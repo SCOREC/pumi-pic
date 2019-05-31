@@ -1,41 +1,50 @@
-#include "pumipic_part_construct.hpp"
+#include "pumipic_mesh.hpp"
 #include <Omega_h_for.hpp>
-#include <Omega_h_file.hpp>  //gmsh
-#include <Omega_h_tag.hpp>
-#include <Omega_h_adj.hpp>
-#include <Omega_h_array.hpp>
-#include <Omega_h_array_ops.hpp>
 #include <Omega_h_element.hpp>
-#include <Omega_h_scalar.hpp> //divide
-#include <Omega_h_mark.hpp>
 #include <Omega_h_class.hpp>
-#include <Omega_h_mesh.hpp>
-#include <Omega_h_shape.hpp>
 #include <Omega_h_build.hpp>
-#include <Omega_h_compare.hpp>
-#include <Omega_h_reduce.hpp>
+#include <Omega_h_int_scan.hpp>
 
 namespace {
-  void createGlobalNumbering(int comm_size, Omega_h::Write<Omega_h::LO>& owner,
-                             Omega_h::Write<Omega_h::LO>& elem_gid);
+  Omega_h::LOs calculateOwnerOffset(Omega_h::Write<Omega_h::LO> owner, int comm_size);
+  Omega_h::LOs createGlobalNumbering(Omega_h::Write<Omega_h::LO> owner, int comm_size,
+                             Omega_h::Write<Omega_h::GO> elem_gid);
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
-                       Omega_h::Write<Omega_h::LO>& is_safe, Omega_h::Write<Omega_h::LO>& is_visited,
-                       Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& has_part);
-  void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO>& has_part, 
-                   Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& buf);
-  Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr);
-  void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& is_valid,
-                          Omega_h::Write<Omega_h::LO>& numbering);
-  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& vert_ids,
-                    Omega_h::Write<Omega_h::Real>& new_coords);
+                       Omega_h::Write<Omega_h::LO> is_safe, Omega_h::Write<Omega_h::LO> is_visited,
+                       Omega_h::Write<Omega_h::LO> owner, Omega_h::Write<Omega_h::LO> has_part);
+  void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO> has_part, 
+                   Omega_h::Write<Omega_h::LO> owner, Omega_h::Write<Omega_h::LO> buf);
+  Omega_h::LO sumPositives(Omega_h::LO size, Omega_h::Write<Omega_h::LO> arr);
+  // void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid,
+  //                         Omega_h::Write<Omega_h::LO> numbering);
+  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
+                    Omega_h::Write<Omega_h::Real> new_coords);
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::Write<Omega_h::LO>& ent_ids, Omega_h::Write<Omega_h::LO>& vert_ids,
-                        Omega_h::Write<Omega_h::Real>& new_coords);
+                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
+                        Omega_h::Write<Omega_h::Real> new_coords);
 }
 
 namespace pumipic {
-  void constructPICParts(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& owner,
-                         int safe_layers, int ghost_layers, Omega_h::Mesh* picpart, int debug) {
+    Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+    /************* Globally Number Element **********/
+    Omega_h::Write<Omega_h::GO> elem_gid(mesh.nelems());
+    Omega_h::LOs rank_offset_nelms = createGlobalNumbering(owner, comm_size, elem_gid);
+    //TODO define global numbering on all entity types
+
+    // *********** Set safe zone and buffer to be entire mesh**************** //
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 1);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size, 1);
+
+    constructPICPart(mesh, owner, elem_gid, rank_offset_nelms, has_part, is_safe);
+  }
+
+  Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner,
+                  int ghost_layers, int safe_layers) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     int comm_size;
@@ -46,134 +55,149 @@ namespace pumipic {
       throw 1;
     }
 
-    int dim = mesh.dim();
-    int ne = mesh.nelems();
     /************* Globally Number Element **********/
-    Omega_h::Write<Omega_h::LO> elem_gid(ne);
-    createGlobalNumbering(comm_size, owner, elem_gid);
+    Omega_h::Write<Omega_h::GO> elem_gid(mesh.nelems());
+    Omega_h::LOs rank_offset_nelms = createGlobalNumbering(owner, comm_size, elem_gid);
+    //TODO define global numbering on all entity types
 
     // **********Determine safe zone and ghost region**************** //
-    Omega_h::Write<Omega_h::LO> is_safe(ne);
-    Omega_h::Write<Omega_h::LO> is_visited(ne);
-    const auto initVisit = OMEGA_H_LAMBDA( Omega_h::LO elem_id){
-      is_visited[elem_id] = is_safe[elem_id] = (owner[elem_id] == rank);
-    };
-    Omega_h::parallel_for(ne, initVisit, "initVisit");
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
+    Omega_h::Write<Omega_h::LO> is_visited(mesh.nelems());
     Omega_h::Write<Omega_h::LO> has_part(comm_size);
-    for (int i = 0; i < comm_size; ++i)
-      has_part[i] = (i == rank);
     int bridge_dim = 0;
     bfsBufferLayers(mesh, bridge_dim, safe_layers, ghost_layers, is_safe, is_visited, 
                     owner, has_part);
 
-    if (debug >= 2) {
-      for (int i = 0; i < comm_size; ++i) {
-        if (has_part[i])
-          printf("Rank %d is keeping %d\n", rank, i);
-      }
-    }
-    if (debug >= 3) {
-      //*************Render the 0th rank after BFS*************//
-      mesh.add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::LO>(elem_gid));
-      mesh.add_tag(dim, "safe", 1, Omega_h::Read<int>(is_safe));
-      mesh.add_tag(dim, "visited", 1, Omega_h::Read<int>(is_visited));
-      if (rank == 0) {
-        Omega_h::vtk::write_parallel("rendered", &mesh, dim);
-      }
-    }
+    constructPICPart(mesh, owner, elem_gid, rank_offset_nelms, has_part, is_safe);
+  }
+  void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner,
+                              Omega_h::Write<Omega_h::GO> elem_gid,
+                              Omega_h::LOs rank_offset_nelms,
+                              Omega_h::Write<Omega_h::LO> has_part,
+                              Omega_h::Write<Omega_h::LO> is_safe) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int dim = mesh.dim();
 
-    /***************** Count Number of Entities in the PICpart *************/    
+    /***************** Count the number of parts in the picpart ****************/
+    num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
+
+    
+    /***************** Count Number of Entities in the PICpart *************/
     //Mark all entities owned by a part with has_part[part] = true as staying
-    Omega_h::Write<Omega_h::LO>** buf_ents = new Omega_h::Write<Omega_h::LO>*[dim+1];
+    Omega_h::Write<Omega_h::LO> buf_ents[4];
     for (int i = 0; i <= dim; ++i) 
-      buf_ents[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
+      buf_ents[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
     for (int i = 0; i <= dim; ++i)
-      setSafeEnts(mesh, i, ne, has_part, owner, *(buf_ents[i]));
-  
+      setSafeEnts(mesh, i, mesh.nelems(), has_part, owner, buf_ents[i]);
+
     //Gather number of entities remaining in the picpart
-    Omega_h::Write<Omega_h::LO> num_ents(dim+1,0);
+    Omega_h::GO* num_ents = new Omega_h::GO[dim+1];
     for (int i = 0; i <= dim; ++i)
-      num_ents[i] = sumArray(mesh.nents(i), *(buf_ents[i]));
-    if (debug >= 1)
-      printf("Rank %d has <v e f r> %d %d %d %d\n", rank, 
-             num_ents[0], num_ents[1], num_ents[2], num_ents[3]);
+      num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
 
     /**************** Create numberings for the entities on the picpart **************/
-    Omega_h::Write<Omega_h::LO>** ent_ids = new Omega_h::Write<Omega_h::LO>*[dim+1];
+    Omega_h::LOs ent_ids[4];
     for (int i = 0; i <= dim; ++i) {
       //Default the value to the number of entities in the pic part (for padding)
-      ent_ids[i] = new Omega_h::Write<Omega_h::LO>(mesh.nents(i), -1);
-      numberValidEntries(mesh.nents(i), *(buf_ents[i]), *(ent_ids[i]));
+      Omega_h::Write<Omega_h::LO> numbering(mesh.nents(i), -1);
+      const auto size = mesh.nents(i);
+      auto is_valid = buf_ents[i];
+      Omega_h::LOs is_valid_r(is_valid);
+      auto offset = Omega_h::offset_scan(is_valid_r);
+      Omega_h::parallel_for(size, OMEGA_H_LAMBDA(Omega_h::LO i) {
+          if(is_valid_r[i])
+            numbering[i] = offset[i];
+      });
+      ent_ids[i] = numbering;
     }
 
     //************Build a new mesh as the picpart**************
-    //Gather coordinates
-    //Pad the array by 1 set of coordinates
-    Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
-    gatherCoords(mesh, *(ent_ids[0]), new_coords);
+    Omega_h::Library* lib = mesh.library();
+    picpart = new Omega_h::Mesh(lib);
 
+    //Gather coordinates
+    Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
+    gatherCoords(mesh, ent_ids[0], new_coords);
+
+    //Build the mesh
     for (int i = dim; i >= 0; --i)
-      buildAndClassify(mesh,picpart,i,num_ents[i], *(ent_ids[i]), *(ent_ids[0]), new_coords);
+      buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
     Omega_h::finalize_classification(picpart);
+
+    delete [] num_ents;
 
     //****************Convert Tags to the picpart***********
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO>& new_elem_ids = *(ent_ids[dim]);
-    const auto convertSafeAndGid = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
-      const Omega_h::LO new_elem = new_elem_ids[elem_id];
+    Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0);
+    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
+    Omega_h::LOs elm_ids = ent_ids[dim];
+    const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
+      const Omega_h::LO new_elem = elm_ids[elem_id];
+      //TODO remove this conditional using padding?
       if (new_elem >= 0) {
         new_safe[new_elem] = is_safe[elem_id];
         new_elem_gid[new_elem] = elem_gid[elem_id];
+        new_ent_owners[new_elem] = owner[elem_id];
       }
     };
-    Omega_h::parallel_for(mesh.nelems(), convertSafeAndGid, "convertSafeAndGid");
-    picpart->add_tag(dim, "global_id", 1, Omega_h::Read<Omega_h::LO>(new_elem_gid));
+    Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
     picpart->add_tag(dim, "safe", 1, Omega_h::Read<Omega_h::LO>(new_safe));
+    global_ids_per_dim[dim] = Omega_h::Read<Omega_h::GO>(new_elem_gid);
+    is_ent_safe = Omega_h::LOs(new_safe);
 
-    //Cleanup
-    for (int i = 0; i <= dim; ++i) {
-      delete buf_ents[i];
-      delete ent_ids[i];
-    }
-    delete [] buf_ents;
-    delete [] ent_ids;
+    //**************** Build communication information ********************//
+    //TODO create communication information for each entity dimension
+    commptr = lib->world();
+    Omega_h::LOs picpart_offset_nelms = calculateOwnerOffset(new_ent_owners, comm_size);
+    setupComm(dim, rank_offset_nelms, picpart_offset_nelms, new_ent_owners);
   }
 }
 
 namespace {
 
-  void createGlobalNumbering(int comm_size, Omega_h::Write<Omega_h::LO>& owner,
-                             Omega_h::Write<Omega_h::LO>& elem_gid) {
-    //Exclusive sum of # elements per part
-    Omega_h::Write<Omega_h::LO> elems_per_rank(comm_size+1, 0);
-    //TODO put this on device
-    for (int i = 0; i < owner.size(); ++i) {
-      ++elems_per_rank[owner[i]+1];
-    }
-    
-    //Exclusive sum over elems per rank
-    for (int i = 1; i <= comm_size; ++i) {
-      elems_per_rank[i] += elems_per_rank[i-1];
-    }
+  Omega_h::LOs calculateOwnerOffset(Omega_h::Write<Omega_h::LO> owner, int comm_size) {
+    Omega_h::Write<Omega_h::LO> offset_nents(comm_size, 0);
+    auto countEntsPerRank = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
+      const Omega_h::LO owner_index = owner[ent_id];
+      Kokkos::atomic_fetch_add(&(offset_nents[owner_index]), 1);
+    };
+    Omega_h::parallel_for(owner.size(), countEntsPerRank);
+    return Omega_h::offset_scan(Omega_h::LOs(offset_nents));
+  }
+
+  Omega_h::LOs createGlobalNumbering(Omega_h::Write<Omega_h::LO> owner, int comm_size,
+                             Omega_h::Write<Omega_h::GO> elem_gid) {
+    Omega_h::LOs rank_offset_nelms = calculateOwnerOffset(owner, comm_size);
+
     //Globally number the elements
-    int* elem_gid_rank = new int[comm_size];
-    for (int i = 0; i < comm_size; ++i)
-      elem_gid_rank[i] = elems_per_rank[i];
-    for (int i = 0; i < owner.size(); ++i) {
-      elem_gid[i] = elem_gid_rank[owner[i]]++;
-    }
+    Omega_h::Write<Omega_h::LO> elem_gid_rank = Omega_h::deep_copy(rank_offset_nelms);
+    auto setElemGID = OMEGA_H_LAMBDA(Omega_h::LO elm_id) {
+      elem_gid[elm_id] = Kokkos::atomic_fetch_add(&(elem_gid_rank[owner[elm_id]]), 1);
+    };
+    Omega_h::parallel_for(owner.size(), setElemGID);
+    return rank_offset_nelms;
   }
 
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
-                       Omega_h::Write<Omega_h::LO>& is_safe, Omega_h::Write<Omega_h::LO>& is_visited,
-                       Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& has_part) {
-    //runBFS to calculate safe zone and buffered region
+                       Omega_h::Write<Omega_h::LO> is_safe, Omega_h::Write<Omega_h::LO> is_visited,
+                       Omega_h::Write<Omega_h::LO> owner, Omega_h::Write<Omega_h::LO> has_part) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     Omega_h::Write<Omega_h::LO> is_visited_next(mesh.nelems());
     const auto initVisit = OMEGA_H_LAMBDA( Omega_h::LO elem_id){
+      is_visited[elem_id] = is_safe[elem_id] = (owner[elem_id] == rank);
       is_visited_next[elem_id] = is_visited[elem_id];
     };
     Omega_h::parallel_for(mesh.nelems(), initVisit, "initVisit");
+    auto initHasPart = OMEGA_H_LAMBDA(Omega_h::LO i) {
+      has_part[i] = (i == rank);
+    };
+    Omega_h::parallel_for(comm_size, initHasPart);
 
     const auto bridge2elems = mesh.ask_up(bridge_dim, mesh.dim());
     auto ghostingBFS = OMEGA_H_LAMBDA( Omega_h::LO bridge_id) {
@@ -182,7 +206,8 @@ namespace {
       bool is_visited_here = false;
       for (int j = 0; j < deg; ++j) {
         const auto elm = bridge2elems.ab2b[firstElm+j];
-        is_visited_here |= is_visited[elm];
+        if (is_visited[elm])
+          is_visited_here = 1;
       }
       for (int j = 0; j < deg*is_visited_here; ++j) {
         const auto elm = bridge2elems.ab2b[firstElm+j];
@@ -194,7 +219,8 @@ namespace {
     };
     auto copyVisit = OMEGA_H_LAMBDA( Omega_h::LO elm_id) {
       is_visited[elm_id] = is_visited_next[elm_id];
-      has_part[owner[elm_id]] |= is_visited[elm_id];
+      if (is_visited[elm_id])
+        has_part[owner[elm_id]] = 1;
     };
     for (int i = 0; i < ghost_layers; ++i) {
       Omega_h::parallel_for(mesh.nents(bridge_dim), ghostingBFS,"ghostingBFS");
@@ -204,8 +230,8 @@ namespace {
     }
   }
 
-  void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO>& has_part, 
-                   Omega_h::Write<Omega_h::LO>& owner, Omega_h::Write<Omega_h::LO>& buf) {
+  void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO> has_part, 
+                   Omega_h::Write<Omega_h::LO> owner, Omega_h::Write<Omega_h::LO> buf) {
     if (dim == mesh.dim()) {
       auto setSafeEntsL = OMEGA_H_LAMBDA( Omega_h::LO elm_id) {
         buf[elm_id] = has_part[owner[elm_id]];
@@ -220,39 +246,37 @@ namespace {
         const auto firstEnt = elm_id * deg;
         for (int j = 0; j < deg; ++j) {
           const auto ent = downAdj.ab2b[firstEnt+j];
-          buf[ent] |= is_buffered;
+          if( is_buffered )
+            buf[ent] = 1;
         }
       };
       Omega_h::parallel_for(size, setSafeEnts, "setSafeEnts");
     }
   }
 
-  Omega_h::LO sumArray(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& arr) {
+  //TODO Replace with omega_h reduce/scan
+  Omega_h::LO sumPositives(Omega_h::LO size, Omega_h::Write<Omega_h::LO> arr) {
     Omega_h::LO sum = 0;
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-    Kokkos::parallel_reduce(size, KOKKOS_LAMBDA(const int i, Omega_h::LO& lsum) {
+    Kokkos::parallel_reduce(size, OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
         lsum += arr[i] > 0 ;
       }, sum);
-#endif
     return sum;
   }
-  void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO>& is_valid, 
-                          Omega_h::Write<Omega_h::LO>& numbering) {
-#if defined(KOKKOS_ENABLE_CXX11_DISPATCH_LAMBDA)
-    Kokkos::parallel_scan(size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
-      num += is_valid[i];
-      numbering[i] += num * final * is_valid[i];
-    });
-#endif
-  }
-
-  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO>& vert_ids,
-                    Omega_h::Write<Omega_h::Real>& new_coords) {
+  // void numberValidEntries(Omega_h::LO size, Omega_h::Write<Omega_h::LO> is_valid, 
+  //                         Omega_h::Write<Omega_h::LO> numbering) {
+  //   Kokkos::parallel_scan(size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
+  //     num += is_valid[i];
+  //     numbering[i] += num * final * is_valid[i];
+  //   });
+  // }
+  void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
+                    Omega_h::Write<Omega_h::Real> new_coords) {
+    const auto meshDim = mesh.dim();
     Omega_h::Reals n2c = mesh.coords();
     auto gatherCoordsL = OMEGA_H_LAMBDA(Omega_h::LO vert_id)  {
-      const Omega_h::LO first_vert = vert_id * 3;
-      const Omega_h::LO first_new_vert = vert_ids[vert_id]*3;
-      const int deg = (first_new_vert >=0) * mesh.dim();
+      const Omega_h::LO first_vert = vert_id * meshDim;
+      const Omega_h::LO first_new_vert = vert_ids[vert_id]*meshDim;
+      const int deg = (first_new_vert >=0 ) * meshDim;
       for (int i = 0; i < deg; ++i)
         new_coords[first_new_vert + i] = n2c[first_vert + i];
     };
@@ -260,8 +284,8 @@ namespace {
   }
 
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::Write<Omega_h::LO>& ent_ids, Omega_h::Write<Omega_h::LO>& vert_ids,
-                        Omega_h::Write<Omega_h::Real>& new_coords) {
+                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
+                        Omega_h::Write<Omega_h::Real> new_coords) {
     Omega_h::Write<Omega_h::LO> ent2v((num_ents) * (dim + 1));
     Omega_h::Write<Omega_h::LO> ent_class(num_ents);
     auto old_class = full_mesh.get_array<Omega_h::ClassId>(dim, "class_id");

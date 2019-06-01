@@ -25,6 +25,13 @@ using particle_structs::elemCoords;
 namespace o = Omega_h;
 namespace p = pumipic;
 
+void render(o::Mesh& mesh, int iter) {
+  fprintf(stderr, "%s\n", __func__);
+  std::stringstream ss;
+  ss << "rendered_t" << iter;
+  std::string s = ss.str();
+  Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
+}
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -36,91 +43,62 @@ void printTimerResolution() {
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
 }
 
-//TODO this update has to be in Boris Move ?, or kept track of inside it
-void updatePtclPositions(SCS* scs) {
-  auto x_scs_d = scs->get<0>();
-  auto xtgt_scs_d = scs->get<1>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
-      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
-      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
-      xtgt_scs_d(pid,0) = 0;
-      xtgt_scs_d(pid,1) = 0;
-      xtgt_scs_d(pid,2) = 0;
-    });
-  });
-}
+void tagParentElements(o::Mesh& mesh, SCS* scs, int loop) {
+  fprintf(stderr, "%s\n", __func__);
+  //read from the tag
+  o::LOs ehp_nm1 = mesh.get_array<o::LO>(mesh.dim(), "has_particles");
+  o::Write<o::LO> ehp_nm0(ehp_nm1.size());
+  auto set_ehp = OMEGA_H_LAMBDA(o::LO i) {
+    ehp_nm0[i] = ehp_nm1[i];
+  };
+  o::parallel_for(ehp_nm1.size(), set_ehp, "set_ehp");
 
-
-void rebuild(SCS* scs, o::LOs elem_ids) {
-  fprintf(stderr, "rebuild\n");
-  updatePtclPositions(scs);
-  const int scs_capacity = scs->capacity();
-  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    (void) pid;
     if(mask > 0)
-      printf("elem_ids[%d] %d\n", pid, elem_ids[pid]);
-  };
-  scs->parallel_for(printElmIds);
-
-  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
-
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    (void)e;
-    scs_elem_ids(pid) = elem_ids[pid];
-  };
-  scs->parallel_for(lamb);
-  
-  scs->rebuild(scs_elem_ids);
-}
-
-void search(o::Mesh& mesh, SCS* scs) {
-  fprintf(stderr, "search\n");
-  assert(scs->num_elems == mesh.nelems());
-  Omega_h::LO maxLoops = 100;
-  const auto scsCapacity = scs->capacity();
-  o::Write<o::LO> elem_ids(scsCapacity,-1);
-  bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
-  assert(isFound);
-  //rebuild the SCS to set the new element-to-particle lists
-  rebuild(scs, elem_ids);
-}
-
-void push(SCS* scs, int np, fp_t distance,
-    fp_t dx, fp_t dy, fp_t dz) {
-  fprintf(stderr, "push\n");
-
-
-  Kokkos::Timer timer;
-  auto position_d = scs->get<0>();
-  auto new_position_d = scs->get<1>();
-
-  const auto capacity = scs->capacity();
-
-  fp_t disp[4] = {distance,dx,dy,dz};
-  p::kkFpView disp_d("direction_d", 4);
-  p::hostToDeviceFp(disp_d, disp);
-  fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
-
-  o::Write<o::Real> ptclUnique_d(capacity, 0);
-
-  double totTime = 0;
-  timer.reset();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    fp_t dir[3];
-    dir[0] = disp_d(0)*disp_d(1);
-    dir[1] = disp_d(0)*disp_d(2);
-    dir[2] = disp_d(0)*disp_d(3);
-    new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
-    new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
-    new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
+      ehp_nm0[e] = loop;
   };
   scs->parallel_for(lamb);
 
-  totTime += timer.seconds();
-  printTiming("scs push", totTime);
+  o::LOs ehp_nm0_r(ehp_nm0);
+  mesh.set_tag(o::REGION, "has_particles", ehp_nm0_r);
 }
+
+void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
+  //create an array to store the number of particles in each element
+  o::Write<o::LO> elmPtclCnt_w(mesh.nelems(),0);
+  //parallel loop over elements and particles
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+
+    Kokkos::atomic_fetch_add(&(elmPtclCnt_w[e]), 1);
+  };
+  scs->parallel_for(lamb);
+  o::Write<o::Real> epc_w(mesh.nelems(),0);
+  const auto convert = OMEGA_H_LAMBDA(o::LO i) {
+     epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
+   };
+  o::parallel_for(mesh.nelems(), convert, "convert_to_real");
+  o::Reals epc(epc_w);
+  mesh.add_tag(o::REGION, "element_particle_count", 1, o::Reals(epc));
+  //get the list of elements adjacent to each vertex
+  auto verts2elems = mesh.ask_up(o::VERT, mesh.dim());
+  //create a device writeable array to store the computed density
+  o::Write<o::Real> ad_w(mesh.nverts(),0);
+  const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
+    const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
+    const auto firstElm = verts2elems.a2ab[i];
+    o::Real vertVal = 0.00;
+    for (int j = 0; j < deg; j++){
+      const auto elm = verts2elems.ab2b[firstElm+j];
+      vertVal += epc[elm];
+    }
+    ad_w[i] = vertVal / deg;
+  };
+  o::parallel_for(mesh.nverts(), accumulate, "calculate_avg_density");
+  o::Read<o::Real> ad_r(ad_w);
+  mesh.set_tag(o::VERT, "avg_density", ad_r);
+}
+
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
@@ -164,7 +142,7 @@ int main(int argc, char** argv) {
   
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
-  auto mesh = Omega_h::gmsh::read(argv[1], world);
+  auto mesh = Omega_h::binary::read(argv[1], world);
   const auto r2v = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
 
@@ -197,7 +175,7 @@ int main(int argc, char** argv) {
 
 
   GitrmParticles gp(mesh, 10); // (const char* param_file);
-  gp.initImpurityPtcls(numPtcls, 110, 0, 1.5, 5);
+  gp.initImpurityPtcls(numPtcls, 110, 0, 1.5, 200,10);
   auto &scs = gp.scs;
   printf("\nCalculate Distance To Bdry..\n");
   gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
@@ -211,7 +189,7 @@ int main(int argc, char** argv) {
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-      break;
+  //    break;
     }
     fprintf(stderr, "iter %d\n", iter);
     //computeAvgPtclDensity(mesh, scs);
@@ -225,7 +203,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-      break;
+    //  break;
     }
     //tagParentElements(mesh,scs,iter);
     //render(mesh,iter);

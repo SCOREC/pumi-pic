@@ -73,12 +73,11 @@ void GitrmParticles::initImpurityPtcls(const o::LO numPtcls, o::Real theta, o::R
   o::LO initEl = -1;
   findInitBdryElemId(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
   defineParticles(initEl, numPtcls);
-
-  setImpurityPtclInitCoords(elemAndFace);
   setPtclIds(scs);
 
-  //setTargetPtclCoords(scs);
-
+  // TODO set initial prev_pos, vel, etc
+  
+  setImpurityPtclInitCoords(elemAndFace);
 }
 
 // spherical coordinates (wikipedia), radius r=1.5m, inclination theta[0,pi] from the z dir,
@@ -146,7 +145,7 @@ void GitrmParticles::findInitBdryElemId(o::Real theta, o::Real phi, const o::Rea
 
     while (!found) {
 
-      if(debug > 3)
+      if(debug > 4)
         printf("\n****ELEM %d : ", elem);
 
       // Destination should be outisde domain
@@ -170,7 +169,7 @@ void GitrmParticles::findInitBdryElemId(o::Real theta, o::Real phi, const o::Rea
         o::Vector<3> xpoint = o::zero_vector<3>();
         const auto face = p::get_face_of_tet(mesh2verts, coords, elem, fIndex);
         bool detected = p::line_triangle_intx_simple(face, orig, dest, xpoint);
-        if(debug > 3) {
+        if(debug > 4) {
           printf("iface %d faceid %d detected %d\n", iface, face_id, detected);             
         }
 
@@ -189,7 +188,7 @@ void GitrmParticles::findInitBdryElemId(o::Real theta, o::Real phi, const o::Rea
         } else if(detected && !side_is_exposed[face_id]) {
           auto adj_elem  = dual_faces[dface_ind];
           elem = adj_elem;
-          if(debug) {
+          if(debug >4) {
             printf("faceid %d detected on interior; next elm %d\n", face_id, elem);
           }
           break;
@@ -201,7 +200,7 @@ void GitrmParticles::findInitBdryElemId(o::Real theta, o::Real phi, const o::Rea
       } // faces
 
       if(loops > maxLoops) {
-          //Omega_h_fail("Tried maxLoops iterations in initImpurityPtcls");
+          Omega_h_fail("Tried maxLoops iterations in initImpurityPtcls");
           break;
       }
       ++loops;

@@ -54,11 +54,6 @@ public:
 };
 
 
-//HACK to avoid having an unguarded comma in the SCS PARALLEL macro
-OMEGA_H_INLINE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4> v) {
-  return o::gather_vectors<4, 3>(a, v);
-}
-
 inline void setPtclIds(SCS* scs) {
   fprintf(stderr, "%s\n", __func__);
   auto pid_d = scs->get<2>();
@@ -70,51 +65,56 @@ inline void setPtclIds(SCS* scs) {
   });
 }
 
-
-inline void setInitialPtclCoords(o::Mesh& mesh, SCS* scs) {
-  //get centroid of parent element and set the child particle coordinates
-  //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
-  //It isn't clear why the template parameter for gather_[verts|vectors] was
-  //sized eight... maybe something to do with the 'Overlay'.  Given that there
-  //are four vertices bounding a tet, I'm setting that parameter to four below.
-  auto cells2nodes = mesh.get_adj(o::REGION, o::VERT).ab2b;
-  auto nodes2coords = mesh.coords();
-  //set particle positions and parent element ids
+//TODO this update has to be in Boris Move ?, or kept track of inside it
+inline void updatePtclPositions(SCS* scs) {
   auto x_scs_d = scs->get<0>();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
-    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
-    auto center = average(cell_nodes2coords);
-    if(mask > 0) {
-      printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
-      for(int i=0; i<3; i++)
-        x_scs_d(pid,i) = center[i];
-    }
-  };
-  scs->parallel_for(lamb);
+  auto xtgt_scs_d = scs->get<1>();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+      xtgt_scs_d(pid,0) = 0;
+      xtgt_scs_d(pid,1) = 0;
+      xtgt_scs_d(pid,2) = 0;
+    });
+  });
 }
 
-inline void setTargetPtclCoords(SCS* scs) {
-  fprintf(stderr, "%s\n", __func__);
-  const auto capacity = scs->capacity();
-  auto xtgt_scs_d = scs->get<1>();
-  const fp_t insetFaceDiameter = 0.5;
-  const fp_t insetFacePlane = 0.201; // just above the inset bottom face
-  const fp_t insetFaceRim = -0.25; // in x
-  const fp_t insetFaceCenter = 0; // in x and z
-  fp_t x_delta = insetFaceDiameter / (capacity-1);
-  printf("x_delta %.4f\n", x_delta);
-  if( scs->num_ptcls == 1 )
-    x_delta = 0;
+inline void rebuild(SCS* scs, o::LOs elem_ids) {
+  fprintf(stderr, "rebuild\n");
+  updatePtclPositions(scs);
+  const int scs_capacity = scs->capacity();
+  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0)
+      printf("elem_ids[%d] %d\n", pid, elem_ids[pid]);
+  };
+  scs->parallel_for(printElmIds);
+
+  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
+
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      xtgt_scs_d(pid,0) = insetFaceCenter;
-      xtgt_scs_d(pid,1) = insetFacePlane;
-      xtgt_scs_d(pid,2) = insetFaceRim + (x_delta * pid);
-    }
+    (void)e;
+    scs_elem_ids(pid) = elem_ids[pid];
   };
   scs->parallel_for(lamb);
+  
+  scs->rebuild(scs_elem_ids);
 }
+
+inline void search(o::Mesh& mesh, SCS* scs) {
+  fprintf(stderr, "search\n");
+  assert(scs->num_elems == mesh.nelems());
+  Omega_h::LO maxLoops = 100;
+  const auto scsCapacity = scs->capacity();
+  o::Write<o::LO> elem_ids(scsCapacity,-1);
+  bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
+  assert(isFound);
+  //rebuild the SCS to set the new element-to-particle lists
+  rebuild(scs, elem_ids);
+}
+
 
 #endif //define
 

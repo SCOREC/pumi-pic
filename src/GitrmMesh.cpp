@@ -560,7 +560,7 @@ void GitrmMesh::initBoundaryFaces() {
     // If  face is long, BField is not accurate. Calculate at closest point ?
     p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
          pos, B, true);
-    if(verbose > 3 && fid%50==0){
+    if(verbose > 3 && fid%500==0){
       printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
     }
 

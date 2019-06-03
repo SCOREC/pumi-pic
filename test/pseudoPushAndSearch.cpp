@@ -6,8 +6,8 @@
 #include <SCS_Macros.h>
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
-#include "pumipic_library.hpp"
-
+#include "pumipic_mesh.hpp"
+#include <fstream>
 #define NUM_ITERATIONS 30
 
 using particle_structs::fp_t;
@@ -29,9 +29,9 @@ namespace p = pumipic;
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
 typedef SellCSigma<Particle> SCS;
 
-void render(o::Mesh& mesh, int iter) {
+void render(o::Mesh& mesh, int iter, int comm_rank) {
   std::stringstream ss;
-  ss << "pseudoPush_t" << iter;
+  ss << "pseudoPush_t" << iter<<"_r"<<comm_rank;
   std::string s = ss.str();
   Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
 }
@@ -230,7 +230,7 @@ void setSunflowerPositions(SCS* scs, const fp_t insetFaceDiameter, const fp_t in
   const o::LO n = scs->capacity();
   const fp_t phi = (sqrt(5) + 1) / 2;
   auto setPoints = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    const fp_t r = sqrt(pid - 0.5) / sqrt(n - 1 / 2);
+    const fp_t r = sqrt(pid + 0.5) / sqrt(n - 1 / 2);
     const fp_t theta = 2 * M_PI * pid / (phi*phi);
     xtgt_scs_d(pid, 0) = insetFaceCenter + insetFaceRadius * r * cos(theta);
     xtgt_scs_d(pid, 1) = insetFacePlane;
@@ -300,34 +300,68 @@ void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
   Omega_h::Library& lib = pic_lib.omega_h_lib();
-  printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
-  printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
-  printf("Kokkos execution space memory %s name %s\n",
-      typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
-      typeid (Kokkos::DefaultExecutionSpace).name());
-  printf("Kokkos host execution space %s name %s\n",
-      typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
-      typeid (Kokkos::DefaultHostExecutionSpace).name());
-  printTimerResolution();
-
-  if(argc < 2 && argc > 4)
-  {
-    std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial element (271)]\n";
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  int min_args = 2 + (comm_size > 1);
+  if(argc < min_args || argc > min_args + 2) {
+    if (!comm_rank) {
+      if (comm_size == 1)
+        std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial element (271)]\n";
+      else
+        std::cout << "Usage: " << argv[0] << " <mesh> <owner_file> [numPtcls (12)] "
+          "[initial element (271)]\n";
+    }
     exit(1);
   }
+  if (comm_rank == 0) {
+    printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
+    printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
+    printf("Kokkos execution space memory %s name %s\n",
+           typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
+           typeid (Kokkos::DefaultExecutionSpace).name());
+    printf("Kokkos host execution space %s name %s\n",
+           typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
+           typeid (Kokkos::DefaultHostExecutionSpace).name());
+    printTimerResolution();
+  }
+  auto full_mesh = Omega_h::gmsh::read(argv[1], lib.self());
+  Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
+  if (comm_size > 1) {
+    std::ifstream in_str(argv[2]);
+    if (!in_str) {
+      if (!comm_rank)
+        fprintf(stderr,"Cannot open file %s\n", argv[2]);
+      return EXIT_FAILURE;
+    }
+    int own;
+    int index = 0;
+    while(in_str >> own) 
+      host_owners[index++] = own;
+  }
+  else
+    for (int i = 0; i < full_mesh.nelems(); ++i)
+      host_owners[i] = 0;
+  Omega_h::Write<Omega_h::LO> owner(host_owners);
+  
+  //Create Picparts with the full mesh
+  pumipic::Mesh picparts(full_mesh,owner);
 
-  const auto world = lib.world();
-  auto mesh = Omega_h::gmsh::read(argv[1], world);
-  const auto r2v = mesh.ask_elem_verts();
-  const auto coords = mesh.coords();
+  Omega_h::Mesh& mesh = *(picparts.mesh());
+  mesh.ask_elem_verts();
+  mesh.coords();
+  if (comm_rank == 0)
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(), 
+           mesh.nfaces(), mesh.nelems());
 
   /* Particle data */
-  const int numPtcls =  argc >=3 ? atoi(argv[2]) : 12;
-  const int initialElement = argc >= 4 ? atoi(argv[3]) : 271;
-  const bool output = numPtcls <= 12;
+  const int numPtcls = (argc >=min_args + 1) ? atoi(argv[min_args]) : 12;
+  const int initialElement = (argc >= min_args + 2) ? atoi(argv[min_args+1]) : 271;
+  const bool output = numPtcls <= 12 && (comm_rank == 0);
   Omega_h::Int ne = mesh.nelems();
-  fprintf(stderr, "number of elements %d number of particles %d\n",
-      ne, numPtcls);
+  if (comm_rank == 0)
+    fprintf(stderr, "number of elements %d number of particles %d\n",
+            ne, numPtcls);
   o::LOs foo(ne, 1, "foo");
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   //Element gids is left empty since there is no partitioning of the mesh yet
@@ -348,10 +382,10 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, Kokkos::AUTO);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-						       ptcls_per_elem, element_gids);
+                                                       ptcls_per_elem, element_gids);
 
   //Set initial and target positions so search will
   // find the parent elements
@@ -371,47 +405,53 @@ int main(int argc, char** argv) {
   fp_t dy = 0.8;
   fp_t dz = 0;
 
-  fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
-      distance, dx, dy, dz);
+  if (comm_rank == 0)
+    fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
+            distance, dx, dy, dz);
 
   o::LOs elmTags(ne, -1, "elmTagVals");
   mesh.add_tag(o::REGION, "has_particles", 1, elmTags);
   mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
   tagParentElements(mesh, scs, 0);
-  render(mesh,0);
+  render(mesh,0, comm_rank);
 
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
-  fullTimer.reset();
   int iter;
   for(iter=1; iter<=NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    fprintf(stderr, "iter %d\n", iter);
-    //computeAvgPtclDensity(mesh, scs);
+    if (comm_rank == 0)
+      fprintf(stderr, "iter %d\n", iter);
+    computeAvgPtclDensity(mesh, scs);
     timer.reset();
     push(scs, scs->num_ptcls, distance, dx, dy, dz);
-    fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
+    if (comm_rank == 0)
+      fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     if (output)
       writeDispVectors(scs);
     timer.reset();
     search(mesh,scs, output);
-    fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
+    if (comm_rank == 0)
+      fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
     tagParentElements(mesh,scs,iter);
-    render(mesh,iter);
+    render(mesh,iter, comm_rank);
+    MPI_Barrier(MPI_COMM_WORLD);
   }
-  fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, timer.seconds());
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (comm_rank == 0)
+    fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
   
   //cleanup
   delete scs;
 
-  Omega_h::vtk::write_parallel("psuedoPushFinal", &mesh, mesh.dim());
+  Omega_h::vtk::write_parallel("pseudoPush_tf", &mesh, mesh.dim());
   fprintf(stderr, "done\n");
   return 0;
 }

@@ -22,6 +22,7 @@ namespace pumipic {
     
     Omega_h::Mesh* mesh() const {return picpart;}
     bool isFullMesh() const;
+    int dim() const {return picpart->dim();}
 
     int numBuffers(int dim) const {return num_cores[dim] + 1;}
     Omega_h::HostWrite<Omega_h::LO> bufferedRanks(int dim) const {return buffered_parts[dim];}

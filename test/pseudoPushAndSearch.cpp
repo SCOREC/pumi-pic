@@ -365,9 +365,11 @@ int main(int argc, char** argv) {
   o::LOs foo(ne, 1, "foo");
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   //Element gids is left empty since there is no partitioning of the mesh yet
-  SCS::kkGidView element_gids;
+  SCS::kkGidView element_gids("ptcls_per_elem", ne);
+  Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     ptcls_per_elem(i) = 0;
+    element_gids(i) = mesh_element_gids[i];
     if (i == initialElement)
       ptcls_per_elem(i) = numPtcls;
   });

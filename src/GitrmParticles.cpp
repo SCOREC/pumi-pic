@@ -1,4 +1,5 @@
-
+#include <cstdlib>
+#include <ctime>
 #include "pumipic_adjacency.hpp"
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
@@ -235,38 +236,42 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
   auto x_scs_prev_d = scs->get<PTCL_POS_PREV>();
   auto vel_d = scs->get<PTCL_VEL>();
 
-  srand(time(NULL));
+  std::srand(time(NULL));
 
   auto init = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(elem == elemAndFace[1]) {
       const auto faceId = elemAndFace[2];
-      const auto fv2v = o::gather_verts<3>(face_verts, faceId);
-      const auto face = p::gatherVectors3x3(coords, fv2v);
-      o::Vector<3> fnorm;
-      p::find_face_normal(faceId, coords, face_verts, fnorm);
+      auto fnorm = p::get_face_normal(faceId, coords, face_verts);
+      //const auto fv2v = o::gather_verts<3>(face_verts, faceId);
+      //const auto face = p::gatherVectors3x3(coords, fv2v);
       //Inverse dir
-      o::Vector<3> finv = -1*fnorm;
-      o::Vector<3> pos;
 
-      p::find_face_centroid(faceId, coords, face_verts, pos);
-      // Move inwards a bit, then scatter
-      auto rnd = (double)(std::rand())/RAND_MAX - 0.5;
-      o::LO ind = (rnd < 0.3)?0:1;
-      ind = (rnd > 0.6)?2:ind;
+      //auto pos = p::find_face_centroid(faceId, coords, face_verts);
+      // auto rnd = (double)(std::rand())/RAND_MAX - 0.5;
+      //o::LO ind = (rnd < 0.3)?0:1;
+      //ind = (rnd > 0.6)?2:ind;
 
-      o::Vector<3> scatter = pos + rnd * (pos -face[ind]);
-      auto rnd2 = (double)(std::rand())/RAND_MAX;
+      //o::Vector<3> scatter = pos + rnd * (pos -face[ind]);
+      //auto rnd2 = (double)(std::rand())/RAND_MAX;
 
-      o::Vector<3> ppos = pos + 0.0001* finv + rnd2*scatter;
-      pos = ppos + 0.0001* finv;
-      if(elem%500 == 0)
+      //o::Vector<3> ppos = pos + 0.0001* finv + rnd2*scatter;
+      //pos = ppos + 0.0001* finv;
+    
+      auto pos = p::centroid_of_tet(elem, mesh2verts, coords); 
+      o::Vector<3> ppos = pos - 0.05 *fnorm;
+      //if(elem%500 == 0)
         printf("elm %d xyz %f %f %f\n", elem, pos[0], pos[1], pos[2]);
 
+      double amu = 2.0; //TODO
+      o::Vector<3> energy{4.0, 0, 0}; //TODO
+      o::Vector<3> vel{{0}};
       for(int i=0; i<3; i++) {
         x_scs_prev_d(pid,i) = ppos[i];
-        //TODO ??
-        x_scs_d(pid,i) = pos[i] ;
-        vel_d(pid,i) = std::rand();
+        x_scs_d(pid,i) = pos[i];
+        
+        if(! p::almost_equal(energy[i], 0))
+          vel_d(pid, i) = energy[i] / std::abs(energy[i]) * std::sqrt(2.0 * abs(energy[i]) * 
+              1.60217662e-19 / (amu * 1.6737236e-27)); 
       }
     }
 

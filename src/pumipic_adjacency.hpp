@@ -273,7 +273,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   };
   scs->parallel_for(lamb);
 
-  const int debug = 0;
+  const int debug = 1;
 
   bool found = false;
   int loops = 0;
@@ -284,19 +284,19 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
     auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       auto elmId = e;
-      auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-      auto M = gatherVectors4x3(coords, tetv2v);
-      //inactive particle that is still moving to its target position
+      //Inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         if(debug)
           printf("Elem %d ptcl: %d\n", elmId, pid);
+        // Particle's parent element switched if not current elem
         if(elmId != elem_ids[pid]) {
           elmId = elem_ids[pid];
-          tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-          M = gatherVectors4x3(coords, tetv2v);
           if(debug)
-            printf("Elem %d ptcl: %d\n", elmId, pid);
+            printf("Switching_to: Elem %d ptcl: %d\n", elmId, pid);
         }
+        OMEGA_H_CHECK(elmId >= 0);
+        auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
+        auto M = gatherVectors4x3(coords, tetv2v);
         const o::Vector<3> orig = makeVector3(pid, x_scs_d);
         const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
         Omega_h::Vector<4> bcc;
@@ -306,7 +306,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               dest[0], dest[1], dest[2]);
           //Check particle origin containment in beginning element
           find_barycentric_tet(M, orig, bcc);
-          //OMEGA_H_CHECK(all_positive(bcc, 0));
+          OMEGA_H_CHECK(all_positive(bcc, 0));
         }
         //check if the destination is in this element
         find_barycentric_tet(M, dest, bcc);
@@ -318,7 +318,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         } else {
           if(debug)
             printf("ptcl %d checking adj elms\n", pid);
-          //get element ID
+          // Get element ID
           auto dface_ind = dual_elems[elmId];
           const auto beg_face = elmId *4;
           const auto end_face = beg_face +4;
@@ -329,10 +329,12 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             o::Vector<3> xpoint = o::zero_vector<3>();
             const auto face = get_face_of_tet(mesh2verts, coords, e, findex);
             bool detected = line_triangle_intx_simple(face, orig, dest, xpoint);
+            bool exposed = side_is_exposed[face_id];
             if(debug)
-              printf("ptcl %d faceid %d detected %d\n", pid, face_id, detected);
+              printf("ptcl %d faceid %d exposed %d detected %d\n", pid, face_id, 
+                  exposed, detected);
 
-            if(detected && side_is_exposed[face_id]) {
+            if(detected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
                 xpoints[pid*3+i] = xpoint[i];
@@ -342,7 +344,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                     pid, face_id, elem_ids_next[pid]);
               }
               break;
-            } else if(detected && !side_is_exposed[face_id]) {
+            } else if(detected && ! exposed) {
               auto adj_elem  = dual_faces[dface_ind];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
@@ -354,7 +356,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
             // No line triangle intersection found for the current face
             // appears to be a guess at the next element based on the smallest BCC
-            if(!side_is_exposed[face_id]) {
+            if(!exposed) {
               if(debug)
                 printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
               ++dface_ind;
@@ -362,7 +364,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               if(findex == min_ind) {
                 elem_ids_next[pid] = dual_faces[dface_ind];
                 if(debug) {
-                  printf("WARNING ptcl %d faceid %d !detected and !exposed, next parent elm %d\n",
+                  printf("WARNING ptcl %d faceid %d !detected for this minBCC, next parent elm %d\n",
                     pid, face_id, elem_ids_next[pid]);
                 }
                 // No 'break' here, since other faces to be checked.
@@ -378,7 +380,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     };
 
     scs->parallel_for(lamb);
-
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
       elem_ids[i] = elem_ids_next[i];

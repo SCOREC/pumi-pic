@@ -17,10 +17,6 @@ using particle_structs::fp_t;
 using particle_structs::lid_t;
 using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -99,6 +95,73 @@ void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
   mesh.set_tag(o::VERT, "avg_density", ad_r);
 }
 
+/*
+void setPtclIds(SCS* scs) {
+  fprintf(stderr, "%s\n", __func__);
+  auto pid_d = scs->get<2>();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      pid_d(pid) = pid;
+    });
+  });
+}
+*/
+
+//TODO this update has to be in Boris Move ?, or kept track of inside it
+void updatePtclPositions(SCS* scs) {
+  auto x_scs_d = scs->get<0>();
+  auto xtgt_scs_d = scs->get<1>();
+  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
+    (void)e;
+    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
+      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+      xtgt_scs_d(pid,0) = 0;
+      xtgt_scs_d(pid,1) = 0;
+      xtgt_scs_d(pid,2) = 0;
+    });
+  });
+}
+
+void rebuild(SCS* scs, o::LOs elem_ids) {
+  fprintf(stderr, "rebuild\n");
+  updatePtclPositions(scs);
+  const int scs_capacity = scs->capacity();
+  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0)
+      printf("elem_ids[%d] %d\n", pid, elem_ids[pid]);
+  };
+  scs->parallel_for(printElmIds);
+
+  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
+
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    (void)e;
+    scs_elem_ids(pid) = elem_ids[pid];
+  };
+  scs->parallel_for(lamb);
+  
+  scs->rebuild(scs_elem_ids);
+}
+
+void search(o::Mesh& mesh, SCS* scs) {
+  fprintf(stderr, "search\n");
+  assert(scs->num_elems == mesh.nelems());
+  Omega_h::LO maxLoops = 10;
+  const auto scsCapacity = scs->capacity();
+  o::Write<o::LO> elem_ids(scsCapacity,-1);
+  bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
+  assert(isFound);
+
+  //Apply surface model using face_ids, and update elem if particle reflected. 
+  //The elem_ids only updated in rebuild, so don't use it before rebuild
+  applySurfaceModel(mesh, scs, elem_ids);
+
+  //rebuild the SCS to set the new element-to-particle lists
+  rebuild(scs, elem_ids);
+}
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
@@ -124,8 +187,7 @@ int main(int argc, char** argv) {
     std::cout << "\n\n ****** WARNING: No BField file provided ! \n\n\n";
   }
 
-  std::string bFile, eFile, profFile, profFileDensity;
-  bFile = eFile = profFile = profFileDensity = "";
+  std::string bFile="", eFile="", profFile="", profFileDensity="";
 
   if(argc >2) {
     bFile = argv[2];
@@ -149,7 +211,6 @@ int main(int argc, char** argv) {
   Omega_h::Int ne = mesh.nelems();
   fprintf(stderr, "Number of elements %d \n", ne);
 
-
   GitrmMesh gm(mesh);
 
   OMEGA_H_CHECK(!profFile.empty());
@@ -169,41 +230,48 @@ int main(int argc, char** argv) {
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
 
-  int numPtcls = 10;
+  int numPtcls = 2;
   double dTime = 1e-8;
-  int NUM_ITERATIONS = 10;
+  int NUM_ITERATIONS = 2;
 
-
+  printf("\nInitializing impurity particles..\n");
   GitrmParticles gp(mesh, 10); // (const char* param_file);
   gp.initImpurityPtcls(numPtcls, 110, 0, 1.5, 200,10);
   auto &scs = gp.scs;
   printf("\nCalculate Distance To Bdry..\n");
-  gitrm_findDistanceToBdry(gp.scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
+  gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
 
   // Put inside search
   printf("\nCalculate EField ..\n");
-  gitrm_calculateE(gp.scs, mesh);
+  gitrm_calculateE(scs, mesh);
 
+  int width = (int)(2.5*100);
+  int height = (int)(2.5*100);
+
+  o::Write<o::Real> data_d(numPtcls*width*height, 0);
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-  //    break;
+      break;
     }
     fprintf(stderr, "iter %d\n", iter);
     //computeAvgPtclDensity(mesh, scs);
     timer.reset();
     fprintf(stderr, "Boris Move: dTime=%.5f\n", dTime);
-    gitrm_borisMove(gp.scs, mesh, gm, dTime);
+    gitrm_borisMove(scs, mesh, gm, dTime);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     //writeDispVectors(scs);
     timer.reset();
-    search(mesh, gp.scs);
+    search(mesh, scs);
+
+    storeData(mesh, scs, data_d);
+
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-    //  break;
+      break;
     }
     //tagParentElements(mesh,scs,iter);
     //render(mesh,iter);

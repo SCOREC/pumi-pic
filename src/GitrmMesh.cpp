@@ -402,9 +402,8 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
       return;
     }
 
-    o::Vector<3> pos{{0}};
     // TODO storing fields at centroid may not be best for long tets.
-    p::find_face_centroid(fid, coords, face_verts, pos);
+    auto pos = p::find_face_centroid(fid, coords, face_verts);
 
     //Cylindrical symmetry = true ? TODO
     o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, true);
@@ -553,8 +552,7 @@ void GitrmMesh::initBoundaryFaces() {
       return;
     }
     o::Vector<3> B{{0}};
-    o::Vector<3> pos{{0}};
-    p::find_face_centroid(fid, coords, face_verts, pos);
+    auto pos = p::find_face_centroid(fid, coords, face_verts);
 
     // TODO angle is between surface normal and magnetic field at center of face
     // If  face is long, BField is not accurate. Calculate at closest point ?
@@ -564,8 +562,7 @@ void GitrmMesh::initBoundaryFaces() {
       printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
     }
 
-    o::Vector<3> surfNorm{{0}};
-    p::find_face_normal(fid, coords, face_verts, surfNorm);
+    auto surfNorm = p::get_face_normal(fid, coords, face_verts);
     
     o::Real magB = o::norm(B);
     o::Real magSurfNorm = o::norm(surfNorm);
@@ -631,6 +628,8 @@ void GitrmMesh::initBoundaryFaces() {
   mesh.add_tag<o::Real>(o::FACE, "impacts", 1, o::Reals(impacts));
   mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential));
 
+ //Book keeping of intersecting particles
+  mesh.add_tag<o::Real>(o::FACE, "bdryData", 7);
 }
 
 

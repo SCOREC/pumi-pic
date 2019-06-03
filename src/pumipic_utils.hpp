@@ -257,22 +257,24 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0,
 }
 
 
-OMEGA_H_DEVICE void find_face_centroid(const o::LO fid, const o::Reals &coords, 
-   const o::LOs &face_verts, o::Vector<3> &pos){
+OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, const o::Reals &coords, 
+   const o::LOs &face_verts){
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
   //TODO check if y and z are in required order
 
   // Mid point of face, as in GITR. 
+  o::Vector<3> pos;
   pos[0] = abc[0][0] + 2.0/3.0*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
   pos[1] = abc[0][1] + 2.0/3.0*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
   pos[2] = abc[0][2] + 2.0/3.0*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
+  return pos;
 }
 
 
-OMEGA_H_DEVICE void find_face_normal(const o::LO fid, const o::Reals &coords, 
-   const o::LOs &face_verts, o::Vector<3> &fnorm){
+OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::Reals &coords, 
+   const o::LOs &face_verts){
 
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
@@ -281,10 +283,36 @@ OMEGA_H_DEVICE void find_face_normal(const o::LO fid, const o::Reals &coords,
   o::Vector<3> a = abc[0];
   o::Vector<3> b = abc[1];
   o::Vector<3> c = abc[2];
-
-  fnorm = o::cross(b - a, c - a);
+  o::Vector<3> fnorm = o::cross(b - a, c - a);
+  return o::normalize(fnorm);
 }
 
+
+OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
+  const o::LOs &f2r_elem) { 
+  //bdry
+  OMEGA_H_CHECK(f2r_ptr[fid+1] - f2r_ptr[fid] == 1);
+  auto ind = f2r_ptr[fid];
+  return f2r_elem[ind];
+}
+
+
+OMEGA_H_DEVICE o::LO angle_between(o::Vector<3> v1, o::Vector<3> v2) {
+  auto cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
+  return std::acos(cos);
+}
+
+
+OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(o::LO elem, const o::LOs &mesh2verts, 
+  const o::Reals &coords) {
+  o::Vector<3> pos;
+  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+  auto M = o::gather_vectors<4, 3>(coords, tetv2v);
+  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
+  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
+  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
+  return pos;
+}
 
 } //namespace
 #endif

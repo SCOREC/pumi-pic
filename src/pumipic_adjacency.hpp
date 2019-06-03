@@ -261,6 +261,8 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     o::Write<o::LO>& elem_ids, int looplimit=0) {
+  const int debug = 0;
+
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -284,19 +286,19 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   o::Write<o::Real> xpoints(3*scsCapacity, -1.0);
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity,-1);
+  
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
-      printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
+      if (debug)
+        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
     }
   };
   scs->parallel_for(lamb);
-
-  const int debug = 0;
 
   bool found = false;
   int loops = 0;
@@ -322,7 +324,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         }
         const o::Vector<3> orig = makeVector3(pid, x_scs_d);
         const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
-        if(loops == 0) {
+        if(loops == 0 && debug) {
           printf("orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
               orig[0], orig[1], orig[2],
               dest[0], dest[1], dest[2]);

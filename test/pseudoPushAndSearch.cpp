@@ -30,9 +30,8 @@ typedef MemberTypes<Vector3d, Vector3d, int> Particle;
 typedef SellCSigma<Particle> SCS;
 
 void render(o::Mesh& mesh, int iter) {
-  fprintf(stderr, "%s\n", __func__);
   std::stringstream ss;
-  ss << "rendered_t" << iter;
+  ss << "pseudoPush_t" << iter;
   std::string s = ss.str();
   Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
 }
@@ -48,8 +47,6 @@ void printTimerResolution() {
 }
 
 void writeDispVectors(SCS* scs) {
-  fprintf(stderr, "%s\n", __func__);
-
   const int capacity = scs->capacity();
   auto x_nm1 = scs->get<0>();
   auto x_nm0 = scs->get<1>();
@@ -89,9 +86,6 @@ void writeDispVectors(SCS* scs) {
 
 void push(SCS* scs, int np, fp_t distance,
     fp_t dx, fp_t dy, fp_t dz) {
-  fprintf(stderr, "push\n");
-
-
   Kokkos::Timer timer;
   auto position_d = scs->get<0>();
   auto new_position_d = scs->get<1>();
@@ -123,7 +117,6 @@ void push(SCS* scs, int np, fp_t distance,
 }
 
 void tagParentElements(o::Mesh& mesh, SCS* scs, int loop) {
-  fprintf(stderr, "%s\n", __func__);
   //read from the tag
   o::LOs ehp_nm1 = mesh.get_array<o::LO>(mesh.dim(), "has_particles");
   o::Write<o::LO> ehp_nm0(ehp_nm1.size());
@@ -159,12 +152,11 @@ void updatePtclPositions(SCS* scs) {
   });
 }
 
-void rebuild(SCS* scs, o::LOs elem_ids) {
-  fprintf(stderr, "rebuild\n");
+void rebuild(SCS* scs, o::LOs elem_ids, const bool output) {
   updatePtclPositions(scs);
   const int scs_capacity = scs->capacity();
   auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0)
+    if(output && mask > 0)
       printf("elem_ids[%d] %d\n", pid, elem_ids[pid]);
   };
   scs->parallel_for(printElmIds);
@@ -180,8 +172,7 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
   scs->rebuild(scs_elem_ids);
 }
 
-void search(o::Mesh& mesh, SCS* scs) {
-  fprintf(stderr, "search\n");
+void search(o::Mesh& mesh, SCS* scs, bool output) {
   assert(scs->num_elems == mesh.nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
@@ -189,7 +180,7 @@ void search(o::Mesh& mesh, SCS* scs) {
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
-  rebuild(scs, elem_ids);
+  rebuild(scs, elem_ids, output );
 }
 
 //HACK to avoid having an unguarded comma in the SCS PARALLEL macro
@@ -198,7 +189,6 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
 }
 
 void setPtclIds(SCS* scs) {
-  fprintf(stderr, "%s\n", __func__);
   auto pid_d = scs->get<2>();
   PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
     (void)e;
@@ -208,7 +198,7 @@ void setPtclIds(SCS* scs) {
   });
 }
 
-void setInitialPtclCoords(o::Mesh& mesh, SCS* scs) {
+void setInitialPtclCoords(o::Mesh& mesh, SCS* scs, bool output) {
   //get centroid of parent element and set the child particle coordinates
   //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
   //It isn't clear why the template parameter for gather_[verts|vectors] was
@@ -223,7 +213,8 @@ void setInitialPtclCoords(o::Mesh& mesh, SCS* scs) {
     auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
     auto center = average(cell_nodes2coords);
     if(mask > 0) {
-      printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+      if (output)
+        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
       for(int i=0; i<3; i++)
         x_scs_d(pid,i) = center[i];
     }
@@ -231,15 +222,26 @@ void setInitialPtclCoords(o::Mesh& mesh, SCS* scs) {
   scs->parallel_for(lamb);
 }
 
-void setTargetPtclCoords(SCS* scs) {
-  fprintf(stderr, "%s\n", __func__);
-  const auto capacity = scs->capacity();
+//Sunflower algorithm adapted from: https://stackoverflow.com/questions/28567166/uniformly-distribute-x-points-inside-a-circle
+void setSunflowerPositions(SCS* scs, const fp_t insetFaceDiameter, const fp_t insetFacePlane,
+                           const fp_t insetFaceRim, const fp_t insetFaceCenter) {
+  const fp_t insetFaceRadius = insetFaceDiameter/2;
   auto xtgt_scs_d = scs->get<1>();
-  const fp_t insetFaceDiameter = 0.5;
-  const fp_t insetFacePlane = 0.201; // just above the inset bottom face
-  const fp_t insetFaceRim = -0.25; // in x
-  const fp_t insetFaceCenter = 0; // in x and z
-  fp_t x_delta = insetFaceDiameter / (capacity-1);
+  const o::LO n = scs->capacity();
+  const fp_t phi = (sqrt(5) + 1) / 2;
+  auto setPoints = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    const fp_t r = sqrt(pid - 0.5) / sqrt(n - 1 / 2);
+    const fp_t theta = 2 * M_PI * pid / (phi*phi);
+    xtgt_scs_d(pid, 0) = insetFaceCenter + insetFaceRadius * r * cos(theta);
+    xtgt_scs_d(pid, 1) = insetFacePlane;
+    xtgt_scs_d(pid, 2) = insetFaceCenter + insetFaceRadius * r * sin(theta);
+  };
+  scs->parallel_for(setPoints);
+}
+void setLinearPositions(SCS* scs, const fp_t insetFaceDiameter, const fp_t insetFacePlane,
+                        const fp_t insetFaceRim, const fp_t insetFaceCenter){
+  auto xtgt_scs_d = scs->get<1>();
+  fp_t x_delta = insetFaceDiameter / (scs->capacity()-1);
   printf("x_delta %.4f\n", x_delta);
   if( scs->num_ptcls == 1 )
     x_delta = 0;
@@ -251,6 +253,13 @@ void setTargetPtclCoords(SCS* scs) {
     }
   };
   scs->parallel_for(lamb);
+}
+void setTargetPtclCoords(SCS* scs) {
+  const fp_t insetFaceDiameter = 0.5;
+  const fp_t insetFacePlane = 0.201; // just above the inset bottom face
+  const fp_t insetFaceRim = -0.25; // in x
+  const fp_t insetFaceCenter = 0; // in x and z
+  setSunflowerPositions(scs, insetFaceDiameter, insetFacePlane, insetFaceRim, insetFaceCenter);
 }
 
 void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
@@ -301,9 +310,9 @@ int main(int argc, char** argv) {
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
 
-  if(argc != 2)
+  if(argc < 2 && argc > 4)
   {
-    std::cout << "Usage: " << argv[0] << " <mesh>\n";
+    std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial element (271)]\n";
     exit(1);
   }
 
@@ -313,9 +322,9 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   /* Particle data */
-  const int numPtcls = 12;
-  const int initialElement = 271;
-
+  const int numPtcls =  argc >=3 ? atoi(argv[2]) : 12;
+  const int initialElement = argc >= 4 ? atoi(argv[3]) : 271;
+  const bool output = numPtcls <= 12;
   Omega_h::Int ne = mesh.nelems();
   fprintf(stderr, "number of elements %d number of particles %d\n",
       ne, numPtcls);
@@ -330,7 +339,7 @@ int main(int argc, char** argv) {
   });
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
-    if (np > 0)
+    if (output && np > 0)
       printf("ppe[%d] %d\n", i, np);
   });
 
@@ -339,19 +348,19 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, Kokkos::AUTO);
   //Create the particle structure
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
 						       ptcls_per_elem, element_gids);
 
   //Set initial and target positions so search will
   // find the parent elements
-  setInitialPtclCoords(mesh, scs);
+  setInitialPtclCoords(mesh, scs, output);
   setPtclIds(scs);
   setTargetPtclCoords(scs);
 
   //run search to move the particles to their starting elements
-  search(mesh,scs);
+  search(mesh,scs, output);
 
   //define parameters controlling particle motion
   //move the particles in +y direction by 1/20th of the
@@ -365,24 +374,30 @@ int main(int argc, char** argv) {
   fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
       distance, dx, dy, dz);
 
-  o::LOs elmTags(ne, 0, "elmTagVals");
+  o::LOs elmTags(ne, -1, "elmTagVals");
   mesh.add_tag(o::REGION, "has_particles", 1, elmTags);
   mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
+  tagParentElements(mesh, scs, 0);
+  render(mesh,0);
 
   Kokkos::Timer timer;
-  for(int iter=0; iter<NUM_ITERATIONS; iter++) {
+  Kokkos::Timer fullTimer;
+  fullTimer.reset();
+  int iter;
+  for(iter=1; iter<=NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
     fprintf(stderr, "iter %d\n", iter);
-    computeAvgPtclDensity(mesh, scs);
+    //computeAvgPtclDensity(mesh, scs);
     timer.reset();
     push(scs, scs->num_ptcls, distance, dx, dy, dz);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
-    writeDispVectors(scs);
+    if (output)
+      writeDispVectors(scs);
     timer.reset();
-    search(mesh,scs);
+    search(mesh,scs, output);
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
@@ -391,11 +406,12 @@ int main(int argc, char** argv) {
     tagParentElements(mesh,scs,iter);
     render(mesh,iter);
   }
-
+  fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, timer.seconds());
+  
   //cleanup
   delete scs;
 
-  Omega_h::vtk::write_parallel("rendered", &mesh, mesh.dim());
+  Omega_h::vtk::write_parallel("psuedoPushFinal", &mesh, mesh.dim());
   fprintf(stderr, "done\n");
   return 0;
 }

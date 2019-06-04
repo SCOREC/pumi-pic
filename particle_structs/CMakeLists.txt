@@ -29,24 +29,15 @@ option(IS_TESTING "Build for CTest" OFF)
 message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if (ENABLE_KOKKOS)
-  find_package(KokkosCore REQUIRED)
-  find_package(KokkosContainers REQUIRED)
-
+  find_package(Kokkos REQUIRED)
   set(KOKKOS_ENABLED true)
-  include_directories(${KokkosCore_INCLUDE_DIRS})
-  include_directories(${KokkosContainers_INCLUDE_DIRS})
+  include_directories(${KOKKOS_INCLUDE_DIR})
 
-  message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
-  set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})
-  set(CMAKE_C_COMPILER ${KokkosCore_C_COMPILER})
-  message(STATUS "Kokkos CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER}")
-  message(STATUS "Kokkos CMAKE_C_COMPILER ${KokkosCore_C_COMPILER}")
-
+  include(${KOKKOS_INCLUDE_DIR}/../kokkos_generated_settings.cmake)
   message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
-  set(CMAKE_CXX_FLAGS "${debug_flag} ${KokkosCore_CXX_FLAGS}")
-  set(CMAKE_C_FLAGS "${debug_flag} ${KokkosCore_C_FLAGS}")
+  string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
   message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
-  message(STATUS "Kokkos CMAKE_C_FLAGS ${CMAKE_C_FLAGS}")
+
 endif()
 
 include_directories(support)
@@ -81,10 +72,9 @@ bob_export_target(particleStructs)
 
 if (ENABLE_KOKKOS)
   # bob package creation {
-  set(particle_structures_USE_KokkosCore_DEFAULT ON)
-  get_filename_component(KokkosCore_PREFIX
-    ${KokkosCore_INCLUDE_DIRS} DIRECTORY CACHE)
-  bob_public_dep(KokkosCore)
+  set(particle_structures_USE_Kokkos_DEFAULT ON)
+  get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY CACHE)
+  bob_public_dep(KOKKOS)
   # }
   add_definitions(-DKOKKOS_ENABLED)
   target_compile_definitions(particleStructs INTERFACE -DKOKKOS_ENABLED)
@@ -94,19 +84,17 @@ if (ENABLE_KOKKOS)
   target_include_directories(particleStructs INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/algorithms>
     $<INSTALL_INTERFACE:include>)
-  target_include_directories(particleStructs PRIVATE ${KokkosCore_INCLUDE_DIRS})
-  target_include_directories(particleStructs PRIVATE ${KokkosKernels_INCLUDE_DIRS})
-  target_include_directories(particleStructs PRIVATE ${KokkosContainers_INCLUDE_DIRS})
+  target_include_directories(particleStructs PRIVATE ${KOKKOS_INCLUDE_DIR})
   target_link_libraries(particleStructs PRIVATE
-    ${KokkosCore_LIBRARIES} ${KokkosKernels_LIBRARIES} ${KokkosContainers_LIBRARIES})
+    ${KOKKOS_LIBRARY})
 
   include(${CMAKE_CURRENT_LIST_DIR}/cmake/detect_kokkos_opts.cmake)
   detect_kokkos_opts()
-  if (KokkosCore_HAS_CUDA)
+  if (Kokkos_HAS_CUDA)
     add_definitions(-DSCS_USE_CUDA)
     target_compile_definitions(particleStructs INTERFACE -DSCS_USE_CUDA)
   endif()
-  if (KokkosCore_HAS_OpenMP)
+  if (Kokkos_HAS_OpenMP)
     add_definitions(-DSCS_USE_OPENMP)
     target_compile_definitions(particleStructs INTERFACE -DSCS_USE_OPENMP)
   endif()

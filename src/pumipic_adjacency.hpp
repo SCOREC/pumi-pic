@@ -45,9 +45,6 @@ OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
     abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
     abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
 
-#if DEBUG >2
-    printf("face %d\n", iface);
-#endif // DEBUG
 }
 
 OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
@@ -56,9 +53,6 @@ OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> 
    //edge_vert:0,1; 1,2; 2,0
     ab[0] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 0)];
     ab[1] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 1)];
-#ifdef DEBUG
-    printf("abc_index %d %d iedge: %d\n", ab[0], ab[1], iedge);
-#endif // DEBUG
 }
 
 OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
@@ -67,14 +61,6 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
     Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
     get_face_coords( M, faceid, abc);
 
-#ifdef DEBUG
-    print_array(abc[0].data(),3, "a");
-    print_array(face[0].data(),3, "face1");
-    print_array(abc[1].data(), 3, "b");
-    print_array(face[1].data(), 3, "face2");
-    print_array(abc[2].data(), 3, "c");
-    print_array(face[2].data(), 3, "face3");
-#endif
     OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), DIM)); //a
     OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), DIM)); //b
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
@@ -97,14 +83,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
     auto vap = pos - abc[0]; // p - a;
     vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
 
-#if DEBUG >2
-    printf("vol: %f for points_of_this_TET:\n", vals[iface]);
-    print_array(abc[0].data(),3);
-    print_array(abc[1].data(),3);
-    print_array(abc[2].data(),3);
-    print_array(pos.data(),3, "point");
-    printf("\n");
-#endif // DEBUG
   }
   //volume using bottom face=0
   get_face_coords(Mat, 0, abc);
@@ -118,9 +96,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
     inv_vol = 1.0/vol6;
   else
   {
-#if DEBUG >0  
-    printf("%f too low \n", vol6);
-#endif 
     return 0;
   }
   bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
@@ -260,7 +235,7 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 
 template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
-    o::Write<o::LO>& elem_ids, int looplimit=0) {
+                 o::Write<o::LO>& elem_ids, int looplimit=0) {
   const int debug = 0;
 
   const auto dual = mesh.ask_dual();
@@ -299,7 +274,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     }
   };
   scs->parallel_for(lamb);
-
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -309,19 +283,17 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
     auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       auto elmId = e;
-      auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-      auto M = gatherVectors4x3(coords, tetv2v);
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         if(debug)
           printf("Elem %d ptcl: %d\n", elmId, pid);
         if(elmId != elem_ids[pid]) {
           elmId = elem_ids[pid];
-          tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-          M = gatherVectors4x3(coords, tetv2v);
           if(debug)
             printf("Elem %d ptcl: %d\n", elmId, pid);
         }
+        auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
+        auto M = gatherVectors4x3(coords, tetv2v);
         const o::Vector<3> orig = makeVector3(pid, x_scs_d);
         const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
         if(loops == 0 && debug) {
@@ -428,11 +400,11 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     ++loops;
 
     if(looplimit && loops > looplimit) {
-      if(debug) fprintf(stderr, "loop limit %d exceeded\n", looplimit);
+      if (debug)
+        fprintf(stderr, "loop limit %d exceeded\n", looplimit);
       break;
     }
   }
-
   return found;
 }
 

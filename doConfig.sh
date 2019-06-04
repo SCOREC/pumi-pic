@@ -7,7 +7,7 @@ ps=$2
 export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$ps
 
 cmake $src \
--DCMAKE_BUILD_TYPE=DEBUG \
--DIS_TESTING=ON \
--DTEST_DATA_DIR=$src/pumipic-data \
--DCMAKE_INSTALL_PREFIX=$PWD/install
+      -DCMAKE_CXX_COMPILER=mpicxx \
+      -DCMAKE_BUILD_TYPE=DEBUG \
+      -DIS_TESTING=ON \
+      -DTEST_DATA_DIR=$src/pumipic-data

@@ -11,8 +11,9 @@ public:
   using Base=typename BaseType<Type>::type;
 
   using ViewType=Kokkos::View<Type*, ExecSpace>;
+  Segment() {}
   Segment(ViewType v) : view(v){}
-
+  
   template <typename U = Type>
   KOKKOS_INLINE_FUNCTION typename std::enable_if<std::rank<Type>::value == 0 && std::is_same<U, Type>::value, Base>::type&
     operator()(const int& particle_index) const {

@@ -49,6 +49,8 @@ class SellCSigma {
 
   template <std::size_t N> 
   Segment<DataTypes, N, ExecSpace> get() {
+    if (num_ptcls == 0)
+      return Segment<DataTypes, N, ExecSpace>();
     using Type=typename MemberTypeAtIndex<N, DataTypes>::type;
     MemberTypeView<Type>* view = static_cast<MemberTypeView<Type>*>(scs_data[N]);
     return Segment<DataTypes, N, ExecSpace>(*view);
@@ -346,8 +348,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::destroy(bool destroyGid2Row) {
-  if (num_ptcls > 0)
-    DestroyViews<DataTypes>(scs_data+0);
+  DestroyViews<DataTypes>(scs_data+0);
   if (destroyGid2Row)
     element_gid_to_lid.clear();
 }
@@ -504,7 +505,6 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element, 
                                               kkLidView new_particle_elements, 
                                               MemberTypeViews<DataTypes> new_particles) {
-
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(int element_id,int particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
@@ -512,7 +512,6 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
       Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), mask);
   };
   parallel_for(countNewParticles);
-
   // Add new particles to counts
   Kokkos::parallel_for(new_particle_elements.size(), KOKKOS_LAMBDA(const int& i) {
     const lid_t new_elem = new_particle_elements(i);
@@ -522,13 +521,11 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const int& i, lid_t& sum) {
     sum+= new_particles_per_elem(i);
   }, activePtcls);
-
   //If there are no particles left, then destroy the structure
   if(activePtcls == 0) {
-    destroy();
     num_ptcls = 0;
-    num_chunks = 0;
     num_slices = 0;
+    capacity_ = 0;
     return;
   }
   int new_num_ptcls = activePtcls;

@@ -193,10 +193,15 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
+  Kokkos::Timer timer;
   bool isFound = p::search_mesh<Particle>(*mesh, scs, elem_ids, maxLoops);
+  fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
+  timer.reset();
   rebuild(picparts, scs, elem_ids, output);
+  fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
+
 }
 
 //HACK to avoid having an unguarded comma in the SCS PARALLEL macro
@@ -457,7 +462,6 @@ int main(int argc, char** argv) {
       writeDispVectors(scs);
     timer.reset();
     search(picparts,scs, output);
-    MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     MPI_Allreduce(&(scs->num_ptcls), &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
@@ -467,9 +471,7 @@ int main(int argc, char** argv) {
     }
     tagParentElements(picparts,scs,iter);
     render(picparts,iter, comm_rank);
-    MPI_Barrier(MPI_COMM_WORLD);
   }
-  MPI_Barrier(MPI_COMM_WORLD);
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
   

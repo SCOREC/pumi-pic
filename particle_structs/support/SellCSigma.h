@@ -19,15 +19,46 @@
 #include <Kokkos_Sort.hpp>
 #include <mpi.h>
 #include <unordered_map>
+#include <climits>
+namespace {
+struct MyPair {
+  constexpr MyPair() : first(0), second(0) {}
+  constexpr MyPair(int i) : first(i), second(0) {}
+  void operator=(const volatile MyPair& p) volatile {
+    first = p.first;
+    second = p.second;
+  }
+  int operator-(const volatile MyPair& p) const volatile { return first - p.first;}
+  bool operator==(const volatile MyPair& p) const volatile {return first==p.first;}
+  bool operator!=(const volatile MyPair& p) const volatile {return !(*this == p);}
+  //Reverse operators in order to get largest first
+  bool operator<(const volatile MyPair& p) const volatile {return first > p.first || (first ==p.first && second < p.second);}
+  bool operator>(const volatile MyPair& p) const volatile {return first < p.first || (first==p.first && second > p.second);}
+  int first, second;
+};
+
+}
+namespace Kokkos {
+  template <>
+  struct reduction_identity<MyPair> {
+    constexpr static MyPair ma = MyPair(10000000);
+    constexpr static MyPair mi = MyPair(0);
+    KOKKOS_FORCEINLINE_FUNCTION constexpr static const MyPair& max() {return ma;}
+    KOKKOS_FORCEINLINE_FUNCTION constexpr static const  MyPair& min() {return mi;}
+  };
+  constexpr MyPair reduction_identity<MyPair>::ma;
+  constexpr MyPair reduction_identity<MyPair>::mi;
+}
 namespace particle_structs {
 
 template <typename ExecSpace> 
-using PairView=Kokkos::View<Kokkos::pair<lid_t,lid_t>*, typename ExecSpace::device_type>;
+using PairView=Kokkos::View<MyPair*, typename ExecSpace::device_type>;
 
 
 template<class DataTypes, typename ExecSpace = Kokkos::DefaultExecutionSpace>
 class SellCSigma {
  public:
+  
   typedef Kokkos::TeamPolicy<ExecSpace> PolicyType ;
   typedef Kokkos::View<lid_t*, typename ExecSpace::device_type> kkLidView;
   typedef Kokkos::View<gid_t*, typename ExecSpace::device_type> kkGidView;
@@ -144,8 +175,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     ptcl_pairs(i).first = ptcls_per_elem(i);
     ptcl_pairs(i).second = i;
   });
-  /*
-    Sorting Disabled due to kokkos problems
+  
   int i;
   if (sigma > 1) {
     for (i = 0; i < num_elems - sigma; i+=sigma) {
@@ -153,7 +183,6 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     }
     Kokkos::sort(ptcl_pairs, i, num_elems);
   }
-  */
 }
 
 template <typename ExecSpace>

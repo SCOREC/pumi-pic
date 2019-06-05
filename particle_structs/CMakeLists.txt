@@ -73,8 +73,8 @@ bob_export_target(particleStructs)
 if (ENABLE_KOKKOS)
   # bob package creation {
   set(particle_structures_USE_Kokkos_DEFAULT ON)
-  get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY CACHE)
-  bob_public_dep(KOKKOS)
+  get_filename_component(KOKKOS_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY CACHE)
+  bob_public_dep(Kokkos)
   # }
   add_definitions(-DKOKKOS_ENABLED)
   target_compile_definitions(particleStructs INTERFACE -DKOKKOS_ENABLED)

@@ -272,18 +272,47 @@ OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, const o::Reals &
   return pos;
 }
 
+//2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
+OMEGA_H_DEVICE o::LO getfmap(int i) {
+  assert(i>=0 && i<8);
+  const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
+  return fmap[i];
+}
 
-OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::Reals &coords, 
-   const o::LOs &face_verts){
+OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::LO elmId,
+  const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
+  const o::LOs &down_r2fs) {
 
-  const auto facev = o::gather_verts<3>(face_verts, fid);
-  const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
+  const auto fv2v = o::gather_verts<3>(face_verts, fid);
+  const auto abc = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+  const auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
   //TODO check if face is flipped
+
+  const auto beg_face = elmId *4;
+  const auto end_face = beg_face +4;
+  o::LO findex = -1;
+  o::LO find = 0;
+  for(auto iface = beg_face; iface < end_face; ++iface) {
+    const auto face_id = down_r2fs[iface];
+    if(fid == face_id) {
+      findex = find;
+      break;
+    }
+    ++find;
+  }
+
+  bool inverse = true;
+  o::LO matInd1 = getfmap(findex*2);
+  o::LO matInd2 = getfmap(findex*2+1);
+  if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
+    inverse = false;
 
   o::Vector<3> a = abc[0];
   o::Vector<3> b = abc[1];
   o::Vector<3> c = abc[2];
   o::Vector<3> fnorm = o::cross(b - a, c - a);
+  if(inverse)
+    fnorm = -1*fnorm;
   return o::normalize(fnorm);
 }
 

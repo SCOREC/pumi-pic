@@ -108,7 +108,7 @@ void setPtclIds(SCS* scs) {
 }
 */
 
-//TODO this update has to be in Boris Move ?, or kept track of inside it
+//this update has to be in or called from Boris Move
 void updatePtclPositions(SCS* scs) {
   auto x_scs_d = scs->get<0>();
   auto xtgt_scs_d = scs->get<1>();
@@ -127,11 +127,11 @@ void updatePtclPositions(SCS* scs) {
 
 void rebuild(SCS* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
-  updatePtclPositions(scs);
+  //updatePtclPositions(scs);
   const int scs_capacity = scs->capacity();
   auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0)
-      printf("elem_ids[%d] %d\n", pid, elem_ids[pid]);
+      printf("rebuild:elem_ids[%d] %d\n", pid, elem_ids[pid]);
   };
   scs->parallel_for(printElmIds);
 
@@ -149,16 +149,16 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
 void search(o::Mesh& mesh, SCS* scs) {
   fprintf(stderr, "search\n");
   assert(scs->num_elems == mesh.nelems());
-  Omega_h::LO maxLoops = 10;
+  Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
   assert(isFound);
-
+  fprintf(stderr, "Applying surface Model..\n");
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //The elem_ids only updated in rebuild, so don't use it before rebuild
-  applySurfaceModel(mesh, scs, elem_ids);
-
+  //applySurfaceModel(mesh, scs, elem_ids);
+  fprintf(stderr, "Rebuilding ..\n");
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
 }
@@ -179,12 +179,12 @@ int main(int argc, char** argv) {
   if(argc < 2)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_file_density]\n";
+      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file]\n";
     exit(1);
   }
   if(argc < 3)
   {
-    std::cout << "\n\n ****** WARNING: No BField file provided ! \n\n\n";
+    fprintf(stderr, "\n ****** WARNING: No BField file provided ! \n");
   }
 
   std::string bFile="", eFile="", profFile="", profFileDensity="";
@@ -205,6 +205,7 @@ int main(int argc, char** argv) {
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::binary::read(argv[1], world);
+
   const auto r2v = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
 
@@ -214,42 +215,37 @@ int main(int argc, char** argv) {
   GitrmMesh gm(mesh);
 
   OMEGA_H_CHECK(!profFile.empty());
-  std::cout << "\n adding Tags And Loadin Data ..\n";
+  fprintf(stderr, "Adding Tags And Loadin Data\n");
   gm.addTagAndLoadData(profFile, profFileDensity);
 
-  std::cout << "\nInitialize Fields and Boundary data..\n";
+  fprintf(stderr, "Initialize Fields and Boundary data\n");
   OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
   gm.initEandBFields(bFile, eFile);
 
-  std::cout << "\nInitialize Boundary faces ...\n";
+  fprintf(stderr, "Initialize Boundary faces\n");
   gm.initBoundaryFaces();
 
-  std::cout << "\nPreprocessing Distance to boundary ...\n";
+  fprintf(stderr, "Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
 
-  int numPtcls = 2;
-  double dTime = 1e-8;
-  int NUM_ITERATIONS = 2;
+  int numPtcls = 10;
+  double dTime = 2e-6; // gitr:1e-8s for 10,000 iterations
+  int NUM_ITERATIONS = 5;
 
-  printf("\nInitializing impurity particles..\n");
+  fprintf(stderr, "Initializing impurity particles\n");
   GitrmParticles gp(mesh, 10); // (const char* param_file);
-  gp.initImpurityPtcls(numPtcls, 110, 0, 1.5, 200,10);
+  gp.initImpurityPtcls(dTime, numPtcls, 110, 0, 1.5, 200,10);
+
   auto &scs = gp.scs;
-  printf("\nCalculate Distance To Bdry..\n");
-  gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
-      SIZE_PER_FACE, FSKIP);
 
-  // Put inside search
-  printf("\nCalculate EField ..\n");
-  gitrm_calculateE(scs, mesh);
-
+  // Collect data
   int width = (int)(2.5*100);
   int height = (int)(2.5*100);
-
-  o::Write<o::Real> data_d(numPtcls*width*height, 0);
+  int around = (int)(2*o::PI*100);
+  o::Write<o::Real> data_d(around*width*height, 0);
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
@@ -259,14 +255,21 @@ int main(int argc, char** argv) {
     fprintf(stderr, "iter %d\n", iter);
     //computeAvgPtclDensity(mesh, scs);
     timer.reset();
-    fprintf(stderr, "Boris Move: dTime=%.5f\n", dTime);
+    fprintf(stderr, "Calculate Distance To Bdry\n");
+    gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
+      SIZE_PER_FACE, FSKIP);
+
+    fprintf(stderr,"Calculate EField\n");
+    gitrm_calculateE(scs, mesh);
+    fprintf(stderr, "Boris Move: dTime=%.5f iter:%d\n", dTime, iter);
+
     gitrm_borisMove(scs, mesh, gm, dTime);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     //writeDispVectors(scs);
     timer.reset();
     search(mesh, scs);
 
-    storeData(mesh, scs, data_d);
+   // storeData(mesh, scs, data_d, width, height, around);
 
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
@@ -279,7 +282,7 @@ int main(int argc, char** argv) {
 
   //p::test_find_closest_point_on_triangle();
 
-  Omega_h::vtk::write_parallel("torus", &mesh, mesh.dim());
+  Omega_h::vtk::write_parallel("extruded", &mesh, mesh.dim());
 
 
   fprintf(stderr, "done\n");

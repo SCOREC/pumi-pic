@@ -44,13 +44,14 @@ public:
   void operator=(GitrmParticles const&) = delete;
 
   void defineParticles(const int elId, const int numPtcls=100);
-  void findInitBdryElemId(o::Real theta, o::Real phi, const o::Real r,
+  void findInitialBdryElemId(o::Real theta, o::Real phi, const o::Real r,
      o::LO &initEl, o::Write<o::LO> &elemAndFace, 
      const o::LO maxLoops = 100, const o::Real outer=2);
   void setImpurityPtclInitCoords(o::Write<o::LO> &);
-  void initImpurityPtcls(const o::LO numPtcls,o::Real theta, o::Real phi, 
-    const o::Real r, const o::LO maxLoops = 100, const o::Real outer=2);
-  
+  void initImpurityPtcls(o::Real, o::LO numPtcls,o::Real theta, o::Real phi, 
+    o::Real r, o::LO maxLoops = 100, o::Real outer=2);
+  void setInitialTargetCoords(o::Real dTime);
+
   SCS* scs;
   o::Mesh &mesh;
 };
@@ -66,32 +67,41 @@ inline void setPtclIds(SCS* scs) {
   });
 }
 
-
+//TODO crash
 inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids) {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
 
   o::LO dof = BDRY_DATA_SIZE; //7
-  //get mesh tag for boundary data id,xpt,vel
-  auto xtag_d  = o::deep_copy(mesh.get_array<o::Real>(o::FACE, "bdryData"));
-  
   auto ppos_d = scs->template get<PTCL_POS>();
   auto pxpt_d = scs->template get<XPOINT>();
   const auto xface_d = scs->template get<XPOINT_FACE>();
   auto pvel_d = scs->template get<PTCL_VEL>();
+  //get mesh tag for boundary data id,xpt,vel
+  auto xtag_r = mesh.get_array<o::Real>(o::FACE, "bdryData");
+  
+  o::Write<o::Real> xtag_d(xtag_r.size());
+  auto convert = OMEGA_H_LAMBDA(int i) {
+    for(int j=0; j<dof; ++j)
+      xtag_d[i*dof+j] = xtag_r[i*dof+j];
+  };
+  o::parallel_for(mesh.nfaces(), convert);
+
+  std::srand(time(NULL));
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto fid = xface_d(pid);
 
     if(fid >= 0) {
       OMEGA_H_CHECK(side_is_exposed[fid]);
-      std::srand(std::time(nullptr));
       double rn = (double)std::rand()/RAND_MAX;
       auto vel = p::makeVector3(pid, pvel_d );
       auto xpt = p::makeVector3(pid, pxpt_d);
-      auto fnv = p::get_face_normal(fid, coords, face_verts);
+      auto fnv = p::get_face_normal(fid, e, coords, mesh2verts, face_verts, down_r2fs);
 
       auto angle = p::angle_between(fnv, vel);
       // reflection
@@ -108,7 +118,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         ppos_d(pid, 2) = xpt[2];
         elem_ids[pid] = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
       } else {
-
+      /*
      printf("\n****DOF=BDRY_DATA_SIZE: %d \n", dof);
         xtag_d[pid*dof] = static_cast<o::Real>(pid);
         for(int i=1; i<4; ++i) {
@@ -116,16 +126,17 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         }
         for(int i=5; i<7; ++i) {
           xtag_d[pid*dof+i] = vel[i];
-        }
+        } */
       }
     }
   };
   scs->parallel_for(lamb);
-  o::HostWrite<o::Real> tag(xtag_d);
-  mesh.set_tag(o::FACE, "bdryData", o::Reals(tag)); //TODO
+  o::Reals tag(xtag_d);
+  mesh.set_tag(o::FACE, "bdryData", tag);
 }
 
-inline void storeData(o::Mesh& mesh, SCS* scs, o::Write<o::Real> &data_d) {
+inline void storeData(o::Mesh& mesh, SCS* scs, o::Write<o::Real> &data_d, 
+  int w, int h, int r) {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
@@ -138,8 +149,9 @@ inline void storeData(o::Mesh& mesh, SCS* scs, o::Write<o::Real> &data_d) {
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto vel = p::makeVector3(pid, pvel_d);
     auto pos = p::makeVector3(pid, ppos_d);
-/*
-  // find location
+
+  // find grid index
+    /*
     data_d[pid*dof] = static_cast<double>(pid);
     int s = 1;
     for(int i=s; i<s+3; ++i)
@@ -147,7 +159,7 @@ inline void storeData(o::Mesh& mesh, SCS* scs, o::Write<o::Real> &data_d) {
     s = 4;
     for(int i=s; i<s+3; ++i)
       data_d[pid*dof+i] = vel[i-s];
- */
+    */
   };
   scs->parallel_for(lamb);
 }

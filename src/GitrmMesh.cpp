@@ -325,8 +325,8 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
 
   };
   o::parallel_for(mesh.nverts(), fill, "Fill E/B Tag");
-  o::HostWrite<o::Real> tag(tag_d);
-  mesh.set_tag(o::VERT, tagName, o::Reals(tag));
+  o::Reals tag(tag_d);
+  mesh.set_tag(o::VERT, tagName, tag);
 }
 
 // TODO Remove Tags after use
@@ -416,8 +416,8 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
   };
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  o::HostWrite<o::Real> tag(tag_d);
-  mesh.set_tag(o::FACE, tagName, o::Reals(tag));
+  o::Reals tag(tag_d);
+  mesh.set_tag(o::FACE, tagName, tag);
  
 }
 
@@ -470,8 +470,8 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &f
   };
   o::parallel_for(mesh.nverts(), fill, "Fill Tag");
 
-  o::HostWrite<o::Real> tag(tag_d);
-  mesh.set_tag(o::VERT, tagName, o::Reals(tag));
+  o::Reals tag(tag_d);
+  mesh.set_tag(o::VERT, tagName, tag);
 }
 
 
@@ -517,22 +517,25 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 
 }
 
-
 void GitrmMesh::initBoundaryFaces() {
   int verbose = 4;
 
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
 
   o::Real bxz[4] = {BGRIDX0, BGRIDZ0, BGRID_DX, BGRID_DZ};
   o::LO bnz[2] = {BGRID_NX, BGRID_NZ};
   const auto &Bfield_2dm = Bfield_2d;
 
-  const auto density = o::Reals(mesh.get_array<o::Real>(o::FACE, "density")); //=ni
-  const auto ne = o::Reals(mesh.get_array<o::Real>(o::FACE, "ne"));
-  const auto te = o::Reals(mesh.get_array<o::Real>(o::FACE, "Tel"));
-  const auto ti = o::Reals(mesh.get_array<o::Real>(o::FACE, "Tion"));
+  const auto density = mesh.get_array<o::Real>(o::FACE, "density"); //=ni
+  const auto ne = mesh.get_array<o::Real>(o::FACE, "ne");
+  const auto te = mesh.get_array<o::Real>(o::FACE, "Tel");
+  const auto ti = mesh.get_array<o::Real>(o::FACE, "Tion");
 
   o::Write<o::Real> angle_d(mesh.nfaces());
   o::Write<o::Real> debyeLength_d(mesh.nfaces());
@@ -548,88 +551,82 @@ void GitrmMesh::initBoundaryFaces() {
   auto fill = OMEGA_H_LAMBDA(o::LO fid) {
     
     //Serial numbers are faceids ?
-    if(!side_is_exposed[fid]) {
-      return;
-    }
-    o::Vector<3> B{{0}};
-    auto pos = p::find_face_centroid(fid, coords, face_verts);
+    if(side_is_exposed[fid]) {
+      o::Vector<3> B{{0}};
+      auto pos = p::find_face_centroid(fid, coords, face_verts);
 
-    // TODO angle is between surface normal and magnetic field at center of face
-    // If  face is long, BField is not accurate. Calculate at closest point ?
-    p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
-         pos, B, true);
-    if(verbose > 3 && fid%500==0){
-      printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
-    }
-
-    auto surfNorm = p::get_face_normal(fid, coords, face_verts);
-    
-    o::Real magB = o::norm(B);
-    o::Real magSurfNorm = o::norm(surfNorm);
-    o::Real angleBS = p::osh_dot(B, surfNorm);
-    o::Real theta = acos(angleBS/(magB*magSurfNorm));
-    if (theta > o::PI * 0.5) {
-      theta = abs(theta - (o::PI));
-    }
-
-    angle_d[fid] = theta*180.0/o::PI;
-
-    o::Real tion = ti[fid];
-    o::Real tel = te[fid];
-    o::Real nel = ne[fid];
-    o::Real dens = density[fid];  //3.0E+19 ?
-    o::Real pot = BIAS_POTENTIAL;
-
-    o::Real dlen = 0;
-    if(p::almost_equal(nel, 0.0)){
-      dlen = 1e12f;
-    }
-    else {
-      dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
-    }
-    debyeLength_d[fid] = dlen;
-
-    larmorRadius_d[fid] = 1.44e-4*sqrt(background_amu*tion/2)/(background_Z*magB);
-    flux_d[fid] = 0.25* dens *sqrt(8.0*tion*1.60217662e-19/(o::PI*background_amu));
-    impacts_d[fid] = 0.0;
-
-    if(BIASED_SURFACE) {
-      o::Real cld = 0;
-      if(tel > 0.0) {
-        cld = dlen * pow(abs(pot)/tel, 0.75);
+      // TODO angle is between surface normal and magnetic field at center of face
+      // If  face is long, BField is not accurate. Calculate at closest point ?
+      p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
+           pos, B, true);
+      if(verbose > 3 && fid%500==0){
+        printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
       }
-      else { 
-        cld = 1e12;
+      auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
+      auto surfNorm = p::get_face_normal(fid, elmId, coords, mesh2verts, 
+        face_verts, down_r2fs);
+      o::Real magB = o::norm(B);
+      o::Real magSurfNorm = o::norm(surfNorm);
+      o::Real angleBS = p::osh_dot(B, surfNorm);
+      o::Real theta = acos(angleBS/(magB*magSurfNorm));
+      if (theta > o::PI * 0.5) {
+        theta = abs(theta - (o::PI));
       }
-      childLangmuirDist_d[fid] = cld;
-    }
-    else {
-      pot = 3.0*tel; 
-    }
-    potential_d[fid] = pot;
 
+      angle_d[fid] = theta*180.0/o::PI;
+
+      o::Real tion = ti[fid];
+      o::Real tel = te[fid];
+      o::Real nel = ne[fid];
+      o::Real dens = density[fid];  //3.0E+19 ?
+      o::Real pot = BIAS_POTENTIAL;
+
+      o::Real dlen = 0;
+      if(p::almost_equal(nel, 0.0)){
+        dlen = 1e12f;
+      }
+      else {
+        dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
+      }
+      debyeLength_d[fid] = dlen;
+
+      larmorRadius_d[fid] = 1.44e-4*sqrt(background_amu*tion/2)/(background_Z*magB);
+      flux_d[fid] = 0.25* dens *sqrt(8.0*tion*1.60217662e-19/(o::PI*background_amu));
+      impacts_d[fid] = 0.0;
+
+      if(BIASED_SURFACE) {
+        o::Real cld = 0;
+        if(tel > 0.0) {
+          cld = dlen * pow(abs(pot)/tel, 0.75);
+        }
+        else { 
+          cld = 1e12;
+        }
+        childLangmuirDist_d[fid] = cld;
+      }
+      else {
+        pot = 3.0*tel; 
+      }
+      potential_d[fid] = pot;
+
+      if(verbose >4)// || p::almost_equal(angle_d[fid],0))
+        printf("angle[%d] %.5f\n", fid, angle_d[fid]);
+    }
   };
 
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
 
-  o::HostWrite<o::Real> angle(angle_d);
-  o::HostWrite<o::Real> debyeLength(debyeLength_d);
-  o::HostWrite<o::Real> larmorRadius(larmorRadius_d);
-  o::HostWrite<o::Real> childLangmuirDist(childLangmuirDist_d);
-  o::HostWrite<o::Real> flux(flux_d);
-  o::HostWrite<o::Real> impacts(impacts_d);
-  o::HostWrite<o::Real> potential(potential_d);
-
-  mesh.add_tag<o::Real>(o::FACE, "angleBdryBfield", 1, o::Reals(angle));
-  mesh.add_tag<o::Real>(o::FACE, "DebyeLength", 1, o::Reals(debyeLength));
-  mesh.add_tag<o::Real>(o::FACE, "LarmorRadius", 1, o::Reals(larmorRadius));
-  mesh.add_tag<o::Real>(o::FACE, "ChildLangmuirDist", 1, o::Reals(childLangmuirDist));
-  mesh.add_tag<o::Real>(o::FACE, "flux", 1, o::Reals(flux));
-  mesh.add_tag<o::Real>(o::FACE, "impacts", 1, o::Reals(impacts));
-  mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential));
+  mesh.add_tag<o::Real>(o::FACE, "angleBdryBfield", 1, o::Reals(angle_d));
+  mesh.add_tag<o::Real>(o::FACE, "DebyeLength", 1, o::Reals(debyeLength_d));
+  mesh.add_tag<o::Real>(o::FACE, "LarmorRadius", 1, o::Reals(larmorRadius_d));
+  mesh.add_tag<o::Real>(o::FACE, "ChildLangmuirDist", 1, o::Reals(childLangmuirDist_d));
+  mesh.add_tag<o::Real>(o::FACE, "flux", 1, o::Reals(flux_d));
+  mesh.add_tag<o::Real>(o::FACE, "impacts", 1, o::Reals(impacts_d));
+  mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential_d));
 
  //Book keeping of intersecting particles
-  mesh.add_tag<o::Real>(o::FACE, "bdryData", 7);
+  //o::LO dof = BDRY_DATA_SIZE; 
+  //mesh.add_tag<o::Real>(o::FACE, "bdryData", 7, o::Write<o::Real>(dof*mesh.nfaces(), 0));
 }
 
 

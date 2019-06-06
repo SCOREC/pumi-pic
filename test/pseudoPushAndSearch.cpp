@@ -159,7 +159,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   auto ids = scs->get<2>();
   auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
-      printf("elem_ids[%d] %d %d\n", pid, elem_ids[pid], ids(pid));
+      printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
   scs->parallel_for(printElmIds);
 
@@ -174,7 +174,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
     scs_process_ids(pid) = comm_rank;
     //if (is_safe[e] == 0) {
     if (elem_ids[pid] != -1)
-      scs_process_ids(pid) = elm_owners[e];
+      scs_process_ids(pid) = elm_owners[elem_ids[pid]];
     //}
   };
   scs->parallel_for(lamb);
@@ -185,6 +185,12 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
          , comm_rank,
          scs->num_elems, scs->num_ptcls, scs->num_chunks, scs->num_slices, scs->capacity(),
          scs->numRows());
+  ids = scs->get<2>();
+  auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if (output && mask > 0)
+      printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+  };
+  scs->parallel_for(printElms);
 }
 
 void search(p::Mesh& picparts, SCS* scs, bool output) {
@@ -456,6 +462,7 @@ int main(int argc, char** argv) {
     //computeAvgPtclDensity(picparts, scs);
     timer.reset();
     push(scs, scs->num_ptcls, distance, dx, dy, dz);
+    MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     if (output)

@@ -57,14 +57,12 @@ namespace particle_structs {
                  typename SCS::kkLidView array_indices) {
       int comm_rank;
       MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-      typename SCS::kkLidView array_indices_tmp("tmp", array_indices.size());
-      Kokkos::deep_copy(array_indices_tmp, array_indices);
       MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
       MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
       auto copySCSToArray = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const int arr_index = scs_to_array(ptcl_id);
         if (mask && arr_index != comm_rank) {
-          const int index = Kokkos::atomic_fetch_add(&array_indices_tmp(arr_index), 1);
+          const int index = array_indices(ptcl_id);
           CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, ptcl_id);
         }
       };
@@ -87,36 +85,31 @@ namespace particle_structs {
   template <typename SCS> struct CopySCSToSCSImpl<SCS> {
     CopySCSToSCSImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<void> >,
                      MemberTypeViewsConst<MemberTypes<void> >, typename SCS::kkLidView,
-                     typename SCS::kkLidView, typename SCS::kkLidView) {}
+                     typename SCS::kkLidView) {}
   };
   template <typename SCS, typename T, typename... Types> struct CopySCSToSCSImpl<SCS, T,Types...> {
     CopySCSToSCSImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<T, Types...> > dsts,
                      MemberTypeViewsConst<MemberTypes<T, Types...> > srcs,
                      typename SCS::kkLidView new_element,
-                     typename SCS::kkLidView elem_to_scs,
                      typename SCS::kkLidView scs_indices) {
-      enclose(scs,dsts,srcs,new_element, elem_to_scs, scs_indices);
+      enclose(scs,dsts,srcs,new_element, scs_indices);
     }
     void enclose(SCS* scs, MemberTypeViewsConst<MemberTypes<T, Types...> > dsts,
                  MemberTypeViewsConst<MemberTypes<T, Types...> > srcs,
                  typename SCS::kkLidView new_element,
-                 typename SCS::kkLidView elem_to_scs,
                  typename SCS::kkLidView scs_indices) {
-      typename SCS::kkLidView scs_indices_tmp("tmp", scs_indices.size());
-      Kokkos::deep_copy(scs_indices_tmp, scs_indices);
       MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
       MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
       int C = scs->C;
       auto copySCSToSCS = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const lid_t new_elem = new_element(ptcl_id);
         if (mask && new_elem != -1) {
-          const lid_t new_row = elem_to_scs(new_elem);
-          const int index = Kokkos::atomic_fetch_add(&scs_indices_tmp(new_row), C);
+          const int index = scs_indices(ptcl_id);
           CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, ptcl_id);
         }
       };
       scs->parallel_for(copySCSToSCS);
-      CopySCSToSCSImpl<SCS, Types...>(scs, dsts+1, srcs+1, new_element, elem_to_scs, scs_indices);
+      CopySCSToSCSImpl<SCS, Types...>(scs, dsts+1, srcs+1, new_element, scs_indices);
     }
     
   };
@@ -125,9 +118,8 @@ namespace particle_structs {
     CopySCSToSCS(SCS* scs, MemberTypeViewsConst<MemberTypes<Types...> > dsts,  
                  MemberTypeViewsConst<MemberTypes<Types...> > srcs,
                  typename SCS::kkLidView new_element,
-                 typename SCS::kkLidView elm_to_scs,
                  typename SCS::kkLidView scs_indices) {
-      CopySCSToSCSImpl<SCS, Types...>(scs, dsts, srcs, new_element, elm_to_scs, scs_indices);
+      CopySCSToSCSImpl<SCS, Types...>(scs, dsts, srcs, new_element, scs_indices);
     }
   };
 
@@ -135,44 +127,34 @@ namespace particle_structs {
   template <typename SCS, typename... Types> struct CopyNewParticlesToSCSImpl;
   template <typename SCS> struct CopyNewParticlesToSCSImpl<SCS> {
     CopyNewParticlesToSCSImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<void> >,
-                     MemberTypeViewsConst<MemberTypes<void> >, typename SCS::kkLidView,
-                     typename SCS::kkLidView, typename SCS::kkLidView) {}
+                              MemberTypeViewsConst<MemberTypes<void> >, int,
+                              typename SCS::kkLidView) {}
   };
   template <typename SCS, typename T, typename... Types> struct CopyNewParticlesToSCSImpl<SCS, T,Types...> {
     CopyNewParticlesToSCSImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<T, Types...> > dsts,
-                     MemberTypeViewsConst<MemberTypes<T, Types...> > srcs,
-                     typename SCS::kkLidView new_element,
-                     typename SCS::kkLidView elem_to_scs,
+                              MemberTypeViewsConst<MemberTypes<T, Types...> > srcs, int ne,
                      typename SCS::kkLidView scs_indices) {
-      enclose(scs,dsts,srcs,new_element,elem_to_scs,scs_indices);
+      enclose(scs,dsts,srcs,ne, scs_indices);
     }
     void enclose(SCS* scs, MemberTypeViewsConst<MemberTypes<T, Types...> > dsts,
-                 MemberTypeViewsConst<MemberTypes<T, Types...> > srcs,
-                 typename SCS::kkLidView new_element,
-                 typename SCS::kkLidView elem_to_scs,
+                 MemberTypeViewsConst<MemberTypes<T, Types...> > srcs, int ne,
                  typename SCS::kkLidView scs_indices) {
-      typename SCS::kkLidView scs_indices_tmp("tmp", scs_indices.size());
-      Kokkos::deep_copy(scs_indices_tmp, scs_indices);
       MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
       MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
       int C = scs->C;
-      Kokkos::parallel_for(new_element.size(), KOKKOS_LAMBDA(const int& i) {
-        const lid_t new_elem = new_element(i);
-        const lid_t new_row = elem_to_scs(new_elem);
-        const int index = Kokkos::atomic_fetch_add(&scs_indices_tmp(new_row), C);
+      Kokkos::parallel_for(ne, KOKKOS_LAMBDA(const int& i) {
+        const int index = scs_indices(i);
         CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, i);
       });
-      CopyNewParticlesToSCSImpl<SCS, Types...>(scs, dsts+1, srcs+1, new_element, elem_to_scs, scs_indices);
+      CopyNewParticlesToSCSImpl<SCS, Types...>(scs, dsts+1, srcs+1, ne, scs_indices);
     }
   };
   template <typename SCS, typename... Types> struct CopyNewParticlesToSCS;
   template <typename SCS,typename... Types> struct CopyNewParticlesToSCS<SCS, MemberTypes<Types...> > {
     CopyNewParticlesToSCS(SCS* scs, MemberTypeViewsConst<MemberTypes<Types...> > dsts,  
-                 MemberTypeViewsConst<MemberTypes<Types...> > srcs,
-                 typename SCS::kkLidView new_element,
-                 typename SCS::kkLidView elm_to_scs,
+                          MemberTypeViewsConst<MemberTypes<Types...> > srcs, int ne, 
                  typename SCS::kkLidView scs_indices) {
-      CopyNewParticlesToSCSImpl<SCS, Types...>(scs, dsts, srcs, new_element, elm_to_scs, scs_indices);
+      CopyNewParticlesToSCSImpl<SCS, Types...>(scs, dsts, srcs, ne, scs_indices);
     }
   };
 

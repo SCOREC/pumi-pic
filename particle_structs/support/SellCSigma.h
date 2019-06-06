@@ -24,6 +24,13 @@ namespace {
 struct MyPair {
   KOKKOS_FORCEINLINE_FUNCTION constexpr MyPair() : first(0), second(0) {}
   KOKKOS_FORCEINLINE_FUNCTION constexpr MyPair(int i) : first(i), second(0) {}
+  KOKKOS_INLINE_FUNCTION MyPair& operator=(const MyPair& p) {
+    if (this != &p) {
+      first = p.first;
+      second = p.second;
+    }
+    return *this;
+  }
   KOKKOS_FORCEINLINE_FUNCTION void operator=(const volatile MyPair& p) volatile {
     first = p.first;
     second = p.second;
@@ -175,13 +182,22 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     ptcl_pairs(i).first = ptcls_per_elem(i);
     ptcl_pairs(i).second = i;
   });
-  
-  int i;
   if (sigma > 1) {
+    int i;
+#ifdef SORT_ON_DEVICE
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       Kokkos::sort(ptcl_pairs, i, i + sigma);
     }
     Kokkos::sort(ptcl_pairs, i, num_elems);
+#else
+    typename PairView<ExecSpace>::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
+    MyPair* ptcl_pair_data = ptcl_pairs_host.data();
+    for (i = 0; i < num_elems - sigma; i+=sigma) {
+      std::sort(ptcl_pair_data + i, ptcl_pair_data + i + sigma);
+    }
+    std::sort(ptcl_pair_data + i, ptcl_pair_data + num_elems);
+    hostToDevice(ptcl_pairs,  ptcl_pair_data);
+#endif
   }
 }
 
@@ -416,12 +432,15 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
     num += num_send_particles(i);
-    offset_send_particles(i+1) += num*final;
-    offset_send_particles_temp(i+1) += num*final;
+    if (final) {
+      offset_send_particles(i+1) += num;
+      offset_send_particles_temp(i+1) += num;
+    }
   });
   Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
     num += num_recv_particles(i);
-    offset_recv_particles(i+1) += num*final;
+    if (final)
+      offset_recv_particles(i+1) += num;
   });
   kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
   kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);

@@ -78,7 +78,7 @@ void GitrmMesh::parseGridLimits(std::stringstream &ss, std::string sfirst,
   std::string gridName, bool semi, bool &foundMin, bool &gridLine, 
   double &min, double &max){
   
-  int verbose = 3;
+  int verbose = 1;
   std::string s2, s3, sd;
   
   if(sfirst == gridName) {
@@ -135,7 +135,7 @@ void GitrmMesh::parseGridLimits(std::stringstream &ss, std::string sfirst,
 void GitrmMesh::processFieldFile(const std::string &fName,
     o::HostWrite<o::Real> &data, FieldStruct &fs, int nComp) {
 
-  o::LO verbose = 3;
+  o::LO verbose = 1;
 
   OMEGA_H_CHECK(nComp>0 && nComp<4);
   std::ifstream ifs(fName);
@@ -233,16 +233,13 @@ void GitrmMesh::processFieldFile(const std::string &fName,
     s1 = s2 = s3 = "";
   }
 
-  if(verbose >2){
-    std::cout << "\n foundMin0 : " << foundMin0  << 
+  if(verbose >3){
+    std::cout << "foundMin0 : " << foundMin0  << 
       " foundMin1 : " << foundMin1 << "\n";
   }
   OMEGA_H_CHECK(foundMin0 && foundMin1);
   OMEGA_H_CHECK(dataInit);
 
-  if(verbose >2){
-    std::cout << "\n " << fs.rName << ": " << foundComp0  << "\n";
-  }
   OMEGA_H_CHECK(foundComp0);
   if(nComp > 1){
     if(verbose >2){
@@ -258,8 +255,8 @@ void GitrmMesh::processFieldFile(const std::string &fName,
   }
 
   if(verbose >2){
-    std::cout << "\n " << fs.nR << " " << fs.nZ << " " << fs.rMin<< " "<< fs.rMax 
-              << " "<< fs.zMin << " "<< fs.zMax << "\n\n";
+    std::cout << "Found component " << fs.rName << " = " << foundComp0  << ":: " 
+              << fs.nR << " " << fs.nZ << "\n";
   }
 
   if(ifs.is_open()) {
@@ -269,9 +266,9 @@ void GitrmMesh::processFieldFile(const std::string &fName,
 
 
 void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
-  o::LO verbose = 3;
+  o::LO verbose = 1;
 
-  std::cout<< "processing File to load " << fs.name << "\n" ;
+  std::cout<< "processing File to load " << fs.name << " on vtx\n" ;
   // Not per vertex; but for input EField: [nZ*nR]
   o::HostWrite<o::Real> readInData;
 
@@ -366,9 +363,9 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  o::LO verbose = 5;
+  o::LO verbose = 1;
   if(verbose >0)
-    std::cout << "Loading "<< fs.name << "\n";
+    std::cout << ">>>>> Loading "<< fs.name << " from " << file<< " on bdry\n";
 
   // Huge numbers, not suitable for Real if Real is redefined not to be double
   o::HostWrite<double> readInData;
@@ -422,9 +419,9 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
 }
 
 void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
-  o::LO verbose = 3;
+  o::LO verbose = 1;
 
-  std::cout<< "processing File to load " << fs.name << "\n" ;
+  std::cout<< ">>>>> Loading data from " << fs.name << " on vtx\n" ;
   // Not per vertex; but for input EField: [nZ*nR]
   o::HostWrite<o::Real> readInData;
 
@@ -518,7 +515,7 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 }
 
 void GitrmMesh::initBoundaryFaces() {
-  int verbose = 4;
+  o::LO verbose = 1;
 
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
@@ -552,19 +549,20 @@ void GitrmMesh::initBoundaryFaces() {
     
     //Serial numbers are faceids ?
     if(side_is_exposed[fid]) {
-      o::Vector<3> B{{0}};
+      o::Vector<3> B{0,0,0};
       auto pos = p::find_face_centroid(fid, coords, face_verts);
 
       // TODO angle is between surface normal and magnetic field at center of face
       // If  face is long, BField is not accurate. Calculate at closest point ?
       p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
            pos, B, true);
-      if(verbose > 3 && fid%500==0){
-        printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f \n", fid, pos[0], pos[1], pos[2], te[fid]);
+      if(verbose > 3 ) { //&& fid%1000==0){
+        printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f B:%g %g %g\n", fid, pos[0], pos[1], pos[2], te[fid],
+            B[0], B[1], B[2]);
       }
       auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
       auto surfNorm = p::get_face_normal(fid, elmId, coords, mesh2verts, 
-        face_verts, down_r2fs);
+          face_verts, down_r2fs);
       o::Real magB = o::norm(B);
       o::Real magSurfNorm = o::norm(surfNorm);
       o::Real angleBS = p::osh_dot(B, surfNorm);
@@ -572,8 +570,12 @@ void GitrmMesh::initBoundaryFaces() {
       if (theta > o::PI * 0.5) {
         theta = abs(theta - (o::PI));
       }
-
       angle_d[fid] = theta*180.0/o::PI;
+      
+      if(verbose >3) {
+        printf("fid:%d surfNorm:%g %g %g angleBS=%g theta=%g angle=%g\n", fid, surfNorm[0], 
+          surfNorm[1], surfNorm[2],angleBS,theta,angle_d[fid]);
+      }
 
       o::Real tion = ti[fid];
       o::Real tel = te[fid];
@@ -583,7 +585,7 @@ void GitrmMesh::initBoundaryFaces() {
 
       o::Real dlen = 0;
       if(p::almost_equal(nel, 0.0)){
-        dlen = 1e12f;
+        dlen = 1.0e12;
       }
       else {
         dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
@@ -625,8 +627,8 @@ void GitrmMesh::initBoundaryFaces() {
   mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential_d));
 
  //Book keeping of intersecting particles
-  //o::LO dof = BDRY_DATA_SIZE; 
-  //mesh.add_tag<o::Real>(o::FACE, "bdryData", 7, o::Write<o::Real>(dof*mesh.nfaces(), 0));
+  o::LO dof = BDRY_DATA_SIZE; 
+  mesh.add_tag<o::Real>(o::FACE, "bdryData", 7, o::Write<o::Real>(dof*mesh.nfaces(), 0));
 }
 
 
@@ -772,7 +774,7 @@ void GitrmMesh::copyBdryFacesToSelf() {
   auto &bdryFaceElemIds = this->bdryFaceElemIds;
   auto &bdryFlags = this->bdryFlags;
 
-  o::LO verbose = 2;
+  o::LO verbose = 1;
   auto fillBdry = OMEGA_H_LAMBDA(o::LO elem) {
 
     // Find  bdry faces: # and id

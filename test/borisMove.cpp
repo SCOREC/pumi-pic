@@ -129,11 +129,14 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuild\n");
   //updatePtclPositions(scs);
   const int scs_capacity = scs->capacity();
+  auto pid_d =  scs->get<2>();
   auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0)
-      printf("rebuild:elem_ids[%d] %d\n", pid, elem_ids[pid]);
+    if(mask > 0 ) {//&& elem_ids[pid] >= 0) 
+      //printf(">> Particle remains %d \n", pid);
+      printf("rebuild:elem_ids[%d] %d ptcl %d\n", pid, elem_ids[pid], pid_d(pid));
+    }
   };
-  scs->parallel_for(printElmIds);
+ // scs->parallel_for(printElmIds);
 
   SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
 
@@ -154,13 +157,24 @@ void search(o::Mesh& mesh, SCS* scs) {
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
   assert(isFound);
-  fprintf(stderr, "Applying surface Model..\n");
+  //fprintf(stderr, "Applying surface Model..\n");
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //The elem_ids only updated in rebuild, so don't use it before rebuild
   //applySurfaceModel(mesh, scs, elem_ids);
   fprintf(stderr, "Rebuilding ..\n");
+
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
+
+  o::Write<o::LO> total(2,0);
+  auto lambda = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask >0 && elem_ids[pid]>=0)
+      total[0] +=1;
+  };
+  //scs->parallel_for(lambda);
+  //o::HostRead<o::LO>tot_h(total);
+  //printf("Remaining Particles %d \n", tot_h[0]);
+
 }
 
 int main(int argc, char** argv) {
@@ -215,27 +229,27 @@ int main(int argc, char** argv) {
   GitrmMesh gm(mesh);
 
   OMEGA_H_CHECK(!profFile.empty());
-  fprintf(stderr, "Adding Tags And Loadin Data\n");
+  fprintf(stderr, "\nAdding Tags And Loadin Data\n");
   gm.addTagAndLoadData(profFile, profFileDensity);
 
-  fprintf(stderr, "Initialize Fields and Boundary data\n");
+  fprintf(stderr, "\nInitializing Fields and Boundary data\n");
   OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
   gm.initEandBFields(bFile, eFile);
 
-  fprintf(stderr, "Initialize Boundary faces\n");
+  fprintf(stderr, "\nInitializing Boundary faces\n");
   gm.initBoundaryFaces();
 
-  fprintf(stderr, "Preprocessing Distance to boundary \n");
+  fprintf(stderr, "\nPreprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
 
-  int numPtcls = 10;
+  int numPtcls = 10000;
   double dTime = 2e-6; // gitr:1e-8s for 10,000 iterations
-  int NUM_ITERATIONS = 5;
+  int NUM_ITERATIONS = 1000;
 
-  fprintf(stderr, "Initializing impurity particles\n");
+  fprintf(stderr, "\nInitializing impurity particles\n");
   GitrmParticles gp(mesh, 10); // (const char* param_file);
   gp.initImpurityPtcls(dTime, numPtcls, 110, 0, 1.5, 200,10);
 
@@ -246,22 +260,25 @@ int main(int argc, char** argv) {
   int height = (int)(2.5*100);
   int around = (int)(2*o::PI*100);
   o::Write<o::Real> data_d(around*width*height, 0);
+
+  fprintf(stderr, "\n*********\nMain Loop**********\n");
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
+      fprintf(stderr, "Total iterations = %d\n", iter);
       break;
     }
-    fprintf(stderr, "iter %d\n", iter);
+    fprintf(stderr, "=================iter %d===============\n", iter);
     //computeAvgPtclDensity(mesh, scs);
     timer.reset();
-    fprintf(stderr, "Calculate Distance To Bdry\n");
+    //fprintf(stderr, "Calculate Distance To Bdry\n");
     gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
 
-    fprintf(stderr,"Calculate EField\n");
+    //fprintf(stderr,"Calculate EField\n");
     gitrm_calculateE(scs, mesh);
-    fprintf(stderr, "Boris Move: dTime=%.5f iter:%d\n", dTime, iter);
+    fprintf(stderr, "Boris Move: dTime=%g iter:%d\n", dTime, iter);
 
     gitrm_borisMove(scs, mesh, gm, dTime);
     fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
@@ -274,6 +291,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
+      fprintf(stderr, "Total iterations = %d\n", iter+1);
       break;
     }
     //tagParentElements(mesh,scs,iter);

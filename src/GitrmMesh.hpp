@@ -222,79 +222,82 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
   const auto mesh2verts = mesh.ask_elem_verts(); 
   //fskip is 2, since 1st 2 are not part of face vertices
   OMEGA_H_CHECK(fsize > 0 && nel >0);
-  auto pos_d = scs->get<PTCL_POS>();
-  auto closestPoint_d = scs->get<PTCL_BDRY_CLOSEPT>();
+  auto pos_d = scs->template get<PTCL_POS>();
+  auto closestPoint_d = scs->template get<PTCL_BDRY_CLOSEPT>();
+  auto bdry_face_d = scs->template get<PTCL_BDRY_FACEID>();
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
-    //if (mask <= 0) return; //TODO ?????
-    //TODO  
-    o::LO verbose = 2; //(elem%500==0)?2:1;
+    if (mask > 0) {
+    // elem 42200
+      o::LO verbose = 1; //(elem%500==0)?2:1;
 
-    o::LO beg = bdryFaceInds[elem];
-    o::LO nFaces = bdryFaceInds[elem+1] - beg;
-    if(nFaces ==0) 
-      return;
+      o::LO beg = bdryFaceInds[elem];
+      o::LO nFaces = bdryFaceInds[elem+1] - beg;
+      if(nFaces >0) {
+        o::Real dist = 0;
+        o::Real min = std::numeric_limits<o::Real>::max();
+        o::Few< o::Vector<3>, 3> face;
+        o::Vector<3> point{0, 0, 0};
+        o::Vector<3> pt;
+        o::LO fe = -1;
+        o::LO fel = -1;
+        o::LO fi = -1;
+        o::LO fid = -1;
+        o::LO minRegion = -1;
 
-    o::Real dist = 0;
-    o::Real min = std::numeric_limits<o::Real>::max();
-    o::Few< o::Vector<3>, 3> face;
-    o::Vector<3> point{0, 0, 0};
-    o::Vector<3> pt;
-    o::LO fe = -1;
-    o::LO fel = -1;
-    o::LO fi = -1;
-    o::LO fid = -1;
-    o::LO minRegion = -1;
+        if(verbose >2)
+          printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
+            bdryFaceInds[elem+1]);
 
-    if(verbose >2)
-      printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
-        bdryFaceInds[elem+1]);
+        for(o::LO ii = 0; ii < nFaces; ++ii) {
+          // TODO put in a function
+          o::LO ind = (beg + ii)*fsize;
+          // fskip=2 for faceId, elId
+          OMEGA_H_CHECK(fskip ==2);
+          fi = static_cast<o::LO>(bdryFaces[ind]);
+          fe = static_cast<o::LO>(bdryFaces[ind + 1]);
+          for(o::LO i=0; i<3; ++i) { //Tet vertexes
+            for(o::LO j=0; j<3; ++j) { //coords
+              face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+            }
+          }
+          auto ref = p::makeVector3(pid, pos_d);
+          if(verbose > 2 && ii == 0)
+            printf("ref: %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
+          //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
+          o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
+          dist = p::osh_dot(pt - ref, pt - ref);
+          if(verbose >3)
+            printf(": dist_%0.6f e_%d reg_%d fe_%d \n", dist, elem, region, fe);
 
-    for(o::LO ii = 0; ii < nFaces; ++ii) {
-      // TODO put in a function
-      o::LO ind = (beg + ii)*fsize;
-      // fskip=2 for faceId, elId
-      OMEGA_H_CHECK(fskip ==2);
-      fi = static_cast<o::LO>(bdryFaces[ind]);
-      fe = static_cast<o::LO>(bdryFaces[ind + 1]);
-      for(o::LO i=0; i<3; ++i) { //Tet vertexes
-        for(o::LO j=0; j<3; ++j) { //coords
-          face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+          if(dist < min) {
+            min = dist;
+            fel = fe;
+            fid = fi;
+            minRegion = region;
+            for(int i=0; i<3; ++i)
+              point[0] = pt[i];
+
+            if(verbose >2){
+              printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
+                elem, min, region, fi, fe);
+              p::print_osh_vector(point, "Nearest_pt");
+            }
+          }
         }
-      }
-      auto ref = p::makeVector3(pid, pos_d);
-      if(verbose > 2 && ii == 0)
-        printf("ref: %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
-      //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
-      o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
-      dist = p::osh_dot(pt - ref, pt - ref);
-      if(verbose >3)
-        printf(": dist_%0.6f e_%d reg_%d fe_%d \n", dist, elem, region, fe);
 
-      if(dist < min) {
-        min = dist;
-        fel = fe;
-        fid = fi;
-        minRegion = region;
-        for(int i=0; i<3; ++i)
-          point[0] = pt[i];
-
-        if(verbose >2){
-          printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
-            elem, min, region, fi, fe);
-          p::print_osh_vector(point, "Nearest_pt");
+        min = std::sqrt(min);
+        if(verbose >1) {
+          printf("  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
+            elem, min, fid, fel, minRegion);
         }
-      }
+        OMEGA_H_CHECK(fid >= 0);
+        bdry_face_d(pid) = fid;
+        closestPoint_d(pid, 0) = point[0];
+        closestPoint_d(pid, 1) = point[1];
+        closestPoint_d(pid, 2) = point[2];   
+      } 
     }
-
-    min = std::sqrt(min);
-    if(verbose >1) {
-      printf("  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
-        elem, min, fid, fel, minRegion);
-    }
-    closestPoint_d(pid, 0) = point[0];
-    closestPoint_d(pid, 1) = point[1];
-    closestPoint_d(pid, 2) = point[2];    
   };
 
   scs->parallel_for(distRun);

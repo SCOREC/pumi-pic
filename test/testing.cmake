@@ -31,6 +31,8 @@ endfunction(mpi_test)
 #  ./pseudoPushAndSearch --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
 #mpi_test(pseudoPushAndSearch_t2 1
 #  ./pseudoPushAndSearch --kokkos-threads=2 ${TEST_DATA_DIR}/pisces/gitr.msh)
+#mpi_test(pseudoPushAndSearch_t2_r2 2
+#  ./pseudoPushAndSearch --kokkos-threads=2 ${TEST_DATA_DIR}/pisces/gitr.msh ${TEST_DATA_DIR}/pisces/pisces_2.ptn)
 
 #MPI+X testing
 #mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube)
@@ -50,7 +52,7 @@ endfunction(mpi_test)
 #mpi_test(comm_array_pisces 4 
 #         ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
 
-mpi_test(borisMove 1
-   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
-   ${TEST_DATA_DIR}/inputFields)
+#mpi_test(borisMove 1
+#   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
+#   ${TEST_DATA_DIR}/inputFields)
 

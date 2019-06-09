@@ -1,4 +1,5 @@
 #include "Omega_h_mesh.hpp"
+#include "Omega_h_map.hpp"  //collect_marked
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
 #include <psTypes.h>
@@ -219,6 +220,49 @@ void setPtclIds(SCS* scs) {
   });
 }
 
+void setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
+    const int mdlFace, const int numPtcls) {
+  const auto elm_dim = picparts.dim();
+  const auto side_dim = elm_dim-1;
+  o::Mesh* mesh = picparts.mesh();
+  auto face_class_ids = mesh->get_array<o::ClassId>(side_dim, "class_id");
+  auto exposed_faces = o::mark_exposed_sides(mesh);
+  o::Write<o::Byte> isClassOnFace(face_class_ids.size());
+  o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
+    isClassOnFace[i] = 0;
+    if( face_class_ids[i] == mdlFace && exposed_faces[i] )
+      isClassOnFace[i] = 1;
+  });
+  auto markedElms = mark_up(mesh, side_dim, elm_dim, isClassOnFace);
+  o::Write<o::LO> markedElmIds(markedElms.size(),-1);
+  o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
+     markedElmIds[i] = markedElms[i] * i;
+  });
+  Omega_h::LO lastMarkedElm = o::get_max(o::LOs(markedElmIds));
+  auto numMarkedElms = 0;
+  Kokkos::parallel_reduce(markedElms.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
+    lsum += markedElms[i] > 0 ;
+  }, numMarkedElms);
+  printf("mesh elements classified on model face %d: %d\n", mdlFace, numMarkedElms);
+  auto numPpe = numPtcls / numMarkedElms;
+  printf("num ptcls per elm %d\n", numPpe);
+  auto numPpeR = numPtcls % numMarkedElms;
+  auto cells2nodes = mesh->get_adj(o::REGION, o::VERT).ab2b;
+  auto nodes2coords = mesh->coords();
+  o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
+    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(i));
+    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
+    auto center = average(cell_nodes2coords);
+    if( markedElms[i] )
+      ppe[i] = numPpe + ( (i==lastMarkedElm) * numPpeR );
+  });
+  Omega_h::LO totPtcls = 0;
+  Kokkos::parallel_reduce(ppe.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
+    lsum += ppe[i];
+  }, totPtcls);
+  assert(totPtcls == numPtcls);
+}
+
 void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
   //get centroid of parent element and set the child particle coordinates
   //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
@@ -330,10 +374,10 @@ int main(int argc, char** argv) {
   if(argc < min_args || argc > min_args + 2) {
     if (!comm_rank) {
       if (comm_size == 1)
-        std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial element (271)]\n";
+        std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial model face (5)]\n";
       else
         std::cout << "Usage: " << argv[0] << " <mesh> <owner_file> [numPtcls (12)] "
-          "[initial element (271)]\n";
+          "[initial model face (5)]\n";
     }
     exit(1);
   }
@@ -381,22 +425,19 @@ int main(int argc, char** argv) {
   const bool output = numPtcls <= 30;
   if (comm_rank != 0)
     numPtcls = 0;
-  const int initialElement = (argc >= min_args + 2) ? atoi(argv[min_args+1]) : 271;
   Omega_h::Int ne = mesh->nelems();
   if (comm_rank == 0)
     fprintf(stderr, "number of elements %d number of particles %d\n",
             ne, numPtcls);
-  o::LOs foo(ne, 1, "foo");
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   //Element gids is left empty since there is no partitioning of the mesh yet
-  SCS::kkGidView element_gids("ptcls_per_elem", ne);
+  SCS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
-    ptcls_per_elem(i) = 0;
     element_gids(i) = mesh_element_gids[i];
-    if (i == initialElement)
-      ptcls_per_elem(i) = numPtcls;
   });
+  const int mdlFace = (argc >= min_args + 2) ? atoi(argv[min_args+1]) : 5;
+  setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)
@@ -406,21 +447,14 @@ int main(int argc, char** argv) {
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = INT_MAX; // full sorting
+  const int sigma = 1; // full sorting
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                                                        ptcls_per_elem, element_gids);
-
-  //Set initial and target positions so search will
-  // find the parent elements
   setInitialPtclCoords(picparts, scs, output);
   setPtclIds(scs);
-  setTargetPtclCoords(scs);
-
-  //run search to move the particles to their starting elements
-  search(picparts,scs, output);
 
   //define parameters controlling particle motion
   //move the particles in +y direction by 1/20th of the

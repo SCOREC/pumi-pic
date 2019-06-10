@@ -38,6 +38,7 @@ GitrmParticles::~GitrmParticles(){
   delete scs;
 }
 
+//TODO sigma sorting disabled
 // Initialized in only one element
 void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
 
@@ -49,7 +50,7 @@ void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
     ptcls_per_elem(i) = 0;
     if (i == elId) {
       ptcls_per_elem(i) = numPtcls;
-      printf("Ptcls in elId %d\n", elId);
+      printf(" Ptcls in elId %d\n", elId);
     }
   });
 
@@ -58,11 +59,10 @@ void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
   });
 
 
-
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (np > 0)
-      printf("ptcls/elem[%d] %d\n", i, np);
+      printf(" ptcls/elem[%d] %d\n", i, np);
   });
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
@@ -74,13 +74,6 @@ void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
   //Create the particle structure
   scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                    ptcls_per_elem, element_gids);
-  /*
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    if(mask >0) printf("e %d pid %d mask %d\n", elem, pid, mask );
-    //if(elem==42200) printf("e %d pid %d mask %d\n", elem, pid,mask );
-  };
-  scs->parallel_for(lambda);
-  */
 }
 
 void GitrmParticles::initImpurityPtcls(o::Real dTime, const o::LO numPtcls, o::Real theta, 
@@ -90,17 +83,15 @@ void GitrmParticles::initImpurityPtcls(o::Real dTime, const o::LO numPtcls, o::R
   findInitialBdryElemId(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
   defineParticles(initEl, numPtcls);
 
-  //set  previous position, velocity. Rebuild if particles added/deleted in elems.
+  //note:rebuild if particles added/deleted in elems.
   printf("\n Setting ImpurityPtcl InitCoords \n");
   setImpurityPtclInitCoords(elemAndFace);
   //Store id as a member in Particle. 
-  setPtclIds(scs);
+  setPtclIds(scs, true);
 
 }
 
-
 void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
-
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -121,7 +112,6 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
  
   o::Write<o::LO> elem_ids(scs->capacity(),-1);
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-
     if(mask > 0) {
     //if(elemAndFace[1] >=0 && elem == elemAndFace[1]) {  
       o::LO verbose =1;
@@ -135,34 +125,38 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
       if(verbose >3)
         printf(" elemAndFace[1]:%d, elem:%d face%d beg%d\n", 
           elemAndFace[1], elem, elemAndFace[2], elemAndFace[0]);
-      auto rnd1 = (double)(std::rand())/RAND_MAX - 0.5;
-      auto rnd2 = (double)(std::rand())/RAND_MAX - 0.5;
-      auto rnd3 = (double)(std::rand())/RAND_MAX - 0.5;
-      auto dir1 = face[0] - fcent;
-      auto dir2 = face[1] - fcent;
-      auto dir3 = face[2] - fcent;      
-      auto scatter = rnd1*dir1 + rnd2*dir2 + rnd3*dir3;
-      o::Vector<3> ppos = tcent; //fcent + 0.01*diff + scatter;
-    
+
       o::Vector<4> bcc;
-      auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-      auto M = p::gatherVectors4x3(coords, tetv2v);
-      p::find_barycentric_tet(M, ppos, bcc);
+      o::Vector<3> pos;
+      do {
+        auto rnd1 = (double)(std::rand())/RAND_MAX;
+        auto rnd2 = (double)(std::rand())/RAND_MAX;
+        auto rnd3 = (double)(std::rand())/RAND_MAX;
+     
+        o::Real bc1 = (rnd1 > rnd2)?rnd2:rnd1;
+        o::Real bc2 = std::abs(rnd1 - rnd2);
+        o::Real bc3 = 1.0 - bc1 - bc2;
+        o::Vector<3> fpos = bc1*face[0] + bc2*face[1] + bc3*face[2];
+        auto fnorm = p::get_face_normal(faceId, elem, coords, mesh2verts, 
+                                        face_verts, down_r2fs);
+        pos = fpos - 0.000001*fnorm;
+        auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+        auto M = p::gatherVectors4x3(coords, tetv2v);
+        p::find_barycentric_tet(M, pos, bcc);
 
-      OMEGA_H_CHECK(p::all_positive(bcc, 0));
-
+      } while(!p::all_positive(bcc, 0));
 
       double amu = 2.0; //TODO
       double energy[] = {4.0, 0.1, 0.05}; //TODO actual [4,0,0]
       double vel[] = {0,0,0};
       for(int i=0; i<3; i++) {
-        x_scs_prev_d(pid,i) = ppos[i];
-        x_scs_d(pid,i) = ppos[i];
+        x_scs_prev_d(pid,i) = pos[i];
+        x_scs_d(pid,i) = pos[i];
         auto rnd = (double)(std::rand())/RAND_MAX - 0.5;
         if(! p::almost_equal(energy[i], 0))
           vel[i] = energy[i] / std::abs(energy[i]) * std::sqrt(2.0 * abs(energy[i]) * 
               1.60217662e-19 / (amu * 1.6737236e-27));
-        vel[i] += rnd*10000;  //TODO
+          vel[i] += rnd*10000;  //TODO
       }
 
       for(int i=0; i<3; i++)
@@ -173,10 +167,9 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
       elem_ids[pid] = elem;
 
       if(verbose >2)
-        printf("elm %d : pos %.4f %.4f %.4f :ppos %.4f %.4f %.4f : vel %.1f %.1f %.1f Mask%d\n",
+        printf("elm %d : pos %.4f %.4f %.4f : vel %.1f %.1f %.1f Mask%d\n",
           elem, x_scs_prev_d(pid,0), x_scs_prev_d(pid,1), x_scs_prev_d(pid,2),
-          x_scs_d(pid,0),x_scs_d(pid,1),x_scs_d(pid,2), vel[0], vel[1], vel[2], mask);
-
+          vel[0], vel[1], vel[2], mask);
     }
   };
   scs->parallel_for(lambda);
@@ -225,12 +218,12 @@ void GitrmParticles::findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r
     if(p::all_positive(bcc, 0)) {
       elemAndFace[0] = elem;
       if(debug > 3)
-        printf("ORIGIN detected in elem %d \n", elem);
+        printf(" ORIGIN detected in elem %d \n", elem);
     }
   };
   o::parallel_for(mesh.nelems(), lamb, "init_impurity_ptcl1");
   o::HostRead<o::LO> elemId_bh(elemAndFace);
-  printf("ELEM_beg %d \n", elemId_bh[0]);
+  printf(" ELEM_beg %d \n", elemId_bh[0]);
 
   OMEGA_H_CHECK(elemId_bh[0] >= 0);
 
@@ -283,14 +276,14 @@ void GitrmParticles::findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r
             xpt[i] = xpoint[i];
 
           if(debug) {
-            printf("faceid %d detected on exposed\n",  face_id);
+            printf(" faceid %d detected on exposed\n",  face_id);
           }
           break;
         } else if(detected && !side_is_exposed[face_id]) {
           auto adj_elem  = dual_faces[dface_ind];
           elem = adj_elem;
           if(debug >4) {
-            printf("faceid %d detected on interior; next elm %d\n", face_id, elem);
+            printf(" faceid %d detected on interior; next elm %d\n", face_id, elem);
           }
           break;
         }
@@ -313,7 +306,7 @@ void GitrmParticles::findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r
 
   o::HostRead<o::LO> elemId_fh(elemAndFace);
   initEl = elemId_fh[1];
-  printf("ELEM_final %d xpt: %.3f %.3f %.3f\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
+  printf(" ELEM_final %d xpt: %.3f %.3f %.3f\n\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
   OMEGA_H_CHECK(elemId_fh[0] >= 0);
 
 }

@@ -70,8 +70,8 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         //TODO what about other quantities ????????????????
         */
         if(verbose >3){
-          printf("CalcE: ptcl %d bdryface:%d angle:%.5f pot:%.5f DL:%.5f LR:%.5f CLD:%.5f \n", 
-              pid_d(pid), faceId, angle, pot, debyeLength, larmorRadius, childLangmuirDist);
+          printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%.5f pot:%.5f DL:%.5f LR:%.5f CLD:%.5f \n", 
+              pid_d(pid), md, faceId, angle, pot, debyeLength, larmorRadius, childLangmuirDist);
           p::print_osh_vector(pos, "ptclPos");
           p::print_osh_vector(closest, "closestPt");
           p::print_osh_vector(distVector, "distVector");
@@ -106,7 +106,7 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         efield_d(pid, 2) = exd[2];
 
         if(verbose >2) {
-              printf("efield %.5f %.5f %.5f \n", exd[0], exd[1], exd[2]);
+              printf("efield %.5f %.5f %.5f :d2bdry %g \n", exd[0], exd[1], exd[2], md);
         }
       }
     }

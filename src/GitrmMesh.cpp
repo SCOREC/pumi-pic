@@ -268,7 +268,7 @@ void GitrmMesh::processFieldFile(const std::string &fName,
 void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
   o::LO verbose = 1;
 
-  std::cout<< "processing File to load " << fs.name << " on vtx\n" ;
+  std::cout<< "Loading " << fs.name << " from " << file << " on vtx\n" ;
   // Not per vertex; but for input EField: [nZ*nR]
   o::HostWrite<o::Real> readInData;
 
@@ -365,7 +365,7 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
 
   o::LO verbose = 1;
   if(verbose >0)
-    std::cout << ">>>>> Loading "<< fs.name << " from " << file<< " on bdry\n";
+    std::cout << "Loading "<< fs.name << " from " << file << " on bdry\n";
 
   // Huge numbers, not suitable for Real if Real is redefined not to be double
   o::HostWrite<double> readInData;
@@ -421,7 +421,7 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
 void GitrmMesh::load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs) {
   o::LO verbose = 1;
 
-  std::cout<< ">>>>> Loading data from " << fs.name << " on vtx\n" ;
+  std::cout<< "Loading " << fs.name << " from " << file << " on vtx\n" ;
   // Not per vertex; but for input EField: [nZ*nR]
   o::HostWrite<o::Real> readInData;
 

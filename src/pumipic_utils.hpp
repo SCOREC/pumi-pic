@@ -300,7 +300,9 @@ OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::LO elmId,
     }
     ++find;
   }
-
+  if(findex <0 || findex >3) {
+    Omega_h_fail("get_face_normal:getfmap:: faceid not found");
+  }
   bool inverse = true;
   o::LO matInd1 = getfmap(findex*2);
   o::LO matInd2 = getfmap(findex*2+1);
@@ -326,8 +328,8 @@ OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
 }
 
 
-OMEGA_H_DEVICE o::LO angle_between(o::Vector<3> v1, o::Vector<3> v2) {
-  auto cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
+OMEGA_H_DEVICE o::Real angle_between(o::Vector<3> v1, o::Vector<3> v2) {
+  o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
   return std::acos(cos);
 }
 

@@ -304,10 +304,10 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
         o::Vector<4> bcc;
         if(loops == 0) {
-          //if(debug)
+          if(debug)
             printf("ptcl %d elem %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
               p, e, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-          //Check particle origin containment in beginning element
+          //NOTE:making sure particle origin is in beginning element
           find_barycentric_tet(M, orig, bcc);
           OMEGA_H_CHECK(all_positive(bcc, 0));
         }
@@ -415,7 +415,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     }
   }
   //if(debug)
-    fprintf(stderr, "This search: loops %d\n", loops);
+    fprintf(stderr, "\t: loops %d\n", loops);
   
   return found;
 }

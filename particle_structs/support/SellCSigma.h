@@ -162,7 +162,7 @@ class SellCSigma {
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths, 
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls);
+  void setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls, kkLidView chunk_widths);
 private: 
   //Pointers to the start of each SCS for each data type
   MemberTypeViews<DataTypes> scs_data;
@@ -323,29 +323,37 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   cap = getLastValue<lid_t>(offs);
 }
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes, ExecSpace>::setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls) {
+void SellCSigma<DataTypes, ExecSpace>::setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls, kkLidView chunk_widths) {
+  //Get start of each chunk
+  auto offsets_cpy = offsets;
+  auto slice_to_chunk_cpy = slice_to_chunk;
+  kkLidView chunk_starts("chunk_starts", num_chunks);
+  Kokkos::parallel_for(num_slices-1, KOKKOS_LAMBDA(const int& i) {
+    const int my_chunk = slice_to_chunk_cpy(i);
+    const int next_chunk = slice_to_chunk_cpy(i+1);
+    if (my_chunk != next_chunk) {
+      chunk_starts(next_chunk) = offsets_cpy(i+1);
+    }
+  });
   //Fill the SCS
-  const int league_size = num_slices;
+  const int league_size = num_chunks;
   const int team_size = C;
   const int ne = num_elems;
   typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
   const team_policy policy(league_size, team_size);
-  auto offsets_cpy = offsets;
-  auto slice_to_chunk_cpy = slice_to_chunk;
   auto row_to_element_cpy = row_to_element;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
-    const int slice = thread.league_rank();
-    const int slice_row = thread.team_rank();
-    const int cap = offsets_cpy(slice+1)-offsets_cpy(slice);
-    const int rowLen = cap/team_size;
-    const int start = offsets_cpy(slice) + slice_row;
+    const int chunk = thread.league_rank();
+    const int chunk_row = thread.team_rank();
+    const int rowLen = chunk_widths(chunk);
+    const int start = chunk_starts(chunk) + chunk_row;
     Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (int& j) {
-      const int row = slice_to_chunk_cpy(slice) * team_size + slice_row;
+      const int row = chunk * team_size + chunk_row;
       const int element_id = row_to_element_cpy(row);
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) {
         const int particle_id = start+(p*team_size);
         if (element_id < ne)
-          mask(particle_id) =  p < ptcls(element_id).first;
+          mask(particle_id) =  p < ptcls(row).first;
       });
     });
   });
@@ -386,7 +394,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   Kokkos::resize(particle_mask, cap);
   CreateViews<DataTypes>(scs_data, cap);
 
-  setupParticleMask(particle_mask, ptcls);
+  setupParticleMask(particle_mask, ptcls, chunk_widths);
 }
 
 template<class DataTypes, typename ExecSpace>

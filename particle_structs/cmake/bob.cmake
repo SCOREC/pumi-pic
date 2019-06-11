@@ -163,9 +163,6 @@ include(CMakeFindDependencyMacro)
 # our users to have to specify where all of our dependencies
 # were installed; that defeats the whole point of automatically
 # importing dependencies.
-# since the documentation for find_dependency() doesn't mention
-# a PATHS argument, we'll temporarily add the prefixes to
-# CMAKE_PREFIX_PATH.
 set(${PROJECT_NAME}_DEPS \"${${PROJECT_NAME}_DEPS}\")
 foreach(dep IN LISTS ${PROJECT_NAME}_DEPS)
   find_dependency(\${dep} PATHS \"${${PROJECT_NAME}_DEP_PREFIXES}\")

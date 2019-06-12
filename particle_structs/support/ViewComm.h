@@ -102,10 +102,11 @@ namespace particle_structs {
   template <typename T, typename ExecSpace>
   IsCuda<ExecSpace> PS_Comm_Send(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                  int dest, int tag, MPI_Comm comm) {
-    auto subview = Subview<T,ExecSpace>::subview(view, std::make_pair(offset, offset+size));
+    auto subview = Subview<T>::subview(view, offset, size);
+
 #ifdef PS_CUDA_AWARE_MPI
-    return MPI_Send(subview.data(), subview.size(), MpiType<BT<T> >::mpitype, dest, 
-                    tag, comm);
+    return MPI_Send(subview.data(), subview.size(), MpiType<BT<T> >::mpitype, 
+                    dest, tag, comm);
 #else
     auto view_host = deviceToHost(subview);
     return MPI_Send(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype, 
@@ -138,15 +139,16 @@ namespace particle_structs {
   template <typename T, typename ExecSpace>
   IsCuda<ExecSpace> PS_Comm_Isend(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                   int dest, int tag, MPI_Comm comm, MPI_Request* req) {
-    auto subview = Subview<T,ExecSpace>::subview(view, std::make_pair(offset, offset+size));
+    auto subview = Subview<T>::subview(view, offset, size);
 #ifdef PS_CUDA_AWARE_MPI
     return MPI_Isend(subview.data(),subview.size(), MpiType<BT<T> >::mpitype, dest, 
                      tag, comm, req);
 #else
-    typename Kokkos::View<T*, ExecSpace>::HostMirror view_host = deviceToHost(subview);
-    return MPI_Isend(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype, 
-                     dest, tag, comm, req);
+    auto view_host = deviceToHost(subview);
+    return MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype, dest, 
+                     tag, comm, req);
 #endif
+
   }
   //Irecv
   template <typename T, typename ExecSpace>

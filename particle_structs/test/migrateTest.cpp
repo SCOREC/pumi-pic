@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
   distribute_elements(ne, 0, comm_rank, comm_size, gids);
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids);
+  distribute_particles(ne, np, 2, ptcls_per_elem, ids);
   delete [] ids;
   {
     SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);

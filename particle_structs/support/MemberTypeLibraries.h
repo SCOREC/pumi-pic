@@ -37,7 +37,7 @@ namespace particle_structs {
       CreateViewsImpl<Types...>(views, size);
     }
   };
- 
+  
   template <typename SCS, typename... Types> struct CopyParticlesToSendImpl;
   template <typename SCS> struct CopyParticlesToSendImpl<SCS> {
     CopyParticlesToSendImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<void> >,
@@ -100,7 +100,6 @@ namespace particle_structs {
                  typename SCS::kkLidView scs_indices) {
       MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
       MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
-      int C = scs->C;
       auto copySCSToSCS = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const lid_t new_elem = new_element(ptcl_id);
         if (mask && new_elem != -1) {
@@ -141,7 +140,6 @@ namespace particle_structs {
                  typename SCS::kkLidView scs_indices) {
       MemberTypeView<T> dst = *static_cast<MemberTypeView<T> const*>(dsts[0]);
       MemberTypeView<T> src = *static_cast<MemberTypeView<T> const*>(srcs[0]);
-      int C = scs->C;
       Kokkos::parallel_for(ne, KOKKOS_LAMBDA(const int& i) {
         const int index = scs_indices(i);
         CopyViewToView<T,Kokkos::DefaultExecutionSpace::device_type>(dst, index, src, i);

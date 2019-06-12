@@ -4,9 +4,9 @@
 
 namespace particle_structs {
 
-  template <class T, typename ExecSpace>
-  typename Kokkos::View<T*, ExecSpace>::HostMirror deviceToHost(Kokkos::View<T*, ExecSpace> view) {
-  typename Kokkos::View<T*, ExecSpace>::HostMirror hv = Kokkos::create_mirror_view(view);
+  template <class View>
+  typename View::HostMirror deviceToHost(View view) {
+    typename View::HostMirror hv = Kokkos::create_mirror_view(view);
   Kokkos::deep_copy(hv, view);
   return hv;
 }
@@ -65,6 +65,36 @@ template <class T, typename ExecSpace, int N, int M, int P>
           dst(dst_index, i, j, k) = src(src_index, i, j, k);
   }
 };
+
+  template <typename T, typename ExecSpace> struct Subview {
+    static auto subview(Kokkos::View<T*, ExecSpace> view, const std::pair<int,int>& range)
+      -> decltype(Kokkos::subview(view, range)) {
+      return Kokkos::subview(view, range);
+    }
+  };
+  template <typename T, typename ExecSpace, size_t N> struct Subview<T[N],ExecSpace> {
+    static auto subview(Kokkos::View<T*[N], ExecSpace> view, const std::pair<int,int>& range)
+      -> decltype(Kokkos::subview(view, range, Kokkos::ALL())) {
+      return Kokkos::subview(view, range, Kokkos::ALL());
+    }
+  };
+  template <typename T, typename ExecSpace, size_t N, size_t M>
+  struct Subview<T[N][M],ExecSpace> {
+    static auto subview(Kokkos::View<T*[N][M], ExecSpace> view,
+                           const std::pair<int,int>& range)
+      -> decltype(Kokkos::subview(view, range, Kokkos::ALL(), Kokkos::ALL())) {
+      return Kokkos::subview(view, range, Kokkos::ALL(), Kokkos::ALL());
+    }
+  };
+  template <typename T, typename ExecSpace, size_t N, size_t M, size_t P>
+  struct Subview<T[N][M][P],ExecSpace> {
+    static auto subview(Kokkos::View<T*[N][M][P], ExecSpace> view,
+                           const std::pair<int,int>& range)
+      -> decltype(Kokkos::subview(view, range, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL())) {
+      return Kokkos::subview(view, range, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+    }
+  };
+
 
 
 }

@@ -372,12 +372,10 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   num_ptcls = np;
   
   printf("Building SCS with C: %d sigma: %d V: %d\n",C,sigma,V);
-
   //Perform sorting
   PairView<ExecSpace> ptcls;
   sigmaSort<ExecSpace>(ptcls, num_elems,ptcls_per_elem, sigma);
 
-  
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
   constructChunks(ptcls, num_chunks, chunk_widths, row_to_element);
@@ -388,13 +386,14 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
   //Create offsets into each chunk/vertical slice
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk,capacity_);
-  
+
   //Allocate the SCS  
   lid_t cap = getLastValue<lid_t>(offsets);
   Kokkos::resize(particle_mask, cap);
   CreateViews<DataTypes>(scs_data, cap);
 
-  setupParticleMask(particle_mask, ptcls, chunk_widths);
+  if (np > 0)
+    setupParticleMask(particle_mask, ptcls, chunk_widths);
 }
 
 template<class DataTypes, typename ExecSpace>
@@ -510,8 +509,6 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
     int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
     if (num_recv > 0) {
       int start_index = offset_recv_particles_host(i);
-      /* MPI_Irecv(recv_element_data + start_index, num_recv, MPI_INT, i, 0, */
-      /*           MPI_COMM_WORLD, recv_requests + recv_num); */
       PS_Comm_Irecv(recv_element, start_index, num_recv, i, 0, MPI_COMM_WORLD, 
                     recv_requests + recv_num);
       recv_num++;

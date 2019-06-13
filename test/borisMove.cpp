@@ -149,7 +149,7 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
   scs->rebuild(scs_elem_ids);
 }
 
-void search(o::Mesh& mesh, SCS* scs) {
+void search(o::Mesh& mesh, SCS* scs, int iter, o::Write<o::LO> &data_d) {
   fprintf(stderr, "searching..\n");
   assert(scs->num_elems == mesh.nelems());
   Omega_h::LO maxLoops = 100;
@@ -157,10 +157,13 @@ void search(o::Mesh& mesh, SCS* scs) {
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
   assert(isFound);
-  fprintf(stderr, "Applying surface Model..\n");
   //Apply surface model using face_ids, and update elem if particle reflected. 
-  //The elem_ids only updated in rebuild, so don't use it before rebuild
+  //elem_ids to be used in rebuild
+  fprintf(stderr, "Applying surface Model..\n");
   applySurfaceModel(mesh, scs, elem_ids);
+
+  //output particle positions, for converting to vtk
+  //storeAndPrintData(mesh, scs, iter, data_d);
 
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
@@ -220,30 +223,35 @@ int main(int argc, char** argv) {
   OMEGA_H_CHECK(!profFile.empty());
   fprintf(stderr, "Adding Tags And Loadin Data\n");
   gm.addTagAndLoadData(profFile, profFileDensity);
-
   fprintf(stderr, "Initializing Fields and Boundary data\n");
   OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
   gm.initEandBFields(bFile, eFile);
 
   fprintf(stderr, "Initializing Boundary faces\n");
   gm.initBoundaryFaces();
-
   fprintf(stderr, "Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-
   int numPtcls = 10;
-  double dTime = 2e-6; // gitr:1e-8s for 10,000 iterations
-  int NUM_ITERATIONS = 1000;
-
-  fprintf(stderr, "\nInitializing impurity particles\n");
-  GitrmParticles gp(mesh, 10); // (const char* param_file);
-  gp.initImpurityPtcls(dTime, numPtcls, 110, 0, 1.5, 200,10);
+  double dTime = 1e-7;//1e-7; // gitr:1e-8s for 10,000 iterations
+  int NUM_ITERATIONS = 10; //000;
+  fprintf(stderr, "\nInitializing %d impurity particles\n", numPtcls);
+  GitrmParticles gp(mesh); // (const char* param_file);
+  //current extruded mesh has Y, Z switched
+  // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
+  gp.initImpurityPtcls(dTime, numPtcls, 110, 0, 1.5, 200,10); //tgt324
 
   auto &scs = gp.scs;
-  o::Write<o::Real> *data_d;
+
+  o::Real dr = 0.02; //2cm 
+  o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
+  o::Write<o::LO>data_d(radGrid, 0);//*thetaGrid*phiGrid, 0);
+  
+  fprintf(stderr, "\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
+
+  mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
 
   fprintf(stderr, "\n*********Main Loop**********\n");
   Kokkos::Timer timer;
@@ -254,19 +262,19 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "=================iter %d===============\n", iter);
-    //computeAvgPtclDensity(mesh, scs);
-    //timer.reset();
+    fprintf(stderr, "Calculating EField.. \n");
+    timer.reset();
     gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
     gitrm_calculateE(scs, mesh);
+    fprintf(stderr, "Boris Move .. \n");
     gitrm_borisMove(scs, mesh, gm, dTime);
+    //computeAvgPtclDensity(mesh, scs);
+    timer.reset();
     //fprintf(stderr, "dist2bdry, E, Boris Move (seconds) %f\n", timer.seconds());
     //writeDispVectors(scs);
-    timer.reset();
-    search(mesh, scs);
-    fprintf(stderr, "search+surface_model, rebuild, and transfer (seconds) %f\n", 
-        timer.seconds());
-    storeData(mesh, scs, iter, true, data_d);
+    search(mesh, scs, iter, data_d);
+    fprintf(stderr, "time(s) %f\n", timer.seconds());
     if(scs->num_ptcls == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       fprintf(stderr, "Total iterations = %d\n", iter+1);
@@ -275,9 +283,8 @@ int main(int argc, char** argv) {
     //tagParentElements(mesh,scs,iter);
     //render(mesh,iter);
   }
-
+  //printGridData(data_d);
   Omega_h::vtk::write_parallel("extruded", &mesh, mesh.dim());
-
 
   fprintf(stderr, "done\n");
   return 0;

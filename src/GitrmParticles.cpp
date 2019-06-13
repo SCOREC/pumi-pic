@@ -29,16 +29,14 @@ namespace o = Omega_h;
 namespace p = pumipic;
 
 //TODO remove mesh argument, once Singleton gm is used
-GitrmParticles::GitrmParticles(o::Mesh &m, const int np):
+GitrmParticles::GitrmParticles(o::Mesh &m):
   mesh(m) {
-  //defineParticles(np);
 }
 
 GitrmParticles::~GitrmParticles(){
   delete scs;
 }
 
-//TODO sigma sorting disabled
 // Initialized in only one element
 void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
 
@@ -68,7 +66,7 @@ void GitrmParticles::defineParticles(const int elId, const int numPtcls) {
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = 1 ;//INT_MAX; // full sorting
+  const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
@@ -83,7 +81,7 @@ void GitrmParticles::initImpurityPtcls(o::Real dTime, const o::LO numPtcls, o::R
   findInitialBdryElemId(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
   defineParticles(initEl, numPtcls);
 
-  //note:rebuild if particles added/deleted in elems.
+  //note:rebuild if particles to be added in new elems, or after emptying any elem.
   printf("\n Setting ImpurityPtcl InitCoords \n");
   setImpurityPtclInitCoords(elemAndFace);
   //Store id as a member in Particle. 
@@ -147,16 +145,16 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
       } while(!p::all_positive(bcc, 0));
 
       double amu = 2.0; //TODO
-      double energy[] = {4.0, 0.1, 0.05}; //TODO actual [4,0,0]
+      double energy[] = {4.0, 4, 4}; //TODO actual [4,0,0]
       double vel[] = {0,0,0};
       for(int i=0; i<3; i++) {
         x_scs_prev_d(pid,i) = pos[i];
         x_scs_d(pid,i) = pos[i];
-        auto rnd = (double)(std::rand())/RAND_MAX - 0.5;
-        if(! p::almost_equal(energy[i], 0))
-          vel[i] = energy[i] / std::abs(energy[i]) * std::sqrt(2.0 * abs(energy[i]) * 
-              1.60217662e-19 / (amu * 1.6737236e-27));
-          vel[i] += rnd*10000;  //TODO
+        auto rnd = (double)(std::rand())/RAND_MAX;
+        auto en = energy[i];   
+        //if(! p::almost_equal(energy[i], 0))
+        vel[i] = std::sqrt(2.0 * abs(en) * 1.60217662e-19 / (amu * 1.6737236e-27));
+        vel[i] *= rnd;  //TODO
       }
 
       for(int i=0; i<3; i++)
@@ -224,8 +222,10 @@ void GitrmParticles::findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r
   o::parallel_for(mesh.nelems(), lamb, "init_impurity_ptcl1");
   o::HostRead<o::LO> elemId_bh(elemAndFace);
   printf(" ELEM_beg %d \n", elemId_bh[0]);
-
-  OMEGA_H_CHECK(elemId_bh[0] >= 0);
+  
+  if(elemId_bh[0] < 0) {
+    Omega_h_fail("Failed finding initial element in given direction\n");
+  }
 
   // Search final elemAndFace on bdry, on 1 thread on device(issue [] on host) 
   o::Write<o::Real> xpt(3, -1); 

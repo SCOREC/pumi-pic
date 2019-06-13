@@ -328,13 +328,13 @@ OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
 }
 
 
-OMEGA_H_DEVICE o::Real angle_between(o::Vector<3> v1, o::Vector<3> v2) {
+OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, const o::Vector<3> v2) {
   o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
   return std::acos(cos);
 }
 
 
-OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(o::LO elem, const o::LOs &mesh2verts, 
+OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, const o::LOs &mesh2verts, 
   const o::Reals &coords) {
   o::Vector<3> pos;
   auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
@@ -343,6 +343,14 @@ OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(o::LO elem, const o::LOs &mesh2verts
   pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
   pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
   return pos;
+}
+
+OMEGA_H_DEVICE void cartesianToSpeherical(const o::Real &x, const o::Real &y, 
+  const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
+  r = std::sqrt(x*x + y*y + z*z);
+  OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));
+  theta = std::atan(y/x);
+  phi = std::acos(z/r);
 }
 
 } //namespace

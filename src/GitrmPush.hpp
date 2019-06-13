@@ -32,22 +32,22 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
   auto larmorRadii = mesh.get_array<o::Real>(o::FACE, "LarmorRadius");
   auto childLangmuirDists = mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist");
 
-  auto ptclPos_d = scs->get<PTCL_POS>();
-  auto closestPoint_d = scs->get<PTCL_BDRY_CLOSEPT>();
-  auto faceId_d = scs->get<PTCL_BDRY_FACEID>();
-  auto efield_d  = scs->get<PTCL_EFIELD_PREV>();
-  auto pid_d = scs->get<PTCL_ID>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto closestPoint_scs = scs->get<PTCL_BDRY_CLOSEPT>();
+  auto faceId_scs = scs->get<PTCL_BDRY_FACEID>();
+  auto efield_scs  = scs->get<PTCL_EFIELD_PREV>();
+  auto pid_scs = scs->get<PTCL_ID>();
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) { 
     if(mask >0) {
       o::LO verbose = 1;//(elem %100 ==0)?3:0;
 
-      auto faceId = faceId_d(pid);
+      auto faceId = faceId_scs(pid);
       if(faceId < 0) {
         //TODO check
-        efield_d(pid, 0) = 0;
-        efield_d(pid, 1) = 0;
-        efield_d(pid, 2) = 0;
+        efield_scs(pid, 0) = 0;
+        efield_scs(pid, 1) = 0;
+        efield_scs(pid, 2) = 0;
       } else {
 
         // TODO angle is between surface normal and magnetic field at center of face
@@ -58,9 +58,9 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         o::Real larmorRadius = larmorRadii[faceId];
         o::Real childLangmuirDist = childLangmuirDists[faceId];
 
-        o::Vector<3> pos{ptclPos_d(pid,0), ptclPos_d(pid,1), ptclPos_d(pid,2)};
-        o::Vector<3> closest{closestPoint_d(pid,0), closestPoint_d(pid,1), 
-                             closestPoint_d(pid,2)};
+        o::Vector<3> pos{pos_scs(pid,0), pos_scs(pid,1), pos_scs(pid,2)};
+        o::Vector<3> closest{closestPoint_scs(pid,0), closestPoint_scs(pid,1), 
+                             closestPoint_scs(pid,2)};
         o::Vector<3> distVector = pos - closest; 
         o::Vector<3> dirUnitVector = o::normalize(distVector);
         o::Real md = p::osh_mag(distVector);
@@ -71,7 +71,7 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         */
         if(verbose >3){
           printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%.5f pot:%.5f DL:%.5f LR:%.5f CLD:%.5f \n", 
-              pid_d(pid), md, faceId, angle, pot, debyeLength, larmorRadius, childLangmuirDist);
+              pid_scs(pid), md, faceId, angle, pot, debyeLength, larmorRadius, childLangmuirDist);
           p::print_osh_vector(pos, "ptclPos");
           p::print_osh_vector(closest, "closestPt");
           p::print_osh_vector(distVector, "distVector");
@@ -101,9 +101,9 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
           dirUnitVector = {0, 0, 0}; //TODO confirm
         }
         auto exd = Emag*dirUnitVector;
-        efield_d(pid, 0) = exd[0];
-        efield_d(pid, 1) = exd[1];
-        efield_d(pid, 2) = exd[2];
+        efield_scs(pid, 0) = exd[0];
+        efield_scs(pid, 1) = exd[1];
+        efield_scs(pid, 2) = exd[2];
 
         if(verbose >2) {
               printf("efield %.5f %.5f %.5f :d2bdry %g \n", exd[0], exd[1], exd[2], md);
@@ -140,22 +140,26 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   const auto &EField_2d = gm.Efield_2d;
   const auto &BField_2d = gm.Bfield_2d;
 
-  auto ptclPos_d = scs->template get<PTCL_POS>();
-  auto efield_d  = scs->template get<PTCL_EFIELD_PREV>();
-  auto ptclPrevPos_d = scs->template get<PTCL_POS_PREV>();
-  auto vel_d = scs->template get<PTCL_VEL>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto efield_scs  = scs->get<PTCL_EFIELD_PREV>();
+  auto prev_pos_scs = scs->get<PTCL_POS_PREV>();
+  auto vel_scs = scs->get<PTCL_VEL>();
+  auto xface_scs = scs->get<XPOINT_FACE>();
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask >0) {
       o::LO verbose = 1;//(elem%50==0)?4:0;
-      o::Vector<3> vel{vel_d(pid,0), vel_d(pid,1), vel_d(pid,2)};  //at current_pos
-      o::Vector<3> eField{efield_d(pid,0), efield_d(pid,1),efield_d(pid,2)}; //at previous_pos
-      o::Vector<3> posPrev{ptclPrevPos_d(pid,0), ptclPrevPos_d(pid,1), ptclPrevPos_d(pid,2)};
+      //reset wall-collision face id
+      xface_scs(pid) = -1;
+
+      o::Vector<3> vel{vel_scs(pid,0), vel_scs(pid,1), vel_scs(pid,2)};  //at current_pos
+      o::Vector<3> eField{efield_scs(pid,0), efield_scs(pid,1),efield_scs(pid,2)}; //at previous_pos
+      o::Vector<3> posPrev{prev_pos_scs(pid,0), prev_pos_scs(pid,1), prev_pos_scs(pid,2)};
       o::Vector<3> bField; //At previous_pos
 
       if(verbose >3) {
         printf(" e: %d pid:%d :: pos: %.3f %.3f %.3f ::", elem, pid, 
-          ptclPos_d(pid, 0), ptclPos_d(pid, 1), ptclPos_d(pid, 2));
+          pos_scs(pid, 0), pos_scs(pid, 1), pos_scs(pid, 2));
         printf("prev: %.3f %.3f %.3f ::", posPrev[0], posPrev[1], posPrev[2]);
         printf("vel: %.1f %.1f %.1f \n", vel[0], vel[1], vel[2]);
       }
@@ -213,23 +217,23 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       vel = vel + qpE;
 
       // Update particle data
-      ptclPrevPos_d(pid, 0) = ptclPos_d(pid, 0);
-      ptclPrevPos_d(pid, 1) = ptclPos_d(pid, 1);
-      ptclPrevPos_d(pid, 2) = ptclPos_d(pid, 2);
+      prev_pos_scs(pid, 0) = pos_scs(pid, 0);
+      prev_pos_scs(pid, 1) = pos_scs(pid, 1);
+      prev_pos_scs(pid, 2) = pos_scs(pid, 2);
      
       //fence ?
 
       // Next position and velocity
-      ptclPos_d(pid, 0) = posPrev[0] + vel[0] * dTime;
-      ptclPos_d(pid, 1) = posPrev[1] + vel[1] * dTime;
-      ptclPos_d(pid, 2) = posPrev[2] + vel[2] * dTime;
-      vel_d(pid, 0) = vel[0];
-      vel_d(pid, 1) = vel[1];
-      vel_d(pid, 2) = vel[2];
+      pos_scs(pid, 0) = posPrev[0] + vel[0] * dTime;
+      pos_scs(pid, 1) = posPrev[1] + vel[1] * dTime;
+      pos_scs(pid, 2) = posPrev[2] + vel[2] * dTime;
+      vel_scs(pid, 0) = vel[0];
+      vel_scs(pid, 1) = vel[1];
+      vel_scs(pid, 2) = vel[2];
       
       if(verbose >2){
         printf("e %d pid %d :: newpos: %.3f %.3f %.3f :: vel_next: %.1f %.1f %.1f \n", elem,pid,
-          ptclPos_d(pid, 0), ptclPos_d(pid, 1), ptclPos_d(pid, 2), vel[0], vel[1], vel[2]);
+          pos_scs(pid, 0), pos_scs(pid, 1), pos_scs(pid, 2), vel[0], vel[1], vel[2]);
       }
     }// mask
   };

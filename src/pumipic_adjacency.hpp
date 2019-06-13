@@ -291,8 +291,9 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         auto p = pid_d(pid);
         if(debug)
           printf("Elem %d ptcl %d\n", elmId, p);
-        // Particle's parent element switched if not current elem
+        // Particle's parent element switched if not current elem. 
         if(elmId != elem_ids[pid]) {
+          OMEGA_H_CHECK(loops > 0);
           elmId = elem_ids[pid];
           if(debug)
             printf("Switching: Elem %d ptcl: %d\n", elmId, p);
@@ -304,12 +305,13 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
         o::Vector<4> bcc;
         if(loops == 0) {
-          if(debug)
-            printf("ptcl %d elem %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
-              p, e, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
           //NOTE:making sure particle origin is in beginning element
           find_barycentric_tet(M, orig, bcc);
-          OMEGA_H_CHECK(all_positive(bcc, 0));
+          if(!all_positive(bcc, 0)) {
+            printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
+              p, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
+            Omega_h_fail("Particle doesn't belong to this element at loop=0");
+          }
         }
         //check if the destination is in this element
         find_barycentric_tet(M, dest, bcc);

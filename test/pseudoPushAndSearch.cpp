@@ -1,5 +1,5 @@
-#include "Omega_h_mesh.hpp"
-#include "Omega_h_map.hpp"  //collect_marked
+#include <Omega_h_mesh.hpp>
+#include <Omega_h_bbox.hpp>
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
 #include <psTypes.h>
@@ -364,21 +364,33 @@ void computeAvgPtclDensity(p::Mesh& picparts, SCS* scs){
   mesh->set_tag(o::VERT, "avg_density", ad_r);
 }
 
+o::Mesh readMesh(char* meshFile, o::Library& lib) {
+  (void)lib;
+  std::string fn(meshFile);
+  auto ext = fn.substr(fn.find_last_of(".") + 1);
+  if( ext == "msh") {
+    std::cout << "reading gmsh mesh " << meshFile << "\n";
+    return Omega_h::gmsh::read(meshFile, lib.self());
+  } else if( ext == "osh" ) {
+    std::cout << "reading omegah mesh " << meshFile << "\n";
+    return Omega_h::binary::read(meshFile, lib.self());
+  } else {
+    std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
+    exit(EXIT_FAILURE);
+  }
+}
+
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
   Omega_h::Library& lib = pic_lib.omega_h_lib();
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  int min_args = 2 + (comm_size > 1);
-  if(argc < min_args || argc > min_args + 2) {
-    if (!comm_rank) {
-      if (comm_size == 1)
-        std::cout << "Usage: " << argv[0] << " <mesh> [numPtcls (12)] [initial model face (5)]\n";
-      else
-        std::cout << "Usage: " << argv[0] << " <mesh> <owner_file> [numPtcls (12)] "
-          "[initial model face (5)]\n";
-    }
+  const int numargs = 8;
+  if( argc != numargs ) {
+    auto args = " <mesh> <owner_file> <numPtcls> "
+      "<initial model face> <push vector>";
+    std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
   if (comm_rank == 0) {
@@ -392,7 +404,7 @@ int main(int argc, char** argv) {
            typeid (Kokkos::DefaultHostExecutionSpace).name());
     printTimerResolution();
   }
-  auto full_mesh = Omega_h::gmsh::read(argv[1], lib.self());
+  auto full_mesh = readMesh(argv[1], lib);
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   if (comm_size > 1) {
     std::ifstream in_str(argv[2]);
@@ -421,7 +433,7 @@ int main(int argc, char** argv) {
            mesh->nfaces(), mesh->nelems());
 
   /* Particle data */
-  int numPtcls = (argc >=min_args + 1) ? atoi(argv[min_args]) : 12;
+  int numPtcls = atoi(argv[3]);
   const bool output = numPtcls <= 30;
   if (comm_rank != 0)
     numPtcls = 0;
@@ -436,7 +448,7 @@ int main(int argc, char** argv) {
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
   });
-  const int mdlFace = (argc >= min_args + 2) ? atoi(argv[min_args+1]) : 5;
+  const int mdlFace = atoi(argv[4]);
   setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
@@ -447,7 +459,7 @@ int main(int argc, char** argv) {
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = 1; // no sorting
+  const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
@@ -459,11 +471,21 @@ int main(int argc, char** argv) {
   //define parameters controlling particle motion
   //move the particles in +y direction by 1/20th of the
   //pisces model's height
-  fp_t heightOfDomain = 1.0;
-  fp_t distance = heightOfDomain/20;
-  fp_t dx = -0.5;
-  fp_t dy = 0.8;
-  fp_t dz = 0;
+  const double pushDir[3] = {atof(argv[5]), atof(argv[6]), atof(argv[7])};
+  auto bb = o::get_bounding_box<3>(&full_mesh);
+  double maxDimLen = 0;
+  printf("bbox ");
+  for(int i=0; i< picparts.dim(); i++) {
+    printf("%3d %.3f %.3f ", i, bb.min[i], bb.max[i]);
+    auto len = bb.max[i]-bb.min[i];
+    if( len > maxDimLen ) maxDimLen = len;
+  }
+  printf("\n");
+  const fp_t heightOfDomain = maxDimLen;
+  const fp_t distance = heightOfDomain/20;
+  const fp_t dx = pushDir[0];
+  const fp_t dy = pushDir[1];
+  const fp_t dz = pushDir[2];
 
   if (comm_rank == 0)
     fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",

@@ -28,11 +28,22 @@ mpi_test(linetri_intersection_2 1
   ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )
 
 mpi_test(pseudoPushAndSearch_t1 1
-  ./pseudoPushAndSearch --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh)
+  ./pseudoPushAndSearch --kokkos-threads=1 
+  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
 mpi_test(pseudoPushAndSearch_t2 1
-  ./pseudoPushAndSearch --kokkos-threads=2 ${TEST_DATA_DIR}/pisces/gitr.msh)
+  ./pseudoPushAndSearch --kokkos-threads=2
+  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
 mpi_test(pseudoPushAndSearch_t2_r2 2
-  ./pseudoPushAndSearch --kokkos-threads=2 ${TEST_DATA_DIR}/pisces/gitr.msh ${TEST_DATA_DIR}/pisces/pisces_2.ptn)
+  ./pseudoPushAndSearch --kokkos-threads=2 
+  ${TEST_DATA_DIR}/pisces/gitr.msh 
+  ${TEST_DATA_DIR}/pisces/pisces_2.ptn 200 5 -0.5 0.8 0)
+
+mpi_test(pseudoPushAndSearch_cube_t1 1
+  ./pseudoPushAndSearch --kokkos-threads=1 
+  ${TEST_DATA_DIR}/cube/7k.osh ignored 200 156 0 0 1)
+mpi_test(pseudoPushAndSearch_cube_t2 1
+  ./pseudoPushAndSearch --kokkos-threads=2
+  ${TEST_DATA_DIR}/cube/7k.osh ignored 200 156 0 0 1)
 
 #MPI+X testing
 mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube)

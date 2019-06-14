@@ -203,7 +203,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   }
   else
   {
-    printf("Line and plane are parallel \n");
+    if(debug)
+      printf("Line and plane are parallel \n");
   }
   return found;
 }

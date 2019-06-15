@@ -42,10 +42,6 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
   set(debug_flag "-g")
 endif()
 
-#deps
-find_package(Kokkos REQUIRED)
-include_directories(${KOKKOS_INCLUDE_DIRS})
-
 find_package(particle_structures 0.0.1 REQUIRED)
 set(pumipic_USE_particle_structures_DEFAULT ON)
 message(STATUS "Found particle_structures: ${particle_structures_VERSION}")

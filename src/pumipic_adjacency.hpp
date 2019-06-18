@@ -259,7 +259,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity,-1);
   // flag to move origin if intersection fails
-  o::Write<o::LO> perturb(scsCapacity, 0);
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
@@ -303,7 +302,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           if(!all_positive(bcc, 0)) {
             printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
               ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-            Omega_h_fail("Particle doesn't belong to this element at loops=0");
+            printf("Particle doesn't belong to this element at loops=0");
+            OMEGA_H_CHECK(false);
           }
         }
         //check if the destination is this element
@@ -316,24 +316,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         } else {
           if(debug)
             printf("ptcl %d checking adj elms\n", ptcl);
-          //handle particle path coinciding with faces or falls at corners, or centroid
-          if(perturb[pid]>0) {
-            auto centroid =centroid_of_tet(elmId, mesh2verts, coords);
-            o::LO vind = std::floor((5*(o::Real)std::rand()/RAND_MAX));
-            OMEGA_H_CHECK(vind >=0 && vind <5);
-            o::Vector<3> pull;
-            if(vind<4)
-             pull = M[vind];
-            else
-             pull = centroid;
-
-            auto dir = pull - orig;
-            orig = orig + 0.000001*dir;
-            if(debug)
-              printf("ptcl %d perturbed in elm %d by %g %g %g\n", ptcl, elmId, 
-                0.001*dir[0], 0.001*dir[1], 0.001*dir[2]);
-          }
-
           //get element ID
           auto dface_ind = dual_elems[elmId];
           const auto beg_face = elmId *4;
@@ -376,20 +358,20 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               }
               break;
             }
-            if(!exposed)
+            // no line triangle intersection found for the current face
+            // appears to be a guess at the next element based on the smallest BCC
+            if(!exposed) {
+              if(debug)
+                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
               ++dface_ind;
+              const o::LO min_ind = min_index(bcc, 4);
+              if(f_index == min_ind) {
+                elem_ids_next[pid] = dual_faces[dface_ind];
+              }
+            }
             ++f_index;
           } //for iface
 
-          if(detected)
-              perturb[pid] = 0;
-          else {
-            perturb[pid] = 1;
-            //repeat current elem with shifted origin next time
-            elem_ids_next[pid] = elmId;
-            if(debug)
-              printf("perturbing pid %d in %d\n", ptcl, elmId);
-          }
         } //else not in current element
       } //if active particle
     };

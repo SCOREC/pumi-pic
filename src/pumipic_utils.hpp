@@ -142,6 +142,20 @@ void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
     print_osh_vector(dest, "point");
     print_array(bcc.data(), 4, "BCoords");
 }
+
+
+OMEGA_H_DEVICE Omega_h::Vector<3> centroid_of_tet(const Omega_h::LO elem, 
+  const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords) {
+  Omega_h::Vector<3> pos;
+  auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, elem);
+  auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
+  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
+  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
+  return pos;
+}
+
+
 } //namespace
 #endif
 

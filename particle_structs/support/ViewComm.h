@@ -145,10 +145,14 @@ namespace particle_structs {
                      tag, comm, req);
 #else
     auto view_host = deviceToHost(subview);
-    return MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype, dest, 
-                     tag, comm, req);
+    int ret =  MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype, dest, 
+                         tag, comm, req);
+    //Noop that will keep the view_host around until the lambda is removed
+    lambda_map[req] = [=]() {
+      (void)view_host;
+    };
+    return ret;
 #endif
-
   }
   //Irecv
   template <typename T, typename ExecSpace>
@@ -189,8 +193,8 @@ namespace particle_structs {
       Irecv_Map::iterator itr = lambda_map.find(reqs + i);
       if (itr != lambda_map.end()) {
         (itr->second)();
+        lambda_map.erase(itr);
       }
-      lambda_map.erase(itr);
     }
     return ret;
 #endif

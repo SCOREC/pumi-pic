@@ -489,7 +489,6 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   MPI_Request* send_requests = new MPI_Request[num_sends];
   MPI_Request* recv_requests = new MPI_Request[num_recvs];
   //Send the particles to each neighbor
-  //TODO? Combine new_element & scs_data arrays into one array to reduce number of sends/recvs
   for (int i = 0; i < comm_size; ++i) {
     if (i == comm_rank)
       continue;
@@ -517,7 +516,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
       recv_num+=num_types;
     }
   }
-  MPI_Waitall(num_sends, send_requests, MPI_STATUSES_IGNORE);
+  PS_Comm_Waitall<ExecSpace>(num_sends, send_requests, MPI_STATUSES_IGNORE);
   PS_Comm_Waitall<ExecSpace>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
   delete [] send_requests;
   delete [] recv_requests;

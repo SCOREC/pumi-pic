@@ -184,10 +184,8 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   
   scs->migrate(scs_elem_ids, scs_process_ids);
 
-  printf("SCS on rank %d has Elements: %d. Ptcls %d. Chunks %d. Slices %d. Capacity %d. Rows %d.\n"
-         , comm_rank,
-         scs->num_elems, scs->num_ptcls, scs->num_chunks, scs->num_slices, scs->capacity(),
-         scs->numRows());
+  printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
+         , comm_rank, scs->nElems(), scs->nPtcls(), scs->capacity(), scs->numRows());
   ids = scs->get<2>();
   if (output) {
     auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -200,7 +198,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
 
 void search(p::Mesh& picparts, SCS* scs, bool output) {
   o::Mesh* mesh = picparts.mesh();
-  assert(scs->num_elems == mesh->nelems());
+  assert(scs->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
@@ -323,7 +321,7 @@ void setLinearPositions(SCS* scs, const fp_t insetFaceDiameter, const fp_t inset
   auto xtgt_scs_d = scs->get<1>();
   fp_t x_delta = insetFaceDiameter / (scs->capacity()-1);
   printf("x_delta %.4f\n", x_delta);
-  if( scs->num_ptcls == 1 )
+  if( scs->nPtcls() == 1 )
     x_delta = 0;
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -514,8 +512,10 @@ int main(int argc, char** argv) {
   Kokkos::Timer fullTimer;
   int iter;
   int np;
+  int scs_np;
   for(iter=1; iter<=NUM_ITERATIONS; iter++) {
-    MPI_Allreduce(&(scs->num_ptcls), &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -524,7 +524,7 @@ int main(int argc, char** argv) {
       fprintf(stderr, "iter %d\n", iter);
     //computeAvgPtclDensity(picparts, scs);
     timer.reset();
-    push(scs, scs->num_ptcls, distance, dx, dy, dz);
+    push(scs, scs->nPtcls(), distance, dx, dy, dz);
     MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
@@ -534,7 +534,8 @@ int main(int argc, char** argv) {
     search(picparts,scs, output);
     if (comm_rank == 0)
       fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
-    MPI_Allreduce(&(scs->num_ptcls), &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
     if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;

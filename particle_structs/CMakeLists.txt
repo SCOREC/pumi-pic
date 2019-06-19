@@ -54,6 +54,7 @@ set(PS_SOURCES
   algorithms/psTypes.cpp
   support/psAssert.cpp
   support/SellCSigma.cpp
+  support/ViewComm.cpp
 )
 
 set(PS_HEADERS

@@ -2,6 +2,7 @@
 
 #include <Kokkos_Core.hpp>
 #include "SupportKK.h"
+#include "MemberTypes.h"
 #include <unordered_map>
 #include <mpi.h>
 namespace particle_structs {
@@ -23,8 +24,12 @@ namespace particle_structs {
   CREATE_MPITYPE(long double, MPI_LONG_DOUBLE);
   CREATE_MPITYPE(long long int, MPI_LONG_LONG_INT);
 #undef CREATE_MPI_TYPE
-
+  
   template <typename T> using BT = typename BaseType<T>::type;
+
+  using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
+  Irecv_Map& get_map();
+
   /* Routines to be abstracted
      MPI_Allreduce/NCCL
      MPI_Reduce/NCCL
@@ -95,8 +100,6 @@ namespace particle_structs {
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
 #define PS_CUDA_AWARE_MPI
 #endif
-  using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
-  Irecv_Map lambda_map;
 
   //Send
   template <typename T, typename ExecSpace>
@@ -148,7 +151,7 @@ namespace particle_structs {
     int ret =  MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype, dest, 
                          tag, comm, req);
     //Noop that will keep the view_host around until the lambda is removed
-    lambda_map[req] = [=]() {
+    get_map()[req] = [=]() {
       (void)view_host;
     };
     return ret;
@@ -170,7 +173,7 @@ namespace particle_structs {
                         sender, tag, comm, req);
 #endif
     
-    lambda_map[req] = [=]() {
+    get_map()[req] = [=]() {
 #ifndef PS_CUDA_AWARE_MPI
       Kokkos::deep_copy(new_view, view_host);
 #endif
@@ -190,10 +193,10 @@ namespace particle_structs {
 #else
     int ret = MPI_Waitall(num_reqs, reqs, stats);
     for (int i = 0; i < num_reqs; ++i) {
-      Irecv_Map::iterator itr = lambda_map.find(reqs + i);
-      if (itr != lambda_map.end()) {
+      Irecv_Map::iterator itr = get_map().find(reqs + i);
+      if (itr != get_map().end()) {
         (itr->second)();
-        lambda_map.erase(itr);
+        get_map().erase(itr);
       }
     }
     return ret;

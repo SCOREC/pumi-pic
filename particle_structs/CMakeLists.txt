@@ -64,6 +64,7 @@ set(PS_HEADERS
   support/MemberTypes.h
   support/MemberTypeArray.h
   support/MemberTypeLibraries.h
+  support/SCSPair.h
   support/SellCSigma.h
   support/Segment.h
   support/psAssert.h

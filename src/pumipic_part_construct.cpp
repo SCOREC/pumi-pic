@@ -23,7 +23,7 @@ namespace {
 }
 
 namespace pumipic {
-    Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner) {
+  Mesh::Mesh(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     int comm_size;
@@ -128,9 +128,9 @@ namespace pumipic {
     delete [] num_ents;
 
     //****************Convert Tags to the picpart***********
-    Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0);
-    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0);
+    Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0, "safe_tag");
+    Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0, "elem_gids");
+    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0, "elem_owners");
     Omega_h::LOs elm_ids = ent_ids[dim];
     const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = elm_ids[elem_id];
@@ -168,8 +168,6 @@ namespace {
   }
 
   struct GlobalNumberer {
-    
-    //NOTE process number must be < the number below
     using value_type=Omega_h::LO[];
     using size_type=unsigned long;
     size_type value_count;

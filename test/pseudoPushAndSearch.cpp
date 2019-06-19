@@ -171,12 +171,14 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    scs_elem_ids(pid) = elem_ids[pid];
-    scs_process_ids(pid) = comm_rank;
-    //if (is_safe[e] == 0) {
-    if (elem_ids[pid] != -1)
-      scs_process_ids(pid) = elm_owners[elem_ids[pid]];
-    //}
+    if (mask) {
+      int new_elem = elem_ids[pid];
+      scs_elem_ids(pid) = new_elem;
+      scs_process_ids(pid) = comm_rank;
+      if (new_elem != -1 && is_safe[new_elem] == 0) {
+        scs_process_ids(pid) = elm_owners[new_elem];
+      }
+    }
   };
   scs->parallel_for(lamb);
   
@@ -187,11 +189,13 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
          scs->num_elems, scs->num_ptcls, scs->num_chunks, scs->num_slices, scs->capacity(),
          scs->numRows());
   ids = scs->get<2>();
-  auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if (output && mask > 0)
-      printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
-  };
-  scs->parallel_for(printElms);
+  if (output) {
+    auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if (mask > 0)
+        printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+    };
+    scs->parallel_for(printElms);
+  }
 }
 
 void search(p::Mesh& picparts, SCS* scs, bool output) {
@@ -226,7 +230,7 @@ void setPtclIds(SCS* scs) {
   });
 }
 
-void setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
+int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
     const int mdlFace, const int numPtcls) {
   const auto elm_dim = picparts.dim();
   const auto side_dim = elm_dim-1;
@@ -250,23 +254,27 @@ void setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
     lsum += markedElms[i] > 0 ;
   }, numMarkedElms);
   printf("mesh elements classified on model face %d: %d\n", mdlFace, numMarkedElms);
-  auto numPpe = numPtcls / numMarkedElms;
-  printf("num ptcls per elm %d\n", numPpe);
-  auto numPpeR = numPtcls % numMarkedElms;
-  auto cells2nodes = mesh->get_adj(o::REGION, o::VERT).ab2b;
-  auto nodes2coords = mesh->coords();
-  o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
-    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(i));
-    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
-    auto center = average(cell_nodes2coords);
-    if( markedElms[i] )
-      ppe[i] = numPpe + ( (i==lastMarkedElm) * numPpeR );
-  });
-  Omega_h::LO totPtcls = 0;
-  Kokkos::parallel_reduce(ppe.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
-    lsum += ppe[i];
-  }, totPtcls);
-  assert(totPtcls == numPtcls);
+  if (numMarkedElms > 0) {
+    auto numPpe = numPtcls / numMarkedElms;
+    printf("num ptcls per elm %d\n", numPpe);
+    auto numPpeR = numPtcls % numMarkedElms;
+    auto cells2nodes = mesh->get_adj(o::REGION, o::VERT).ab2b;
+    auto nodes2coords = mesh->coords();
+    o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
+        auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(i));
+        auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
+        auto center = average(cell_nodes2coords);
+        if( markedElms[i] )
+          ppe[i] = numPpe + ( (i==lastMarkedElm) * numPpeR );
+      });
+    Omega_h::LO totPtcls = 0;
+    Kokkos::parallel_reduce(ppe.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
+        lsum += ppe[i];
+      }, totPtcls);
+    assert(totPtcls == numPtcls);
+    return totPtcls;
+  }
+  return 0;
 }
 
 void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
@@ -448,14 +456,13 @@ int main(int argc, char** argv) {
     fprintf(stderr, "number of elements %d number of particles %d\n",
             ne, numPtcls);
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  //Element gids is left empty since there is no partitioning of the mesh yet
   SCS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
   });
   const int mdlFace = atoi(argv[4]);
-  setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
+  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)
@@ -469,7 +476,7 @@ int main(int argc, char** argv) {
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
                                                        ptcls_per_elem, element_gids);
   setInitialPtclCoords(picparts, scs, output);
   setPtclIds(scs);

@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 
     SCS* scs = new SCS(po, 1, 10000, ne, np, ptcls_per_elem_v, element_gids_v);
 
-    scs->printFormatDevice();
+    scs->printFormat();
 
     auto scs_first = scs->get<0>(); //int
     auto scs_second = scs->get<1>(); //double[2]

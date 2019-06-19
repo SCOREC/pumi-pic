@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     SellCSigma<Type, exe_space>* scs =
       new SellCSigma<Type, exe_space>(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v);
 
-    scs->printFormatDevice();
+    scs->printFormat();
     SCS::kkLidView scs_ppe("scs_ppe",ne);
     auto lamb = SCS_LAMBDA(const int& eid, const int& pid, const int& mask) {
       if (mask > 0)

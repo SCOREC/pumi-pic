@@ -59,7 +59,7 @@ bool shuffleParticlesTests() {
   delete [] ptcls_per_elem;
   delete [] ids;
 
-  scs->printFormatDevice();
+  scs->printFormat();
 
   SCS::kkLidView new_element("new_element", scs->capacity());
 
@@ -75,7 +75,7 @@ bool shuffleParticlesTests() {
   //Rebuild with no changes  
   scs->rebuild(new_element);
 
-  scs->printFormatDevice();
+  scs->printFormat();
 
   values = scs->get<0>();
 
@@ -107,7 +107,7 @@ bool shuffleParticlesTests() {
       printf("Particle %d has value %d\n", ptcl_id, values(ptcl_id));
   };
   scs->parallel_for(printParticles);
-  scs->printFormatDevice();
+  scs->printFormat();
   
   delete scs;
   delete scs2;
@@ -135,7 +135,7 @@ bool resortElementsTest() {
   delete [] ids;
   delete [] gids;
 
-  scs->printFormatDevice();
+  scs->printFormat();
 
   auto values = scs->get<0>();
 
@@ -153,7 +153,7 @@ bool resortElementsTest() {
   scs->parallel_for(moveParticles);
   scs->rebuild(new_element);
 
-  scs->printFormatDevice();
+  scs->printFormat();
 
   values = scs->get<0>();
   SCS::kkLidView fail("", 1);

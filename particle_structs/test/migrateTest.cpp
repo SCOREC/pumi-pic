@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
 
     char rank_str[100];
     sprintf(rank_str,"Format for rank %d", comm_rank);
-    scs->printFormatDevice(rank_str);
+    scs->printFormat(rank_str);
   
     typedef SCS::kkLidView kkLidView;
     kkLidView new_element("new_element", scs->capacity());
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     };
     scs->parallel_for(checkValues);
     MPI_Barrier(MPI_COMM_WORLD);
-    scs->printFormatDevice(rank_str);
+    scs->printFormat(rank_str);
 
     int f = particle_structs::getLastValue(fail);
     if (f == 1) {

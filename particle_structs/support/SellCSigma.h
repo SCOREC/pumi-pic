@@ -132,12 +132,6 @@ class SellCSigma {
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
   void setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls, kkLidView chunk_widths);
 
-  //Backward compatibility for macros
-  kkLidView get_offsets() {return offsets;}
-  kkLidView get_slice_to_chunk() {return slice_to_chunk;}
-  kkLidView get_row_to_element() {return row_to_element;}
-  kkLidView get_particle_mask() {return particle_mask;}
-  int get_num_slices() {return num_slices;}
 private:
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;

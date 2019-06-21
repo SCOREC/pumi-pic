@@ -26,21 +26,19 @@ void setPosition(SCS* scs,
     o::Vector<3> orig, o::Vector<3> dest) {
   auto x_scs_d = scs->get<0>();
   auto xtgt_scs_d = scs->get<1>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if(particle_mask(pid)) {
-        for(int i=0; i<3; i++) {
-          x_scs_d(pid,i) = orig[i];
-          xtgt_scs_d(pid,i) = dest[i];
-        }
-        printf("elm %d ptcl %d position %f %f %f target position %f %f %f\n",
-          e, pid,
-          x_scs_d(pid,0), x_scs_d(pid,1), x_scs_d(pid,2),
-          xtgt_scs_d(pid,0), xtgt_scs_d(pid,1), xtgt_scs_d(pid,2));
+  auto setPos = SCS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+    if (mask) {
+      for(int i=0; i<3; i++) {
+        x_scs_d(pid,i) = orig[i];
+        xtgt_scs_d(pid,i) = dest[i];
       }
-    });
-  });
+      printf("elm %d ptcl %d position %f %f %f target position %f %f %f\n",
+             eid, pid,
+             x_scs_d(pid,0), x_scs_d(pid,1), x_scs_d(pid,2),
+             xtgt_scs_d(pid,0), xtgt_scs_d(pid,1), xtgt_scs_d(pid,2));
+    }
+  };
+  scs->parallel_for(setPos);
 }
 
 int main(int argc, char** argv) {

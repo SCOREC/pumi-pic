@@ -141,17 +141,15 @@ void tagParentElements(p::Mesh& picparts, SCS* scs, int loop) {
 void updatePtclPositions(SCS* scs) {
   auto x_scs_d = scs->get<0>();
   auto xtgt_scs_d = scs->get<1>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
-      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
-      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
-      xtgt_scs_d(pid,0) = 0;
-      xtgt_scs_d(pid,1) = 0;
-      xtgt_scs_d(pid,2) = 0;
-    });
-  });
+  auto updatePtclPos = SCS_LAMBDA(const int&, const int& pid, const bool&) {
+    x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+    x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+    x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+    xtgt_scs_d(pid,0) = 0;
+    xtgt_scs_d(pid,1) = 0;
+    xtgt_scs_d(pid,2) = 0;
+  };
+  scs->parallel_for(updatePtclPos);
 }
 
 void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
@@ -220,12 +218,10 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
 
 void setPtclIds(SCS* scs) {
   auto pid_d = scs->get<2>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      pid_d(pid) = pid;
-    });
-  });
+  auto setIDs = SCS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+    pid_d(pid) = pid;
+  };
+  scs->parallel_for(setIDs);
 }
 
 int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,

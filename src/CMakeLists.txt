@@ -5,8 +5,8 @@ set(HEADERS
   pumipic_constants.hpp
   pumipic_mesh.hpp
   pumipic_library.hpp
-  GitrmMesh.hpp
-  GitrmParticles.hpp
+  #GitrmMesh.hpp
+  #GitrmParticles.hpp
 )
 
 set(SOURCES
@@ -14,8 +14,8 @@ set(SOURCES
   pumipic_comm.cpp
   pumipic_mesh.cpp
   pumipic_library.cpp
-  GitrmMesh.cpp
-  GitrmParticles.cpp
+  #GitrmMesh.cpp
+  #GitrmParticles.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

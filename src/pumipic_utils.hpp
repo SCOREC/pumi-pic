@@ -139,22 +139,14 @@ inline void print_array(const double* a, int n=3, std::string name=" ")
   std::cout <<"\n";
 }
 
-inline void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", 
-  bool line_break=true)
+OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<3> &v, const char* name)
 {
-  std::string str = line_break ? ")\n" : "); ";
-  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " 
-    << v.data()[2] << str;
+  printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
 }
-
-inline void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
-     Omega_h::Write<Omega_h::Real> &bcc)
+inline void print_osh_vector_host(const Omega_h::Vector<3> &v, const char* name)
 {
-    print_matrix(M);  //include file problem ?
-    print_osh_vector(dest, "point");
-    print_array(bcc.data(), 4, "BCoords");
+  printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
 }
-
 
 /** @brief To interpolate field ONE component at atime from 
  *    nComp-component(dof) 2D data
@@ -200,25 +192,16 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, const o::Real gr
 
   if (i >=nx-1 && j>=nz-1) {
     fxz = data[(nx-1+(nz-1)*nx)*nComp+comp];
-    if(verbose > 3){
-      std::cout << "if : \n";
-    }
   }
   else if (i >=nx-1) {
     fx_z1 = data[(nx-1+j*nx)*nComp + comp];
     fx_z2 = data[(nx-1+(j+1)*nx)*nComp + comp];
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
-    if(verbose > 3){
-      std::cout << "i >=nx-1 : \n";
-    }
   }
   else if (j >=nz-1) {
     fx_z1 = data[(i+(nz-1)*nx)*nComp + comp];
     fx_z2 = data[(i+(nz-1)*nx)*nComp+ comp];
     fxz = ((gridXip1-dim1)*fx_z1+(dim1 - gridXi)*fx_z2)/dx;
-    if(verbose > 3){
-      std::cout << "j >=nz-1 :\n";
-    }
   }
   else {
     fx_z1 = ((gridXip1-dim1)*data[(i+j*nx)*nComp + comp] + 
@@ -226,15 +209,11 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, const o::Real gr
     fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*nComp + comp] + 
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
-    if(verbose > 3) {
-      std::cout << "Else: \n";
-    }
   }
-  if(verbose > 3) {
-    std::cout << " dim1(x):" << dim1 << " pos1:" << pos[1] << " pos2 " << pos[2] 
-    << " i: " << i << " j:" << j << " dx: " <<  dx << " gridx0:" << gridx0 
-    << " nx " << nx << " nz:" << nz << " fxz " << fxz << "\n";
-  }
+  if(verbose > 3)
+    printf(" dim1(x):%d pos: %g %g %g : i %d j %d dx %g gridx0 %d nx %d nz %d fxz %g",
+      dim1, pos[1], pos[2], i, j, dx, gridx0, nx, nz, fxz);
+
   return fxz;
 }
 
@@ -264,11 +243,11 @@ OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, const o::Reals &
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
   //TODO check if y and z are in required order
 
-  // Mid point of face, as in GITR. 
+  // Mid point of face, as in GITR.  0.666666667 may be for float
   o::Vector<3> pos;
-  pos[0] = abc[0][0] + 2.0/3.0*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
-  pos[1] = abc[0][1] + 2.0/3.0*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
-  pos[2] = abc[0][2] + 2.0/3.0*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
+  pos[0] = abc[0][0] + 0.666666667*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
+  pos[1] = abc[0][1] + 0.666666667*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
+  pos[2] = abc[0][2] + 0.666666667*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
   return pos;
 }
 
@@ -279,7 +258,8 @@ OMEGA_H_DEVICE o::LO getfmap(int i) {
   return fmap[i];
 }
 
-OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::LO elmId,
+//face normal can point to either way
+OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
   const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
   const o::LOs &down_r2fs) {
 
@@ -301,7 +281,8 @@ OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::LO elmId,
     ++find;
   }
   if(findex <0 || findex >3) {
-    Omega_h_fail("get_face_normal:getfmap:: faceid not found");
+    printf("find_face_normal:getfmap:: faceid not found");
+    OMEGA_H_CHECK(false);
   }
   bool inverse = true;
   o::LO matInd1 = getfmap(findex*2);
@@ -315,6 +296,20 @@ OMEGA_H_DEVICE o::Vector<3> get_face_normal(const o::LO fid, const o::LO elmId,
   o::Vector<3> fnorm = o::cross(b - a, c - a);
   if(inverse)
     fnorm = -1*fnorm;
+  return o::normalize(fnorm);
+}
+
+// TODO boundary face normal points always outwards, no need to check
+OMEGA_H_DEVICE o::Vector<3> find_dbry_face_normal(const o::LO fid, 
+  const o::Reals &coords, const o::LOs &face_verts) {
+
+  const auto fv2v = o::gather_verts<3>(face_verts, fid);
+  const auto abc = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+  
+  o::Vector<3> a = abc[0];
+  o::Vector<3> b = abc[1];
+  o::Vector<3> c = abc[2];
+  o::Vector<3> fnorm = o::cross(b - a, c - a);
   return o::normalize(fnorm);
 }
 

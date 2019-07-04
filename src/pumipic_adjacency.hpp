@@ -2,7 +2,8 @@
 #define PUMIPIC_ADJACENCY_HPP
 
 #include <iostream>
-
+#include <cstdlib>
+#include <ctime>
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
@@ -14,11 +15,9 @@
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
 
-
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
-//TODO use .get() to access data ?
 namespace pumipic
 {
 
@@ -77,7 +76,6 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 //TODO Warning: Check opposite_template use in this before using
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc) {
-  bool debug = false;
   for(Omega_h::LO i=0; i<4; ++i) bcc[i] = -1;
 
   Omega_h::Real vals[4];
@@ -207,7 +205,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   }
   else
   {
-    printf("Line and plane are parallel \n");
+    if(debug)
+      printf("WARNING: Line and plane are parallel \n");
   }
   return found;
 }
@@ -228,11 +227,6 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 }
 
 
-/*
-TODO: Search should exclude particle if on surface of an element by SURFACE_EXCLUDE. 
-When an intersection on bdry is found, that face id is to be stored to use in surface model.
-*/
-
 //How to avoid redefining the MemberType? each application will define it
 //differently. Templating search_mesh with
 //template < typename ParticleType >
@@ -241,7 +235,7 @@ When an intersection on bdry is found, that face id is to be stored to use in su
 template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                  o::Write<o::LO>& elem_ids, int looplimit=0) {
-  bool debug = 0;
+  bool debug =0 ;
 
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
@@ -249,7 +243,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);
-
   const auto down_r2fs = down_r2f.ab2b;
   const auto dual_faces = dual.ab2b;
   const auto dual_elems = dual.a2ab;
@@ -259,12 +252,11 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   auto xtgt_scs_d = scs->template get<1>();
   auto pid_d = scs->template get<2>();
   auto xpoints_d = scs->template get<3>(); 
-  auto xface_id_d = scs->template get<4>();
+  auto xface_id = scs->template get<4>();
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity,-1);
-  
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
@@ -277,121 +269,110 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     }
   };
   scs->parallel_for(lamb);
+
+  std::srand(std::time(nullptr));
   bool found = false;
   int loops = 0;
   while(!found) {
     if(debug) {
       fprintf(stderr, "------------ %d ------------\n", loops);
     }
-
+    //pid is same for a particle between iterations in this while loop
     auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = e;
-        auto p = pid_d(pid);
+        auto ptcl = pid_d(pid);
         if(debug)
-          printf("Elem %d ptcl %d\n", elmId, p);
+          printf("Elem %d ptcl %d\n", elmId, ptcl);
         // Particle's parent element switched if not current elem. 
         if(elmId != elem_ids[pid]) {
           OMEGA_H_CHECK(loops > 0);
           elmId = elem_ids[pid];
           if(debug)
-            printf("Switching: Elem %d ptcl: %d\n", elmId, p);
+            printf("Switching: Elem %d ptcl: %d\n", elmId, ptcl);
         }
         OMEGA_H_CHECK(elmId >= 0);
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
-        const o::Vector<3> orig = makeVector3(pid, x_scs_d);
-        const o::Vector<3> dest = makeVector3(pid, xtgt_scs_d);
+        auto orig = makeVector3(pid, x_scs_d);
+        auto dest = makeVector3(pid, xtgt_scs_d);
         o::Vector<4> bcc;
         if(loops == 0) {
-          //NOTE:making sure particle origin is in beginning element
+          //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, 0)) {
             printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
-              p, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-            Omega_h_fail("Particle doesn't belong to this element at loop=0");
+              ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
+            OMEGA_H_CHECK(false);
           }
         }
-        //check if the destination is in this element
+        //check if the destination is this element
         find_barycentric_tet(M, dest, bcc);
         if(all_positive(bcc, 0)) {
           if(debug)
-            printf("ptcl %d is in destination elm %d\n", p, elmId);
+            printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
           elem_ids_next[pid] = elem_ids[pid];
           ptcl_done[pid] = 1;
         } else {
           if(debug)
-            printf("ptcl %d checking adj elms\n", p);
+            printf("ptcl %d checking adj elms\n", ptcl);
           // Get element ID
           auto dface_ind = dual_elems[elmId];
           const auto beg_face = elmId *4;
           const auto end_face = beg_face +4;
           o::LO findex = 0;
-          bool use_min = false;   
+          bool detected = false;
           for(auto iface = beg_face; iface < end_face; ++iface) {
             const auto face_id = down_r2fs[iface];
-            o::Vector<3> xpoint = o::zero_vector<3>();
+            auto xpoint = o::zero_vector<3>();
             bool exposed = side_is_exposed[face_id];
             auto fv2v = o::gather_verts<3>(face_verts, face_id);
-            const auto face2 = gatherVectors3x3(coords, fv2v);
+            const auto face = gatherVectors3x3(coords, fv2v);
             o::LO matInd1 = getfmap(findex*2);
             o::LO matInd2 = getfmap(findex*2+1);
             bool inverse = true;
             if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
               inverse = false;
 
-            bool detected = line_triangle_intx_simple(face2, orig, dest, xpoint, inverse);
+            detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse);
             if(debug)
-              printf("\t :ptcl %d faceid %d exposed %d detected %d\n", p, face_id, 
-                  exposed, detected);
+              printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
+                face_id, inverse, exposed, detected);
 
             if(detected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
                 xpoints_d(pid,i) = xpoint[i];
-              xface_id_d(pid) = face_id;
+              xface_id(pid) = face_id;
               elem_ids_next[pid] = -1;
-              use_min = false;
               if(debug) {
                 printf("ptcl %d faceid %d detected and exposed, next parent elm %d\n",
-                    p, face_id, elem_ids_next[pid]);
+                    ptcl, face_id, elem_ids_next[pid]);
               }
               break;
             } else if(detected && ! exposed) {
               auto adj_elem  = dual_faces[dface_ind];
               elem_ids_next[pid] = adj_elem;
-              use_min = false;
               if(debug) {
                 printf("ptcl %d faceid %d detected and !exposed, next parent elm %d\n",
-                    p, face_id, elem_ids_next[pid]);
+                    ptcl, face_id, elem_ids_next[pid]);
               }
               break;
             }
-
-            // No line triangle intersection found for the current face
+            // no line triangle intersection found for the current face
             // appears to be a guess at the next element based on the smallest BCC
             if(!exposed) {
               if(debug)
-                printf("ptcl %d faceid %d !detected and !exposed\n", p, face_id);
+                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
               ++dface_ind;
               const o::LO min_ind = min_index(bcc, 4);
-              // Debugg using right tolerance, if this occurs.
               if(findex == min_ind) {
                 elem_ids_next[pid] = dual_faces[dface_ind];
-                use_min = true;
-                if(debug) {
-                  printf("Using minBCC: ptcl %d faceid %d, next parent elm %d\n",
-                    p, face_id, elem_ids_next[pid]);
-                }
-                // No 'break' here, since other faces to be checked.                
               }
             }
             ++findex;
           } //for iface
-          if(use_min)
-            printf("WARNING: ptcl %d line-triangle intersection failed in %d\n", p, e);
-
         } //else not in current element
       } //if active particle
     };
@@ -416,7 +397,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       break;
     }
   }
-  //if(debug)
+  if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
   
   return found;
@@ -427,40 +408,35 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 // To interpoalte field stored at vertices. Field has dof components, and 
 // stored in order 0,1,2,3 at tet's vertices. BCC in order of faces
 OMEGA_H_DEVICE Omega_h::Real interpolateTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, o::LO dof=1, o::LO comp=0)
-{
+  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, o::LO dof=1, o::LO comp=0) {
   OMEGA_H_CHECK(all_positive(bcc)==1);
   Omega_h::Real val = 0;
-  for(Omega_h::LO fi=0; fi<4; ++fi) //faces
-  {
-      Omega_h::LO d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
-      Omega_h::LO fd = 4*dof*elem + d*dof + comp;
-      val = val + bcc[fi]*field[fd];
+  for(Omega_h::LO fi=0; fi<4; ++fi) {//faces
+    Omega_h::LO d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
+    Omega_h::LO fd = 4*dof*elem + d*dof + comp;
+    val = val + bcc[fi]*field[fd];
   }
   return val;
 }
 
 
 OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, Omega_h::Vector<3> &fv)
-{
+  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, Omega_h::Vector<3> &fv) {
   for(int i=0; i<3; ++i) {
-      fv[i] = interpolateTet(field, bcc, elem, 3, i);
+    fv[i] = interpolateTet(field, bcc, elem, 3, i);
   }
 }
 
 
 OMEGA_H_DEVICE void findTetCoords(const Omega_h::LOs &mesh2verts,
-const Omega_h::Reals &coords, const Omega_h::LO elem, Omega_h::Matrix<DIM, 4> &mat)
-{
+const Omega_h::Reals &coords, const Omega_h::LO elem, Omega_h::Matrix<DIM, 4> &mat) {
   const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, elem);
   mat = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
 }
 
 OMEGA_H_DEVICE void findBCCoordsInTet(const Omega_h::Reals &coords, 
   const Omega_h::LOs &mesh2verts, const Omega_h::Vector<3> &xyz, 
-  const Omega_h::LO elem, Omega_h::Vector<4> &bcc)
-{
+  const Omega_h::LO elem, Omega_h::Vector<4> &bcc) {
   Omega_h::Matrix<3, 4> mat;
   findTetCoords(mesh2verts, coords, elem, mat);
   const bool res = find_barycentric_tet(mat, xyz, bcc);
@@ -486,7 +462,7 @@ typedef o::Vector<3> Vector;
 //TODO test this function, is this needed ?
 OMEGA_H_INLINE o::LO find_closest_point_on_triangle_with_normal(
   const o::Few< o::Vector<3>, 3> &abc,
-  const o::Vector<3> &p, o::Vector<3> &q, o::LO verbose = 0){
+  const o::Vector<3> &p, o::Vector<3> &q, o::LO verbose = 0) {
 
   // Check if P in vertex region outside A
   Vector a = abc[0];
@@ -560,7 +536,7 @@ OMEGA_H_INLINE o::LO find_closest_point_on_triangle_with_normal(
 
 //Ref: Real-time Collision Detection by Christer Ericson, 2005.
 //ptp = ref point; ptq = nearest point on triangle; abc = triangle
-OMEGA_H_INLINE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>, 3> &abc, 
+OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>, 3> &abc, 
   const o::Vector<3> &ptp, o::Vector<3> &ptq, o::LO verbose = 0) {
   
   //o::LO verbose = 1;
@@ -571,9 +547,9 @@ OMEGA_H_INLINE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   o::Vector<3> ptc = abc[2];
 
   if(verbose >2){
-    print_osh_vector(pta, "pta", false);
-    print_osh_vector(ptb, "ptb", false);
-    print_osh_vector(ptc, "ptc", false);
+    print_osh_vector(pta, "pta");
+    print_osh_vector(ptb, "ptb");
+    print_osh_vector(ptc, "ptc");
     print_osh_vector(ptp, "ptp");
   }
 
@@ -587,7 +563,7 @@ OMEGA_H_INLINE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     ptq = pta;
     region = VTXA;
     if(verbose >2){
-      print_osh_vector(ptq, "QA", false);
+      print_osh_vector(ptq, "QA");
       print_osh_vector(ptp, "P");
     }
     return VTXA; 
@@ -666,7 +642,7 @@ OMEGA_H_INLINE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     return TRIFACE;
   }
   if(verbose >2){
-    print_osh_vector(ptq, "Q", false);
+    print_osh_vector(ptq, "Q");
     printf("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
   }
   return region;
@@ -749,7 +725,8 @@ OMEGA_H_DEVICE bool check_if_face_within_dist_to_tet(const o::Matrix<DIM, 4> &te
   return false;
 }
 
-// TODO move to unit_tests
+// TODO use device to call device function
+/*
 inline void test_find_closest_point_on_triangle(){
   constexpr int nTris = 1;
   o::Few<o::Few< o::Vector<3>, 3>, nTris> abcs{{{1,0,0},{2,0,0},{1.5,1,0}}}; 
@@ -769,18 +746,18 @@ inline void test_find_closest_point_on_triangle(){
       auto v = find_closest_point_on_triangle(abc, ptp, ptq, 3);
   
       std::cout << "\nTest_Pt_on_Tri: ";
-      print_osh_vector(abc[0], "A", false);
-      print_osh_vector(abc[1], "B", false);
-      print_osh_vector(abc[2], "C", false);    
-      print_osh_vector(ptp, "P", false);
-      print_osh_vector(ptq, "Nearest_pt Q", false);
+      print_osh_vector(abc[0], "A");
+      print_osh_vector(abc[1], "B");
+      print_osh_vector(abc[2], "C");    
+      print_osh_vector(ptp, "P");
+      print_osh_vector(ptq, "Nearest_pt Q");
       std::cout << " reg: " << v << "\n";
 
       OMEGA_H_CHECK(v == regions[i*nTris + j]);
     }
   }
 }
-
+*/
 
 } //namespace
 

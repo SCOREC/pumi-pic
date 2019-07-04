@@ -2,12 +2,7 @@
 #define GITRM_PUSH_HPP
 
 #include "GitrmMesh.hpp"
-#include "GitrmParticles.hpp" 
-
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <Kokkos_Core.hpp>  //direct use
-
+#include "GitrmParticles.hpp"
 
 #include <iostream>
 #include <cmath>
@@ -17,9 +12,6 @@
 #include "Omega_h_array_ops.hpp"
 #include "Omega_h_scalar.hpp" //divide
 #include "Omega_h_fail.hpp"
-
-#include "pumipic_utils.hpp"
-#include "pumipic_constants.hpp"
 
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
@@ -58,9 +50,8 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         o::Real larmorRadius = larmorRadii[faceId];
         o::Real childLangmuirDist = childLangmuirDists[faceId];
 
-        o::Vector<3> pos{pos_scs(pid,0), pos_scs(pid,1), pos_scs(pid,2)};
-        o::Vector<3> closest{closestPoint_scs(pid,0), closestPoint_scs(pid,1), 
-                             closestPoint_scs(pid,2)};
+        auto pos = p::makeVector3(pid, pos_scs);
+        auto closest = p::makeVector3(pid, closestPoint_scs);
         o::Vector<3> distVector = pos - closest; 
         o::Vector<3> dirUnitVector = o::normalize(distVector);
         o::Real md = p::osh_mag(distVector);
@@ -98,7 +89,7 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 
         if(p::almost_equal(md, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
           Emag = 0.0;
-          dirUnitVector = {0, 0, 0}; //TODO confirm
+          dirUnitVector = o::zero_vector<3>();
         }
         auto exd = Emag*dirUnitVector;
         efield_scs(pid, 0) = exd[0];
@@ -151,11 +142,10 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       o::LO verbose = 1;//(elem%50==0)?4:0;
       //reset wall-collision face id
       xface_scs(pid) = -1;
-
-      o::Vector<3> vel{vel_scs(pid,0), vel_scs(pid,1), vel_scs(pid,2)};  //at current_pos
-      o::Vector<3> eField{efield_scs(pid,0), efield_scs(pid,1),efield_scs(pid,2)}; //at previous_pos
-      o::Vector<3> posPrev{prev_pos_scs(pid,0), prev_pos_scs(pid,1), prev_pos_scs(pid,2)};
-      o::Vector<3> bField; //At previous_pos
+      auto vel = p::makeVector3(pid, vel_scs); //at current_pos
+      auto eField = p::makeVector3(pid, efield_scs); //at previous_pos
+      auto posPrev = p::makeVector3(pid, prev_pos_scs);
+      auto bField = o::zero_vector<3>(); //At previous_pos
 
       if(verbose >3) {
         printf(" e: %d pid:%d :: pos: %.3f %.3f %.3f ::", elem, pid, 
@@ -164,7 +154,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         printf("vel: %.1f %.1f %.1f \n", vel[0], vel[1], vel[2]);
       }
       
-      o::Vector<4> bcc{{0}};
+      auto bcc = o::zero_vector<4>();
       if(use3dField) {
         p::findBCCoordsInTet(coords, mesh2verts, posPrev, elem, bcc);
       }

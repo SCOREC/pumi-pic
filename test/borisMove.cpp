@@ -1,33 +1,9 @@
-#include <string>
 #include "GitrmMesh.hpp"
 #include "GitrmPush.hpp"
 #include "GitrmParticles.hpp"
 
-#include "Omega_h_mesh.hpp"
-#include "pumipic_kktypes.hpp"
-#include "pumipic_adjacency.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <Distribute.h>
-#include <Kokkos_Core.hpp>
-#include "pumipic_library.hpp"
-
-using particle_structs::fp_t;
-using particle_structs::lid_t;
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-
 namespace o = Omega_h;
 namespace p = pumipic;
-
-void render(o::Mesh& mesh, int iter) {
-  fprintf(stderr, "%s\n", __func__);
-  std::stringstream ss;
-  ss << "rendered_t" << iter;
-  std::string s = ss.str();
-  Omega_h::vtk::write_parallel(s, &mesh, mesh.dim());
-}
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -151,7 +127,7 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
 
 void search(o::Mesh& mesh, SCS* scs, int iter, o::Write<o::LO> &data_d) {
   fprintf(stderr, "searching..\n");
-  assert(scs->num_elems == mesh.nelems());
+  assert(scs->nElems() == mesh.nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
@@ -234,14 +210,14 @@ int main(int argc, char** argv) {
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 10;
-  double dTime = 1e-7;//1e-7; // gitr:1e-8s for 10,000 iterations
-  int NUM_ITERATIONS = 10; //000;
+  int numPtcls = 100;
+  double dTime = 1e-6;//1e-7; // gitr:1e-8s for 10,000 iterations
+  int NUM_ITERATIONS = 100; //000;
   fprintf(stderr, "\nInitializing %d impurity particles\n", numPtcls);
   GitrmParticles gp(mesh); // (const char* param_file);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
-  gp.initImpurityPtcls(dTime, numPtcls, 110, 0, 1.5, 200,10); //tgt324
+  gp.initImpurityPtclsInADir(dTime, numPtcls, 110, 0, 1.5, 200,10);
 
   auto &scs = gp.scs;
 
@@ -256,7 +232,7 @@ int main(int argc, char** argv) {
   fprintf(stderr, "\n*********Main Loop**********\n");
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
-    if(scs->num_ptcls == 0) {
+    if(scs->nPtcls() == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       fprintf(stderr, "Total iterations = %d\n", iter);
       break;
@@ -275,7 +251,7 @@ int main(int argc, char** argv) {
     //writeDispVectors(scs);
     search(mesh, scs, iter, data_d);
     fprintf(stderr, "time(s) %f\n", timer.seconds());
-    if(scs->num_ptcls == 0) {
+    if(scs->nPtcls() == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       fprintf(stderr, "Total iterations = %d\n", iter+1);
       break;

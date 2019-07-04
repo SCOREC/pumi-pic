@@ -6,7 +6,7 @@ endfunction(make_test)
 
 #make_test(print_partition print_partition.cpp)
 #make_test(full_mesh test_full_mesh.cpp)
-#make_test(ptn_loading test_ptn_loading.cpp)
+make_test(ptn_loading test_ptn_loading.cpp)
 #make_test(comm_array test_comm_array.cpp)
 #make_test(collision test_collision.cpp)
 #make_test(barycentric test_barycentric.cpp)

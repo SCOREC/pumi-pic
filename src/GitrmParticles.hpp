@@ -3,7 +3,6 @@
 
 #include "pumipic_adjacency.hpp"
 #include "pumipic_kktypes.hpp"
-
 #include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
@@ -11,16 +10,11 @@
 #include <Kokkos_Core.hpp>
 #include "pumipic_library.hpp"
 
-
-
 using particle_structs::fp_t;
 using particle_structs::lid_t;
 using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -34,8 +28,6 @@ enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, XPOINT, XPOINT_FACE, PTCL_BDRY_FACEID,
      PTCL_BDRY_CLOSEPT, PTCL_EFIELD_PREV, PTCL_VEL};
 typedef SellCSigma<Particle> SCS;
 
-enum {BDRY_DATA_SIZE=7 }; //TODO
-
 class GitrmParticles {
 public:
   GitrmParticles(o::Mesh &m);
@@ -43,19 +35,38 @@ public:
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
 
-  void defineParticles(const int elId, const int numPtcls=100);
-  void findInitialBdryElemId(o::Real theta, o::Real phi, const o::Real r,
+  void defineParticles(int numPtcls, int elId=-1);
+  void findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r,
      o::LO &initEl, o::Write<o::LO> &elemAndFace, 
-     const o::LO maxLoops = 100, const o::Real outer=2);
+     o::LO maxLoops = 100, o::Real outer=2);
   void setImpurityPtclInitCoords(o::Write<o::LO> &);
-  void initImpurityPtcls(o::Real, o::LO numPtcls,o::Real theta, o::Real phi, 
-    o::Real r, o::LO maxLoops = 100, o::Real outer=2);
+  void initImpurityPtclsInADir(o::Real, o::LO numPtcls,o::Real theta, 
+    o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
 
   SCS* scs;
   o::Mesh &mesh;
 };
 
+
+struct PtclInitStruct {
+  PtclInitStruct(std::string n, std::string np, std::string x, std::string y,
+    std::string z,std::string vx, std::string vy, std::string vz):
+    name(n), nPname(np), xName(x), yName(y), zName(z), 
+    vxName(vx), vyName(vy), vzName(vz) {}
+  std::string name;
+  std::string nPname;// "nP"
+  std::string xName;
+  std::string yName;
+  std::string zName;
+  std::string vxName;
+  std::string vyName;
+  std::string vzName;
+  int nComp = 6;  //pos, vel
+  int nP = 0;
+};
+
+/*
 inline void setPtclIds(SCS* scs, bool verb=false) {
   if(verb)
     fprintf(stderr, " %s\n", __func__);
@@ -67,94 +78,7 @@ inline void setPtclIds(SCS* scs, bool verb=false) {
     });
   });
 }
-
-//Note, elem_ids are index by pid=indexes, not scs member. Don't rebuild after search_mesh 
-inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids) {
-  o::LO verbose = 1;
-  o::Real pi = 3.14159265358979323; //TODO
-  const auto coords = mesh.coords();
-  const auto face_verts = mesh.ask_verts_of(2);
-  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
-  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  const auto mesh2verts = mesh.ask_elem_verts();
-  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
-
-  o::LO dof = BDRY_DATA_SIZE; //7
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto xpt_scs = scs->get<XPOINT>();
-  auto xface_scs = scs->get<XPOINT_FACE>();
-  auto vel_scs = scs->get<PTCL_VEL>();
-  //get mesh tag for boundary data id,xpt,vel
-  auto xtag_r = mesh.get_array<o::Real>(o::FACE, "bdryData");
-  
-  o::Write<o::Real> xtag_d(xtag_r.size());
-  auto convert = OMEGA_H_LAMBDA(int i) {
-    for(int j=0; j<dof; ++j)
-      xtag_d[i*dof+j] = xtag_r[i*dof+j];
-  };
-  o::parallel_for(mesh.nfaces(), convert);
-
-  std::srand(time(NULL));
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask >0 && elem_ids[pid]==-1) {
-    //mask is set for origin element, if moved it is not set for exiting element
-      auto elemId = e;
-      auto fid = xface_scs(pid);
-      auto ptcl = pid_scs(pid);
-
-      if(fid >= 0) {
-        OMEGA_H_CHECK(side_is_exposed[fid]);
-        auto vel = p::makeVector3(pid, vel_scs );
-        auto xpt = p::makeVector3(pid, xpt_scs);
-        auto pelem = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
-        if(elemId != pelem)
-          elemId = pelem;
-        auto fnorm = p::get_face_normal(fid, elemId, coords, mesh2verts, 
-          face_verts, down_r2fs);
-        auto angle = p::angle_between(fnorm, vel);
-        double rn = (double)std::rand()/RAND_MAX;
-        // reflection
-        if(angle > pi/6.0 && rn >0.5) {
-          // R = D- 2(D.N)N;
-          auto rvel = vel - 2* p::osh_dot(vel, fnorm) * fnorm;
-          for(o::LO i=0; i<3; ++i)
-            vel_scs(pid, i) = rvel[i];
-
-          // move a bit inwards
-          auto pos = xpt - 0.000001*fnorm;
-          for(o::LO i=0; i<3; ++i)
-            pos_scs(pid, i) = pos[i];
-
-          //TODO resetting faceId of reflected particle
-          xface_scs(pid) = -1;
-          
-          elem_ids[pid] = elemId;
-          if(verbose >3) {
-            printf("ptclRefl %d reflected => elem %d pos: %g %g %g \n\t prevvel:%g %g %g vel:%g %g %g\n", 
-                ptcl, elem_ids[pid], xpt[0], xpt[1],xpt[2],vel[0],vel[1],vel[2],
-                rvel[0],rvel[1],rvel[2]);
-          }
-        } else {
-        /*
-       printf("\n****DOF=BDRY_DATA_SIZE: %d \n", dof);
-          xtag_d[pid*dof] = static_cast<o::Real>(pid);
-          for(int i=1; i<4; ++i) {
-            xtag_d[pid*dof+i] = xpt[i];  
-          }
-          for(int i=5; i<7; ++i) {
-            xtag_d[pid*dof+i] = vel[i];
-          } */
-        }
-      }
-    } //mask
-  };
-  scs->parallel_for(lamb);
-  o::Reals tag(xtag_d);
-  mesh.set_tag(o::FACE, "bdryData", tag);
-}
-
+*/
 
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter, 
@@ -201,10 +125,107 @@ inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter,
 }
 
 
+
+/** @brief Calculate distance of particles to domain boundary 
+ * TODO add description of data size of bdryFaces, bdryFaceInds and indexes
+ */
+inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* scs,
+  o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
+  const o::LO fsize, const o::LO fskip) {
+  const auto nel = mesh.nelems();
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts(); 
+  //fskip is 2, since 1st 2 are not part of face vertices
+  OMEGA_H_CHECK(fsize > 0 && nel >0);
+  auto pos_d = scs->template get<PTCL_POS>();
+  auto closestPoint_d = scs->template get<PTCL_BDRY_CLOSEPT>();
+  auto bdry_face_d = scs->template get<PTCL_BDRY_FACEID>();
+  auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
+                                const int &mask){ 
+    if (mask > 0) {
+    // elem 42200
+      o::LO verbose = 1; //(elem%500==0)?2:1;
+
+      o::LO beg = bdryFaceInds[elem];
+      o::LO nFaces = bdryFaceInds[elem+1] - beg;
+      if(nFaces >0) {
+        o::Real dist = 0;
+        o::Real min = 1e10;
+        o::Matrix<3, 3> face;
+        o::Vector<3> point = o::zero_vector<3>();
+        o::Vector<3> pt;
+        o::LO fe = -1;
+        o::LO fel = -1;
+        o::LO fi = -1;
+        o::LO fid = -1;
+        o::LO minRegion = -1;
+
+        if(verbose >2)
+          printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
+            bdryFaceInds[elem+1]);
+
+        for(o::LO ii = 0; ii < nFaces; ++ii) {
+          // TODO put in a function
+          o::LO ind = (beg + ii)*fsize;
+          // fskip=2 for faceId, elId
+          OMEGA_H_CHECK(fskip ==2);
+          fi = static_cast<o::LO>(bdryFaces[ind]);
+          fe = static_cast<o::LO>(bdryFaces[ind + 1]);
+          for(o::LO i=0; i<3; ++i) { //Tet vertexes
+            for(o::LO j=0; j<3; ++j) { //coords
+              face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+            }
+          }
+          auto ref = p::makeVector3(pid, pos_d);
+          if(verbose > 2 && ii == 0)
+            printf("ref: %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
+          //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
+          o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
+          dist = p::osh_dot(pt - ref, pt - ref);
+          if(verbose >3)
+            printf(": dist_%0.6f e_%d reg_%d fe_%d \n", dist, elem, region, fe);
+
+          if(dist < min) {
+            min = dist;
+            fel = fe;
+            fid = fi;
+            minRegion = region;
+            for(int i=0; i<3; ++i)
+              point[0] = pt[i];
+
+            if(verbose >2){
+              printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
+                elem, min, region, fi, fe);
+              p::print_osh_vector(point, "Nearest_pt");
+            }
+          }
+        }
+
+        min = std::sqrt(min);
+        if(verbose >1) {
+          printf("  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
+            elem, min, fid, fel, minRegion);
+        }
+        OMEGA_H_CHECK(fid >= 0);
+        bdry_face_d(pid) = fid;
+        closestPoint_d(pid, 0) = point[0];
+        closestPoint_d(pid, 1) = point[1];
+        closestPoint_d(pid, 2) = point[2];   
+      } 
+    }
+  };
+
+  scs->parallel_for(distRun);
+
+}
+
+/*
+//TODO this doesn't work !
 inline void printGridData(o::Write<o::LO> &data_d) {
   //mask not 1 after rebuild at the ened of iterations in main
   for(o::LO i=0; i<data_d.size(); ++i)
-      printf("ptclRad ind %d num %d\n", i, data_d[i]);
+      printf("ptclRad ind %d num %d\n", i, data_d(i));
 }
+*/
 #endif//define
 

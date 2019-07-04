@@ -27,9 +27,9 @@ endfunction(mpi_test)
 #mpi_test(linetri_intersection_2 1
 #  ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )
 
-mpi_test(pseudoPushAndSearch_t1 1
-  ./pseudoPushAndSearch --kokkos-threads=1 
-  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
+#mpi_test(pseudoPushAndSearch_t1 1
+#  ./pseudoPushAndSearch --kokkos-threads=1 
+#  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
 #mpi_test(pseudoPushAndSearch_t2 1
 #  ./pseudoPushAndSearch --kokkos-threads=2
 #  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)

@@ -80,19 +80,6 @@ struct PtclInitStruct {
   int nP = 0;
 };
 
-/*
-inline void setPtclIds(SCS* scs, bool verb=false) {
-  if(verb)
-    fprintf(stderr, " %s\n", __func__);
-  auto pid_scs = scs->template get<2>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      pid_scs(pid) = pid;
-    });
-  });
-}
-*/
 
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter, 

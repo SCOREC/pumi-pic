@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 100;
+  int numPtcls = 10;
   double dTime = 1e-6;//1e-7; // gitr:1e-8s for 10,000 iterations
   int NUM_ITERATIONS = 100; //000;
   fprintf(stderr, "\nInitializing %d impurity particles\n", numPtcls);

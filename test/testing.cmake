@@ -27,9 +27,9 @@ endfunction(mpi_test)
 #mpi_test(linetri_intersection_2 1
 #  ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )
 
-#mpi_test(pseudoPushAndSearch_t1 1
-#  ./pseudoPushAndSearch --kokkos-threads=1 
-#  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
+mpi_test(pseudoPushAndSearch_t1 1
+  ./pseudoPushAndSearch --kokkos-threads=1 
+  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
 #mpi_test(pseudoPushAndSearch_t2 1
 #  ./pseudoPushAndSearch --kokkos-threads=2
 #  ${TEST_DATA_DIR}/pisces/gitr.msh ignored 200 5 -0.5 0.8 0)
@@ -66,9 +66,12 @@ endfunction(mpi_test)
 #mpi_test(borisMove 1
 #   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
 #   ${TEST_DATA_DIR}/inputFields)
+
+#mpi_test(comm_array_pisces 4 
+#         ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
+
+# linext16 inputFields d3dTut_profiles_withE d3d2_profiles d3d_reducedDomain_profiles_ni
 mpi_test(borisMove 1
   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
   ${TEST_DATA_DIR}/inputFields)
 
-#mpi_test(comm_array_pisces 4 
-#         ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)

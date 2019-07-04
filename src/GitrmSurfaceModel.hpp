@@ -34,10 +34,7 @@ OMEGA_H_DEVICE o::Real stoppingPower (const Omega_h::Vector<3> &vel, const o::Re
 }
 
 inline o::Real erosion(const o::LO indx, const Omega_h::Write<Omega_h::Real> &vx,
-  const Omega_h::Write<Omega_h::Real> &vy, const Omega_h::Write<Omega_h::Real> &vz,  
-    
-    /*???*/ Y0)
-{
+  const Omega_h::Write<Omega_h::Real> &vy, const Omega_h::Write<Omega_h::Real> &vz) {
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto ptcl = pid_scs(pid);

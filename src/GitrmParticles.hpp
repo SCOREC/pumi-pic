@@ -27,6 +27,7 @@ typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, int, int, Vector3d,
 enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, XPOINT, XPOINT_FACE, PTCL_BDRY_FACEID, 
      PTCL_BDRY_CLOSEPT, PTCL_EFIELD_PREV, PTCL_VEL};
 typedef SellCSigma<Particle> SCS;
+struct PtclInitStruct;
 
 class GitrmParticles {
 public:
@@ -35,15 +36,28 @@ public:
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
 
-  void defineParticles(int numPtcls, int elId=-1);
+  void defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId=-1);
   void findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r,
-     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
-     o::LO maxLoops = 100, o::Real outer=2);
+    o::LO &initEl, o::Write<o::LO> &elemAndFace, 
+    o::LO maxLoops=100, o::Real outer=2);
   void setImpurityPtclInitCoords(o::Write<o::LO> &);
   void initImpurityPtclsInADir(o::Real, o::LO numPtcls,o::Real theta, 
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
-
+  void initImpurityPtclsFromFile(const std::string& fName, 
+    o::LO numPtcls, o::LO maxLoops);
+  void processPtclInitFile(const std::string &fName,
+    o::HostWrite<o::Real> &data, PtclInitStruct &ps);
+  void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
+    o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
+  void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
+    const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
+    const o::LOs& elemIds, int maxLoops=100);
+  void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
+    const o::Reals& data, o::Write<o::LO>& elemIds, o::LOs& numPtclsInElems);
+  void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
+    o::LOs& ptclIdPtrsInElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
+    o::LO numPtcls);
   SCS* scs;
   o::Mesh &mesh;
 };

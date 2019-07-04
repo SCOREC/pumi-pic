@@ -366,7 +366,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               if(debug)
                 printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
               ++dface_ind;
-              const o::LO min_ind = min_index(bcc, 4);
+              o::LO min_ind = min_index(bcc, 4);
               if(findex == min_ind) {
                 elem_ids_next[pid] = dual_faces[dface_ind];
               }

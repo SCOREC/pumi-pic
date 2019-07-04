@@ -97,7 +97,6 @@ public:
 
   //GitrmMesh() = default;
   // static bool hasMesh;
-  void calculateCsrIndices(const o::Write<o::LO> &, const bool, o::LOs &, o::LO &);
 
   void convert2ReadOnlyCSR();
   void copyBdryFacesToSelf();
@@ -129,8 +128,6 @@ public:
   *    ChildLangmuirDist
   */
   void initEandBFields(const std::string &, const std::string &);
-  void parseFileFieldData( std::stringstream &, std::string, 
-    std::string, bool, o::HostWrite<o::Real> &, int &, bool &, int, int);
   void parseGridLimits(std::stringstream &, std::string, std::string, bool, 
     bool &, bool &, double &, double &);
   void processFieldFile(const std::string &, o::HostWrite<o::Real> &, 
@@ -215,8 +212,7 @@ struct FieldStruct {
 // TODO this method is a utility 
 // Cumulative sums. Done on host, to get ordered sum of all previous entries CSR.
 // NOTE: numsPerSlot must have all entries including zero entries
-o::LO calculateCsrIndices(const o::Write<o::LO>& numsPerSlot, 
-  o::LOs& csrPointers) {
+inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, o::LOs& csrPointers) {
   o::LO tot = numsPerSlot.size();
   o::HostRead<o::LO> numsPerSlotH(numsPerSlot);
   o::HostWrite<o::LO> csrPointersH(tot+1);
@@ -230,6 +226,60 @@ o::LO calculateCsrIndices(const o::Write<o::LO>& numsPerSlot,
   //CSR indices
   csrPointers = o::LOs(csrPointersH.write());
   return sum;
+}
+
+inline void parseFileFieldData(std::stringstream &ss, std::string sFirst, 
+   std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
+   bool &dataLine, int iComp=0, int nComp=1) {
+  
+  int verbose = 0;
+
+  if(verbose >5) {
+    std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
+  }
+  std::string s2 = "", sd = "";
+
+  // restart index when string matches
+  if(sFirst == fieldName) {
+    ind = 0;
+    ss >> s2;
+    OMEGA_H_CHECK("=" == s2);
+    dataLine = true;
+    if(verbose >5) {
+      std::cout << " dataLine: " << dataLine << "\n";
+    }    
+  }
+
+  if(dataLine) {
+    if(verbose >5) {
+      std::cout << " dataLine:: " << dataLine << "\n";
+    }    
+    if(sFirst != fieldName) {
+      sd = sFirst;
+      data[nComp*ind+iComp] = std::stod(sd);
+      if(verbose >5)
+        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
+                  << " " << std::stod(sd) << "\n";
+  
+      ++ind;
+    }
+
+    while(ss >> sd){
+      if(verbose >5)
+        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
+                  << " " << std::stod(sd) << "\n";
+      
+      data[nComp*ind+iComp] = std::stod(sd);
+      ++ind;
+    } 
+
+    if(verbose >5) {
+      std::cout << " \n";
+    }
+    if(semi){
+      dataLine = false;
+    }
+  }
 }
 
 #endif// define

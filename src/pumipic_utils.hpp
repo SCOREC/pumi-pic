@@ -67,7 +67,7 @@ OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, Omega_h::Real tol=E
 }
 
 template <class T> OMEGA_H_DEVICE Omega_h::LO 
-min_index(const T a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
+min_index(const T a, Omega_h::LO n)
 {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];

@@ -17,61 +17,6 @@ GitrmMesh::GitrmMesh(o::Mesh &m):
   mesh(m) {
 }
 
-void GitrmMesh::parseFileFieldData(std::stringstream &ss, std::string sFirst, 
-   std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
-   bool &dataLine, int iComp=0, int nComp=1) {
-  
-  int verbose = 0;
-
-  if(verbose >5) {
-    std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
-  }
-  std::string s2 = "", sd = "";
-
-  // restart index when string matches
-  if(sFirst == fieldName) {
-    ind = 0;
-    ss >> s2;
-    OMEGA_H_CHECK("=" == s2);
-    dataLine = true;
-    if(verbose >5) {
-      std::cout << " dataLine: " << dataLine << "\n";
-    }    
-  }
-
-  if(dataLine) {
-    if(verbose >5) {
-      std::cout << " dataLine:: " << dataLine << "\n";
-    }    
-    if(sFirst != fieldName) {
-      sd = sFirst;
-      data[nComp*ind+iComp] = std::stod(sd);
-      if(verbose >5)
-        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                  << " " << std::stod(sd) << "\n";
-  
-      ++ind;
-    }
-
-    while(ss >> sd){
-      if(verbose >5)
-        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                  << " " << std::stod(sd) << "\n";
-      
-      data[nComp*ind+iComp] = std::stod(sd);
-      ++ind;
-    } 
-
-    if(verbose >5) {
-      std::cout << " \n";
-    }
-    if(semi){
-      dataLine = false;
-    }
-  }
-}
-
-
 void GitrmMesh::parseGridLimits(std::stringstream &ss, std::string sfirst, 
   std::string gridName, bool semi, bool &foundMin, bool &gridLine, 
   double &min, double &max){
@@ -671,7 +616,8 @@ void GitrmMesh::convert2ReadOnlyCSR() {
   o::LO S = SIZE_PER_FACE;
   // Convert to CSR.
   // Not actual index of bdryFaces, but has to x by SIZE_PER_FACE to get it
-  numAddedBdryFaces = calculateCsrIndices(numBdryFaceIds, bdryFaceInds);
+  o::LOs numBdryFaceIds_r(numBdryFaceIds);
+  numAddedBdryFaces = calculateCsrIndices(numBdryFaceIds_r, bdryFaceInds);
 
   //Keep separate copy of bdry face coords per elem, to avoid  accessing another
   // element's face. Can save storage if common bdry face data is used by face id?

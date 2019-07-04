@@ -1,6 +1,7 @@
 #include "GitrmMesh.hpp"
 #include "GitrmPush.hpp"
 #include "GitrmParticles.hpp"
+//#include "GitrmSurfaceModel.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -71,35 +72,6 @@ void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
   mesh.set_tag(o::VERT, "avg_density", ad_r);
 }
 
-/*
-void setPtclIds(SCS* scs) {
-  fprintf(stderr, "%s\n", __func__);
-  auto pid_d = scs->get<2>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      pid_d(pid) = pid;
-    });
-  });
-}
-*/
-
-//this update has to be in or called from Boris Move
-void updatePtclPositions(SCS* scs) {
-  auto x_scs_d = scs->get<0>();
-  auto xtgt_scs_d = scs->get<1>();
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      x_scs_d(pid,0) = xtgt_scs_d(pid,0);
-      x_scs_d(pid,1) = xtgt_scs_d(pid,1);
-      x_scs_d(pid,2) = xtgt_scs_d(pid,2);
-      xtgt_scs_d(pid,0) = 0;
-      xtgt_scs_d(pid,1) = 0;
-      xtgt_scs_d(pid,2) = 0;
-    });
-  });
-}
 
 void rebuild(SCS* scs, o::LOs elem_ids) {
   fprintf(stderr, "rebuilding..\n");
@@ -136,7 +108,7 @@ void search(o::Mesh& mesh, SCS* scs, int iter, o::Write<o::LO> &data_d) {
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //elem_ids to be used in rebuild
   fprintf(stderr, "Applying surface Model..\n");
-  applySurfaceModel(mesh, scs, elem_ids);
+  //applySurfaceModel(mesh, scs, elem_ids);
 
   //output particle positions, for converting to vtk
   //storeAndPrintData(mesh, scs, iter, data_d);

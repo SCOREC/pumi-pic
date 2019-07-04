@@ -230,7 +230,7 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 //How to avoid redefining the MemberType? each application will define it
 //differently. Templating search_mesh with
 //template < typename ParticleType >
-//results in an error on getSCS<> as an unresolved function.
+//results in an error on get<> as an unresolved function.
 
 template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
@@ -295,8 +295,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         OMEGA_H_CHECK(elmId >= 0);
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
-        auto orig = makeVector3(pid, x_scs_d);
         auto dest = makeVector3(pid, xtgt_scs_d);
+        auto orig = makeVector3(pid, x_scs_d);
         o::Vector<4> bcc;
         if(loops == 0) {
           //make sure particle origin is in initial element
@@ -317,7 +317,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         } else {
           if(debug)
             printf("ptcl %d checking adj elms\n", ptcl);
-          // Get element ID
+          //get element ID
           auto dface_ind = dual_elems[elmId];
           const auto beg_face = elmId *4;
           const auto end_face = beg_face +4;
@@ -351,7 +351,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                     ptcl, face_id, elem_ids_next[pid]);
               }
               break;
-            } else if(detected && ! exposed) {
+            } else if(detected && !exposed) {
               auto adj_elem  = dual_faces[dface_ind];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
@@ -373,6 +373,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             }
             ++findex;
           } //for iface
+
         } //else not in current element
       } //if active particle
     };
@@ -393,7 +394,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
     if(looplimit && loops > looplimit) {
       if (debug)
-        fprintf(stderr, "ERROR: loop limit %d exceeded\n", looplimit);
+        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   }

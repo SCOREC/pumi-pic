@@ -52,5 +52,10 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+
+    char vtk_name[100];
+  sprintf(vtk_name, "picpart%d", rank);
+  Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
+
   return EXIT_SUCCESS;
 }

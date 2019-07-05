@@ -3,6 +3,7 @@
 
 #include "pumipic_adjacency.hpp"
 //#include "GitrmParticles.hpp"  // For dist2bdry
+#include "Omega_h_mesh.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;

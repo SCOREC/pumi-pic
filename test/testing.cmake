@@ -70,7 +70,12 @@ endfunction(mpi_test)
 #mpi_test(comm_array_pisces 4 
 #         ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
 
-# linext16 inputFields d3dTut_profiles_withE d3d2_profiles d3d_reducedDomain_profiles_ni
+# linext16 inputFields d3dTut_profiles_withE d3d2_profiles 
+# d3d_reducedDomain_profiles_ni
+
+mpi_test(test_scs_fp 1
+ ./test_scs_fp --kokkos-threads=1  ${TEST_DATA_DIR}/pisces/gitr.msh )
+
 mpi_test(borisMove 1
   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
   ${TEST_DATA_DIR}/inputFields)

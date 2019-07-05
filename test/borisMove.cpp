@@ -2,6 +2,7 @@
 #include "GitrmPush.hpp"
 #include "GitrmParticles.hpp"
 //#include "GitrmSurfaceModel.hpp"
+#include "Omega_h_file.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -158,7 +159,7 @@ int main(int argc, char** argv) {
   
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
-  auto mesh = Omega_h::binary::read(argv[1], world);
+  auto mesh = Omega_h::read_mesh_file(argv[1], world);
 
   const auto r2v = mesh.ask_elem_verts();
   const auto coords = mesh.coords();

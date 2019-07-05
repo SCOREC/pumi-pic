@@ -43,7 +43,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   o::Int ne = mesh.nelems();
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   //Element gids is left empty since there is no partitioning of the mesh yet
-  SCS::kkGidView element_gids("elem_gids", ne);
+  SCS::kkGidView element_gids("elem_gids", 0);
   if(elId>=0) {
     Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
       ptcls_per_elem(i) = 0;

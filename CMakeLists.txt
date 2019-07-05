@@ -42,22 +42,6 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
   set(debug_flag "-g")
 endif()
 
-#deps
-find_package(KokkosCore REQUIRED)
-include_directories(${KokkosCore_INCLUDE_DIRS})
-
-message(STATUS "Kokkos enabled - Overriding compiler selection for consistency with Kokkos install")
-set(CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER})
-set(CMAKE_C_COMPILER ${KokkosCore_C_COMPILER})
-message(STATUS "Kokkos CMAKE_CXX_COMPILER ${KokkosCore_CXX_COMPILER}")
-message(STATUS "Kokkos CMAKE_C_COMPILER ${KokkosCore_C_COMPILER}")
-
-message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
-set(CMAKE_CXX_FLAGS "${debug_flag} ${KokkosCore_CXX_FLAGS}")
-set(CMAKE_C_FLAGS "${debug_flag} ${KokkosCore_C_FLAGS}")
-message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
-message(STATUS "Kokkos CMAKE_C_FLAGS ${CMAKE_C_FLAGS}")
-
 find_package(particle_structures 0.0.1 REQUIRED)
 set(pumipic_USE_particle_structures_DEFAULT ON)
 message(STATUS "Found particle_structures: ${particle_structures_VERSION}")

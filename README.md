@@ -28,7 +28,17 @@ git submodule update
 mkdir build
 cd !$
 source ../pumi-pic/envRhel7Serial.sh
-../doConfig.sh ../pumi-pic /path/to/particle_structures/install/dir
+../pumi-pic/doConfig.sh ../pumi-pic /path/to/particle_structures/install/dir
+make
+```
+
+### Build on SCOREC Blockade for Cuda
+
+```
+mkdir build
+cd !$
+source ../pumi-pic/envBlockadeCuda.sh
+../pumi-pic/doConfig.sh ../pumi-pic /path/to/particle_structures/cuda_install/dir
 make
 ```
 

@@ -6,7 +6,7 @@
 #include <SCS_Macros.h>
 #include "pumipic_adjacency.hpp"
 #include "unit_tests.hpp"
-
+#include "pumipic_library.hpp"
 namespace o = Omega_h;
 namespace p = pumipic;
 
@@ -20,36 +20,30 @@ using particle_structs::fp_t;
 // computed (pre adjacency search) positions, and
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
+typedef SellCSigma<Particle> SCS;
 
-void setPosition(SellCSigma<Particle>* scs,
+void setPosition(SCS* scs,
     o::Vector<3> orig, o::Vector<3> dest) {
-  scs->transferToDevice();
-  auto capacity = scs->offsets[scs->num_slices];
-  p::kkFp3View x_scs_d("x_scs_d", capacity);
-  p::hostToDeviceFp(x_scs_d, scs->getSCS<0>() );
-  p::kkFp3View xtgt_scs_d("xtgt_scs_d", capacity);
-  p::hostToDeviceFp(xtgt_scs_d, scs->getSCS<1>() );
-  PS_PARALLEL_FOR_ELEMENTS(scs, thread, e, {
-    (void)e;
-    PS_PARALLEL_FOR_PARTICLES(scs, thread, pid, {
-      if(particle_mask(pid)) {
-        for(int i=0; i<3; i++) {
-          x_scs_d(pid,i) = orig[i];
-          xtgt_scs_d(pid,i) = dest[i];
-        }
-        printf("elm %d ptcl %d position %f %f %f target position %f %f %f\n",
-          e, pid,
-          x_scs_d(pid,0), x_scs_d(pid,1), x_scs_d(pid,2),
-          xtgt_scs_d(pid,0), xtgt_scs_d(pid,1), xtgt_scs_d(pid,2));
+  auto x_scs_d = scs->get<0>();
+  auto xtgt_scs_d = scs->get<1>();
+  auto setPos = SCS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+    if (mask) {
+      for(int i=0; i<3; i++) {
+        x_scs_d(pid,i) = orig[i];
+        xtgt_scs_d(pid,i) = dest[i];
       }
-    });
-  });
-  p::deviceToHostFp(x_scs_d, scs->getSCS<0>() );
-  p::deviceToHostFp(xtgt_scs_d, scs->getSCS<1>() );
+      printf("elm %d ptcl %d position %f %f %f target position %f %f %f\n",
+             eid, pid,
+             x_scs_d(pid,0), x_scs_d(pid,1), x_scs_d(pid,2),
+             xtgt_scs_d(pid,0), xtgt_scs_d(pid,1), xtgt_scs_d(pid,2));
+    }
+  };
+  scs->parallel_for(setPos);
 }
 
 int main(int argc, char** argv) {
-  auto lib = o::Library(&argc, &argv);
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
   const auto world = lib.world();
   auto mesh = o::gmsh::read(argv[1], world);
 
@@ -66,31 +60,30 @@ int main(int argc, char** argv) {
 
   //TODO create SCS structure with one particle in element 159
   const int initialElement = 159;
-  int* ptcls_per_elem = new int[nelems];
-  for(int i=0; i<nelems; i++)
-    ptcls_per_elem[i] = 0;
-  std::vector<int>* ids = new std::vector<int>[nelems];
-  ids[initialElement].push_back(0);
+  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", nelems);
+  //Element gids is left empty since there is no partitioning of the mesh yet
+  SCS::kkGidView element_gids;
+  Omega_h::parallel_for(nelems, OMEGA_H_LAMBDA(const int& i) {
+    ptcls_per_elem(i) = 0;
+    if (i == initialElement)
+      ptcls_per_elem(i) = numPtcls;
+  });
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure 
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  const bool debug = false;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 4);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, nelems, numPtcls,
-						       ptcls_per_elem,
-						       ids, debug);
-  delete [] ptcls_per_elem;
-  delete [] ids;
+  SCS* scs = new SCS(policy, sigma, V, nelems, numPtcls,
+						       ptcls_per_elem, element_gids);
 
   o::Vector<3> orig{2, 0.5,0.3};
   o::Vector<3> dest{1.1,50,0};
   setPosition(scs,orig,dest);
 
   o::LO maxLoops = 100;
-  const auto scsCapacity = scs->offsets[scs->num_slices];
+  const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
 

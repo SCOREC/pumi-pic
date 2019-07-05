@@ -11,28 +11,44 @@ namespace pumipic {
       Mesh& operator=(const Mesh&) = delete;
 
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
-    Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO> partition_vector);
+    Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector);
     //Constructs PIC parts with a core and buffer all parts within buffer_layers
     // All elements in the core and elements within safe_layers from the core are safe
-    Mesh(Omega_h::Mesh& full_mesh, Omega_h::Write<Omega_h::LO> partition_vector,
+    Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector,
          int buffer_layers, int safe_layers);
     //TODO? create XGC classification method for creating picpart
     //TODO? create picpart with unsafe_layers instead of safe_layers
     ~Mesh();
-    
-    Omega_h::Mesh* mesh() const {return picpart;}
-    bool isFullMesh() const;
 
+    //Returns a pointer to the underlying omega_h mesh
+    Omega_h::Mesh* mesh() const {return picpart;}
+    //Returns true if the full mesh is buffered
+    bool isFullMesh() const;
+    //Returns the dimension of the mesh
+    int dim() const {return picpart->dim();}
+    //Returns the commptr
+    Omega_h::CommPtr comm() const {return commptr;}
+
+    //Returns the number of parts buffered
     int numBuffers(int dim) const {return num_cores[dim] + 1;}
+    //Returns a host array of the ranks buffered
     Omega_h::HostWrite<Omega_h::LO> bufferedRanks(int dim) const {return buffered_parts[dim];}
 
-    Omega_h::Read<Omega_h::GO> globalIds(int dim) {return global_ids_per_dim[dim];}
-    Omega_h::Read<Omega_h::LO> safeTag() {return is_ent_safe;}
-    Omega_h::Read<Omega_h::LO> nentsOffsets(int dim) {return offset_ents_per_rank_per_dim[dim];}
-    Omega_h::Read<Omega_h::LO> commArrayIndex(int dim) {return ent_to_comm_arr_index_per_dim[dim];}
-    Omega_h::Read<Omega_h::LO> entOwners(int dim) {return ent_owner_per_dim[dim];}
-    Omega_h::Read<Omega_h::LO> rankLocalIndex(int dim) {return ent_local_rank_id_per_dim[dim];}
 
+    //Picpart global ID array over entities sized nents
+    Omega_h::GOs globalIds(int dim) {return global_ids_per_dim[dim];}
+    //Safe tag over elements sized nelems (1 - safe, 0 - unsafe)
+    Omega_h::LOs safeTag() {return is_ent_safe;}
+    //Offset array for number of entities per rank sized comm_size
+    Omega_h::LOs nentsOffsets(int dim) {return offset_ents_per_rank_per_dim[dim];}
+    //Mapping from local id to comm array index sized nents
+    Omega_h::LOs commArrayIndex(int dim) {return ent_to_comm_arr_index_per_dim[dim];}
+    //Array of owners of an entity sized nents
+    Omega_h::LOs entOwners(int dim) {return ent_owner_per_dim[dim];}
+    //The local index of an entity in its own core region sized nents
+    Omega_h::LOs rankLocalIndex(int dim) {return ent_local_rank_id_per_dim[dim];}
+
+    //Creates an array of size num_entreis_per_entity * nents for communication
     template <class T>
     typename Omega_h::Write<T> createCommArray(int dim, int num_entries_per_entity,
                                                T default_value);
@@ -41,6 +57,7 @@ namespace pumipic {
       MAX_OP,
       MIN_OP
     };
+    //Performs an MPI reduction on a communication array across all picparts
     template <class T>
     void reduceCommArray(int dim, Op op, Omega_h::Write<T> array);
 

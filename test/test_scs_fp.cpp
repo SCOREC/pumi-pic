@@ -46,10 +46,10 @@ int main(int argc, char** argv) {
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   //doesn't work for extruded mesh
-  //auto mesh = Omega_h::read_mesh_file(argv[1], world);
+  auto mesh = Omega_h::read_mesh_file(argv[1], world);
 
   //doesn't work for gmsh
-  auto mesh = Omega_h::binary::read(argv[1], world);
+  //auto mesh = Omega_h::binary::read(argv[1], world);
   Omega_h::Int ne = mesh.nelems();
   fprintf(stderr, "Number of elements %d \n", ne);
 

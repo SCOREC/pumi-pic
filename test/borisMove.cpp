@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
   if(argc < 2)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file]\n";
+      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file][ptcls_file]\n";
     exit(1);
   }
   if(argc < 3)
@@ -142,8 +142,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "\n ****** WARNING: No BField file provided ! \n");
   }
 
-  std::string bFile="", eFile="", profFile="", profFileDensity="";
-
+  std::string bFile="", eFile="", profFile="", profFileDensity="", ptclSource="";
   if(argc >2) {
     bFile = argv[2];
   }
@@ -156,7 +155,10 @@ int main(int argc, char** argv) {
   if(argc > 5) {
     profFileDensity  = argv[5];
   }
-  
+  if(argc > 6) {
+    ptclSource  = argv[6];
+  }  
+
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::read_mesh_file(argv[1], world);
@@ -183,25 +185,30 @@ int main(int argc, char** argv) {
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 10;
-  double dTime = 1e-6;//1e-7; // gitr:1e-8s for 10,000 iterations
+  int numPtcls = 0;
+
+  double dTime = 1e-7; // gitr:1e-8s for 10,000 iterations
   int NUM_ITERATIONS = 100; //000;
-  fprintf(stderr, "\nInitializing %d impurity particles\n", numPtcls);
   GitrmParticles gp(mesh); // (const char* param_file);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
-  gp.initImpurityPtclsInADir(dTime, numPtcls, 110, 0, 1.5, 200,10);
+  if(ptclSource.empty())
+    gp.initImpurityPtclsInADir(dTime, numPtcls, 110, 0, 1.5, 200,10);
+  else
+    gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100);
 
   auto &scs = gp.scs;
 
-  o::Real dr = 0.02; //2cm 
-  o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
-  o::Write<o::LO>data_d(radGrid, 0);//*thetaGrid*phiGrid, 0);
+  // o::Real dr = 0.02; //2cm 
+  // o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
+  o::Write<o::LO>data_d; //(radGrid, 0);//*thetaGrid*phiGrid, 0);
   
   fprintf(stderr, "\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
   mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
 
+  Omega_h::vtk::write_parallel("meshvtk", &mesh, mesh.dim());
+  
   fprintf(stderr, "\n*********Main Loop**********\n");
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
@@ -233,7 +240,6 @@ int main(int argc, char** argv) {
     //render(mesh,iter);
   }
   //printGridData(data_d);
-  Omega_h::vtk::write_parallel("extruded", &mesh, mesh.dim());
 
   fprintf(stderr, "done\n");
   return 0;

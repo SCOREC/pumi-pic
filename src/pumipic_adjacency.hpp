@@ -165,8 +165,8 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
   {
     const Omega_h::Real par_t = dist2plane/proj_lined;
     if(debug)
-      printf(" abs(proj_lined)>0;  par_t= %f dist2plane= %f "
-             "; proj_lined= %f \n", par_t, dist2plane, proj_lined);
+      printf(" abs(proj_lined)>0;  par_t= %.15f dist2plane= %.15f "
+             "; proj_lined= %.15f \n", par_t, dist2plane, proj_lined);
     if (par_t > bound_intol && par_t <= 1.0) //TODO test tol value
     {
       xpoint = origin + par_t * line;
@@ -196,7 +196,7 @@ OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector
       if(debug)
         printf("Line origin and destination are on the same side of face \n");
     }
-    else if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
+    else //if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
     {
       if(debug)
         printf("No/Self-intersection of ptcl origin with plane at origin."
@@ -336,10 +336,15 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               inverse = false;
 
             detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse);
-            if(debug)
+            if(debug) {
               printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
                 face_id, inverse, exposed, detected);
-
+              printf("face pt0: %.15f %.15f %.15f\n", face[0][0], face[0][1], face[0][2]);
+              printf("face pt1: %.15f %.15f %.15f\n", face[1][0], face[1][1], face[1][2]);
+              printf("face pt2: %.15f %.15f %.15f\n", face[2][0], face[2][1], face[2][2]);
+              printf("ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", ptcl, orig[0], 
+                orig[1], orig[2], dest[0],dest[1],dest[2]);
+            }
             if(detected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
@@ -362,11 +367,19 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             }
             // no line triangle intersection found for the current face
             // appears to be a guess at the next element based on the smallest BCC
+            o::LO min_ind = min_index(bcc, 4);
+            if(exposed) {
+              if(findex == min_ind) {
+                printf("ERROR: line-triangle intersection failed: ptcl %d face %d\n",
+                    pid, face_id);
+                ptcl_done[pid] = 1;
+                elem_ids_next[pid] = -1;
+              }             
+            }
             if(!exposed) {
               if(debug)
                 printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
               ++dface_ind;
-              o::LO min_ind = min_index(bcc, 4);
               if(findex == min_ind) {
                 elem_ids_next[pid] = dual_faces[dface_ind];
               }

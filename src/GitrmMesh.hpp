@@ -231,9 +231,7 @@ inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, o::LOs& csrPointers)
 
 inline void parseFileFieldData(std::stringstream &ss, std::string sFirst, 
    std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
-   bool &dataLine, int iComp=0, int nComp=1) {
-  
-  int verbose = 0;
+   bool &dataLine, int iComp=0, int nComp=1, int verbose=0) {
 
   if(verbose >5) {
     std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
@@ -254,8 +252,8 @@ inline void parseFileFieldData(std::stringstream &ss, std::string sFirst,
   if(dataLine) {
     if(verbose >5) {
       std::cout << " dataLine:: " << dataLine << "\n";
-    }    
-    if(sFirst != fieldName) {
+    }   
+    if(!(sFirst.empty() || sFirst == fieldName)) {
       sd = sFirst;
       data[nComp*ind+iComp] = std::stod(sd);
       if(verbose >5)
@@ -264,15 +262,16 @@ inline void parseFileFieldData(std::stringstream &ss, std::string sFirst,
   
       ++ind;
     }
-
-    while(ss >> sd){
-      if(verbose >5)
-        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                  << " " << std::stod(sd) << "\n";
-      
-      data[nComp*ind+iComp] = std::stod(sd);
-      ++ind;
-    } 
+    if(!ss.str().empty()) {
+      while(ss >> sd){
+        if(verbose >5)
+          std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
+                    << " " << std::stod(sd) << "\n";
+        
+        data[nComp*ind+iComp] = std::stod(sd);
+        ++ind;
+      } 
+    }
 
     if(verbose >5) {
       std::cout << " \n";

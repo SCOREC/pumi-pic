@@ -1,32 +1,9 @@
 #include <fstream>
 #include <cstdlib>
-#include <ctime>
-#include <random>
-#include "pumipic_adjacency.hpp"
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
-#include "GitrmMesh.hpp"
-// #include "unit_tests.hpp"  //??
-#include <Omega_h_library.hpp>
-/*
-#include "pumipic_kktypes.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <MemberTypes.h>
-#include <Distribute.h>
-#include <Kokkos_Core.hpp>
-#include "pumipic_library.hpp"
-*/
+#include "Omega_h_library.hpp"
 
-using particle_structs::fp_t;
-using particle_structs::lid_t;
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
-
-namespace o = Omega_h;
-namespace p = pumipic;
 
 //TODO remove mesh argument, once Singleton gm is used
 GitrmParticles::GitrmParticles(o::Mesh &m):
@@ -43,7 +20,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   o::Int ne = mesh.nelems();
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   //Element gids is left empty since there is no partitioning of the mesh yet
-  SCS::kkGidView element_gids("elem_gids", 0);
+  SCS::kkGidView element_gids("elem_gids", ne);
   if(elId>=0) {
     Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
       ptcls_per_elem(i) = 0;
@@ -72,7 +49,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-    printf("Constructing Particles\n");
+  printf("Constructing Particles\n");
   //Create the particle structure
   scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                    ptcls_per_elem, element_gids);
@@ -82,14 +59,14 @@ void GitrmParticles::initImpurityPtclsInADir(o::Real dTime, o::LO numPtcls,
    o::Real theta, o::Real phi, o::Real r, o::LO maxLoops, o::Real outer) {
   o::Write<o::LO> elemAndFace(3, -1); 
   o::LO initEl = -1;
-  findInitialBdryElemId(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
+  findInitialBdryElemIdInADir(theta, phi, r, initEl, elemAndFace, maxLoops, outer);
   o::LOs temp;
   defineParticles(numPtcls, temp, initEl);
   printf("Constructed Particles\n");
 
   //note:rebuild if particles to be added in new elems, or after emptying any elem.
   printf("\n Setting ImpurityPtcl InitCoords \n");
-  setImpurityPtclInitCoords(elemAndFace);
+  setImpurityPtclInitRndDistribution(elemAndFace);
 }
 
 
@@ -100,33 +77,39 @@ void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName,
   o::HostWrite<o::Real> readInData;
   // TODO piscesLowFlux/updated/input/particleSource.cfg has r,z,angles, CDF, cylSymm=1
   PtclInitStruct psin("ptcl_init_data", "nP", "x", "y", "z", "vx", "vy", "vz");
-  processPtclInitFile(fName, readInData, psin);
-  //TODO move readonly data definition and conversion to functions
-  o::Write<o::LO> elemIds(numPtcls, -1);
-  o::Write<o::LO> ptclsInElem(mesh.nelems());
+  processPtclInitFile(fName, readInData, psin, numPtcls);
+  numPtcls = psin.nP;
+  OMEGA_H_CHECK(numPtcls > 0 && mesh.nelems() >0);
+  
+  o::LOs elemIdOfPtcls;
+  o::LOs numPtclsInElems;
   o::Reals readInData_r(readInData);
-  findElemIdsOfPtclFileCoords(numPtcls, readInData_r, elemIds, ptclsInElem, maxLoops);
+  std::cout << "findElemIdsOfPtclFileCoordsByAdjSearch \n";
+  findElemIdsOfPtclFileCoordsByAdjSearch(numPtcls, readInData_r, elemIdOfPtcls,
+   numPtclsInElems);
 
-  o::LOs ptclsInElem_r(ptclsInElem);
   printf("Constructing SCS particles\n");
-  defineParticles(numPtcls, ptclsInElem_r, -1);
+  defineParticles(numPtcls, numPtclsInElems, -1);
 
-  o::LOs elemIds_r(elemIds);
   //note:rebuild to get mask if elem_ids changed
   printf("\n Setting ImpurityPtcl InitCoords \n");
-  o::Write<o::LO> numPtclsInElems;
-  o::LOs ptclIdPtrsOfElem_r;
-  o::LOs ptclIdsOfElem_r;
-  setImpurityPtclInitData(numPtcls, readInData_r, ptclIdPtrsOfElem_r, 
-    ptclIdsOfElem_r, elemIds_r, maxLoops);
+  o::LOs ptclIdPtrsOfElem;
+  o::LOs ptclIdsInElem;
+  
+  convertInitPtclElemIdsToCSR(numPtclsInElems, ptclIdPtrsOfElem, 
+    ptclIdsInElem, elemIdOfPtcls, numPtcls);
+  setImpurityPtclInitData(numPtcls, readInData_r, ptclIdPtrsOfElem, 
+    ptclIdsInElem, elemIdOfPtcls, maxLoops);
 }
 
-// use adjacency search using bcc and do search_mesh, starting with same initial 
-// element=that of any particle, found by part of findInitialBdryElemId.
-// Get #particles in each element, for SCS_LAMBDA to fill ptcl data in scs.
+// Find elemId of any particle, and start with that elem to search 
+// elem of all particles. Get #particles in each element,
+// for SCS_LAMBDA to fill ptcl data in scs.
 void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
-  const o::Reals& data_r, o::Write<o::LO>& elemIds, o::LOs& numPtclsInElems) {
+  const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems) {
   o::LO debug =1;
+  o::LO maxLoop = 10;
+  auto ne = mesh.nelems();
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -136,43 +119,54 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls,
   const auto down_r2fs = down_r2f.ab2b;
   const auto dual_faces = dual.ab2b;
   const auto dual_elems = dual.a2ab;
-  o::Write<o::LO> elemDet(2, -1);
-  // Beginning element id of this x,y,z
-  auto lamb = OMEGA_H_LAMBDA(const int elem) {
-    auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-    auto M = p::gatherVectors4x3(coords, tetv2v);
-
-    o::Vector<3> orig;
-    orig[0] = data_r[0];
-    orig[1] = data_r[1];
-    orig[2] = data_r[2];
-    o::Vector<4> bcc;
-    p::find_barycentric_tet(M, orig, bcc);
-    if(p::all_positive(bcc, 0)) {
-      elemDet[0] = elem;
-      if(debug > 3)
-        printf(" ORIGIN detected in elem %d \n", elem);
-    }
-  };
-  o::parallel_for(mesh.nelems(), lamb, "init_impurity_ptcl1");
-  o::HostRead<o::LO> elemId_bh(elemDet);
-  printf(" ELEM_beg %d \n", elemId_bh[0]);
   
-  if(elemId_bh[0] < 0) {
-    Omega_h_fail("Failed finding initial element in given direction\n");
-  }
-  o::Write<o::LO> numPtclsInElems_w(mesh.nelems(), 0);
-
-  //search all particles from this element
-  o::LO elmId = elemId_bh[0];
   auto size = data_r.size();
   auto dof = numPtcls/size;
+  //TODO
+  dof = 6;
+  o::Write<o::LO> elemDet(1, -1);
+  // Beginning element id of this x,y,z
+  o::LO elmBeg=-1, ii=0;
+  bool found = false;
+  while(!found) {
+    auto lamb = OMEGA_H_LAMBDA(const int elem) {
+      auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+      auto M = p::gatherVectors4x3(coords, tetv2v);
+
+      o::Vector<3> pos;
+      pos[0] = data_r[ii*dof];
+      pos[1] = data_r[ii*dof + 1];
+      pos[2] = data_r[ii*dof + 2];
+      o::Vector<4> bcc;
+      p::find_barycentric_tet(M, pos, bcc);
+      if(p::all_positive(bcc, 0)) {
+        elemDet[0] = elem;
+        if(debug > 3)
+          printf(" ORIGIN detected in elem %d \n", elem);
+      }
+    };
+    o::parallel_for(ne, lamb, "init_impurity_ptcl1");
+  
+    o::HostRead<o::LO> elemFound(elemDet);
+    elmBeg = elemFound[0];
+    if(elmBeg >= 0 || ii > maxLoop)
+      break;
+    ++ii;
+  }
+
+  printf(" ELEM_beg %d of_ptcl %d\n", elmBeg, ii);
+  if(elmBeg < 0)
+    Omega_h_fail("Failed finding initial element \n");
+  o::Write<o::LO> numPtclsInElems_w(ne, 0);
+  o::Write<o::LO> elemIdOfPtcls_w(numPtcls, -1);
   o::Write<o::LO> ptcl_done(numPtcls, 0);
+  o::LO maxSearch = 100;
+  //search all particles from this element
   auto lamb2 = OMEGA_H_LAMBDA(const int ip) {
     bool found = false;
     o::Vector<3> pos;
     o::Vector<4> bcc;
-    o::LO elem=elmId;
+    o::LO elem = elmBeg, is=0;
     while(!found) {
       auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
       auto M = p::gatherVectors4x3(coords, tetv2v);
@@ -183,7 +177,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls,
       if(p::all_positive(bcc, 0)) {
         if(debug > 3)
           printf(" ptcl %d detected in elem %d \n", ip, elem);
-        elemIds[ip] = elem;
+        elemIdOfPtcls_w[ip] = elem;
         ptcl_done[ip] = 1;
         Kokkos::atomic_fetch_add(&numPtclsInElems_w[elem], 1);  //TODO
         found = true;
@@ -202,58 +196,72 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls,
           ++findex;
         }//for
       }
+      if(is > maxSearch)
+        break;
+      ++is;
     }
-
   };
   o::parallel_for(numPtcls, lamb2, "init_impurity_ptcl2");
   o::LOs ptcl_done_r(ptcl_done);
   auto minFlag = o::get_min(ptcl_done_r);
-  OMEGA_H_CHECK(minFlag == 0);
+  OMEGA_H_CHECK(minFlag == 1);
   numPtclsInElems = o::LOs(numPtclsInElems_w);
+  elemIdOfPtcls = o::LOs(elemIdOfPtcls_w); 
 }
 
 // using ptcl sequential numbers 0..numPtcls
 void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
-  o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsInElem, o::LOs& elemIds,
+  o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsInElem, o::LOs& elemIdOfPtcls,
    o::LO numPtcls) {
+  o::LO verbose = 3;
   auto nel = mesh.nelems();
-  auto total = calculateCsrIndices(numPtclsInElems, ptclIdPtrsOfElem);
-  OMEGA_H_CHECK(numPtcls == total);
+  auto totalPtcls = calculateCsrIndices(numPtclsInElems, ptclIdPtrsOfElem);
+  OMEGA_H_CHECK(numPtcls == totalPtcls);
+  // csr data
   o::Write<o::LO> ptclIdsInElem_w(numPtcls, -1);
   o::Write<o::LO> ptclsFilledInElem(nel, 0); 
   auto convert = OMEGA_H_LAMBDA(o::LO id) {
-    auto el = elemIds[id];
+    auto el = elemIdOfPtcls[id];
     auto old = Kokkos::atomic_fetch_add(&ptclsFilledInElem[el], 1);
     OMEGA_H_CHECK(old < numPtclsInElems[el]);
     //elemId is sequential from 0 .. nel
-    auto pos = el+old ;
-    OMEGA_H_CHECK(pos< numPtclsInElems[el+1]);
+    auto beg = ptclIdPtrsOfElem[el];
+    auto pos = beg + old;
+    auto elLim =  numPtclsInElems[el]; 
+    if(verbose > 4)
+      printf("id:el,old,beg,pos %d %d %d %d %d limit %d \n",id,el,old,beg,pos, elLim);
+    OMEGA_H_CHECK(pos < ptclIdPtrsOfElem[el+1]);
     auto prev = Kokkos::atomic_exchange(&ptclIdsInElem_w[pos], id);
+    if(verbose > 4)
+      printf("previd %d \n", prev);
   };
-  o::parallel_for(total, convert, "Convert to CSR write");
+  o::parallel_for(totalPtcls, convert, "Convert to CSR write");
   ptclIdsInElem = o::LOs(ptclIdsInElem_w);   
 }
 
-
-//To use scs, SCS_LAMBDA is required, not o::parallel_for(numPtcls,OMEGA_H_LAMBDA())
-//since ptcls in each element is iterated. Constrct SCS with #particles in each 
-// elem is passed in, otherwise empty elements and unaccounted ptcls may not
-// show up in SCS_LAMBDA iterations. Plus mask will be 0. If mask is not used,
-// invalid particles may show up from other threads in the launch group.
+//To use scs, SCS_LAMBDA is required, not parallel_for(#ptcls,OMEGA_H_LAMBDA
+// since ptcls in each element is iterated in groups. Construct SCS with 
+// #particles in each elem passed in, otherwise newly added particles in 
+// originally empty elements won't show up in SCS_LAMBDA iterations. 
+// ie. their mask will be 0. If mask is not used, invalid particles may 
+// show up from other threads in the launch group.
 void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
-    const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
-    const o::LOs& elemIds, int maxLoops) {
+   const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsInElem, 
+   const o::LOs& elemIdOfPtcls, int maxLoops) {
   //o::LO debug =1;
   MESHDATA(mesh);
 
   auto size = data.size();
   auto dof = numPtcls/size;
+  //TODO
+  dof = 6;
   OMEGA_H_CHECK(dof==6);
   auto x_scs_d = scs->template get<PTCL_POS>();
   auto x_scs_prev_d = scs->template get<PTCL_POS_PREV>();
   auto vel_d = scs->template get<PTCL_VEL>();
   auto fid_d = scs->template get<XPOINT_FACE>();
   auto pid_scs = scs->template get<PTCL_ID>();
+  o::Write<o::LO> nextPtclInd(mesh.nelems(), 0);
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
       auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
@@ -261,11 +269,12 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
       o::Vector<4> bcc;
       auto pos = o::zero_vector<3>();
       o::Real vel[] = {0,0,0};
-      auto ptclStart = ptclIdPtrsOfElem[elem]; //from CSR
-      auto ind = ptclStart + pid;  // pid =ptcl index in this elem
-      OMEGA_H_CHECK(ind <= ptclIdPtrsOfElem[elem+1]);
-      auto ip = ptclIdsOfElem[ind]; //ip 0..numPtcls
-      OMEGA_H_CHECK(elemIds[ip] == elem);
+      auto nextInd = Kokkos::atomic_fetch_add(&nextPtclInd[elem], 1);
+      auto ind = ptclIdPtrsOfElem[elem] + nextInd;
+      //TODO check =
+      OMEGA_H_CHECK(ind < ptclIdPtrsOfElem[elem+1]);
+      auto ip = ptclIdsInElem[ind]; //ip 0..numPtcls
+      OMEGA_H_CHECK(elemIdOfPtcls[ip] == elem);
 
       pos[0] = data[ip*dof];
       pos[1] = data[ip*dof+1];
@@ -275,9 +284,6 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
       vel[2] = data[ip*dof+5];                                     
       p::find_barycentric_tet(M, pos, bcc);
       OMEGA_H_CHECK(p::all_positive(bcc, 0));
-      //test
-      Kokkos::atomic_exchange(&elemIds[ip], -1);
-      
       for(int i=0; i<3; i++) {
         x_scs_prev_d(pid,i) = pos[i];
         x_scs_d(pid,i) = pos[i];
@@ -291,65 +297,19 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
   scs->parallel_for(lambda);
 }
 
-
-//TO be deleted, use adjacency search instead
-void GitrmParticles::findElemIdsOfPtclFileCoords(o::LO numPtcls, 
-  const o::Reals& data_r, o::Write<o::LO>& elemIds, 
-  o::Write<o::LO>& ptclsInElem, int maxLoops) {
-  o::LO debug =1;
-
-  const auto dual = mesh.ask_dual();
-  const auto down_r2f = mesh.ask_down(3, 2);
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  const auto mesh2verts = mesh.ask_elem_verts();
-  const auto coords = mesh.coords();
-  const auto face_verts =  mesh.ask_verts_of(2);
-  const auto down_r2fs = down_r2f.ab2b;
-  const auto dual_faces = dual.ab2b;
-  const auto dual_elems = dual.a2ab;
-
-  //o::Write<o::LO> elem_ids(scs->capacity(),-1);
-  auto size = data_r.size();
-  auto dof = numPtcls/size;
-  auto lamb = OMEGA_H_LAMBDA(const int elem) {
-    auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-    auto M = p::gatherVectors4x3(coords, tetv2v);
-    o::Vector<3> pos;
-    o::LO nPtcls = 0;
-    for(auto ip=0; ip<numPtcls; ++ip) {
-      pos[0] = data_r[ip*dof];
-      pos[1] = data_r[ip*dof+1];
-      pos[2] = data_r[ip*dof+2];
-    
-      o::Vector<4> bcc;
-      p::find_barycentric_tet(M, pos, bcc);
-      if(p::all_positive(bcc, 0)) {
-        elemIds[ip] = elem;
-        nPtcls += 1;
-        if(debug > 3)
-          printf(" ptcl %d detected in elem %d \n", ip, elem);
-      }
-    }
-    //TODO elem ids sequential ?
-    ptclsInElem[elem] = nPtcls;
-  };
-  o::parallel_for(mesh.nelems(), lamb, "init_impurity_ptcl1");
-  o::LOs ptcls_found_r(elemIds);
-  auto minFlag = o::get_min(ptcls_found_r);
-  OMEGA_H_CHECK(minFlag == -1); //TODO -1 work ?
-}
-
 //Depends on netcdf format, and semicolon at the end of fields
 void GitrmParticles::processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclInitStruct &ps) {
-  o::LO verbose = 5;
+    o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO numPtcls) {
+  o::LO verbose = 1;
   std::ifstream ifs(fName);
   if (!ifs.is_open()) {
     std::cout << "Error opening PtclInitFile file " << fName << '\n';
     //exit(1); //TODO
   }
-  OMEGA_H_CHECK(ps.nComp == 6);
-  constexpr int nComp = 6;// ps.nComp ??
+  // can't set in ps, since field names in ps used below not from array
+  constexpr int nComp = 6;
+
+  OMEGA_H_CHECK(ps.nComp == nComp);
   bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
   std::string fieldNames[nComp];
   int ind[nComp];
@@ -376,26 +336,34 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     std::stringstream ss(line);
     //First string or number of EACH LINE is got here
     ss >> s1;
-    if(verbose >5){
+    if(verbose >4){
           std::cout << "str s1:" << s1 << "\n";
     }
     // Skip blank line
     if(s1.find_first_not_of(' ') == std::string::npos) {
       s1 = "";
-      continue;
+      if(!semi)
+       continue;
     }
     if(s1 == ps.nPname) {
       ss >> s2 >> s3;
-      ps.nPname = std::stoi(s3);
+      OMEGA_H_CHECK(s2 == "=");
+      ps.nP = std::stoi(s3);
+      if(numPtcls <= 0)
+        numPtcls = ps.nP;
+      else if(numPtcls < ps.nP)
+        ps.nP = numPtcls;
       foundNP = true;
       if(verbose >4)
-          std::cout << "nP:" << ps.nPname << "\n";
+          std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
     }
     if(!dataInit && foundNP) {
       data = o::HostWrite<o::Real>(ps.nComp*ps.nP); //destruct ?
       dataInit = true;
     }
     int compBeg = 0, compEnd = nComp;
+    // if ; ends data of each parameters, otherwise comment this block
+    // to search for each parameter for every data line
     for(int iComp = 0; iComp<nComp; ++iComp) {
       if(dataInit && dataLine[iComp]) {
         compBeg = iComp;
@@ -424,14 +392,14 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
   }
 }
 
-void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
+void GitrmParticles::setImpurityPtclInitRndDistribution(
+    o::Write<o::LO> &elemAndFace) {
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);
-
   const auto down_r2fs = down_r2f.ab2b;
   const auto dual_faces = dual.ab2b;
   const auto dual_elems = dual.a2ab;
@@ -442,7 +410,7 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
   auto vel_d = scs->template get<PTCL_VEL>();
   auto fid_d = scs->template get<XPOINT_FACE>();
   
-  // TODO replace this; now same number goes to all particles
+  // TODO replace this with device rnd; now same number goes to all particles
   std::srand(time(NULL));
   auto rnd1 = (double)(std::rand())/RAND_MAX;
   auto rnd2 = (double)(std::rand())/RAND_MAX;
@@ -511,7 +479,7 @@ void GitrmParticles::setImpurityPtclInitCoords(o::Write<o::LO> &elemAndFace) {
 
 // spherical coordinates (wikipedia), radius r=1.5m, inclination theta[0,pi] from the z dir,
 // azimuth angle phi[0, 2π) from the Cartesian x-axis (so that the y-axis has phi = +90°).
-void GitrmParticles::findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r,
+void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
      o::LO &initEl, o::Write<o::LO> &elemAndFace, o::LO maxLoops, o::Real outer){
 
   o::LO debug = 4;

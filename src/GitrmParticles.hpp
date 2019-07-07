@@ -37,27 +37,28 @@ public:
   void operator=(GitrmParticles const&) = delete;
 
   void defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId=-1);
-  void findInitialBdryElemId(o::Real theta, o::Real phi, o::Real r,
+  void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
-  void setImpurityPtclInitCoords(o::Write<o::LO> &);
+  void setImpurityPtclInitRndDistribution(o::Write<o::LO> &);
   void initImpurityPtclsInADir(o::Real, o::LO numPtcls,o::Real theta, 
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
     o::LO numPtcls, o::LO maxLoops);
   void processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclInitStruct &ps);
+    o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO numPtcls);
   void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
     o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
   void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
     const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
     const o::LOs& elemIds, int maxLoops=100);
   void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
-    const o::Reals& data, o::Write<o::LO>& elemIds, o::LOs& numPtclsInElems);
+    const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
-    o::LOs& ptclIdPtrsInElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
+    o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
     o::LO numPtcls);
+  
   SCS* scs;
   o::Mesh &mesh;
 };

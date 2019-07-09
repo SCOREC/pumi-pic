@@ -42,15 +42,16 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
   set(debug_flag "-g")
 endif()
 
+find_package(Omega_h 9 REQUIRED)
+set(pumipic_USE_Omega_h_DEFAULT ON)
+message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
+bob_public_dep(Omega_h)
+
 find_package(particle_structures 0.0.1 REQUIRED)
 set(pumipic_USE_particle_structures_DEFAULT ON)
 message(STATUS "Found particle_structures: ${particle_structures_VERSION}")
 bob_public_dep(particle_structures)
 
-find_package(Omega_h 9 REQUIRED)
-set(pumipic_USE_Omega_h_DEFAULT ON)
-message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
-bob_public_dep(Omega_h)
 
 #code
 add_subdirectory(src)

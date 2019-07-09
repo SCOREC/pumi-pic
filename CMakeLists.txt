@@ -33,7 +33,7 @@ endif()
 #get the mpirun binary/script
 get_filename_component(COMPILER_DIR "${CMAKE_CXX_COMPILER}" PATH)
 find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")
-set(MPIRUN_PROCFLAG "-np" CACHE string
+set(MPIRUN_PROCFLAG "-np" CACHE STRING
   "the command line flag to give process count to MPIRUN")
 
 #set debug flag

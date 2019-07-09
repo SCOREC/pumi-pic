@@ -260,11 +260,20 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
     row_element(i) = i;
   });
 
-  MaxChunkWidths<ExecSpace> maxer(ptcls, C_, nchunks);
-  lid_t* widths = new lid_t[nchunks];
-  Kokkos::parallel_reduce(num_elems, maxer, widths);
-  hostToDevice<lid_t>(chunk_widths, widths);
-  delete [] widths;
+  typedef Kokkos::TeamPolicy<ExecSpace> team_policy;
+  const team_policy policy(nchunks, C_);
+  int C_local = C_;
+  int num_elems_local = num_elems;
+  Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const typename team_policy::member_type& thread) {
+    const int chunk_id = thread.league_rank();
+    const int row_num = chunk_id * C_local + thread.team_rank();
+    lid_t width = 0;
+    if (row_num < num_elems_local) {
+      width = ptcls(row_num).first;
+    }
+    thread.team_reduce(Kokkos::Max<lid_t,ExecSpace>(width));
+    chunk_widths[chunk_id] = width;
+  });
 }
 
 template<class DataTypes, typename ExecSpace>

@@ -85,55 +85,54 @@ struct PtclInitStruct {
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter, 
     o::Write<o::LO> &data_d, bool print=true) {
-  const auto coords = mesh.coords();
-  const auto face_verts = mesh.ask_verts_of(2);
-  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
-  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto ppos_scs = scs->get<PTCL_POS_PREV>();
-  auto vel_scs = scs->get<PTCL_VEL>();
+  // test
+  o::Real radMax = 0.05; //m 0.0446+0.005
+  o::Real zMin = 0; //m height min
+  o::Real zMax = 0.15; //m height max 0.14275
+  o::Real htBead1 =  0.01275; //m ht of 1st bead
+  o::Real dz = 0.01; //m ht of beads 2..14
+
+  auto pisces_ids = mesh.get_array<o::LO>(o::FACE, "piscesTiRod_ind");
   auto pid_scs = scs->get<PTCL_ID>();
   auto xface_scs = scs->get<XPOINT_FACE>();
   auto xpt_scs = scs->get<XPOINT>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask >0) {
-      auto vel = p::makeVector3(pid, vel_scs);
-      auto pos = p::makeVector3(pid, pos_scs);
-
-    // find grid index
-      o::Real dr = 2.0; //TODO set same or pass from main
-      o::Real r, theta, phi;
-      p::cartesianToSpeherical(pos[0], pos[1], pos[2], r, theta, phi);
-      o::LO ir = (o::LO) r/dr;
-      data_d[ir] = data_d[ir] + 1;
-
-      o::Vector<3> old = pos;
-      o::LO intx = 0; 
-      if(xface_scs(pid)>=0) {
-        intx = 1;
-        pos = p::makeVector3(pid, xpt_scs);
+    auto fid = xface_scs(pid);
+    if(mask >0 && fid>=0) {
+      // test
+      auto xpt = p::makeVector3(pid, xpt_scs);
+      auto x = xpt[0], y = xpt[1], z = xpt[2];
+      o::Real rad = std::sqrt(x*x + y*y + z*z);
+      o::LO zInd = -1;
+      if(rad < radMax && z < zMax && z > zMin)
+        zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
+      
+      auto detId = pisces_ids[fid];
+      if(detId > -1) { //TODO
+        if(print)
+          printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
+            pid_scs(pid), zInd, detId, x, y, z, iter);
+        Kokkos::atomic_fetch_add(&data_d[detId], 1);
       }
-
-      if(print)
-        printf("ptclID %d iter %d pos %.5f %.5f %.5f prev %.5f %.5f %.5f actual %.5f %.5f %.5f exit %d\n", 
-          pid_scs(pid), iter, pos[0], pos[1], pos[2],
-          ppos_scs(pid,0), ppos_scs(pid,1), ppos_scs(pid,2),
-          old[0], old[1], old[2], intx );
     }
   };
   scs->parallel_for(lamb);
 }
 
+inline void printGridData(o::Write<o::LO> &data_d) {
+  o::HostRead<o::LO> data(data_d);
+  printf("index total\n");  
+  for(o::LO i=0; i<data_d.size(); ++i)
+      printf("%d %d\n", i, data[i]);
+}
 
 
 /** @brief Calculate distance of particles to domain boundary 
- * TODO add description of data size of bdryFaces, bdryFaceInds and indexes
+ * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
  */
 inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* scs,
   o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
-  const o::LO fsize, const o::LO fskip) {
+  const o::LO fsize, const o::LO fskip, bool debug = false) {
   const auto nel = mesh.nelems();
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts(); 
@@ -145,24 +144,17 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     if (mask > 0) {
-    // elem 42200
-      o::LO verbose = 1; //(elem%500==0)?2:1;
-
       o::LO beg = bdryFaceInds[elem];
       o::LO nFaces = bdryFaceInds[elem+1] - beg;
       if(nFaces >0) {
         o::Real dist = 0;
-        o::Real min = 1e10;
+        o::Real min = 1.0e10;
         o::Matrix<3, 3> face;
         o::Vector<3> point = o::zero_vector<3>();
         o::Vector<3> pt;
-        o::LO fe = -1;
-        o::LO fel = -1;
-        o::LO fi = -1;
-        o::LO fid = -1;
-        o::LO minRegion = -1;
-
-        if(verbose >2)
+        o::LO fe, fel, fi, fid, minRegion;
+        fe = fi = fel = fid = minRegion = -1;
+        if(debug)
           printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
             bdryFaceInds[elem+1]);
 
@@ -179,15 +171,15 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
             }
           }
           auto ref = p::makeVector3(pid, pos_d);
-          if(verbose > 2 && ii == 0)
+          if(debug && ii == 0)
             printf("ref: %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
           //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
           o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
           dist = p::osh_dot(pt - ref, pt - ref);
-          if(verbose >3)
+          if(debug)
             printf(": dist_%0.6f e_%d reg_%d fe_%d \n", dist, elem, region, fe);
 
-          if(dist < min) {
+          if(ii==0 || dist < min) {
             min = dist;
             fel = fe;
             fid = fi;
@@ -195,7 +187,7 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
             for(int i=0; i<3; ++i)
               point[0] = pt[i];
 
-            if(verbose >2){
+            if(debug){
               printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
                 elem, min, region, fi, fe);
               p::print_osh_vector(point, "Nearest_pt");
@@ -204,7 +196,7 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
         }
 
         min = std::sqrt(min);
-        if(verbose >1) {
+        if(debug) {
           printf("  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
             elem, min, fid, fel, minRegion);
         }
@@ -221,13 +213,5 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
 
 }
 
-/*
-//TODO this doesn't work !
-inline void printGridData(o::Write<o::LO> &data_d) {
-  //mask not 1 after rebuild at the ened of iterations in main
-  for(o::LO i=0; i<data_d.size(); ++i)
-      printf("ptclRad ind %d num %d\n", i, data_d(i));
-}
-*/
 #endif//define
 

@@ -933,6 +933,29 @@ void GitrmMesh::preProcessDistToBdry() {
 }
 
 
+void GitrmMesh::markDetectorCylinder() {
+
+  o::HostWrite<o::LO> fIds_h{277, 609, 589, 581, 567, 553, 539, 
+    525, 511, 497, 483, 469, 455, 154};
+  o::LOs faceIds(fIds_h);
+  auto numFaceIds = faceIds.size();
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  auto face_class_ids = mesh.get_array<o::ClassId>(2, "class_id");
+  o::Write<o::LO> faceTagIds(mesh.nfaces());
+  o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
+    faceTagIds[i] = -1;
+    for(auto id=0; id<numFaceIds; ++id) {
+      if(faceIds[id] == face_class_ids[i] && side_is_exposed[i]) {
+        faceTagIds[i] = id;
+      }
+    }
+  });
+
+  mesh.add_tag<o::LO>(o::FACE, "piscesTiRod_ind", 1, o::LOs(faceTagIds));
+
+}
+
+
 void GitrmMesh::printBdryFaceIds(bool printIds, o::LO minNums) {
   auto &numBdryFaceIds = this->numBdryFaceIds;
   auto &bdryFaceIds = this->bdryFaceIds;

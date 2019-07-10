@@ -141,8 +141,9 @@ public:
 
   void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct &);
   void load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs);
-    
- //TODO move these to suitable location
+  
+  void markDetectorCylinder();
+  //TODO move these to suitable location
   // Used in boundary init and if 2D field is used for particles
   o::Real BGRIDX0 = 0;
   o::Real BGRIDZ0 = 0;
@@ -231,7 +232,7 @@ inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, o::LOs& csrPointers)
 
 inline void parseFileFieldData(std::stringstream &ss, std::string sFirst, 
    std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
-   bool &dataLine, int iComp=0, int nComp=1, int verbose=0) {
+   bool &dataLine, int iComp=0, int nComp=1, int numPtcls=0, int verbose=0) {
 
   if(verbose >5) {
     std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
@@ -252,18 +253,23 @@ inline void parseFileFieldData(std::stringstream &ss, std::string sFirst,
   if(dataLine) {
     if(verbose >5) {
       std::cout << " dataLine:: " << dataLine << "\n";
-    }   
+    }
+    // TODO what if no number after =?    
     if(!(sFirst.empty() || sFirst == fieldName)) {
-      sd = sFirst;
-      data[nComp*ind+iComp] = std::stod(sd);
-      if(verbose >5)
-        std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                  << " " << std::stod(sd) << "\n";
-  
-      ++ind;
+      if(ind < numPtcls) { 
+        sd = sFirst; //??
+        data[nComp*ind+iComp] = std::stod(sd);
+        if(verbose >5)
+          std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
+                    << " " << std::stod(sd) << "\n";
+    
+        ++ind;
+      }
     }
     if(!ss.str().empty()) {
       while(ss >> sd){
+        if(ind >= numPtcls)
+          break;
         if(verbose >5)
           std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
                     << " " << std::stod(sd) << "\n";

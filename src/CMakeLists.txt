@@ -14,7 +14,6 @@ set(SOURCES
   pumipic_library.cpp
   GitrmMesh.cpp
   GitrmParticles.cpp
-  testParticles.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

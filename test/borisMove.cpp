@@ -75,7 +75,7 @@ void computeAvgPtclDensity(o::Mesh& mesh, SCS* scs){
 
 
 void rebuild(SCS* scs, o::LOs elem_ids) {
-  fprintf(stderr, "rebuilding..\n");
+  //fprintf(stderr, "rebuilding..\n");
   //updatePtclPositions(scs);
   const int scs_capacity = scs->capacity();
   auto pid_d =  scs->get<2>();
@@ -108,11 +108,11 @@ void search(o::Mesh& mesh, SCS* scs, int iter, o::Write<o::LO> &data_d) {
   assert(isFound);
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //elem_ids to be used in rebuild
-  fprintf(stderr, "Applying surface Model..\n");
+  //fprintf(stderr, "Applying surface Model..\n");
   //applySurfaceModel(mesh, scs, elem_ids);
 
   //output particle positions, for converting to vtk
-  //storeAndPrintData(mesh, scs, iter, data_d);
+  storeAndPrintData(mesh, scs, iter, data_d, true);
 
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
@@ -129,20 +129,21 @@ int main(int argc, char** argv) {
       typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
-
   // TODO use paramter file
   if(argc < 2)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file][ptcls_file]\n";
+      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file] " 
+      << "[ptcls_file][nPtcls][nIterations][dT]\n";
     exit(1);
   }
   if(argc < 3)
   {
-    fprintf(stderr, "\n ****** WARNING: No BField file provided ! \n");
+    printf("\n ****** WARNING: No BField file provided ! \n");
   }
 
   std::string bFile="", eFile="", profFile="", profFileDensity="", ptclSource="";
+  bool piscesRun = false;
   if(argc >2) {
     bFile = argv[2];
   }
@@ -157,7 +158,10 @@ int main(int argc, char** argv) {
   }
   if(argc > 6) {
     ptclSource  = argv[6];
-  }  
+    std::cout << " ptclSource " << ptclSource << "\n";
+  }
+  else 
+    std::cout << " WARNING: ptclSource not found \n";
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
@@ -167,28 +171,39 @@ int main(int argc, char** argv) {
   const auto coords = mesh.coords();
 
   Omega_h::Int ne = mesh.nelems();
-  fprintf(stderr, "Number of elements %d \n", ne);
+  printf("Number of elements %d \n", ne);
 
   GitrmMesh gm(mesh);
+  //TODO
+  piscesRun = true;
+  if(piscesRun)
+    gm.markDetectorCylinder();
 
   OMEGA_H_CHECK(!profFile.empty());
-  fprintf(stderr, "Adding Tags And Loadin Data\n");
+  printf("Adding Tags And Loadin Data\n");
   gm.addTagAndLoadData(profFile, profFileDensity);
-  fprintf(stderr, "Initializing Fields and Boundary data\n");
+  printf("Initializing Fields and Boundary data\n");
   OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
   gm.initEandBFields(bFile, eFile);
 
-  fprintf(stderr, "Initializing Boundary faces\n");
+  printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces();
-  fprintf(stderr, "Preprocessing Distance to boundary \n");
+  printf("Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 0;
+  int numPtcls = 100000;
+  // set with maxloops, neutrals can go far 
+  double dTime = 1e-8; //gitr:1e-8s for 10,000 iterations
+  int NUM_ITERATIONS = 10000; //100k;
+  if(argc > 7)
+    numPtcls  = atoi(argv[7]);
+  if(argc > 8)
+    NUM_ITERATIONS = atoi(argv[8]);
+  if(argc > 9)  
+    dTime = atof(argv[9]);
 
-  double dTime = 1e-7; // gitr:1e-8s for 10,000 iterations
-  int NUM_ITERATIONS = 100; //000;
   GitrmParticles gp(mesh); // (const char* param_file);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
@@ -199,9 +214,9 @@ int main(int argc, char** argv) {
 
   auto &scs = gp.scs;
 
-  // o::Real dr = 0.02; //2cm 
   // o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
-  o::Write<o::LO>data_d; //(radGrid, 0);//*thetaGrid*phiGrid, 0);
+  o::LO numGrid = 14;
+  o::Write<o::LO>data_d(numGrid, 0);//*thetaGrid*phiGrid, 0);
   
   fprintf(stderr, "\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
@@ -210,6 +225,7 @@ int main(int argc, char** argv) {
   Omega_h::vtk::write_parallel("meshvtk", &mesh, mesh.dim());
   
   fprintf(stderr, "\n*********Main Loop**********\n");
+  auto start_sim = std::chrono::system_clock::now(); 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->nPtcls() == 0) {
@@ -218,19 +234,15 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "=================iter %d===============\n", iter);
-    fprintf(stderr, "Calculating EField.. \n");
-    timer.reset();
     gitrm_findDistanceToBdry(scs, mesh, gm.bdryFaces, gm.bdryFaceInds, 
       SIZE_PER_FACE, FSKIP);
     gitrm_calculateE(scs, mesh);
-    fprintf(stderr, "Boris Move .. \n");
     gitrm_borisMove(scs, mesh, gm, dTime);
     //computeAvgPtclDensity(mesh, scs);
-    timer.reset();
-    //fprintf(stderr, "dist2bdry, E, Boris Move (seconds) %f\n", timer.seconds());
     //writeDispVectors(scs);
+    timer.reset();
     search(mesh, scs, iter, data_d);
-    fprintf(stderr, "time(s) %f\n", timer.seconds());
+    fprintf(stderr, "time(s) %f nPtcls %d\n", timer.seconds(), scs->nPtcls());
     if(scs->nPtcls() == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       fprintf(stderr, "Total iterations = %d\n", iter+1);
@@ -239,7 +251,10 @@ int main(int argc, char** argv) {
     //tagParentElements(mesh,scs,iter);
     //render(mesh,iter);
   }
-  //printGridData(data_d);
+  auto end_sim = std::chrono::system_clock::now();
+  std::chrono::duration<double> dur_sec = end_sim - start_sim;
+  std::cout << "Simulation duration " << dur_sec.count()/60 << " min.\n";
+  printGridData(data_d);
 
   fprintf(stderr, "done\n");
   return 0;

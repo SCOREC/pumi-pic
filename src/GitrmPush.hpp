@@ -181,7 +181,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       }
 
   //TODO
-      o::Real charge = 1; //TODO get using speciesID using enum
+      o::Real charge = 0; //1; //TODO get using speciesID using enum
       o::Real amu = 184.0; //TODO //impurity_amu = 184.0
 
       OMEGA_H_CHECK(amu >0 && dTime>0); //TODO dTime

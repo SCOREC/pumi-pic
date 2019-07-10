@@ -354,7 +354,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
       else if(numPtcls < ps.nP)
         ps.nP = numPtcls;
       foundNP = true;
-      if(verbose >4)
+      if(verbose >0)
           std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
     }
     if(!dataInit && foundNP) {
@@ -364,6 +364,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     int compBeg = 0, compEnd = nComp;
     // if ; ends data of each parameters, otherwise comment this block
     // to search for each parameter for every data line
+    
     for(int iComp = 0; iComp<nComp; ++iComp) {
       if(dataInit && dataLine[iComp]) {
         compBeg = iComp;
@@ -374,7 +375,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     if(dataInit) {
       for(int iComp = compBeg; iComp<compEnd; ++iComp) {
         parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
-          dataLine[iComp], iComp, nComp);
+          dataLine[iComp], iComp, nComp, numPtcls);
         
         if(!foundComp[iComp] && dataLine[iComp])
           foundComp[iComp] = true;

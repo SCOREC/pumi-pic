@@ -121,8 +121,10 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
   Omega_h::Vector<DIM> norm = Omega_h::normalize(cross);
   Omega_h::Real area = osh_dot(norm, cross);
 
-  if(std::abs(area) < 1e-6)  //TODO
+  if(std::abs(area) < 1e-9) { //TODO
+    printf("area is too small \n");
     return 0;
+  }
   Omega_h::Real fac = 1/(area*2.0);
   bc[0] = fac * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
   bc[1] = fac * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
@@ -135,9 +137,8 @@ OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vect
  */
 OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
     const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, bool reverse=false )
+    Omega_h::Vector<DIM> &xpoint, bool reverse=false, bool debug=false )
 {
-  const auto debug = 0;
   for(int i=0; i<DIM; ++i)
     xpoint[i] = 0;
 
@@ -236,7 +237,6 @@ template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                  o::Write<o::LO>& elem_ids, int looplimit=0) {
   bool debug =0 ;
-
   const auto dual = mesh.ask_dual();
   const auto down_r2f = mesh.ask_down(3, 2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -283,13 +283,16 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = e;
         auto ptcl = pid_d(pid);
-        if(debug)
+        //TODO
+        bool verb = 0;//(ptcl == 47456)? 1:0;
+
+        if(debug || verb)
           printf("Elem %d ptcl %d\n", elmId, ptcl);
         // Particle's parent element switched if not current elem. 
         if(elmId != elem_ids[pid]) {
           OMEGA_H_CHECK(loops > 0);
           elmId = elem_ids[pid];
-          if(debug)
+          if(debug|| verb)
             printf("Switching: Elem %d ptcl: %d\n", elmId, ptcl);
         }
         OMEGA_H_CHECK(elmId >= 0);
@@ -298,15 +301,21 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         auto dest = makeVector3(pid, xtgt_scs_d);
         auto orig = makeVector3(pid, x_scs_d);
         o::Vector<4> bcc;
+        bool discard = false;
         if(loops == 0) {
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, 0)) {
-            printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
-              ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-            OMEGA_H_CHECK(false);
+            printf("ptcl %d elem %d orig %.10f %.10f %.10f dest %.10f %.10f %.10f\n",
+              ptcl, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
+            // OMEGA_H_CHECK(false);
+
+            printf("ERROR: ptcl %d discarded \n", ptcl);
+            // TODO
+            discard = true;
           }
         }
+        bool detected = false;
         //check if the destination is this element
         find_barycentric_tet(M, dest, bcc);
         if(all_positive(bcc, 0)) {
@@ -314,15 +323,14 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
           elem_ids_next[pid] = elem_ids[pid];
           ptcl_done[pid] = 1;
-        } else {
-          if(debug)
+        } else if(!discard) {
+          if(debug|| verb)
             printf("ptcl %d checking adj elms\n", ptcl);
           //get element ID
           auto dface_ind = dual_elems[elmId];
           const auto beg_face = elmId *4;
           const auto end_face = beg_face +4;
           o::LO findex = 0;
-          bool detected = false;
           for(auto iface = beg_face; iface < end_face; ++iface) {
             const auto face_id = down_r2fs[iface];
             auto xpoint = o::zero_vector<3>();
@@ -336,7 +344,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               inverse = false;
 
             detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse);
-            if(debug) {
+            if(debug|| verb) {
               printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
                 face_id, inverse, exposed, detected);
               printf("face pt0: %.15f %.15f %.15f\n", face[0][0], face[0][1], face[0][2]);
@@ -351,34 +359,36 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                 xpoints_d(pid,i) = xpoint[i];
               xface_id(pid) = face_id;
               elem_ids_next[pid] = -1;
-              if(debug) {
+              //if(debug|| verb) {
                 printf("ptcl %d faceid %d detected and exposed, next parent elm %d\n",
                     ptcl, face_id, elem_ids_next[pid]);
-              }
+              //}
               break;
             } else if(detected && !exposed) {
               auto adj_elem  = dual_faces[dface_ind];
               elem_ids_next[pid] = adj_elem;
-              if(debug) {
+              if(debug|| verb) {
                 printf("ptcl %d faceid %d detected and !exposed, next parent elm %d\n",
                     ptcl, face_id, elem_ids_next[pid]);
               }
               break;
             }
-            // no line triangle intersection found for the current face
-            // appears to be a guess at the next element based on the smallest BCC
             o::LO min_ind = min_index(bcc, 4);
             if(exposed) {
               if(findex == min_ind) {
+                line_triangle_intx_simple(face, orig, dest, xpoint, inverse, true);
                 printf("ERROR: line-triangle intersection failed: ptcl %d face %d\n",
-                    pid, face_id);
-                ptcl_done[pid] = 1;
-                elem_ids_next[pid] = -1;
+                    ptcl, face_id);
+                discard = true;
               }             
             }
+
+            // no line triangle intersection found for the current face
+            // selecting next element based on the smallest BCC, but could be 
+            // overwritten by next valid entry
             if(!exposed) {
-              if(debug)
-                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
+              if(debug|| verb)
+                printf("ptcl %d faceid %d !detected and !exposed\n", ptcl, face_id);
               ++dface_ind;
               if(findex == min_ind) {
                 elem_ids_next[pid] = dual_faces[dface_ind];
@@ -388,6 +398,12 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           } //for iface
 
         } //else not in current element
+        //TODO
+        if(!detected && discard) {
+          ptcl_done[pid] = 1;
+          elem_ids_next[pid] = -1;
+          xface_id(pid) = -1;
+        }
       } //if active particle
     };
 
@@ -406,14 +422,32 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     ++loops;
 
     if(looplimit && loops > looplimit) {
-      if (debug)
+      //if (debug)
         fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   }
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
-  
+
+   // add debug
+  if(!found) {
+    auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if(mask > 0 && ptcl_done[pid] ==0) {
+        auto tetv2v = o::gather_verts<4>(mesh2verts, e);
+        auto M = gatherVectors4x3(coords, tetv2v);
+        auto dest = makeVector3(pid, xtgt_scs_d);
+        auto orig = makeVector3(pid, x_scs_d);
+        o::Vector<4> bcc;
+        find_barycentric_tet(M, orig, bcc);
+        auto ptcl = pid_d(pid);
+        printf("ptcl %d elem %d orig %.6f %.6f %.6f dest %.6f %.6f %.6f\n",
+          ptcl, e, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
+        printf("ERROR:notFound: pid %3d elem_ids %6d\n", ptcl, elem_ids[pid]);
+      }
+    };
+    scs->parallel_for(lamb);
+  }
   return found;
 }
 

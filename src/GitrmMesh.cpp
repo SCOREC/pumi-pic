@@ -935,7 +935,7 @@ void GitrmMesh::preProcessDistToBdry() {
 
 void GitrmMesh::markDetectorCylinder() {
 
-  o::HostWrite<o::LO> fIds_h{277, 609, 589, 581, 567, 553, 539, 
+  o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);
   auto numFaceIds = faceIds.size();

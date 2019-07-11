@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
   gm.preProcessDistToBdry();
   //gm.printBdryFaceIds(false, 20);
   //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 100000;
+  int numPtcls = 0; //100000;
   // set with maxloops, neutrals can go far 
   double dTime = 1e-8; //gitr:1e-8s for 10,000 iterations
   int NUM_ITERATIONS = 10000; //100k;
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
   if(ptclSource.empty())
     gp.initImpurityPtclsInADir(dTime, numPtcls, 110, 0, 1.5, 200,10);
   else
-    gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100);
+    gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100, true);
 
   auto &scs = gp.scs;
 

@@ -53,6 +53,14 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   //Create the particle structure
   scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                    ptcls_per_elem, element_gids);
+  
+  //TODO testing
+  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+    if(mask > 0) {
+      printf("ptclpid %d\n", pid);
+    }
+  };
+  scs->parallel_for(lambda);
 }
 
 void GitrmParticles::initImpurityPtclsInADir(o::Real dTime, o::LO numPtcls, 
@@ -71,7 +79,7 @@ void GitrmParticles::initImpurityPtclsInADir(o::Real dTime, o::LO numPtcls,
 
 
 void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName, 
-  o::LO numPtcls, o::LO maxLoops) {
+  o::LO numPtcls, o::LO maxLoops, bool printSource) {
 
   std::cout << "Loading particle initial data from file: " << fName << " \n";
   o::HostWrite<o::Real> readInData;
@@ -99,7 +107,7 @@ void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName,
   convertInitPtclElemIdsToCSR(numPtclsInElems, ptclIdPtrsOfElem, 
     ptclIdsInElem, elemIdOfPtcls, numPtcls);
   setImpurityPtclInitData(numPtcls, readInData_r, ptclIdPtrsOfElem, 
-    ptclIdsInElem, elemIdOfPtcls, maxLoops);
+    ptclIdsInElem, elemIdOfPtcls, maxLoops, printSource);
 }
 
 // Find elemId of any particle, and start with that elem to search 
@@ -247,7 +255,7 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
 // show up from other threads in the launch group.
 void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
    const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsInElem, 
-   const o::LOs& elemIdOfPtcls, int maxLoops) {
+   const o::LOs& elemIdOfPtcls, int maxLoops, bool printSource) {
   //o::LO debug =1;
   MESHDATA(mesh);
 
@@ -281,7 +289,12 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
       pos[2] = data[ip*dof+2];
       vel[0] = data[ip*dof+3];
       vel[1] = data[ip*dof+4];
-      vel[2] = data[ip*dof+5];                                     
+      vel[2] = data[ip*dof+5];                
+
+      if(printSource)
+        printf("ptclSource %d pos %.6f %.6f %.6f\n", pid_scs(pid), 
+          pos[0], pos[1], pos[2]);
+
       p::find_barycentric_tet(M, pos, bcc);
       OMEGA_H_CHECK(p::all_positive(bcc, 0));
       for(int i=0; i<3; i++) {
@@ -385,9 +398,12 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
   } //while
 
   OMEGA_H_CHECK(dataInit && foundNP);
-  for(int i=0; i<6; ++i)
+  printf("ptclCOUNTS of pos/vel components: ");
+  for(int i=0; i<6; ++i) {
     OMEGA_H_CHECK(foundComp[i]==true);
-
+    printf("%d ", ind[i]);
+  }
+  printf("\n");
   if(ifs.is_open()) {
     ifs.close();
   }

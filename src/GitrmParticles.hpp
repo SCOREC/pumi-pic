@@ -45,14 +45,14 @@ public:
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
-    o::LO numPtcls, o::LO maxLoops);
+    o::LO numPtcls, o::LO maxLoops=100, bool print=false);
   void processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO numPtcls);
   void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
     o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
   void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
     const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
-    const o::LOs& elemIds, int maxLoops=100);
+    const o::LOs& elemIds, int maxLoops=100, bool printSource=false);
   void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
     const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
@@ -85,7 +85,7 @@ struct PtclInitStruct {
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter, 
     o::Write<o::LO> &data_d, bool print=true) {
-  // test
+  // test TODO move test part to separate unit test
   o::Real radMax = 0.05; //m 0.0446+0.005
   o::Real zMin = 0; //m height min
   o::Real zMax = 0.15; //m height max 0.14275
@@ -102,7 +102,7 @@ inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter,
       // test
       auto xpt = p::makeVector3(pid, xpt_scs);
       auto x = xpt[0], y = xpt[1], z = xpt[2];
-      o::Real rad = std::sqrt(x*x + y*y + z*z);
+      o::Real rad = std::sqrt(x*x + y*y);
       o::LO zInd = -1;
       if(rad < radMax && z < zMax && z > zMin)
         zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
@@ -125,7 +125,6 @@ inline void printGridData(o::Write<o::LO> &data_d) {
   for(o::LO i=0; i<data_d.size(); ++i)
       printf("%d %d\n", i, data[i]);
 }
-
 
 /** @brief Calculate distance of particles to domain boundary 
  * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes

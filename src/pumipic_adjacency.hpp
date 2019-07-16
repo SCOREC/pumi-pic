@@ -14,7 +14,6 @@
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
 
-
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
@@ -234,7 +233,9 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 
 template < class ParticleType>
 bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
-                 o::Write<o::LO>& elem_ids, int looplimit=0) {
+                 Segment3d x_scs_d, Segment3d xtgt_scs_d, SegmentInt pid_d,
+                 o::Write<o::LO> elem_ids, o::Write<o::Real> xpoints_d,
+                 o::Write<o::LO> xface_id, int looplimit=0) {
   const int debug = 0;
 
   const auto dual = mesh.ask_dual();
@@ -248,9 +249,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   const auto dual_elems = dual.a2ab;
 
   const auto scsCapacity = scs->capacity();
-  auto x_scs_d = scs->template get<0>();
-  auto xtgt_scs_d = scs->template get<1>();
-  auto pid_d = scs->template get<2>();
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");

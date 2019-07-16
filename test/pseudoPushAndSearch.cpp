@@ -201,7 +201,13 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   Kokkos::Timer timer;
-  bool isFound = p::search_mesh<Particle>(*mesh, scs, elem_ids, maxLoops);
+  auto x = scs->get<0>();
+  auto xtgt = scs->get<1>();
+  auto pid = scs->get<2>();
+  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
+  o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
+  bool isFound = p::search_mesh<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
+                                          xpoints_d, xface_id, maxLoops);
   fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists

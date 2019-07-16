@@ -2,6 +2,7 @@
 #define PUMIPIC_KKTYPES_H
 
 #include <Kokkos_Core.hpp>
+#include <SellCSigma.h>
 #include <psTypes.h>
 #include <chrono>
 #include <thread>
@@ -13,6 +14,9 @@ using particle_structs::lid_t;
 using particle_structs::Vector3d;
 
 typedef Kokkos::DefaultExecutionSpace exe_space;
+typedef particle_structs::Segment<int, exe_space> SegmentInt;
+typedef particle_structs::Segment<Vector3d, exe_space> Segment3d;
+
 typedef Kokkos::View<lid_t*, exe_space::device_type> kkLidView;
 void hostToDeviceLid(kkLidView d, lid_t *h) {
   kkLidView::HostMirror hv = Kokkos::create_mirror_view(d);

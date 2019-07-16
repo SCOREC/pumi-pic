@@ -67,5 +67,30 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
     return EXIT_FAILURE;
   }
+
+  Omega_h::Write<Omega_h::LO> vtx_comm = picparts.createCommArray(0, 1, INT_MAX);
+
+  Omega_h::LOs vtx_owners = picparts.entOwners(0);
+  auto setOwnedVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
+    if (vtx_owners[vtx_id] == rank)
+      vtx_comm[vtx_id] = rank;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nents(0), setOwnedVtx);
+
+  picparts.reduceCommArray(0, pumipic::Mesh::MIN_OP, vtx_comm);
+
+  Omega_h::Write<Omega_h::LO> fail(1);
+
+  auto checkVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
+    if (vtx_comm[vtx_id] != vtx_owners[vtx_id])
+      fail[0] = 1;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtx);
+  
+  Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
+  if (fail_host[0]) {
+    fprintf(stderr, "Vtx comm failed on %d\n", rank);
+    return EXIT_FAILURE;
+  }
   return 0;
 }

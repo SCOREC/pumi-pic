@@ -101,16 +101,12 @@ namespace pumipic {
     //  Note: This is stored in case needed, but is not used beyond setup.
     Omega_h::LOs ent_local_rank_id_per_dim[4];
     //NOTE: Bounding means that the rank 'owns' at least one entity on the picpart boundary of the bounded part
-    //List (per dimension) of parts that only the boundary exist in the picpart
-    //  Note: boundary_parts[mesh_dim] is empty
-    Omega_h::HostWrite<Omega_h::LO> boundary_parts[4];
-    //List (per dimension) of parts that have the boundary of this core
-    //  Note: bounded_parts[mesh_dim] is empty
-    Omega_h::HostWrite<Omega_h::LO> bounded_parts[4];
+    //Flag for each buffered part. True if the entire part is buffered
+    Omega_h::Read<bool> is_complete_part[4];
     //Exclusive sum of number of bounded entities to send to bounded parts
     // size = bounded_parts.size()+1
     Omega_h::LOs offset_bounded_ents_per_rank_per_dim[4];
-    //Mapping for each rank this part bounds
-    Omega_h::LOs bounded_ents_to_comm_array_per_dim[4];
+    //The entities on the boundary
+    Omega_h::LOs bounded_ents_ids[4];
   };
 }

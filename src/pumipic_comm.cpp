@@ -1,9 +1,10 @@
 #include "pumipic_mesh.hpp"
 #include <Omega_h_for.hpp>
+#include <Omega_h_int_scan.hpp>
 namespace pumipic {
   void Mesh::setupComm(int dim, Omega_h::LOs global_ents_per_rank,
-                    Omega_h::LOs picpart_ents_per_rank,
-                    Omega_h::LOs ent_owners) {
+                       Omega_h::LOs picpart_ents_per_rank,
+                       Omega_h::LOs ent_owners) {
     int nents = picpart->nents(dim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
     Omega_h::Write<Omega_h::LO> comm_arr_index(nents,0);
@@ -16,14 +17,41 @@ namespace pumipic {
       if (host_offset_nents[i] != host_offset_nents[i+1] && i != commptr->rank())
         buffered_parts[dim][index++] = i;
     }
-    
+
+    Omega_h::LO num_parts = global_ents_per_rank.size();
+    //Mark parts that are completly buffered
+    Omega_h::Write<Omega_h::LO> is_complete(num_parts,0);
+    Omega_h::Write<Omega_h::LO> boundary_degree(num_parts,0);
+    auto checkCompleteness = OMEGA_H_LAMBDA(const Omega_h::LO part_id) {
+      const Omega_h::LO global_diff =
+         global_ents_per_rank[part_id+1] - global_ents_per_rank[part_id];
+      const Omega_h::LO picpart_diff =
+         picpart_ents_per_rank[part_id+1] - picpart_ents_per_rank[part_id];
+      is_complete[part_id] = global_diff == picpart_diff;
+      boundary_degree[part_id] = picpart_diff * (!is_complete[part_id]);
+    };
+    Omega_h::parallel_for(num_parts, checkCompleteness, "checkCompleteness");
+
     //Calculate rankwise local ids
+    //First number all entities by the global numbering
+    //  NOTE: This numbering is wrong for boundary part ents
     auto global_ids = global_ids_per_dim[dim];
     auto calculateRankLids = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
       const Omega_h::LO owner = ent_owners[ent_id];
       ent_rank_lids[ent_id] = global_ids[ent_id] - global_ents_per_rank[owner];
     };
     Omega_h::parallel_for(nents, calculateRankLids, "calculateRankLids");
+
+    //Renumber the boundary part ents using atomics
+    //  NOTE: We can do this for boundary ents because the order doesn't need to be consistent
+    Omega_h::Write<Omega_h::LO> picpart_offsets_tmp =
+      Omega_h::deep_copy(picpart_ents_per_rank, "picpart_offsets_tmp");
+    auto renumberBoundaryLids = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
+      const Omega_h::LO owner = ent_owners[ent_id];
+      if (!is_complete[owner]) {
+        ent_rank_lids[ent_id] = Kokkos::atomic_fetch_add(&(picpart_offsets_tmp[owner]),1);
+      }
+    }
     //Calculate communication array indices
     // Index = rank_lid + picpart_ents_per_rank
     auto calculateCommArrayIndices = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
@@ -36,6 +64,53 @@ namespace pumipic {
     ent_to_comm_arr_index_per_dim[dim] = Omega_h::LOs(comm_arr_index);
     ent_owner_per_dim[dim] = Omega_h::LOs(ent_owners);
     ent_local_rank_id_per_dim[dim] = Omega_h::LOs(ent_rank_lids);
+
+    //*************Determine boundary part information**************//
+
+    //Count offset of boundary entities
+    Omega_h::LOs boundary_ent_offsets = Omega_h::offset_scan(Omega_h::LOs(boundary_degree));
+
+    Omega_h::LO num_bounded = 0;
+    Kokkos::parallel_reduce(num_parts, OMEGA_H_LAMBDA(const int& i, Omega_h::LO& sum) {
+        sum += !is_complete[part_id];
+      }, num_bounded);
+    
+    //Send/recv the number of boundary entities to each owner
+    Omega_h::HostWrite<Omega_h::LO> is_complete_host(is_complete);
+    Omega_h::HostRead<Omega_h::LO> boundary_degree_host(boundary_degree);
+    Omega_h::HostWrite<Omega_h::LO> recv_boundary_degree_host(boundary_degree_host.size());
+    MPI_Request* send_requests = new MPI_Request[num_bounded];
+    MPI_Request* recv_requests = new MPI_Request[num_bounded];
+    for (int i = 0; i < num_parts; ++i) {
+      if (is_complete_host[i]) {
+        MPI_Isend(&(boundary_degree_host[i]), 1, MPI_INT, i, 0,
+                  commptr->get_impl(), send_requests+ index);
+        MPI_Irecv(&(recv_boundary_degree_host[i]), 1, MPI_INT, i, 0,
+                  commptr->get_impl(), send_requests+ index);
+      }
+    }
+    
+    //Create buffers to collect boundary entity ids
+    Omega_h::HostWrite<Omega_h::LO> boundary_ent_offsets_host(boundary_ent_offsets);
+    Omega_h::LO num_bound_ents = boundary_ent_offsets_host[num_parts];
+    Omega_h::Write<Omega_h::LO> boundary_lids(num_bound_ents);
+    auto gatherBoundedEnts = OMEGA_H_LAMBDA(const Omega_h::LO& ent_id) {
+      const Omega_h::LO own = ent_owners[ent_id];
+      const Omega_h::LO lid = ent_rank_lids[ent_id];
+      const Omega_h::LO start_id = boundary_ent_offsets[own];
+      if (!is_complete[own]) {
+        boundary_gids[start_id + lid] = global_ids[ent_id] - global_ents_per_rank[own];
+      }
+    };
+    Omega_h::parallel_for(nents,gatherBoundedEnts, "gatherBoundedEnts");
+
+    //Wait for number sends & receives to finish
+    MPI_Waitall(send_requests, num_bounded);
+    MPI_Waitall(recv_requests, num_bounded);
+
+    
+    delete [] send_requests;
+    delete [] recv_requests;
   }
 
   template <class T>

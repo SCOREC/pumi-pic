@@ -154,25 +154,17 @@ namespace pumipic {
 
     delete [] num_ents;
 
-    //****************Convert Tags to the picpart***********
+    //****************Convert Safe Tags to the picpart***********
     Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0, "safe_tag");
-    Omega_h::Write<Omega_h::GO> new_elem_gid(picpart->nelems(), 0, "elem_gids");
-    Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nelems(), 0, "elem_owners");
     Omega_h::LOs elm_ids = ent_ids[dim];
-    Omega_h::GOs elem_gid = ent_gid_per_dim[dim];
-    Omega_h::LOs owner = owner_dim[dim];
-    const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
+    const auto convertSafeToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
       const Omega_h::LO new_elem = elm_ids[elem_id];
       if (new_elem >= 0) {
         new_safe[new_elem] = is_safe[elem_id];
-        new_elem_gid[new_elem] = elem_gid[elem_id];
-        new_ent_owners[new_elem] = owner[elem_id];
       }
     };
-    Omega_h::parallel_for(mesh.nelems(), convertArraysToPicpart, "convertArraysToPicpart");
+    Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
     picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
-    picpart->add_tag(dim, "elem_gid", 1, Omega_h::GOs(new_elem_gid));
-    global_ids_per_dim[dim] = Omega_h::GOs(new_elem_gid);
     is_ent_safe = Omega_h::LOs(new_safe);
 
     /****************Convert gids of each dim to the picpart***********/

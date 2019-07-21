@@ -4,10 +4,9 @@
 #include <type_traits>
 namespace particle_structs {
 
-template <typename DataTypes, std::size_t N, typename ExecSpace>
+template <typename Type, typename ExecSpace>
 class Segment {
 public:
-  using Type=typename MemberTypeAtIndex<N,DataTypes>::type;
   using Base=typename BaseType<Type>::type;
 
   using ViewType=Kokkos::View<Type*, ExecSpace>;

@@ -71,12 +71,12 @@ class SellCSigma {
      Example: auto segment = scs->get<0>()
    */ 
   template <std::size_t N> 
-  Segment<DataTypes, N, ExecSpace> get() {
-    if (num_ptcls == 0)
-      return Segment<DataTypes, N, ExecSpace>();
+  Segment<typename MemberTypeAtIndex<N,DataTypes>::type, ExecSpace> get() {
     using Type=typename MemberTypeAtIndex<N, DataTypes>::type;
+    if (num_ptcls == 0)
+      return Segment<Type, ExecSpace>();
     MemberTypeView<Type>* view = static_cast<MemberTypeView<Type>*>(scs_data[N]);
-    return Segment<DataTypes, N, ExecSpace>(*view);
+    return Segment<Type, ExecSpace>(*view);
   }
 
 

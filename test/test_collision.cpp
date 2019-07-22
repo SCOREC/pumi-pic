@@ -85,7 +85,13 @@ int main(int argc, char** argv) {
   o::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  bool isFound = p::search_mesh<Particle>(mesh, scs, elem_ids, maxLoops);
+  auto x = scs->get<0>();
+  auto xtgt = scs->get<1>();
+  auto pid = scs->get<2>();
+  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
+  o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
+  bool isFound = p::search_mesh<Particle>(mesh, scs, x, xtgt, pid, elem_ids,
+                                          xpoints_d, xface_id, maxLoops);
 
   //coordinates
   const auto mesh2verts = mesh.ask_elem_verts();

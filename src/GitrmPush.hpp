@@ -15,26 +15,25 @@
 
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
-inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs, 
-  o::Mesh &mesh) {
+inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh) {
 
   auto angles = mesh.get_array<o::Real>(o::FACE, "angleBdryBfield");
   auto potentials = mesh.get_array<o::Real>(o::FACE, "potential");
   auto debyeLengths = mesh.get_array<o::Real>(o::FACE, "DebyeLength");
   auto larmorRadii = mesh.get_array<o::Real>(o::FACE, "LarmorRadius");
   auto childLangmuirDists = mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist");
-
+  auto* scs = gp.scs;
   auto pos_scs = scs->get<PTCL_POS>();
-  auto closestPoint_scs = scs->get<PTCL_BDRY_CLOSEPT>();
-  auto faceId_scs = scs->get<PTCL_BDRY_FACEID>();
   auto efield_scs  = scs->get<PTCL_EFIELD_PREV>();
   auto pid_scs = scs->get<PTCL_ID>();
+  const auto& closestPoints =  gp.closestPoints;
+  const auto& faceIds = gp.closestBdryFaceIds;
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) { 
     if(mask >0) {
       o::LO verbose = 1;//(elem %100 ==0)?3:0;
 
-      auto faceId = faceId_scs(pid);
+      auto faceId = faceIds[pid];
       if(faceId < 0) {
         //TODO check
         efield_scs(pid, 0) = 0;
@@ -51,7 +50,9 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
         o::Real childLangmuirDist = childLangmuirDists[faceId];
 
         auto pos = p::makeVector3(pid, pos_scs);
-        auto closest = p::makeVector3(pid, closestPoint_scs);
+        o::Vector<3> closest;
+        for(o::LO i=0; i<3; ++i)
+          closest[i] = closestPoints[pid*3+i];
         o::Vector<3> distVector = pos - closest; 
         o::Vector<3> dirUnitVector = o::normalize(distVector);
         o::Real md = p::osh_mag(distVector);
@@ -112,36 +113,29 @@ inline void gitrm_calculateE(particle_structs::SellCSigma<Particle>* scs,
 // is not possible and interpolation from all points of the TET is to be used.
 
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
-  o::Mesh &mesh, const GitrmMesh &gm, const o::Real dTime) {
-
+  const GitrmMesh &gm, const o::Real dTime) {
+  o::Mesh &mesh = gm.mesh;  
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
-
   o::LO preSheathE = USEPRESHEATHEFIELD;
-
   // Only 3D field from mesh tags
   o::LO use3dField = USE_3D_FIELDS;
   const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
   const auto EField = o::Reals( mesh.get_array<o::Real>(o::VERT, "EField"));
-
   // Only if used 2D field read from file
   o::Real  exz[] = {gm.EGRIDX0, gm.EGRIDZ0, gm.EGRID_DX, gm.EGRID_DZ};
   o::Real  bxz[] = {gm.BGRIDX0, gm.BGRIDZ0, gm.BGRID_DX, gm.BGRID_DZ};
   o::LO ebn[] = {gm.EGRID_NX, gm.EGRID_NZ, gm.BGRID_NX, gm.BGRID_NZ};
   const auto &EField_2d = gm.Efield_2d;
   const auto &BField_2d = gm.Bfield_2d;
-
   auto pos_scs = scs->get<PTCL_POS>();
   auto efield_scs  = scs->get<PTCL_EFIELD_PREV>();
   auto prev_pos_scs = scs->get<PTCL_POS_PREV>();
   auto vel_scs = scs->get<PTCL_VEL>();
-  auto xface_scs = scs->get<XPOINT_FACE>();
 
   auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask >0) {
       o::LO verbose = 1;//(elem%50==0)?4:0;
-      //reset wall-collision face id
-      xface_scs(pid) = -1;
       auto vel = p::makeVector3(pid, vel_scs); //at current_pos
       auto eField = p::makeVector3(pid, efield_scs); //at previous_pos
       auto posPrev = p::makeVector3(pid, prev_pos_scs);
@@ -210,8 +204,6 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       prev_pos_scs(pid, 0) = pos_scs(pid, 0);
       prev_pos_scs(pid, 1) = pos_scs(pid, 1);
       prev_pos_scs(pid, 2) = pos_scs(pid, 2);
-     
-      //fence ?
 
       // Next position and velocity
       pos_scs(pid, 0) = posPrev[0] + vel[0] * dTime;

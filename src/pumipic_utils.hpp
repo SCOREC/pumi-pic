@@ -30,51 +30,42 @@ namespace pumipic{
 
 /*
 NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
-device operator because, in Omega_h host functions are not defined 
-when Kokkos/CUDA is enabled.
+device operator, unless for HostWrite, HostRead
 The above is true for all functions using device-only stuff.
 It is safe to define OMEGA_H_DEVICE for functions, unless these are not
 used for host only (openmp) compilation.
 
 */
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=EPSILON)
-{
+    Omega_h::Real tol=EPSILON) {
   return std::abs(a-b) <= tol;
 }
 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, 
-  Omega_h::LO n=3, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(!almost_equal(a[i],b[i], tol))
-    {
+  Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<n; ++i) {
+    if(!almost_equal(a[i],b[i], tol)) {
       return false;
     }
   }
   return true;
 }
 
-OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<a.size(); ++i)
-  {
-    if(a[i] < -tol) // TODO set default the right tolerance
+OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, 
+  Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<a.size(); ++i) {
+    if(a[i] < -tol)
      return false;
   }
   return true;
 }
 
-template <class T> OMEGA_H_DEVICE Omega_h::LO 
-min_index(const T a, Omega_h::LO n)
-{
+template <class T> OMEGA_H_DEVICE  
+Omega_h::LO min_index(const T a, Omega_h::LO n) {
   Omega_h::LO ind=0;
   Omega_h::Real min = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i)
-  {
-    if(min > a[i+1])
-    {
+  for(Omega_h::LO i=0; i<n-1; ++i) {
+    if(min > a[i+1]) {
       min = a[i+1];
       ind = i+1;
     }
@@ -82,25 +73,33 @@ min_index(const T a, Omega_h::LO n)
   return ind;
 }
 
+template <class T> OMEGA_H_DEVICE  
+Omega_h::LO max_index(const T a, Omega_h::LO n) {
+  Omega_h::LO ind=0;
+  Omega_h::Real max = a[0];
+  for(Omega_h::LO i=0; i<n-1; ++i) {
+    if(max < a[i+1]) {
+      max = a[i+1];
+      ind = i+1;
+    }
+  }
+  return ind;
+}
+
 OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-   const Omega_h::Vector<3> &b)
-{
+  const Omega_h::Vector<3> &b) {
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
 
-OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
-{
+OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
 
 OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
- const Omega_h::LO n, Omega_h::Real tol=EPSILON)
-{
-  for(Omega_h::LO i=0; i<n; ++i)
-  {
-    if(std::abs(a[i]-b[i]) > tol)
-    {
+ const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<n; ++i) {
+    if(std::abs(a[i]-b[i]) > tol) {
       return false;
     }
   }
@@ -108,30 +107,23 @@ OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b
 }
 
 OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
-     const Omega_h::Vector<DIM> &vb)
-{
-  for(Omega_h::LO i=0; i<DIM; ++i)
-  {
+     const Omega_h::Vector<DIM> &vb) {
+  for(Omega_h::LO i=0; i<DIM; ++i) {
     if((va.data()[i] < 0 && vb.data()[i] > 0) ||
-       (va.data()[i] > 0 && vb.data()[i] < 0))
-    {
+       (va.data()[i] > 0 && vb.data()[i] < 0)) {
       return false;
     }
   }
   return true;
 }
 
-OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
-{
-  printf("M0 %.4f, %.4f, %.4f\n", M[0][0], M[0][1], M[0][2]);
-  printf("M1 %.4f, %.4f, %.4f\n", M[1][0], M[1][1], M[1][2]);
-  printf("M2 %.4f, %.4f, %.4f\n", M[2][0], M[2][1], M[2][2]);
-  printf("M3 %.4f, %.4f, %.4f\n", M[3][0], M[3][1], M[3][2]);
+OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M) {
+  for(int i=0; i<4; ++i)
+  printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
 
-inline void print_array(const double* a, int n=3, std::string name=" ")
-{
+inline void print_array(const double* a, int n=3, std::string name=" ") {
   if(name!=" ")
     std::cout << name << ": ";
   for(int i=0; i<n; ++i)
@@ -139,12 +131,12 @@ inline void print_array(const double* a, int n=3, std::string name=" ")
   std::cout <<"\n";
 }
 
-OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<3> &v, const char* name)
-{
+OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<3> &v,
+ const char* name) {
   printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
 }
-inline void print_osh_vector_host(const Omega_h::Vector<3> &v, const char* name)
-{
+inline void print_osh_vector_host(const Omega_h::Vector<3> &v, 
+  const char* name) {
   printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
 }
 
@@ -156,14 +148,14 @@ inline void print_osh_vector_host(const Omega_h::Vector<3> &v, const char* name)
  *  @param[in] comp, nth component, out of degree of freedom
  *  @return value corresponding to comp
  */
-OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, const o::Real gridx0, 
-  const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, 
-  const o::LO nz, const o::Vector<3> &pos, const bool cylSymm = false, 
+OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, 
+  const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
+  const o::Real dz, const o::LO nx, const o::LO nz, 
+  const o::Vector<3> &pos, const bool cylSymm = false, 
   const o::LO nComp = 1, const o::LO comp = 0) {
   
   o::LO verbose = 0;
-  if(nx*nz == 1)
-  {
+  if(nx*nz == 1) {
     return data[comp];
   }  
 
@@ -173,7 +165,7 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, const o::Real gr
   o::Real dim1 = pos[0];
   o::Real z = pos[2]; 
 
-  if(cylSymm){
+  if(cylSymm) {
       dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
   }
 
@@ -236,18 +228,20 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0,
 }
 
 
-OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, const o::Reals &coords, 
-   const o::LOs &face_verts){
-
+OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, 
+  const o::Reals &coords, const o::LOs &face_verts) {
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
   //TODO check if y and z are in required order
 
   // Mid point of face, as in GITR.  0.666666667 may be for float
   o::Vector<3> pos;
-  pos[0] = abc[0][0] + 0.666666667*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
-  pos[1] = abc[0][1] + 0.666666667*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
-  pos[2] = abc[0][2] + 0.666666667*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
+  pos[0] = abc[0][0] + 0.666666667*(abc[1][0] + 
+    0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
+  pos[1] = abc[0][1] + 0.666666667*(abc[1][1] + 
+    0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
+  pos[2] = abc[0][2] + 0.666666667*(abc[1][2] + 
+    0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
   return pos;
 }
 

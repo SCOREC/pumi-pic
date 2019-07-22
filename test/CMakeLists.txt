@@ -14,6 +14,7 @@ endfunction(make_test)
 #make_test(pseudoPushAndSearch pseudoPushAndSearch.cpp)
 #make_test(test_scs_fp test_scs_fp.cpp)
 make_test(borisMove borisMove.cpp)
+make_test(adj_precision test_adjSearchPrecision.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

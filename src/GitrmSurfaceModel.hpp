@@ -78,12 +78,11 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
   auto pid_scs = scs->get<PTCL_ID>();
   auto pos_scs = scs->get<PTCL_POS>();
   auto pos_prev_scs = scs->get<PTCL_POS_PREV>();
-  auto xpt_scs = scs->get<XPOINT>();
-  auto xface_scs = scs->get<XPOINT_FACE>();
   auto vel_scs = scs->get<PTCL_VEL>();
-
   auto weight_scs = scs->get<PTCL_WEIGHT>();
 
+  auto& xpoints = gp.collisionPoints;
+  auto& xfaces = gp.collisionPointFaceIds;
   //TODO check if this works, otherwise read and write as shown below
   //get mesh tag for boundary data id,xpt,vel. deep_copy doesn't work
   //auto xtag_w = deep_copy(mesh->get_array<o::Real>(o::FACE, "gridE"));
@@ -110,7 +109,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
     //mask is set for origin element, not for detected/exiting element
     if(mask >0 && elem_ids[pid]==-1) {
       auto elemId = e;
-      auto fid = xface_scs(pid);
+      auto fid = xfaces[pid];
 
       if(fid >= 0) {
         OMEGA_H_CHECK(side_is_exposed[fid]);
@@ -127,9 +126,10 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         auto bdryAtomZ = xtag_d[fInd*dof+ATOMZ];
       
 
-
         auto vel = p::makeVector3(pid, vel_scs );
-        auto xpt = p::makeVector3(pid, xpt_scs);
+        o::Vector<3> xpt;
+        for(o::LO i=0; i<3; ++i)
+          xpt[i] = xpoints[pid*3+i];
         auto pos = p::makeVector3(pid, pos_scs);
 
         o::Real dEdist = 0;
@@ -189,7 +189,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         if(totalYR > 0) {
           if(r7 > sputtProb) { //reflect
             //resetting hitface
-            xface_scs(pid) = -1;
+            xfaces[pid] = -1;
             // for next push
             elem_ids[pid] = elemId;
 

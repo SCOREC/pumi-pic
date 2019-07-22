@@ -24,8 +24,7 @@ typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, int, int, Vector3d,
        Vector3d, Vector3d> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, XPOINT, XPOINT_FACE, PTCL_BDRY_FACEID, 
-     PTCL_BDRY_CLOSEPT, PTCL_EFIELD_PREV, PTCL_VEL};
+enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL};
 typedef SellCSigma<Particle> SCS;
 
 class testParticles {

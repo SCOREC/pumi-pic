@@ -1,6 +1,6 @@
 #include <fstream>
 #include <algorithm>
-
+#include <vector>
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
 #include "Omega_h_reduce.hpp"
@@ -73,8 +73,7 @@ void GitrmMesh::parseGridLimits(std::stringstream &ss, std::string sfirst,
 }
 
 
-
-//Depends on netcdf format, and semi colon at the end of fields
+//Depend on netcdf format, and semi colon at the end of fields
 void GitrmMesh::processFieldFile(const std::string &fName,
     o::HostWrite<o::Real> &data, FieldStruct &fs, int nComp) {
 
@@ -88,13 +87,14 @@ void GitrmMesh::processFieldFile(const std::string &fName,
   }
 
   int ind0 = 0, ind1 = 0, ind2 = 0;
+  std::set<int> nans[3]; //per component
   bool foundMinR, gridLineR, foundMinZ, gridLineZ, dataInit;
   bool dataLine0, dataLine1, dataLine2, doneNr, doneNz;
-  bool foundComp0, foundComp1, foundComp2, foundMin0, foundMin1;
+  bool foundComp0, foundComp1, foundComp2, foundMin0, foundMin1, equal;
   std::string line, s1, s2, s3;
 
   foundComp0 = foundComp1 = foundComp2 = foundMin0 = foundMin1 = false;
-  doneNr = doneNz = dataLine0 = dataLine1 = dataLine2 = false;
+  doneNr = doneNz = dataLine0 = dataLine1 = dataLine2 = equal = false;
   foundMinR = gridLineR = foundMinZ = gridLineZ = dataInit = false;
 
   while(std::getline(ifs, line)) {
@@ -143,7 +143,8 @@ void GitrmMesh::processFieldFile(const std::string &fName,
       foundMin1 = true;
     }
     if(dataInit) {
-      parseFileFieldData(ss, s1, fs.rName, semi, data, ind0, dataLine0, 0, nComp);
+      parseFileFieldData(ss, s1, fs.rName, semi, data, ind0, dataLine0, 
+        nans[0], equal, 0, nComp);
     } 
     if(!foundComp0 && dataLine0) {
       foundComp0 = true;
@@ -151,7 +152,8 @@ void GitrmMesh::processFieldFile(const std::string &fName,
     // 2nd component
     if(nComp >1) {
       if(dataInit){
-        parseFileFieldData(ss, s1, fs.zName, semi, data, ind1, dataLine1, 1, nComp);
+        parseFileFieldData(ss, s1, fs.zName, semi, data, ind1, dataLine1, 
+          nans[1], equal, 1, nComp);
       }
       if(!foundComp1 && dataLine1) {
         foundComp1 = true;
@@ -160,7 +162,8 @@ void GitrmMesh::processFieldFile(const std::string &fName,
     // 3rd component
     if(nComp >2) {
       if(dataInit){
-        parseFileFieldData(ss, s1, fs.tName, semi, data, ind2, dataLine2, 2, nComp);
+        parseFileFieldData(ss, s1, fs.tName, semi, data, ind2, dataLine2, 
+          nans[2], equal, 2, nComp);
       }
       if(!foundComp2 && dataLine2) {
         foundComp2 = true;
@@ -190,6 +193,8 @@ void GitrmMesh::processFieldFile(const std::string &fName,
     }
     OMEGA_H_CHECK(foundComp0 && foundComp1 && foundComp2);
   }
+
+  //TODO remove invalid particles
 
   if(verbose >2){
     std::cout << "Found component " << fs.rName << " = " << foundComp0  << ":: " 
@@ -292,7 +297,6 @@ void GitrmMesh::initEandBFields(const std::string &bFile, const std::string &eFi
   EGRID_DX = (fel.rMax - fel.rMin)/fel.nR;
   EGRID_DZ = (fel.zMax - fel.zMin)/fel.nZ; 
 }
-
 
 void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file, 
   FieldStruct &fs) {
@@ -590,6 +594,7 @@ void GitrmMesh::initNearBdryDistData() {
   OMEGA_H_CHECK(BDRYFACE_SIZE > 0);
   OMEGA_H_CHECK(SIZE_PER_FACE > 0);
   auto nel = mesh.nelems();
+  printf("Init bdry arrays \n");
   // Flat arrays per element. Copying is passing device data.
   bdryFacesW = o::Write<o::Real>(nel * BDRYFACE_SIZE * (SIZE_PER_FACE-1), 0);
   numBdryFaceIds = o::Write<o::LO>(nel, 0);
@@ -778,7 +783,7 @@ void GitrmMesh::preProcessDistToBdry() {
   copyBdryFacesToSelf();
 
   auto fill = OMEGA_H_LAMBDA(o::LO elem) {
-    o::LO verbose = 0;
+    o::LO verbose = 1;
     // This has to be init by copyBdryFacesToSameElem.
     o::LO update = bdryFlags[elem];
     if(verbose >2) 
@@ -933,26 +938,31 @@ void GitrmMesh::preProcessDistToBdry() {
 }
 
 
-void GitrmMesh::markDetectorCylinder() {
-
+void GitrmMesh::markDetectorCylinder(bool renderPiscesCylCells) {
   o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);
   auto numFaceIds = faceIds.size();
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   auto face_class_ids = mesh.get_array<o::ClassId>(2, "class_id");
-  o::Write<o::LO> faceTagIds(mesh.nfaces());
+  o::Write<o::LO> faceTagIds(mesh.nfaces(), -1);
+  o::Write<o::LO> elemTagIds(mesh.nelems(), 0);
+  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
-    faceTagIds[i] = -1;
     for(auto id=0; id<numFaceIds; ++id) {
       if(faceIds[id] == face_class_ids[i] && side_is_exposed[i]) {
         faceTagIds[i] = id;
+        if(renderPiscesCylCells) {
+          auto elmId = p::elem_of_bdry_face(i, f2r_ptr, f2r_elem);
+          elemTagIds[elmId] = id;
+        }
       }
     }
   });
 
   mesh.add_tag<o::LO>(o::FACE, "piscesTiRod_ind", 1, o::LOs(faceTagIds));
-
+  mesh.add_tag<o::LO>(o::REGION, "piscesTiRodId", 1, o::LOs(elemTagIds));
 }
 
 

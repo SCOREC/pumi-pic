@@ -1,6 +1,7 @@
 #ifndef GITRM_PARTICLES_HPP
 #define GITRM_PARTICLES_HPP
 
+#include "Omega_h_mesh.hpp"
 #include "pumipic_adjacency.hpp"
 #include "pumipic_kktypes.hpp"
 #include <psTypes.h>
@@ -20,12 +21,12 @@ namespace o = Omega_h;
 namespace p = pumipic;
 
 // TODO: initialize these to its default values: ids =-1, reals=0
-typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, int, int, Vector3d, 
-       Vector3d, Vector3d> Particle;
+typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
+   int, fp_t, int, fp_t> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, XPOINT, XPOINT_FACE, PTCL_BDRY_FACEID, 
-     PTCL_BDRY_CLOSEPT, PTCL_EFIELD_PREV, PTCL_VEL};
+enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL, 
+  PTCL_CHARGE, FIRST_IONIZEZ, PREV_IONIZE, FIRST_IONIZET};
 typedef SellCSigma<Particle> SCS;
 struct PtclInitStruct;
 
@@ -45,22 +46,30 @@ public:
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
-    o::LO numPtcls, o::LO maxLoops=100, bool print=false);
+    o::LO numPtcls=0, o::LO maxLoops=100, bool print=false);
   void processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO numPtcls);
+    o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls);
   void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
     o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
   void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
     const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
-    const o::LOs& elemIds, int maxLoops=100, bool printSource=false);
+    const o::LOs& elemIds, int maxLoops=100);
   void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
     const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
     o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
     o::LO numPtcls);
-  
+  void printPtclSource(o::Reals& data, int nPtcls=0, int dof=6);
+
   SCS* scs;
   o::Mesh &mesh;
+
+  // particle dist to bdry
+  o::Reals closestPoints;
+  o::LOs closestBdryFaceIds;
+  // wall collision
+  o::Reals collisionPoints;
+  o::LOs collisionPointFaceIds;
 };
 
 
@@ -81,9 +90,9 @@ struct PtclInitStruct {
   int nP = 0;
 };
 
-
+//TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
-inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter, 
+inline void storeAndPrintData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter, 
     o::Write<o::LO> &data_d, bool print=true) {
   // test TODO move test part to separate unit test
   o::Real radMax = 0.05; //m 0.0446+0.005
@@ -91,16 +100,19 @@ inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter,
   o::Real zMax = 0.15; //m height max 0.14275
   o::Real htBead1 =  0.01275; //m ht of 1st bead
   o::Real dz = 0.01; //m ht of beads 2..14
-
+  SCS* scs = gp.scs;
   auto pisces_ids = mesh.get_array<o::LO>(o::FACE, "piscesTiRod_ind");
   auto pid_scs = scs->get<PTCL_ID>();
-  auto xface_scs = scs->get<XPOINT_FACE>();
-  auto xpt_scs = scs->get<XPOINT>();
+  const auto& xpoints = gp.collisionPoints;
+  const auto& xpointFids = gp.collisionPointFaceIds;
+
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto fid = xface_scs(pid);
+    auto fid = xpointFids[pid];
     if(mask >0 && fid>=0) {
       // test
-      auto xpt = p::makeVector3(pid, xpt_scs);
+      o::Vector<3> xpt;
+      for(o::LO i=0; i<3; ++i)
+        xpt[i] = xpoints[pid*3+i];
       auto x = xpt[0], y = xpt[1], z = xpt[2];
       o::Real rad = std::sqrt(x*x + y*y);
       o::LO zInd = -1;
@@ -120,26 +132,44 @@ inline void storeAndPrintData(o::Mesh& mesh, SCS* scs, o::LO iter,
 }
 
 inline void printGridData(o::Write<o::LO> &data_d) {
+  o::Write<o::LO>total(1,0);
+  o::parallel_for(data_d.size(), OMEGA_H_LAMBDA(const int& i) {
+    auto num = data_d[i];
+    if(num>0)
+      Kokkos::atomic_fetch_add(&total[0], num);
+  });
+  o::HostRead<o::LO> tot(total);
+  printf("total in device %d \n", tot[0]);
   o::HostRead<o::LO> data(data_d);
-  printf("index total\n");  
-  for(o::LO i=0; i<data_d.size(); ++i)
+  printf("index total  \n");  
+  for(o::LO i=0; i<data.size(); ++i)
       printf("%d %d\n", i, data[i]);
 }
 
 /** @brief Calculate distance of particles to domain boundary 
  * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
  */
-inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* scs,
-  o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
-  const o::LO fsize, const o::LO fskip, bool debug = false) {
+inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
+  const GitrmMesh &gm, bool debug = false) {
+  //o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
+  //const o::LO fsize, const o::LO fskip, bool debug = false) {
+  auto* scs = gp.scs;
+  o::Mesh &mesh = gm.mesh;  
   const auto nel = mesh.nelems();
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts(); 
+
+  const o::Reals& bdryFaces = gm.bdryFaces;
+  const o::LOs& bdryFaceInds = gm.bdryFaceInds;
+  const auto scsCapacity = scs->capacity();
+  o::Write<o::Real> closestPoints(scsCapacity*3, 0, "closest_points");
+  o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
+  o::LO fsize = SIZE_PER_FACE;
+  o::LO fskip = FSKIP;
   //fskip is 2, since 1st 2 are not part of face vertices
   OMEGA_H_CHECK(fsize > 0 && nel >0);
   auto pos_d = scs->template get<PTCL_POS>();
-  auto closestPoint_d = scs->template get<PTCL_BDRY_CLOSEPT>();
-  auto bdry_face_d = scs->template get<PTCL_BDRY_FACEID>();
+
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 
     if (mask > 0) {
@@ -200,17 +230,16 @@ inline void gitrm_findDistanceToBdry(  particle_structs::SellCSigma<Particle>* s
             elem, min, fid, fel, minRegion);
         }
         OMEGA_H_CHECK(fid >= 0);
-        bdry_face_d(pid) = fid;
-        closestPoint_d(pid, 0) = point[0];
-        closestPoint_d(pid, 1) = point[1];
-        closestPoint_d(pid, 2) = point[2];   
+        closestBdryFaceIds[pid] = fid;
+        for(o::LO j=0; j<<3; ++j)
+          closestPoints[pid*3+j] = point[j];
       } 
     }
   };
 
   scs->parallel_for(distRun);
-
+  gp.closestPoints = o::Reals(closestPoints);
+  gp.closestBdryFaceIds = o::LOs(closestBdryFaceIds);
 }
-
 #endif//define
 

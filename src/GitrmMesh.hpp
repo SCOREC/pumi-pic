@@ -1,6 +1,10 @@
 #ifndef GITRM_MESH_HPP
 #define GITRM_MESH_HPP
-
+#include <vector>
+#include <cfloat>
+#include <set>
+#include <algorithm>
+#include <stdexcept>
 #include "pumipic_adjacency.hpp"
 //#include "GitrmParticles.hpp"  // For dist2bdry
 #include "Omega_h_mesh.hpp"
@@ -32,13 +36,9 @@ namespace p = pumipic;
 // protoMPEx/input/gitrInput.cfg
 static constexpr o::LO BACKGROUND_Z = 1;
 static constexpr o::Real BACKGROUND_AMU = 2.0;
-
-
-// The define is good for device too, or pass by template ?
-static constexpr o::Real  DEPTH_DIST2_BDRY = 0.001; // 1mm
-static constexpr o::LO BDRYFACE_SIZE = 100;
+static constexpr o::Real DEPTH_DIST2_BDRY = 0.001; // 1mm
+static constexpr o::LO BDRYFACE_SIZE = 20;
 static constexpr o::LO BFS_DATA_SIZE = 100;
-
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };
@@ -142,7 +142,7 @@ public:
   void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct &);
   void load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs);
   
-  void markDetectorCylinder();
+  void markDetectorCylinder(bool render=false);
   //TODO move these to suitable location
   // Used in boundary init and if 2D field is used for particles
   o::Real BGRIDX0 = 0;
@@ -230,61 +230,76 @@ inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, o::LOs& csrPointers)
   return sum;
 }
 
-inline void parseFileFieldData(std::stringstream &ss, std::string sFirst, 
-   std::string fieldName, bool semi, o::HostWrite<o::Real> &data, int &ind,
-   bool &dataLine, int iComp=0, int nComp=1, int numPtcls=0, int verbose=0) {
-
-  if(verbose >5) {
-    std::cout << " ss: " << ss.str() << " : " << fieldName << " " << sFirst << "\n";
+inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind, 
+  int iComp, int nComp, std::set<int>& nans, bool debug=false) {
+  bool add2nan = false;
+  try {
+    double num = std::stod(sd);
+    if(! std::isnan(num)) {
+      data[nComp*ind+iComp] = num;      
+      ++ind;     
+    } else 
+      add2nan = true;
+  } catch (const std::invalid_argument& ia) {
+    add2nan = true;
   }
-  std::string s2 = "", sd = "";
+  if(add2nan) {
+      nans.insert(ind);
+      if(debug)
+        std::cout << "WARNING skipping Invalid  input : " << sd 
+          << " ind: " << ind << " iComp: " << iComp << "\n";
+  }
+}
 
+/* file format required:  
+  fieldName = num1 num2 ... ;  //for each component, any number of lines 
+  line = sFirst + ss, where ss may have '=' if line starts with fieldName.
+  semi is ';' to mark end of field, since file may have unused fieldNames
+  so that fieldName match can't be the end of previous field.
+  numPtcls is max ptcls desired. ind is index of component iComp of fieldName.
+  nComp=dof is total components to store in data array.  
+*/
+inline void parseFileFieldData(std::stringstream& ss, std::string sFirst, 
+   std::string fieldName, bool semi, o::HostWrite<o::Real>& data, int& ind,
+   bool& dataLine, std::set<int>& nans, bool& expectEqual, int iComp=0, 
+   int nComp=1, int numPtcls=0, bool debug=0) {
+
+  std::string s2 = "", sd = "";
   // restart index when string matches
   if(sFirst == fieldName) {
     ind = 0;
     ss >> s2;
-    OMEGA_H_CHECK("=" == s2);
     dataLine = true;
-    if(verbose >5) {
+    if(s2 != "=")
+      expectEqual = true;
+    // next character in the same line after fieldNme is '='' 
+    if(debug) {
       std::cout << " dataLine: " << dataLine << "\n";
-    }    
+      if(!s2.empty() && s2 != "=")
+        std::cout << "WARNING: Unexpected entry: " << s2 << " discarded\n";
+    }
   }
-
   if(dataLine) {
-    if(verbose >5) {
-      std::cout << " dataLine:: " << dataLine << "\n";
-    }
-    // TODO what if no number after =?    
+    // this is done for every line, not only that of fieldName string
     if(!(sFirst.empty() || sFirst == fieldName)) {
-      if(ind < numPtcls) { 
-        sd = sFirst; //??
-        data[nComp*ind+iComp] = std::stod(sd);
-        if(verbose >5)
-          std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                    << " " << std::stod(sd) << "\n";
-    
-        ++ind;
-      }
-    }
+      if(ind < numPtcls)
+        storeData(data, sFirst, ind, iComp, nComp, nans);
+    }  
     if(!ss.str().empty()) {
-      while(ss >> sd){
+      while(ss >> sd) {
         if(ind >= numPtcls)
           break;
-        if(verbose >5)
-          std::cout << " sd: " << sd << " ind: " << ind << " iComp:" << iComp 
-                    << " " << std::stod(sd) << "\n";
-        
-        data[nComp*ind+iComp] = std::stod(sd);
-        ++ind;
+        // '=' if not with keyword, accept only if first next
+        if(expectEqual) {
+          expectEqual = false;
+          if(sd=="=")
+            continue;
+        }
+        storeData(data, sd, ind, iComp, nComp, nans, debug);
       } 
     }
-
-    if(verbose >5) {
-      std::cout << " \n";
-    }
-    if(semi){
+    if(semi)
       dataLine = false;
-    }
   }
 }
 

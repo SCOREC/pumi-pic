@@ -80,4 +80,5 @@ mpi_test(borisMove 1
   ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
   ${TEST_DATA_DIR}/inputFields)
 
-mpi_test(adj_precision 1 ./adj_precision --kokkos-threads=1 )
+mpi_test(adj_precision 1 
+./adj_precision --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/cube.msh )

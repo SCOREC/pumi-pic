@@ -1,6 +1,7 @@
 #include "GitrmMesh.hpp"
 #include "GitrmPush.hpp"
 #include "GitrmParticles.hpp"
+#include "GitrmIonizeRecombine.hpp"
 //#include "GitrmSurfaceModel.hpp"
 #include "Omega_h_file.hpp"
 
@@ -41,7 +42,8 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
   scs->rebuild(scs_elem_ids);
 }
 
-void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d) {
+void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d,
+  GitrmIonizeRecombine& gir) {
   SCS* scs = gp.scs;
   assert(scs->nElems() == mesh.nelems());
   Omega_h::LO maxLoops = 100;
@@ -57,6 +59,9 @@ void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d
   assert(isFound);
   gp.collisionPoints = o::Reals(xpoints_d);
   gp.collisionPointFaceIds = o::LOs(xface_ids);
+  auto elm_ids = o::LOs(elem_ids);
+  gitrm_ionize(mesh, scs, gir, gp, elm_ids);
+  //gitrm_recombine(mesh, scs, gir, gp, elm_ids);
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //elem_ids to be used in rebuild
@@ -94,31 +99,29 @@ int main(int argc, char** argv) {
     printf("\n ****** WARNING: No BField file provided ! \n");
   }
 
-  std::string bFile="", eFile="", profFile="", profFileDensity="", ptclSource="";
+  std::string bFile="", eFile="", profFile="", profFileDensity="";
+  std::string ptclSource="", ionizeRecombFile="";
   bool piscesRun = false;
-  if(argc >2) {
+  if(argc >2)
     bFile = argv[2];
-  }
-  if(argc >3) {
+  if(argc >3)
     eFile = argv[3];
-  }
-  if(argc >4) {
+  if(argc >4)
     profFile = argv[4];
-  }
-  if(argc > 5) {
+  if(argc > 5)
     profFileDensity  = argv[5];
-  }
-  if(argc > 6) {
+  if(argc > 6)
     ptclSource  = argv[6];
-    std::cout << " ptclSource " << ptclSource << "\n";
+  if(argc >7) {
+    ionizeRecombFile = argv[7];
+    std::cout << " ionizeRecombFile " << ionizeRecombFile << "\n";
   }
-  else 
-    std::cout << " WARNING: ptclSource not found \n";
+
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
   auto mesh = Omega_h::read_mesh_file(argv[1], world);
-  printf("Number of elements %d \n", mesh.nelems());
+  printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 
   GitrmMesh gm(mesh);
   //TODO
@@ -133,6 +136,9 @@ int main(int argc, char** argv) {
   OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
   gm.initEandBFields(bFile, eFile);
 
+  OMEGA_H_CHECK(!ionizeRecombFile.empty());
+  GitrmIonizeRecombine gir(ionizeRecombFile);
+
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces();
   printf("Preprocessing Distance to boundary \n");
@@ -144,20 +150,20 @@ int main(int argc, char** argv) {
   // set with maxloops, neutrals can go far 
   double dTime = 1e-8; //gitr:1e-8s for 10,000 iterations
   int NUM_ITERATIONS = 10000; //100k;
-  if(argc > 7)
-    numPtcls  = atoi(argv[7]);
   if(argc > 8)
-    NUM_ITERATIONS = atoi(argv[8]);
-  if(argc > 9)  
-    dTime = atof(argv[9]);
+    numPtcls  = atoi(argv[8]);
+  if(argc > 9)
+    NUM_ITERATIONS = atoi(argv[9]);
+  if(argc > 10)  
+    dTime = atof(argv[10]);
 
-  GitrmParticles gp(mesh); // (const char* param_file);
+  GitrmParticles gp(mesh, dTime); // (const char* param_file);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   printf("Initializing Particles\n");
 
   if(ptclSource.empty())
-    gp.initImpurityPtclsInADir(dTime, numPtcls, 110, 0, 1.5, 200,10);
+    gp.initImpurityPtclsInADir(numPtcls, 110, 0, 1.5, 200,10);
   else
     gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100, false);
 
@@ -170,9 +176,8 @@ int main(int argc, char** argv) {
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
   mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
-
   Omega_h::vtk::write_parallel("meshvtk", &mesh, mesh.dim());
-  
+
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto start_sim = std::chrono::system_clock::now(); 
   Kokkos::Timer timer;
@@ -190,7 +195,8 @@ int main(int argc, char** argv) {
     //computeAvgPtclDensity(mesh, scs);
     //writeDispVectors(scs);
     timer.reset();
-    search(mesh, gp, iter, data_d);
+    search(mesh, gp, iter, data_d, gir);
+
     if(iter%100 ==0)
       fprintf(stderr, "time(s) %f nPtcls %d\n", timer.seconds(), scs->nPtcls());
     if(scs->nPtcls() == 0) {
@@ -205,9 +211,8 @@ int main(int argc, char** argv) {
   std::chrono::duration<double> dur_sec = end_sim - start_sim;
   std::cout << "Simulation duration " << dur_sec.count()/60 << " min.\n";
   printGridData(data_d);
-
-  Kokkos::Cuda::finalize();
   fprintf(stderr, "done\n");
+
   return 0;
 }
 

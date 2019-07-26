@@ -157,7 +157,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         o::Vector<3> psheathE;
 
         if(use3dField) { // for 2D field TODO
-          p::interpolate3dFieldTet(EField, bcc, elem, psheathE);//At previous_pos
+          p::interpolate3dFieldTet(EField, bcc, mesh2verts, elem, psheathE);//At previous_pos
         } else {
           p::interp2dVector(EField_2d, exz[0], exz[1], exz[2], exz[3], ebn[0], ebn[1],
             posPrev, psheathE, true);
@@ -168,7 +168,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
 
       // BField is 3 component array
       if(use3dField) {
-        p::interpolate3dFieldTet(BField, bcc, elem, bField);//At previous_pos      
+        p::interpolate3dFieldTet(BField, bcc, mesh2verts, elem, bField);//At previous_pos      
       } else {
         p::interp2dVector(BField_2d,  bxz[0], bxz[1], bxz[2], bxz[3], ebn[2], ebn[3], 
            posPrev, bField, true); //At previous_pos

@@ -235,7 +235,7 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
   bool add2nan = false;
   try {
     double num = std::stod(sd);
-    if(! std::isnan(num)) {
+    if(! std::isnan(num)) { 
       data[nComp*ind+iComp] = num;      
       ++ind;     
     } else 
@@ -262,7 +262,10 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
 inline void parseFileFieldData(std::stringstream& ss, std::string sFirst, 
    std::string fieldName, bool semi, o::HostWrite<o::Real>& data, int& ind,
    bool& dataLine, std::set<int>& nans, bool& expectEqual, int iComp=0, 
-   int nComp=1, int numPtcls=0, bool debug=0) {
+   int nComp=1, int numPtcls=0, bool debug=false) {
+
+  if(debug)
+    std::cout << ":: " <<  ind << " : " << ss.str() << " " << sFirst << " " << fieldName << "\n";
 
   std::string s2 = "", sd = "";
   // restart index when string matches
@@ -274,7 +277,7 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
       expectEqual = true;
     // next character in the same line after fieldNme is '='' 
     if(debug) {
-      std::cout << " dataLine: " << dataLine << "\n";
+      std::cout << " dataLine: " << dataLine << " of " << fieldName << "\n";
       if(!s2.empty() && s2 != "=")
         std::cout << "WARNING: Unexpected entry: " << s2 << " discarded\n";
     }
@@ -282,12 +285,15 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
   if(dataLine) {
     // this is done for every line, not only that of fieldName string
     if(!(sFirst.empty() || sFirst == fieldName)) {
-      if(ind < numPtcls)
-        storeData(data, sFirst, ind, iComp, nComp, nans);
+      if(ind < numPtcls || !numPtcls){
+        if(debug)
+          std::cout << " storing_first " << sFirst << "\n";
+        storeData(data, sFirst, ind, iComp, nComp, nans, debug);
+      }
     }  
     if(!ss.str().empty()) {
       while(ss >> sd) {
-        if(ind >= numPtcls)
+        if(numPtcls>0 && ind >= numPtcls)
           break;
         // '=' if not with keyword, accept only if first next
         if(expectEqual) {

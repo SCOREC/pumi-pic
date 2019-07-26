@@ -284,17 +284,9 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto elmId = e;
-        auto ptcl = pid_scs_d(pid);
-
-        // Particle's parent element switched if not current elem. 
-        if(elmId != elem_ids[pid]) {
-          OMEGA_H_CHECK(loops > 0);
-          elmId = elem_ids[pid];
-          if(debug)
-            printf("Switching: Elem %d ptcl: %d\n", elmId, ptcl);
-        }
+        auto elmId = elem_ids[pid];
         OMEGA_H_CHECK(elmId >= 0);
+        auto ptcl = pid_scs_d(pid);
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
         auto dest = makeVector3(pid, xtgt_scs_d);
@@ -356,9 +348,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             if(debug) {
               printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
                 face_id, flip, exposed, detected);
-              printf("face pt0: %.15f %.15f %.15f\n", face[0][0], face[0][1], face[0][2]);
-              printf("face pt1: %.15f %.15f %.15f\n", face[1][0], face[1][1], face[1][2]);
-              printf("face pt2: %.15f %.15f %.15f\n", face[2][0], face[2][1], face[2][2]);
+              for(int i=0; i<3; ++i)
+               printf("face:%d %.15f %.15f %.15f\n", i, face[i][0], face[i][1], face[i][2]);
               printf("ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", ptcl, orig[0], 
                 orig[1], orig[2], dest[0],dest[1],dest[2]);
             }
@@ -409,12 +400,13 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
                 ptcl_done[pid] = 1;
               } else { //if(min_bcc_elem >= 0) {
                 elem_ids_next[pid] = dual_faces[fid]; //min_bcc_elem;
-                //if(debug)
-                printf("ptcl %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
-                  elem_ids_next[pid], min_bcc_elem);
+                if(debug)
+                  printf("ptcl %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
+                   elem_ids_next[pid], min_bcc_elem);
               }
             } else {
               // current elem, but bcc failed to detect it on face/corner
+              printf("WARNING: particle %d leaked \n", ptcl);
               elem_ids_next[pid] = -1;
               ptcl_done[pid] = 1;
             }
@@ -466,32 +458,29 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   return found;
 }
 
-// Vector is not needed for bcc, TODO
-
 // To interpoalte field stored at vertices. Field has dof components, and 
 // stored in order 0,1,2,3 at tet's vertices. BCC in order of faces
 OMEGA_H_DEVICE Omega_h::Real interpolateTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, o::LO dof=1, 
-  o::LO comp=0) {
+  const Omega_h::Vector<4> &bcc, const o::LOs& mesh2verts, const Omega_h::LO elem, 
+  o::LO dof=1, o::LO comp=0) {
   OMEGA_H_CHECK(all_positive(bcc)==1);
   Omega_h::Real val = 0;
+  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
   for(Omega_h::LO fi=0; fi<4; ++fi) {//faces
     Omega_h::LO d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
-    Omega_h::LO fd = 4*dof*elem + d*dof + comp;
+    Omega_h::LO fd = d*dof + comp;
     val = val + bcc[fi]*field[fd];
   }
   return val;
 }
 
-
 OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const Omega_h::LO elem, 
-  Omega_h::Vector<3> &fv) {
+  const Omega_h::Vector<4> &bcc, const o::LOs& mesh2verts, 
+  const Omega_h::LO elem, Omega_h::Vector<3> &fv) {
   for(int i=0; i<3; ++i) {
-    fv[i] = interpolateTet(field, bcc, elem, 3, i);
+    fv[i] = interpolateTet(field, bcc, mesh2verts, elem, 3, i);
   }
 }
-
 
 OMEGA_H_DEVICE void findTetCoords(const Omega_h::LOs &mesh2verts,
 const Omega_h::Reals &coords, const Omega_h::LO elem, 
@@ -506,7 +495,7 @@ OMEGA_H_DEVICE void findBCCoordsInTet(const Omega_h::Reals &coords,
   Omega_h::Matrix<3, 4> mat;
   findTetCoords(mesh2verts, coords, elem, mat);
   const bool res = find_barycentric_tet(mat, xyz, bcc);
-  OMEGA_H_CHECK(res==0);
+  OMEGA_H_CHECK(res==1);
   OMEGA_H_CHECK(all_positive(bcc)==1);
 }
 

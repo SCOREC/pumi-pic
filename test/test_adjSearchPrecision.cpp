@@ -107,6 +107,7 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
   //const auto dual_faces = dual.ab2b;
   //const auto dual_elems = dual.a2ab;
   auto x_scs_prev_d = scs->get<0>();
+  auto x_scs_d = scs->get<1>();  
   int scsCapacity = scs->capacity();
   o::HostWrite<o::Real> rnd1(scsCapacity);
   o::HostWrite<o::Real> rnd2(scsCapacity);
@@ -117,15 +118,16 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
   }
   o::Write<o::Real>rand1(rnd1);
   o::Write<o::Real>rand2 (rnd2);
-  printf("done rand numbers\n");
 
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
       //auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
       //auto M = gatherVectors4x3(coords, tetv2v);
       //auto dface_ind = dual_elems[elem];
-      o::LO findex = 0;
-      for(auto iface = elem*4; iface < (elem+1)*4; ++iface) {
+      //o::LO findex = 0;
+      o::LO first = elem*4;
+      // NOTE: only first face
+      for(auto iface = first; iface < first+1; ++iface) {
         const auto faceId = down_r2fs[iface];
         //o::LO exposed = side_is_exposed[faceId];
         const auto fv2v = o::gather_verts<3>(face_verts, faceId);
@@ -144,16 +146,15 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
         auto dirCent = o::normalize(dvec);
         o::Real delta = fac * rn1;
         pos = pos + delta*dirCent;
-
         for(int i=0; i<3; i++) {
           x_scs_prev_d(pid,i) = pos[i];
         }
 
         if(debug)
-          printf("elm %d:pos %.4f %.4f %.4f \n", elem, pos[0], pos[1], pos[2]);
+          printf("elm %d initpos %.4f %.4f %.4f \n", elem, pos[0], pos[1], pos[2]);
         //if(!exposed)
         //  ++dface_ind;
-        ++findex;
+        //++findex;
       } //faces
     } //mask
   };
@@ -161,34 +162,52 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
 }
 
 // not in good shape
-void push(SCS* scs) {
+void push(o::Mesh& mesh, SCS* scs) {
+  bool debug = true;
+  const auto down_r2f = mesh.ask_down(3, 2);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto face_verts =  mesh.ask_verts_of(2);
+  const auto down_r2fs = down_r2f.ab2b;
+  auto x_scs_prev_d = scs->get<0>();
+  auto x_scs_d = scs->get<1>();  
+  int scsCapacity = scs->capacity();
+  o::HostWrite<o::Real> rnd1(scsCapacity);
+  o::HostWrite<o::Real> rnd2(scsCapacity);
+  std::srand(time(NULL));
+  for(auto i=0; i<scsCapacity; ++i) {
+    rnd1[i] = (double)(std::rand())/RAND_MAX;
+    rnd2[i] = (double)(std::rand())/RAND_MAX;
+  }
+  o::Write<o::Real>rand1(rnd1);
+  o::Write<o::Real>rand2 (rnd2);
 
+  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+    if(mask > 0) {
 
-  auto pos_d = scs->get<0>();
-  auto new_pos_d = scs->get<1>();
-  const auto capacity = scs->capacity();
-  
-  fp_t distance = 0.5;
-  fp_t dx = 0.1;
-  fp_t dy = 0.2;
-  fp_t dz = 0.3;
+      o::LO first = elem*4;
+      // NOTE: only first face
+      for(auto iface = first; iface < first+1; ++iface) {
+        const auto faceId = down_r2fs[iface];
+        const auto fv2v = o::gather_verts<3>(face_verts, faceId);
+        const auto face = p::gatherVectors3x3(coords, fv2v);
+        auto rn1 = rand1[pid];
+        auto rn2 = rand2[pid];
+        auto pos = p::makeVector3(pid, x_scs_prev_d);
+        // move particle on the face in/out of same tet
+        auto next = pos+ 2*(rn1-0.5)*(face[1] - face[0]) +
+                    2*(rn2-0.5)*(face[2] - face[0]);
 
-  fp_t disp[4] = {distance,dx,dy,dz};
-  p::kkFpView disp_d("direction_d", 4);
-  p::hostToDeviceFp(disp_d, disp);
-
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    fp_t delta[3];
-    delta[0] = disp_d(0)*disp_d(1);
-    delta[1] = disp_d(0)*disp_d(2);
-    delta[2] = disp_d(0)*disp_d(3);
-    new_pos_d(pid,0) = pos_d(pid,0) + delta[0];
-    new_pos_d(pid,1) = pos_d(pid,1) + delta[1];
-    new_pos_d(pid,2) = pos_d(pid,2) + delta[2];
+        for(int i=0; i<3; i++)
+          x_scs_d(pid,i) = next[i];
+        if(debug)
+          printf("elm %d next %.4f %.4f %.4f \n", elem, next[0], next[1], next[2]);
+      } //faces
+    } //mask
   };
-  scs->parallel_for(lamb);
-
+  scs->parallel_for(lambda);
 }
+
 
 int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
@@ -228,7 +247,7 @@ int main(int argc, char** argv) {
                       nPtcls, ptcls_per_elem, element_gids);
 
   printf("Setting initial positions \n");
-  o::Real fac=1.0e-6;
+  o::Real fac=0;//1.0e-6;
   setPtclInitialCoords(mesh, scs, fac);
   setPtclIds(scs);
 
@@ -238,7 +257,7 @@ int main(int argc, char** argv) {
       break;
     }
     printf("-----iter----- %d\n", iter);
-    push(scs);
+    push(mesh, scs);
     search(mesh, scs, iter);
   }
   //cleanup

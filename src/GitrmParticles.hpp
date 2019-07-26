@@ -1,8 +1,7 @@
 #ifndef GITRM_PARTICLES_HPP
 #define GITRM_PARTICLES_HPP
 
-#include "Omega_h_mesh.hpp"
-#include "pumipic_adjacency.hpp"
+#include "GitrmMesh.hpp"
 #include "pumipic_kktypes.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
@@ -22,17 +21,19 @@ namespace p = pumipic;
 
 // TODO: initialize these to its default values: ids =-1, reals=0
 typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
-   int, fp_t, int, fp_t> Particle;
+   int, fp_t, int, fp_t, fp_t> Particle;
 
 // 'Particle' definition retrieval positions. 
 enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL, 
-  PTCL_CHARGE, FIRST_IONIZEZ, PREV_IONIZE, FIRST_IONIZET};
+  PTCL_CHARGE, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
+  PTCL_PREV_RECOMBINE};
+
 typedef SellCSigma<Particle> SCS;
 struct PtclInitStruct;
 
 class GitrmParticles {
 public:
-  GitrmParticles(o::Mesh &m);
+  GitrmParticles(o::Mesh &m, double dT);
   ~GitrmParticles();
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
@@ -42,7 +43,7 @@ public:
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
   void setImpurityPtclInitRndDistribution(o::Write<o::LO> &);
-  void initImpurityPtclsInADir(o::Real, o::LO numPtcls,o::Real theta, 
+  void initImpurityPtclsInADir(o::LO numPtcls,o::Real theta, 
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
@@ -61,6 +62,7 @@ public:
     o::LO numPtcls);
   void printPtclSource(o::Reals& data, int nPtcls=0, int dof=6);
 
+  o::Real timeStep;
   SCS* scs;
   o::Mesh &mesh;
 

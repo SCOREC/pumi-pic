@@ -8,9 +8,9 @@
 
 
 //TODO remove mesh argument, once Singleton gm is used
-GitrmParticles::GitrmParticles(o::Mesh &m):
-  mesh(m) {
-}
+GitrmParticles::GitrmParticles(o::Mesh &m, double dT):
+  mesh(m), timeStep(dT)
+{}
 
 GitrmParticles::~GitrmParticles() {
   delete scs;
@@ -68,7 +68,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   printf("TOTALptcls in scs with mask>0 %d\n", tot[0]);
 }
 
-void GitrmParticles::initImpurityPtclsInADir(o::Real dTime, o::LO numPtcls, 
+void GitrmParticles::initImpurityPtclsInADir(o::LO numPtcls, 
    o::Real theta, o::Real phi, o::Real r, o::LO maxLoops, o::Real outer) {
   o::Write<o::LO> elemAndFace(3, -1); 
   o::LO initEl = -1;
@@ -272,10 +272,16 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
   //TODO
   dof = 6;
   OMEGA_H_CHECK(dof==6);
-  auto x_scs_d = scs->template get<PTCL_POS>();
-  auto x_scs_prev_d = scs->template get<PTCL_POS_PREV>();
-  auto vel_d = scs->template get<PTCL_VEL>();
-  auto pid_scs = scs->template get<PTCL_ID>();
+  auto x_scs_d = scs->get<PTCL_POS>();
+  auto x_scs_prev_d = scs->get<PTCL_POS_PREV>();
+  auto vel_d = scs->get<PTCL_VEL>();
+  auto pid_scs = scs->get<PTCL_ID>();
+  auto charge_scs = scs->get<PTCL_CHARGE>();
+  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
+  auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
+  auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
+  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
+
   o::Write<o::LO> nextPtclInd(mesh.nelems(), 0);
   
   //TODO testing
@@ -307,7 +313,13 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
         x_scs_d(pid,i) = pos[i];
         vel_d(pid, i) = vel[i];
       }
+
       pid_scs(pid) = pid;
+      charge_scs(pid) = 0;
+      first_ionizeZ_scs(pid) = 0;
+      prev_ionize_scs(pid) = 0;
+      first_ionizeT_scs(pid) = 0;
+      prev_recomb_scs(pid) = 0;
     }
   };
   scs->parallel_for(lambda);
@@ -334,6 +346,7 @@ void GitrmParticles::printPtclSource(o::Reals& data, int nPtcls, int dof) {
 
 /* Depend on netcdf format, and semicolon at the end of fields
    fieldName = num1 num2 ... ;  //for each component, any number of lines 
+   NOTE: stored in a single data array of 6 components.
 */
 void GitrmParticles::processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls) {
@@ -367,8 +380,8 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
   while(std::getline(ifs, line)) {
     if(verbose >4)
       std::cout << "Processing  line " << line << '\n';
-    // depend on semicolon to mark the end of fields, unless
-    // no unused fields are present in file
+    // depend on semicolon to mark the end of fields, otherwise
+    // data of unused fields added to the previous valid field.
     bool semi = (line.find(';') != std::string::npos);
     std::replace (line.begin(), line.end(), ',' , ' ');
     std::replace (line.begin(), line.end(), ';' , ' ');
@@ -401,21 +414,21 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
           std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
     }
     if(!dataInit && foundNP) {
-      data = o::HostWrite<o::Real>(ps.nComp*ps.nP); //destruct ?
+      data = o::HostWrite<o::Real>(ps.nComp*ps.nP);
       dataInit = true;
     }
     int compBeg = 0, compEnd = nComp;
     // if ; ends data of each parameters, otherwise comment this block
     // to search for each parameter for every data line
-    if(false) { //TODO
-      for(int iComp = 0; iComp<nComp; ++iComp) {
-        if(dataInit && dataLine[iComp]) {
-          compBeg = iComp;
-          compEnd = compBeg + 1;
-        }
+    for(int iComp = 0; iComp<nComp; ++iComp) {
+      if(dataInit && dataLine[iComp]) {
+        compBeg = iComp;
+        compEnd = compBeg + 1;
       }
     }
+
     if(dataInit) {
+      // stored in a single data array of 6 components.
       for(int iComp = compBeg; iComp<compEnd; ++iComp) {
         parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
           dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls);

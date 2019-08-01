@@ -9,19 +9,22 @@
 class GitrmIonizeRecombine {
 public:
   GitrmIonizeRecombine(const std::string &fName);
-  void initIonizeRecombRateData(const std::string &fName);
-  o::Real IONIZE_TEM_GRID_MIN = 0;
-  o::Real IONIZE_DENS_GRID_MIN = 0;
-  o::Real IONIZE_TEM_GRID_UNIT = 0;
-  o::Real IONIZE_DENSITY_GRID_UNIT = 0;
-  o::LO IONIZE_TEM_GRID_SIZE = 0;
-  o::LO IONIZE_DENSITY_GRID_SIZE = 0;
-  o::Real RECOMBINE_TEM_GRID_MIN = 0;
-  o::Real RECOMBINE_DENS_GRID_MIN = 0;
-  o::Real RECOMBINE_TEM_GRID_UNIT = 0;
-  o::Real RECOMBINE_DENSITY_GRID_UNIT = 0;
-  o::LO RECOMBINE_TEM_GRID_SIZE = 0;
-  o::LO RECOMBINE_DENSITY_GRID_SIZE = 0;
+  void initIonizeRecombRateData(const std::string &fName, int debug=0);
+  o::Real ionizeTempGridMin = 0;
+  o::Real ionizeDensGridMin = 0;
+  o::Real ionizeTempGridDT = 0;
+  o::Real ionizeDensGridDn = 0;
+  o::LO ionizeTempGridN = 0;
+  o::LO ionizeDensGridN = 0;
+  o::Real recombTempGridMin = 0;
+  o::Real recombDensGridMin = 0;
+  o::Real recombTempGridDT = 0;
+  o::Real recombDensGridDn = 0;
+  o::LO recombTempGridN = 0;
+  o::LO recombDensGridN = 0;
+  
+  //TODO set to 0 after testing
+  o::LO useReadInRatesData = 0;
 
   o::Reals ionizationRates;
   o::Reals recombinationRates;
@@ -31,7 +34,7 @@ public:
   o::Reals gridDensRec;
 };
 
-
+//passed in Temperature is in log, but density is not
 // stored as 3component data, but interpolated from 2D grid in log scale
 OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data, 
   const o::Reals &gridTemp, const o::Reals &gridDens,
@@ -39,7 +42,8 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   const o::Real gridD0, const o::Real dT, const o::Real dD, 
   const o::LO nT,  const o::LO nD, const o::LO charge) {
 
-  o::LO indT = floor( (log10(tem) - gridT0)/dT );
+  //o::LO indT = floor( (log10(tem) - gridT0)/dT );
+  o::LO indT = floor( (tem - gridT0)/dT );
   o::LO indN = floor( (log10(dens) - gridD0)/dD );
   if(indT < 0 || indT > nT-2)
     indT = 0;
@@ -47,9 +51,11 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
     indN = 0;
   // TODO use log interpolation. This will loose accuracy 
   auto gridTnext = gridTemp[indT+1] ;//gridT0 + (indT+1)*dT;
-  o::Real aT = pow(10.0, gridTnext) - tem;
+  //o::Real aT = pow(10.0, gridTnext) - tem;
+  o::Real aT = pow(10.0, gridTnext) - pow(10.0, tem);
   auto gridT = gridTemp[indT] ;//gridT0 + indT*dT;
-  o::Real bT = tem - pow(10.0, gridT);
+  //o::Real bT = tem - pow(10.0, gridT);
+  o::Real bT = pow(10.0, tem) - pow(10.0, gridT);
   o::Real abT = aT+bT;
   auto gridDnext = gridDens[indN+1] ;//gridD0 + (indN+1)*dD;
   o::Real aN = pow(10.0, gridDnext) - dens;
@@ -67,24 +73,105 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   return rate;
 }
 
+
+// TODO move to unit test
+inline void test_interpolateTet(SCS* scs, o::Mesh& mesh, const o::Reals& data3d, 
+  const o::Reals& data2d, double x0, double z0, double dx, double dz, int nx,
+  int nz, bool debug=false) {
+
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts();
+  auto lambda = SCS_LAMBDA(const int &el, const int &pid, const int &mask) {
+    if(mask > 0) {
+      const auto tetv2v = o::gather_verts<4>(mesh2verts, el);
+      auto tet = p::gatherVectors4x3(coords, tetv2v);
+      for(int i=0; i<4; ++i) {
+        auto pos = tet[i];
+        auto bcc = o::zero_vector<4>();
+        p::find_barycentric_tet(tet, pos, bcc);
+        if(debug)
+          printf("test: bcc %g %g %g %g\n", bcc[0], bcc[1], bcc[2], bcc[3]);   
+        o::Real val3d = p::interpolateTetVtx(mesh2verts, data3d, el, bcc, 1, 0, true);
+        auto pos2D = o::zero_vector<3>();
+        pos2D[0] = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+        pos2D[1] = 0;
+        auto val2d = p::interpolate2dField(data2d, x0, z0, dx, 
+          dz, nx, nz, pos2D, false, 1,0,debug);
+        if(debug)
+          printf("test: x0 %g z0 %g dx %g dz %g nx %d nz %d \n",
+           x0, z0, dx, dz, nx, nz);
+        if(debug)
+          printf("test: val2D %g val3D %g pos2D %g %g %g\n",
+            val2d, val3d, pos2D[0], pos2D[1], pos2D[2]);
+
+      }
+
+        //TODO test data point (for unit test only)
+        /*
+        if(pid<2) {
+          //test density
+          auto test = o::zero_vector<3>();
+          //index ix=1,iz=0 first row of x, id=1 (nx*iz+ix)
+          auto ref = 7.9691641e+17;
+          test[0] = 1.005;
+          test[1] = 0;
+          test[2] = -1.45;
+          auto d = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
+          dzDens, nxDens, nzDens, test, false, 1,0,true);
+          printf("test Iondensity %f ref: %g @ %f %f %f\n", d, ref, test[0], test[1], test[2]);
+          //index ix=150,iz=300 throw, id= 90450(nx*iz+ix)
+          ref = 3.1642416e+19; 
+          test[0] = 1.75;
+          test[1] = 0;
+          test[2] = 5.00000001402157e-08;
+          d = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
+          dzDens, nxDens, nzDens, test, false,1,0,true);
+          printf("test Iondensity %f ref: %g @ %f %f %f\n", d, ref, test[0], test[1], test[2]);
+        }
+        */
+    } //mask 
+  };
+  scs->parallel_for(lambda);  
+}
+
+
 // dt is timestep
-inline void gitrm_ionize(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine& gir, 
-  const GitrmParticles& gp, o::LOs& elm_ids) {
+inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir, 
+  const GitrmParticles& gp, const GitrmMesh& gm, o::LOs& elm_ids, 
+  bool debug = false) {
+  auto& mesh = gm.mesh;
+  auto use2DRatesData = gir.useReadInRatesData;
+  auto& densIon_d = gm.densIon_d;
+  auto& temIon_d = gm.temIon_d;
+  auto x0Dens = gm.densIonX0;
+  auto z0Dens = gm.densIonZ0;
+  auto nxDens = gm.densIonNx;
+  auto nzDens = gm.densIonNz;
+  auto dxDens = gm.densIonDx;
+  auto dzDens = gm.densIonDz;
+  auto x0Temp = gm.tempIonX0;
+  auto z0Temp = gm.tempIonZ0;
+  auto nxTemp = gm.tempIonNx;
+  auto nzTemp = gm.tempIonNz;
+  auto dxTemp = gm.tempIonDx;
+  auto dzTemp = gm.tempIonDz;
+
   auto& xfaces_d = gp.collisionPointFaceIds;
   auto dt = gp.timeStep;
-  auto gridT0 = gir.IONIZE_TEM_GRID_MIN;
-  auto gridD0 = gir.IONIZE_DENS_GRID_MIN;
-  auto dTem = gir.IONIZE_TEM_GRID_UNIT;
-  auto dDens = gir.IONIZE_DENSITY_GRID_UNIT;
-  auto nTRates = gir.IONIZE_TEM_GRID_SIZE;
-  auto nDRates = gir.IONIZE_DENSITY_GRID_SIZE;
+  auto gridT0 = gir.ionizeTempGridMin;
+  auto gridD0 = gir.ionizeDensGridMin;
+  auto dTem = gir.ionizeTempGridDT;
+  auto dDens = gir.ionizeDensGridDn;
+  auto nTRates = gir.ionizeTempGridN;
+  auto nDRates = gir.ionizeDensGridN;
   const auto& iRates = gir.ionizationRates; 
   const auto& gridTemp = gir.gridTempIonize;
   const auto& gridDens = gir.gridDensIonize;
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
-  const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "TionVtx");
-  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "densityVtx");
+  const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "IonTempVtx");
+  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
+  auto pid_scs = scs->get<PTCL_ID>();
   auto pos_scs = scs->get<PTCL_POS>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
@@ -102,20 +189,50 @@ inline void gitrm_ionize(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine& gi
     // invalid elem_ids init to -1
     o::LO el = elm_ids[pid];
     if(mask > 0 && el >= 0) {
-      //o::LO debug = 1;
+      auto ptcl = pid_scs(pid);
       auto pos = p::makeVector3(pid, pos_scs);
       auto charge = charge_scs(pid);
   	  auto bcc = o::zero_vector<4>();
       p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
+      //if(debug)
+      //  printf("Ionize: bcc %g %g %g \n", bcc[0], bcc[1], bcc[2]);      
       // from tags
-      o::Real tlocal = p::interpolateTet(tIonVtx, bcc, mesh2verts, el, 1);
-	    o::Real nlocal = p::interpolateTet(densVtx, bcc, mesh2verts, el, 1);
+      o::Real tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
+	    o::Real nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
 
       if(charge > 74-1) //W=74, charge index=73
         charge = 0;
 	    // from data array
-			o::Real rate = interpolateRateCoeff(iRates, gridTemp, gridDens, tlocal, 
+      if(use2DRatesData) {
+        //TODO move this to a unit test
+        auto pos2D = o::zero_vector<3>();
+        //cylindrical symmetry, height (z) is same.
+        pos2D[0] = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+        // projecting point to y=0 plane, since 2D data is on const-y plane.
+        // meaningless to include non-zero y coord of target plane.
+        pos2D[1] = 0;
+        auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
+          dzDens, nxDens, nzDens, pos2D, false, 1,0,debug);
+        auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
+          dzTemp, nxTemp, nzTemp, pos2D, false, 1,0,debug);
+        if(debug)
+          printf("Ioni Dens: x0 %g z0 %g dx %g dz %g nx %d " 
+          " nz %d \n", x0Dens, z0Dens, dxDens, dzDens, nxDens, nzDens);
+        if(debug)
+          printf("Ioni Temp: x0 %g z0 %g dx %g dz %g nx %d " 
+          " nz %d \n", x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);        
+        if(debug)
+          printf("Ionization point: temp2D %g dens2D %g t3D %g d3D %g "
+            " pos2D %g %g %g nxTemp %d nzTemp %d\n", 
+            temp, dens, tlocal, nlocal, pos2D[0], pos2D[1], pos2D[2], 
+              nxTemp, nzTemp);
+      }
+      
+      o::Real rate = interpolateRateCoeff(iRates, gridTemp, gridDens, tlocal, 
         nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
+
+      //TODO check rate !=0
+      //OMEGA_H_CHECK(!p::almost_equal(rate,0));
 			o::Real rateIon = 1/(rate*nlocal);
       OMEGA_H_CHECK(!std::isnan(rateIon));
 			if(p::almost_equal(tlocal,0) || p::almost_equal(nlocal, 0))
@@ -136,29 +253,51 @@ inline void gitrm_ionize(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine& gi
         auto fit = first_ionizeT_scs(pid);
 	      first_ionizeT_scs(pid) = fit + dt;
       }
+      if(debug)
+        printf("ionizable %d ptcl%d charge %d randn %g P1 %g rateIon %g rateInterp %g dt %g\n",
+          xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, rate, dt);
 	  } //mask 
 	};
   scs->parallel_for(lambda);
 } 
 
 
-inline void gitrm_recombine(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine& gir, 
-   const GitrmParticles& gp, o::LOs& elm_ids) {
+inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir, 
+   const GitrmParticles& gp, const GitrmMesh& gm, o::LOs& elm_ids, 
+   bool debug = false) {
+  auto& mesh = gm.mesh;
+  auto& densIon_d = gm.densIon_d;
+  auto& temIon_d = gm.temIon_d;
+  auto x0Dens = gm.densIonX0;
+  auto z0Dens = gm.densIonZ0;
+  auto nxDens = gm.densIonNx;
+  auto nzDens = gm.densIonNz;
+  auto dxDens = gm.densIonDx;
+  auto dzDens = gm.densIonDz;
+  auto x0Temp = gm.tempIonX0;
+  auto z0Temp = gm.tempIonZ0;
+  auto nxTemp = gm.tempIonNx;
+  auto nzTemp = gm.tempIonNz;
+  auto dxTemp = gm.tempIonDx;
+  auto dzTemp = gm.tempIonDz;
+
+  auto use2DRatesData = gir.useReadInRatesData;
   auto& xfaces_d = gp.collisionPointFaceIds;
   auto dt = gp.timeStep;
-  auto gridT0 = gir.RECOMBINE_TEM_GRID_MIN;
-  auto gridD0 = gir.RECOMBINE_DENS_GRID_MIN;
-  auto dTem = gir.RECOMBINE_TEM_GRID_UNIT;
-  auto dDens = gir.RECOMBINE_DENSITY_GRID_UNIT;
-  auto nTRates = gir.RECOMBINE_TEM_GRID_SIZE;
-  auto nDRates = gir.RECOMBINE_DENSITY_GRID_SIZE;
+  auto gridT0 = gir.recombTempGridMin;
+  auto gridD0 = gir.recombDensGridMin;
+  auto dTem = gir.recombTempGridDT;
+  auto dDens = gir.recombDensGridDn;
+  auto nTRates = gir.recombTempGridN;
+  auto nDRates = gir.recombDensGridN;
   const auto& rRates = gir.recombinationRates; 
   const auto& gridTemp = gir.gridTempRec;
   const auto& gridDens = gir.gridDensRec;  
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
-  const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "TionVtx");
-  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "densityVtx");
+  const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "IonTempVtx");
+  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
+  auto pid_scs = scs->get<PTCL_ID>();
   auto pos_scs = scs->get<PTCL_POS>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
@@ -175,25 +314,53 @@ inline void gitrm_recombine(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine&
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     auto el = elm_ids[pid];
     if(mask > 0 && el >= 0) {
-      //o::LO debug = 1;
+      auto ptcl = pid_scs(pid);
       auto charge = charge_scs(pid);
       auto pos = p::makeVector3(pid, pos_scs);
 
+      o::Real rateRecomb = 0;
+      o::Real rate = 0;
       o::Real P1 = 0;
       if(charge > 0) {
         auto bcc = o::zero_vector<4>();
         p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
+        //if(debug)
+        //   printf("Recomb: bcc %g %g %g \n", bcc[0], bcc[1], bcc[2]);
         // from tags
-        o::Real tlocal = p::interpolateTet(tIonVtx, bcc, mesh2verts, el, 1);
-        o::Real nlocal = p::interpolateTet(densVtx, bcc, mesh2verts, el, 1);
+        o::Real tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
+        o::Real nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
         // from data array
-        o::Real rate = interpolateRateCoeff(rRates, gridTemp, gridDens, tlocal,
-         nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
-        o::Real rateIon = 1/(rate*nlocal);
-        if(p::almost_equal(tlocal,0) || p::almost_equal(nlocal, 0)) 
-          rateIon = 1.0e12;
+        if(use2DRatesData) {
+          //TODO move this to a unit test
+          auto pos2D = o::zero_vector<3>();
+          //cylindrical symmetry, height (z) is same.
+          pos2D[0] = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+          // projecting point to y=0 plane, since 2D data is on const-y plane.
+          // meaningless to include non-zero y coord of target plane.
+          pos2D[1] = 0;
+          auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
+            dzDens, nxDens, nzDens, pos2D, false,1,0,debug);
+          auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
+            dzTemp, nxTemp, nzTemp, pos2D, false,1,0,debug);
 
-        P1 = 1.0 - exp(-dt/rateIon);
+          if(debug)
+            printf("Recomb Dens: x0 %g z0 %g dx %g dz %g nx %d " 
+            " nz %d \n", x0Dens, z0Dens, dxDens, dzDens, nxDens, nzDens);
+          if(debug)
+            printf("Recomb Temp: x0 %g z0 %g dx %g dz %g nx %d " 
+            " nz %d \n", x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);  
+          if(debug)
+            printf("Recomb point: temp2D %g dens2D %g t3D %g d3D %g pos2D %g %g %g \n", 
+              temp, dens, tlocal, nlocal, pos2D[0], pos2D[1], pos2D[2]);
+        }
+        // rate is from global data
+        rate = interpolateRateCoeff(rRates, gridTemp, gridDens, tlocal,
+         nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
+        rateRecomb = 1/(rate*nlocal);
+        if(p::almost_equal(tlocal,0) || p::almost_equal(nlocal, 0)) 
+          rateRecomb = 1.0e12;
+
+        P1 = 1.0 - exp(-dt/rateRecomb);
       }
 
       auto randn = rands[pid];
@@ -203,10 +370,13 @@ inline void gitrm_recombine(o::Mesh& mesh, SCS* scs, const GitrmIonizeRecombine&
         charge_scs(pid) = charge-1;
         prev_recombination_scs(pid) = 1;
       }
+
+      if(debug)
+        printf("recomb %d ptcl %d charge %d randn %g P1 %g rateRecomb %g rateInterp %g\n", 
+          xfid<0, ptcl, charge_scs(pid), randn, P1, rateRecomb, rate);
     } //mask 
   };
   scs->parallel_for(lambda);
 } 
-
 
 #endif

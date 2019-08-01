@@ -117,11 +117,17 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
   return true;
 }
 
-OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M) {
-  for(int i=0; i<4; ++i)
+template< int N>
+OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, N> &M) {
+  for(int i=0; i<N; ++i)
   printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
+template< int N>
+OMEGA_H_INLINE void print_few_vectors(const o::Few<o::Vector<3>, N> &M) {
+  for(int i=0; i<N; ++i)
+  printf("%d: %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
+}
 
 inline void print_array(const double* a, int n=3, std::string name=" ") {
   if(name!=" ")
@@ -131,10 +137,15 @@ inline void print_array(const double* a, int n=3, std::string name=" ") {
   std::cout <<"\n";
 }
 
-OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<3> &v,
+template< int N>
+OMEGA_H_INLINE void print_osh_vector(const Omega_h::Vector<N> &v,
  const char* name) {
-  printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
+  printf("%s %.3f %.3f %.3f",  name, v[0], v[1], v[2]);
+  if(N>3)
+    printf("%.3f",v[3]);
+  printf("\n");
 }
+
 inline void print_osh_vector_host(const Omega_h::Vector<3> &v, 
   const char* name) {
   printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
@@ -152,9 +163,8 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
   const o::Vector<3> &pos, const bool cylSymm = false, 
-  const o::LO nComp = 1, const o::LO comp = 0) {
+  const o::LO nComp = 1, const o::LO comp = 0, bool debug= false) {
   
-  o::LO verbose = 0;
   if(nx*nz == 1) {
     return data[comp];
   }  
@@ -202,8 +212,9 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
   }
-  if(verbose > 3)
-    printf(" dim1(x):%d pos: %g %g %g : i %d j %d dx %g gridx0 %d nx %d nz %d fxz %g",
+  if(debug)
+    printf(" interp2D pos: %g %g %g : i %d j %d dx %g gridx0 %g " 
+      "nx %d nz %d fxz %g \n",
       dim1, pos[1], pos[2], i, j, dx, gridx0, nx, nz, fxz);
 
   return fxz;

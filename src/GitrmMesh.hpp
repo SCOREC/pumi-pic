@@ -4,9 +4,9 @@
 #include <cfloat>
 #include <set>
 #include <algorithm>
+#include <fstream>
 #include <stdexcept>
 #include "pumipic_adjacency.hpp"
-//#include "GitrmParticles.hpp"  // For dist2bdry
 #include "Omega_h_mesh.hpp"
 
 namespace o = Omega_h;
@@ -20,11 +20,6 @@ namespace p = pumipic;
 #define BIASED_SURFACE 0
 #endif
 
-// TODO
-#ifndef BIAS_POTENTIAL
-#define BIAS_POTENTIAL 250.0
-#endif
-
 #ifndef USEPRESHEATHEFIELD
 #define USEPRESHEATHEFIELD 1
 #endif
@@ -33,12 +28,13 @@ namespace p = pumipic;
 #define USECYLSYMM 0 // TODO
 #endif
 
-// protoMPEx/input/gitrInput.cfg
-static constexpr o::LO BACKGROUND_Z = 1;
-static constexpr o::Real BACKGROUND_AMU = 2.0;
-static constexpr o::Real DEPTH_DIST2_BDRY = 0.001; // 1mm
-static constexpr o::LO BDRYFACE_SIZE = 20;
-static constexpr o::LO BFS_DATA_SIZE = 100;
+constexpr o::LO BACKGROUND_Z = 1;
+constexpr o::Real BACKGROUND_AMU = 4.0; //pisces TODO
+
+constexpr o::Real DEPTH_DIST2_BDRY = 0.001; // 1mm
+constexpr o::LO BDRYFACE_SIZE = 20;
+constexpr o::LO BFS_DATA_SIZE = 100;
+constexpr o::Real BIAS_POTENTIAL = 250.0;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };
@@ -58,7 +54,8 @@ enum {INTERIOR=1, EXPOSED=2};
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
 
-struct FieldStruct;
+struct FieldStruct2d;
+struct FieldStruct3;
 class GitrmMesh {
 public:
   //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
@@ -109,7 +106,6 @@ public:
   o::Write<o::LO> bdryFlags;
   o::Write<o::LO> bdryFaceElemIds;
 
-public:
   /**  @brief CSR data, used in simulation time-step loop.
   * Storing face data in each element, i.e. same bdry face is copied  
   * to neighboring elements if within the depth. This leads to increased storage,
@@ -124,46 +120,74 @@ public:
    */
   o::LOs bdryFaceInds;
 
-public:
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
-  void initEandBFields(const std::string &, const std::string &);
+  void initEandBFields(const std::string &, const std::string &,
+    o::Real shiftB=0, o::Real shiftE=0);
   void parseGridLimits(std::stringstream &, std::string, std::string, bool, 
     bool &, bool &, double &, double &);
   void processFieldFile(const std::string &, o::HostWrite<o::Real> &, 
-    FieldStruct &, int);
-  void load3DFieldOnVtxFromFile(const std::string &, FieldStruct &);
+    FieldStruct2d &, int);
+  void load3DFieldOnVtxFromFile(const std::string &, FieldStruct3&, 
+    o::Reals&, o::Real shift=0 );
 
   //TODO delete tags after use/ in destructor
   void addTagAndLoadData(const std::string &, const std::string &);
   void initBoundaryFaces();
 
-  void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct &);
-  void load1DFieldOnVtxFromFile(const std::string &file, FieldStruct &fs);
+  void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct3 &, 
+    o::Real shift=0, int debug=0);
+  void load1DFieldOnVtxFromFile(const std::string &, FieldStruct3 &, 
+    o::Reals&, o::Real shift=0, int debug=0);
   
   void markDetectorCylinder(bool render=false);
   //TODO move these to suitable location
   // Used in boundary init and if 2D field is used for particles
-  o::Real BGRIDX0 = 0;
-  o::Real BGRIDZ0 = 0;
-  o::Real BGRID_DX = 0;
-  o::Real BGRID_DZ = 0;
-  o::LO BGRID_NX = 0;
-  o::LO BGRID_NZ = 0;
-  o::Real EGRIDX0 = 0;
-  o::Real EGRIDZ0 = 0;
-  o::Real EGRID_DX = 0;
-  o::Real EGRID_DZ = 0;
-  o::LO EGRID_NX = 0;
-  o::LO EGRID_NZ = 0;
+  o::Real bGridX0 = 0;
+  o::Real bGridZ0 = 0;
+  o::Real bGridDx = 0;
+  o::Real bGridDz = 0;
+  o::LO bGridNx = 0;
+  o::LO bGridNz = 0;
+  o::Real eGridX0 = 0;
+  o::Real eGridZ0 = 0;
+  o::Real eGridDx = 0;
+  o::Real eGridDz = 0;
+  o::LO eGridNx = 0;
+  o::LO eGridNz = 0;
+
+  //D3D_major rad =1.6955m; https://github.com/SCOREC/Fusion_Public/blob/master/
+  // samples/D-g096333.03337/g096333.03337#L1033
+  // field2D center may not coincide with mesh center
+  o::Real mesh2Efield2Dshift = 0;
+  o::Real mesh2Bfield2Dshift = 0;
+
+  //testing
   o::Reals Efield_2d;
   o::Reals Bfield_2d;
+  
+  o::Reals densIon_d;
+  o::Reals densEl_d;
+  o::Reals temIon_d;
+  o::Reals temEl_d;
+  o::Real densIonX0 = 0;
+  o::Real densIonZ0 = 0;
+  o::LO densIonNx = 0;
+  o::LO densIonNz = 0;
+  o::Real densIonDx = 0;
+  o::Real densIonDz = 0;
+  o::Real tempIonX0 = 0;
+  o::Real tempIonZ0 = 0;
+  o::LO tempIonNx = 0;
+  o::LO tempIonNz = 0;
+  o::Real tempIonDx = 0;
+  o::Real tempIonDz = 0;
 };
 
-struct FieldStruct {
+struct FieldStruct2d {
   // Implicit call w/o ctr def. not working 
-  FieldStruct(std::string n, std::string snr, std::string snz, std::string sgr,
+  FieldStruct2d(std::string n, std::string snr, std::string snz, std::string sgr,
     std::string sgz,std::string sr, std::string st, std::string sz):
     name(n), nrName(snr), nzName(snz), gridR(sgr), gridZ(sgz), rName(sr), 
     tName(st), zName(sz) {}
@@ -183,14 +207,64 @@ struct FieldStruct {
   int nZ = 0;
 };
 
+struct FieldStruct3 {
+    FieldStruct3(std::string n, std::string c1, std::string c2, std::string c3,
+      std::string g1, std::string g2, std::string g3,
+      std::string ng1, std::string ng2, std::string ng3, 
+      int nc, int ng, int ngr):
+      name(n), comp1(c1), comp2(c2), comp3(c3), 
+      grid1str(g1), grid2str(g2), grid3str(g3),
+      nGrid1str(ng1), nGrid2str(ng2), nGrid3str(ng3),
+      nComp(nc), nGrids(ng), nGridsRead(ngr)
+    {}
+    ~FieldStruct3() {
+      if(data && nComp >0)
+        delete data;
+      if(grid1 && nGridsRead >0)
+        delete grid1;
+      if(grid2 && nGridsRead >1)
+        delete grid2;
+      if(grid3 && nGridsRead >2)
+        delete grid3;
+    }
+  std::string name;
+  std::string comp1;
+  std::string comp2;
+  std::string comp3;
+  std::string grid1str;
+  std::string grid2str;
+  std::string grid3str;
+  std::string nGrid1str;
+  std::string nGrid2str;
+  std::string nGrid3str;
+  // 3rd grid not read
+  int nComp;
+  int nGrids;
+  int nGridsRead;
+  double gr1Min = 0;
+  double gr1Max = 0;
+  double gr2Min = 0;
+  double gr2Max = 0;
+  double gr3Min = 0;
+  double gr3Max = 0;
+  int nGrid1 = 0;
+  int nGrid2 = 0;
+  int nGrid3 = 0;
+  // All are doubles
+  o::HostWrite<o::Real>* data;
+  o::HostWrite<o::Real>* grid1;
+  o::HostWrite<o::Real>* grid2;
+  o::HostWrite<o::Real>* grid3;
+};
+
  // Not used, since this function call from lambda, to modify data, 
  // forces passed argument data to be const
- OMEGA_H_DEVICE void addFaceToBdryData(o::Write<o::Real> &data, o::Write<o::LO> &ids,
-     o::LO fnums, o::LO size, o::LO dof, o::LO fi, o::LO fid,
-     o::LO elem, const o::Matrix<3, 3> &face){
+ OMEGA_H_DEVICE void addFaceToBdryData(o::Write<o::Real> &data, 
+  o::Write<o::LO> &ids, o::LO fnums, o::LO size, o::LO dof, o::LO fi,
+  o::LO fid, o::LO elem, const o::Matrix<3, 3> &face) {
    OMEGA_H_CHECK(fi < fnums);
-   for(o::LO i=0; i<size; ++i){
-     for(o::LO j=0; j<3; j++){
+   for(o::LO i=0; i<size; ++i) {
+     for(o::LO j=0; j<3; j++) {
        data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
      }
    }
@@ -199,8 +273,9 @@ struct FieldStruct {
 
  // Not used; function call from lambda, to change data, forces data to be const
  // Total exposed faces has to be passed in as nbdry; no separate checking
- OMEGA_H_DEVICE void updateAdjElemFlags(const o::LOs &dual_elems, const o::LOs &dual_faces, o::LO elem,
-   o::Write<o::LO> &bdryFlags, o::LO nbdry=0){
+ OMEGA_H_DEVICE void updateAdjElemFlags(const o::LOs &dual_elems,
+  const o::LOs &dual_faces, o::LO elem, o::Write<o::LO> &bdryFlags, 
+  o::LO nbdry=0) {
 
    auto dface_ind = dual_elems[elem];
    for(o::LO i=0; i<4-nbdry; ++i){
@@ -214,7 +289,8 @@ struct FieldStruct {
 // TODO this method is a utility 
 // Cumulative sums. Done on host, to get ordered sum of all previous entries CSR.
 // NOTE: numsPerSlot must have all entries including zero entries
-inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, o::LOs& csrPointers) {
+inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot, 
+  o::LOs& csrPointers) {
   o::LO tot = numsPerSlot.size();
   o::HostRead<o::LO> numsPerSlotH(numsPerSlot);
   o::HostWrite<o::LO> csrPointersH(tot+1);
@@ -236,7 +312,7 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
   try {
     double num = std::stod(sd);
     if(! std::isnan(num)) { 
-      data[nComp*ind+iComp] = num;      
+      data[nComp*ind+iComp] = num;    
       ++ind;     
     } else 
       add2nan = true;
@@ -264,9 +340,6 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
    bool& dataLine, std::set<int>& nans, bool& expectEqual, int iComp=0, 
    int nComp=1, int numPtcls=0, bool debug=false) {
 
-  if(debug)
-    std::cout << ":: " <<  ind << " : " << ss.str() << " " << sFirst << " " << fieldName << "\n";
-
   std::string s2 = "", sd = "";
   // restart index when string matches
   if(sFirst == fieldName) {
@@ -282,16 +355,18 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
         std::cout << "WARNING: Unexpected entry: " << s2 << " discarded\n";
     }
   }
+  if(debug && dataLine)
+    std::cout << ":: "<< ind << " : " << ss.str() << " ::1st " << sFirst 
+              << " field " << fieldName << "\n";
+
   if(dataLine) {
     // this is done for every line, not only that of fieldName string
     if(!(sFirst.empty() || sFirst == fieldName)) {
       if(ind < numPtcls || !numPtcls){
-        if(debug)
-          std::cout << " storing_first " << sFirst << "\n";
         storeData(data, sFirst, ind, iComp, nComp, nans, debug);
       }
     }  
-    if(!ss.str().empty()) {
+    if(! ss.str().empty()) {
       while(ss >> sd) {
         if(numPtcls>0 && ind >= numPtcls)
           break;
@@ -307,6 +382,178 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
     if(semi)
       dataLine = false;
   }
+}
+
+inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
+  int debug=0) {
+  
+  std::ifstream ifs(fName);
+  if (!ifs.good())
+    Omega_h_fail("Error opening Field file %s \n",fName.c_str() );
+  // note: grid data are not stored in the main data array
+
+  auto nComp = fs.nComp;
+  auto nGrids = fs.nGrids;
+  auto nGridsRead = fs.nGridsRead;
+  std::string nGridNames[nGrids];
+  std::string gridNames[nGrids];
+  std::string compNames[nComp];
+  bool foundData[nComp], dLine[nComp], foundGrid[nGridsRead], gLine[nGridsRead];
+  bool eq=false, dataInit=false;
+  int foundGrids=0, indData[nComp], indGrid[nGridsRead];
+  std::set<int> nans1, nans2;
+
+  for(int i = 0; i < nComp; ++i) {
+    indData[i] = 0;
+    foundData[i] = dLine[i] = false;
+  }
+  for(int i = 0; i < nGridsRead; ++i) {
+    indGrid[i] = 0;
+    foundGrid[i] = gLine[i] = false;
+  }
+  nGridNames[0] = fs.nGrid1str;
+  if(nGrids>1)
+    nGridNames[1] = fs.nGrid2str;
+  if(nGrids>2)
+    nGridNames[2] = fs.nGrid3str;
+
+  gridNames[0] = fs.grid1str;
+  if(nGridsRead>1)
+    gridNames[1] = fs.grid2str;
+  if(nGridsRead>2)
+    gridNames[2] = fs.grid3str;
+
+  compNames[0] = fs.comp1;
+  if(nComp>1)
+    compNames[1] = fs.comp2;
+  if(nComp>2)
+    compNames[2] = fs.comp3;
+
+  std::string line, s1, s2, s3;
+  while(std::getline(ifs, line)) {
+    bool semi = (line.find(';') != std::string::npos);
+    std::replace (line.begin(), line.end(), ',' , ' ');
+    std::replace (line.begin(), line.end(), ';' , ' ');
+    std::stringstream ss(line);
+    // first string or number of EACH LINE is got here
+    ss >> s1;
+    if(s1.find_first_not_of(' ') == std::string::npos) {
+      s1 = "";
+      if(!semi)
+       continue;
+    }    
+    //grid names
+    if(foundGrids < nGrids) {
+      for(int i=0; i<nGrids; ++i) {
+        if(s1 == nGridNames[i]) {
+          ss >> s2 >> s3;
+          OMEGA_H_CHECK(s2 == "=");
+          int num = std::stoi(s3);
+          OMEGA_H_CHECK(!std::isnan(num));
+          if(i==0)
+            fs.nGrid1 = num;
+          else if(i==1)
+            fs.nGrid2 = num;
+          else if(i==2)
+            fs.nGrid3 = num;        
+          ++foundGrids;
+          if(debug)
+            printf("s1 %s %d %d %d \n", s1.c_str(), 
+              fs.nGrid1, fs.nGrid2, fs.nGrid3);
+        }
+      }
+    }
+
+    if(!dataInit && foundGrids==nGrids) {
+      if(nGridsRead>0)
+      fs.grid1 = new o::HostWrite<o::Real>(fs.nGrid1);
+      if(nGridsRead>1)
+        fs.grid2 = new o::HostWrite<o::Real>(fs.nGrid2);
+      if(nGridsRead>2)
+        fs.grid3 = new o::HostWrite<o::Real>(fs.nGrid3);
+
+      int ngrid1 = (fs.nGrid1 >0)?fs.nGrid1:1;
+      int ngrid2 = (fs.nGrid2 >0)?fs.nGrid2:1;
+      int ngrid3 = (fs.nGrid3 >0)?fs.nGrid3:1;
+      // data is combined.
+      int size = nComp*ngrid1*ngrid2*ngrid3;
+      fs.data = new o::HostWrite<o::Real>(size);
+
+      dataInit = true;
+    }
+
+    if(dataInit) {
+      parseFileFieldData(ss, s1, fs.comp1, semi, *fs.data, indData[0], 
+        dLine[0], nans1, eq, 0, nComp, 0, debug>1);
+      if(nComp>1)
+        parseFileFieldData(ss, s1, fs.comp2, semi, *fs.data, indData[1], 
+          dLine[1], nans1, eq, 1, nComp, 0, debug>1);
+      if(nComp>2)
+        parseFileFieldData(ss, s1, fs.comp3, semi, *fs.data, indData[2], 
+          dLine[2], nans1, eq, 2, nComp, 0, debug>1);
+
+      if(nGridsRead>0)
+        parseFileFieldData(ss, s1, fs.grid1str, semi, *fs.grid1, indGrid[0], 
+         gLine[0], nans2, eq, 0, 1, 0, debug>1);
+
+      if(nGridsRead>1)
+        parseFileFieldData(ss, s1, fs.grid2str, semi, *fs.grid2, indGrid[1], 
+         gLine[1], nans2, eq, 0, 1, 0, debug>1);
+
+      if(nGridsRead>2)
+        parseFileFieldData(ss, s1, fs.grid3str, semi, *fs.grid3, indGrid[2], 
+         gLine[2], nans2, eq, 0, 1, 0, debug>1);
+
+      for(int i=0; i<nComp; ++i)
+        if(!foundData[i] && dLine[i]) {
+          foundData[i] = true;
+        }
+      for(int i=0; i<nGridsRead; ++i)
+        if(!foundGrid[i] && gLine[i]) {
+          foundGrid[i] = true;
+        }
+    }
+    s1 = s2 = s3 = "";
+  } //while
+  OMEGA_H_CHECK(dataInit);
+
+  
+  if(debug) {
+    printf("ngrids: %d %d : %d %d : %d\n", 
+     fs.nGrid1, indGrid[0], fs.nGrid2, indGrid[1], indData[0]);
+    if(nComp>1)
+      printf("data index2 %d\n", indData[1]);
+    if(nComp>2)
+      printf("data index3: %d\n", indData[2]);
+    if(nGrids==3)
+      printf("ngrids3:  %d %d : %d\n", fs.nGrid3, indGrid[2], indData[2]);
+  }
+  if(nGridsRead>0) {
+    fs.gr1Min = (*fs.grid1)[0];
+    OMEGA_H_CHECK(fs.nGrid1 == indGrid[0]);
+    fs.gr1Max = (*fs.grid1)[fs.nGrid1-1];
+  }
+  if(nGridsRead>1) {
+    fs.gr2Min = (*fs.grid2)[0];
+    OMEGA_H_CHECK(fs.nGrid2 == indGrid[1]);
+    fs.gr2Max = (*fs.grid2)[fs.nGrid2-1];
+  }
+  if(nGridsRead>2) {
+    fs.gr3Min = (*fs.grid3)[0];
+    OMEGA_H_CHECK(fs.nGrid3 == indGrid[2]);
+    fs.gr3Max = (*fs.grid3)[fs.nGrid3-1];
+  }
+  
+  
+ // for(int i=0; i<nComp; ++i){
+    // if ; on first line, dataLine is reset before reaching back
+    //OMEGA_H_CHECK(foundData[i]);
+ // }
+  if(ifs.is_open()) {
+    ifs.close();
+  }
+  if(nans1.size() > 0 || nans2.size() > 0) 
+    std::cout << "ERROR: NaN in ADAS file/grid\n";
 }
 
 #endif// define

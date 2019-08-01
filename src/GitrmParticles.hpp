@@ -28,6 +28,9 @@ enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL,
   PTCL_CHARGE, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
   PTCL_PREV_RECOMBINE};
 
+//TODO if multiple species ?
+constexpr o::Real PTCL_AMU=184.0; //47.867; //titanium for pisces ?
+
 typedef SellCSigma<Particle> SCS;
 struct PtclInitStruct;
 

@@ -42,8 +42,9 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
   scs->rebuild(scs_elem_ids);
 }
 
-void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d,
-  GitrmIonizeRecombine& gir) {
+void search(GitrmParticles& gp, GitrmMesh& gm, int iter, o::Write<o::LO> &data_d,
+  GitrmIonizeRecombine& gir, bool debug=false) {
+  auto& mesh = gm.mesh;
   SCS* scs = gp.scs;
   assert(scs->nElems() == mesh.nelems());
   Omega_h::LO maxLoops = 100;
@@ -60,8 +61,8 @@ void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d
   gp.collisionPoints = o::Reals(xpoints_d);
   gp.collisionPointFaceIds = o::LOs(xface_ids);
   auto elm_ids = o::LOs(elem_ids);
-  gitrm_ionize(mesh, scs, gir, gp, elm_ids);
-  //gitrm_recombine(mesh, scs, gir, gp, elm_ids);
+  gitrm_ionize(scs, gir, gp, gm, elm_ids, debug);
+  gitrm_recombine(scs, gir, gp, gm, elm_ids, debug);
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //elem_ids to be used in rebuild
@@ -70,9 +71,22 @@ void search(o::Mesh& mesh, GitrmParticles& gp, int iter, o::Write<o::LO> &data_d
 
   //output particle positions, for converting to vtk
   storeAndPrintData(mesh, gp, iter, data_d, true);
-
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
+}
+//TODO move test_interpolateTet() from ionizeRecombine
+void unit_test(SCS* scs, GitrmMesh& gm, bool debug=false) {
+  printf("\nInterpolation Test only for init ptcl's element vertices\n");
+  auto& mesh = gm.mesh;
+  const auto densIon_d = gm.densIon_d;
+  auto x0 = gm.densIonX0;
+  auto z0 = gm.densIonZ0;
+  auto nx = gm.densIonNx;
+  auto nz = gm.densIonNz;
+  auto dx = gm.densIonDx;
+  auto dz = gm.densIonDz;
+  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
+  test_interpolateTet(scs, mesh, densVtx, densIon_d, x0, z0, dx, dz, nx, nz, true);
 }
 
 int main(int argc, char** argv) {
@@ -87,36 +101,31 @@ int main(int argc, char** argv) {
       typeid (Kokkos::DefaultHostExecutionSpace).name());
   printTimerResolution();
   // TODO use paramter file
-  if(argc < 2)
+  if(argc < 7)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh> [<BField_file>][<e_file>][prof_file][prof_density_file] " 
-      << "[ptcls_file][nPtcls][nIterations][dT]\n";
+      << " <mesh><Bfile><Efiel><prof_file><ptcls_file><rate_file>"
+      << "[<nPtcls><nIter>]\n";
     exit(1);
   }
-  if(argc < 3)
-  {
-    printf("\n ****** WARNING: No BField file provided ! \n");
-  }
 
-  std::string bFile="", eFile="", profFile="", profFileDensity="";
-  std::string ptclSource="", ionizeRecombFile="";
+  std::string bFile="", eFile="", profFile="", ptclSource="", ionizeRecombFile="";
   bool piscesRun = false;
-  if(argc >2)
-    bFile = argv[2];
-  if(argc >3)
-    eFile = argv[3];
-  if(argc >4)
-    profFile = argv[4];
-  if(argc > 5)
-    profFileDensity  = argv[5];
-  if(argc > 6)
-    ptclSource  = argv[6];
-  if(argc >7) {
-    ionizeRecombFile = argv[7];
-    std::cout << " ionizeRecombFile " << ionizeRecombFile << "\n";
+
+  //TODO
+  piscesRun = true;
+  o::Real shiftE = 0;
+  o::Real shiftB = 0;
+  if(piscesRun) {
+    shiftE = 1.6955;
+    shiftB = 0; //TODO
   }
 
+  bFile = argv[2];
+  eFile = argv[3];
+  profFile = argv[4];
+  ptclSource  = argv[5];
+  ionizeRecombFile = argv[6];
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
@@ -124,17 +133,19 @@ int main(int argc, char** argv) {
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 
   GitrmMesh gm(mesh);
-  //TODO
-  piscesRun = true;
+
   if(piscesRun)
     gm.markDetectorCylinder(true);
 
-  OMEGA_H_CHECK(!profFile.empty());
-  printf("Adding Tags And Loadin Data\n");
-  gm.addTagAndLoadData(profFile, profFileDensity);
   printf("Initializing Fields and Boundary data\n");
-  OMEGA_H_CHECK(!(bFile.empty() || eFile.empty()));
-  gm.initEandBFields(bFile, eFile);
+  OMEGA_H_CHECK(!(bFile.empty()||eFile.empty()));
+  gm.initEandBFields(bFile, eFile, shiftB, shiftE);
+
+  std::cout << "done E,B \n";
+
+  printf("Adding Tags And Loadin Data %s\n", profFile.c_str());
+  OMEGA_H_CHECK(!profFile.empty());
+  gm.addTagAndLoadData(profFile, profFile);
 
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile);
@@ -144,20 +155,15 @@ int main(int argc, char** argv) {
   printf("Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
-  //gm.printBdryFaceIds(false, 20);
-  //gm.printBdryFacesCSR(false, 20);
-  int numPtcls = 0; //100000;
-  // set with maxloops, neutrals can go far 
+  int numPtcls = 0;
   double dTime = 1e-8; //gitr:1e-8s for 10,000 iterations
-  int NUM_ITERATIONS = 10000; //100k;
+  int NUM_ITERATIONS = 10000; //higher beads needs >10K
+  if(argc > 7)
+    numPtcls = atoi(argv[7]);
   if(argc > 8)
-    numPtcls  = atoi(argv[8]);
-  if(argc > 9)
-    NUM_ITERATIONS = atoi(argv[9]);
-  if(argc > 10)  
-    dTime = atof(argv[10]);
+    NUM_ITERATIONS = atoi(argv[8]);
 
-  GitrmParticles gp(mesh, dTime); // (const char* param_file);
+  GitrmParticles gp(mesh, dTime);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   printf("Initializing Particles\n");
@@ -168,6 +174,8 @@ int main(int argc, char** argv) {
     gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100, false);
 
   auto &scs = gp.scs;
+
+  //unit_test(scs, gm, true); //move to unit_test
 
   // o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
   o::LO numGrid = 14;
@@ -195,7 +203,7 @@ int main(int argc, char** argv) {
     //computeAvgPtclDensity(mesh, scs);
     //writeDispVectors(scs);
     timer.reset();
-    search(mesh, gp, iter, data_d, gir);
+    search(gp, gm, iter, data_d, gir );
 
     if(iter%100 ==0)
       fprintf(stderr, "time(s) %f nPtcls %d\n", timer.seconds(), scs->nPtcls());

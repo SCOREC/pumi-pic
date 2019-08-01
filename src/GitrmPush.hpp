@@ -102,7 +102,6 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh) {
         }
       }
     }
-
   };
   scs->parallel_for(run);
 }
@@ -113,41 +112,49 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh) {
 // is not possible and interpolation from all points of the TET is to be used.
 
 inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs, 
-  const GitrmMesh &gm, const o::Real dTime) {
+  const GitrmMesh &gm, const o::Real dTime, bool debug=false) {
+
+  auto shiftE = gm.mesh2Efield2Dshift;
+  auto shiftB = gm.mesh2Bfield2Dshift;
   o::Mesh &mesh = gm.mesh;  
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
   o::LO preSheathE = USEPRESHEATHEFIELD;
+  o::Real amu = PTCL_AMU;
   // Only 3D field from mesh tags
   o::LO use3dField = USE_3D_FIELDS;
   const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
   const auto EField = o::Reals( mesh.get_array<o::Real>(o::VERT, "EField"));
   // Only if used 2D field read from file
-  o::Real  exz[] = {gm.EGRIDX0, gm.EGRIDZ0, gm.EGRID_DX, gm.EGRID_DZ};
-  o::Real  bxz[] = {gm.BGRIDX0, gm.BGRIDZ0, gm.BGRID_DX, gm.BGRID_DZ};
-  o::LO ebn[] = {gm.EGRID_NX, gm.EGRID_NZ, gm.BGRID_NX, gm.BGRID_NZ};
+  o::Real  exz[] = {gm.eGridX0, gm.eGridZ0, gm.eGridDx, gm.eGridDz};
+  o::Real  bxz[] = {gm.bGridX0, gm.bGridZ0, gm.bGridDx, gm.bGridDz};
+  o::LO ebn[] = {gm.eGridNx, gm.eGridNz, gm.bGridNx, gm.bGridNz};
   const auto &EField_2d = gm.Efield_2d;
   const auto &BField_2d = gm.Bfield_2d;
+  auto pid_scs = scs->get<PTCL_ID>();
   auto pos_scs = scs->get<PTCL_POS>();
   auto efield_scs  = scs->get<PTCL_EFIELD_PREV>();
   auto prev_pos_scs = scs->get<PTCL_POS_PREV>();
   auto vel_scs = scs->get<PTCL_VEL>();
+  auto charge_scs = scs->get<PTCL_CHARGE>();
 
-  auto boris = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
-      o::LO verbose = 1;//(elem%50==0)?4:0;
+      auto ptcl = pid_scs(pid);
       auto vel = p::makeVector3(pid, vel_scs); //at current_pos
       auto eField = p::makeVector3(pid, efield_scs); //at previous_pos
       auto posPrev = p::makeVector3(pid, prev_pos_scs);
       auto bField = o::zero_vector<3>(); //At previous_pos
-
-      if(verbose >3) {
-        printf(" e: %d pid:%d :: pos: %.3f %.3f %.3f ::", elem, pid, 
-          pos_scs(pid, 0), pos_scs(pid, 1), pos_scs(pid, 2));
-        printf("prev: %.3f %.3f %.3f ::", posPrev[0], posPrev[1], posPrev[2]);
-        printf("vel: %.1f %.1f %.1f \n", vel[0], vel[1], vel[2]);
-      }
       
+      //cylindrical symmetry, height (z) is same.
+      auto rad = sqrt(posPrev[0]*posPrev[0] + posPrev[1]*posPrev[1]);
+      // projecting point to y=0 plane, since 2D data is on const-y plane.
+      // meaningless to include non-zero y coord of target plane.
+      o::Vector<3> pos;
+      pos[0] = rad + shiftE; // D3D 1.6955m. TODO check unit
+      pos[1] = 0;
+      pos[2] = posPrev[2];
+
       auto bcc = o::zero_vector<4>();
       if(use3dField) {
         p::findBCCoordsInTet(coords, mesh2verts, posPrev, elem, bcc);
@@ -157,10 +164,11 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         o::Vector<3> psheathE;
 
         if(use3dField) { // for 2D field TODO
-          p::interpolate3dFieldTet(EField, bcc, mesh2verts, elem, psheathE);//At previous_pos
+          p::interpolate3dFieldTet(mesh2verts, EField, elem, bcc, psheathE);//At previous_pos
         } else {
+          //Cylindrical symmetry = false, since already projected onto y=0 plane
           p::interp2dVector(EField_2d, exz[0], exz[1], exz[2], exz[3], ebn[0], ebn[1],
-            posPrev, psheathE, true);
+            pos, psheathE, false);
         }
 
         eField = eField + psheathE;
@@ -168,21 +176,23 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
 
       // BField is 3 component array
       if(use3dField) {
-        p::interpolate3dFieldTet(BField, bcc, mesh2verts, elem, bField);//At previous_pos      
+        p::interpolate3dFieldTet(mesh2verts, BField, elem, bcc, bField);//At previous_pos      
       } else {
+        pos[0] = rad + shiftB;
         p::interp2dVector(BField_2d,  bxz[0], bxz[1], bxz[2], bxz[3], ebn[2], ebn[3], 
-           posPrev, bField, true); //At previous_pos
+           pos, bField, false); //At previous_pos
       }
 
-  //TODO
-      o::Real charge = 0; //1; //TODO get using speciesID using enum
-      o::Real amu = 184.0; //TODO //impurity_amu = 184.0
+      auto charge = charge_scs(pid);
+      //o::Real amu = 184.0; //impurity_amu = 184.0
 
       OMEGA_H_CHECK(amu >0 && dTime>0); //TODO dTime
       o::Real bFieldMag = p::osh_mag(bField);
       o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dTime*0.5;
       o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
-
+      if(debug)
+        printf("ptcl %d Bmag %.5f charge %d qPrime %.9f coeff %.9f \n", ptcl,
+          bFieldMag, charge, qPrime, coeff );
       //v_minus = v + q_prime*E;
       o::Vector<3> qpE = qPrime*eField;
       o::Vector<3> vMinus = vel - qpE;
@@ -213,9 +223,10 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       vel_scs(pid, 1) = vel[1];
       vel_scs(pid, 2) = vel[2];
       
-      if(verbose >2){
-        printf("e %d pid %d :: newpos: %.3f %.3f %.3f :: vel_next: %.1f %.1f %.1f \n", elem,pid,
-          pos_scs(pid, 0), pos_scs(pid, 1), pos_scs(pid, 2), vel[0], vel[1], vel[2]);
+      if(false){
+        printf("e %d ptcl %d vel %.1f %.1f %.1f \n pos %.9f %.9f %.9f => %.9f %.9f %.9f \n", 
+          elem, ptcl, vel[0], vel[1], vel[2], prev_pos_scs(pid, 0), prev_pos_scs(pid, 1),
+          prev_pos_scs(pid, 2), pos_scs(pid, 0), pos_scs(pid, 1), pos_scs(pid, 2));
       }
     }// mask
   };

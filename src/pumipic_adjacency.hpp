@@ -75,7 +75,8 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 // BCC not in order of its corresp. opp. vertexes. BCC of tet(iface, xpoint)
 //TODO Warning: Check opposite_template use in this before using
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
-     const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc) {
+     const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc, 
+     bool debug=false) {
   for(Omega_h::LO i=0; i<4; ++i) bcc[i] = -1;
 
   Omega_h::Real vals[4];
@@ -94,6 +95,8 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
   Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
   Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
+  if(debug)
+    print_few_vectors(abc);
   Omega_h::Real inv_vol = 0.0;
   if(vol6 > EPSILON) // TODO tolerance
     inv_vol = 1.0/vol6;
@@ -104,7 +107,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   bcc[1] = inv_vol * vals[1];
   bcc[2] = inv_vol * vals[2];
   bcc[3] = inv_vol * vals[3]; // 1-others
-
   return 1; //success
 }
 
@@ -296,12 +298,11 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, tol)) {
-            printf("Warning: Particle doesn't belong to this "
-              "element at loops=0");
-            printf("\tptcl %d elem %d orig %.10f %.10f %.10f\n"
-              "dest %.10f %.10f %.10f  bcc %.10f %.10f %.10f\n",
-              ptcl, elmId, orig[0], orig[1], orig[2], dest[0], 
-              dest[1], dest[2], bcc[0], bcc[1], bcc[2], bcc[3]);
+            printf("Warning: Particle not in this element at loops=0"
+              "\tptcl %d elem %d\n", ptcl, elmId);
+            print_osh_vector(orig, "orig");
+            print_osh_vector(dest, "dest");
+            print_osh_vector(bcc, "bcc");
             //OMEGA_H_CHECK(false);
           }
         }
@@ -460,25 +461,29 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
 
 // To interpoalte field stored at vertices. Field has dof components, and 
 // stored in order 0,1,2,3 at tet's vertices. BCC in order of faces
-OMEGA_H_DEVICE Omega_h::Real interpolateTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const o::LOs& mesh2verts, const Omega_h::LO elem, 
-  o::LO dof=1, o::LO comp=0) {
+OMEGA_H_DEVICE Omega_h::Real interpolateTetVtx(const Omega_h::LOs& mesh2verts,
+  const Omega_h::Reals& field, o::LO elem, const Omega_h::Vector<4>& bcc, 
+  o::LO dof=1, o::LO comp=0, bool debug=false) {
   OMEGA_H_CHECK(all_positive(bcc)==1);
-  Omega_h::Real val = 0;
   auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+  auto fv4 = o::gather_vectors<4, 1>(field, tetv2v);
+  Omega_h::Real val = 0;
   for(Omega_h::LO fi=0; fi<4; ++fi) {//faces
-    Omega_h::LO d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
-    Omega_h::LO fd = d*dof + comp;
-    val = val + bcc[fi]*field[fd];
+    auto d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
+    auto fd = d*dof + comp;
+    val = val + bcc[fi]*fv4[fd][0];
+    if(debug)
+      printf("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
+        bcc[fi], fv4[fd][0]);
   }
   return val;
 }
 
-OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::Reals &field, 
-  const Omega_h::Vector<4> &bcc, const o::LOs& mesh2verts, 
-  const Omega_h::LO elem, Omega_h::Vector<3> &fv) {
+OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::LOs& mesh2verts,
+  const Omega_h::Reals &field, o::LO elem, const Omega_h::Vector<4> &bcc, 
+  Omega_h::Vector<3>& fv) {
   for(int i=0; i<3; ++i) {
-    fv[i] = interpolateTet(field, bcc, mesh2verts, elem, 3, i);
+    fv[i] = interpolateTetVtx(mesh2verts, field, elem, bcc, 3, i);
   }
 }
 

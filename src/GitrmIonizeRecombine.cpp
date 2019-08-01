@@ -4,6 +4,46 @@ GitrmIonizeRecombine::GitrmIonizeRecombine(const std::string &fName) {
   initIonizeRecombRateData(fName);
 }
 
+// ADAS_Rates_W_structure for Tungsten W(z=74)
+void GitrmIonizeRecombine::initIonizeRecombRateData(
+  const std::string &fName, int debug) {
+  std::cout<< "Loading ionize/recombine data from " << fName << "\n" ;
+  // not reading: gridChargeState_Ionization
+  // unread grids should appear last in gridnames. Grid and its names in same order.
+  FieldStruct3 ioni("IonizRate", "IonizationRateCoeff", "", "", 
+    "gridTemperature_Ionization", "gridDensity_Ionization", 
+    "gridChargeState_Ionization", "n_Temperatures_Ionize", 
+    "n_Densities_Ionize", "n_ChargeStates_Ionize", 1, 3, 2);
+
+  processFieldFileFS3(fName, ioni, debug);
+  ionizeTempGridMin = ioni.gr1Min;
+  ionizeDensGridMin = ioni.gr2Min;
+  ionizeTempGridDT = (ioni.gr1Max - ioni.gr1Min)/ioni.nGrid1;
+  ionizeDensGridDn = (ioni.gr2Max - ioni.gr2Min)/ioni.nGrid2;
+  ionizeTempGridN = ioni.nGrid1;
+  ionizeDensGridN = ioni.nGrid2;
+  ionizationRates = o::Reals(*ioni.data);
+  gridTempIonize = o::Reals(*ioni.grid1);
+  gridDensIonize = o::Reals(*ioni.grid2);
+
+  // not reading: , gridChargeState_Recombination
+  FieldStruct3 rec("Recomb", "RecombinationRateCoeff", "", "",
+    "gridTemperature_Recombination", "gridDensity_Recombination", 
+    "gridChargeState_Recombination", "n_Temperatures_Recombine",
+    "n_Densities_Recombine", "n_ChargeStates_Recombine", 1, 3, 2);
+  processFieldFileFS3(fName, rec, debug);
+  recombTempGridMin = rec.gr1Min;
+  recombDensGridMin = rec.gr2Min;
+  recombTempGridDT = (rec.gr1Max - rec.gr1Min)/rec.nGrid1;
+  recombDensGridDn = (rec.gr2Max - rec.gr2Min)/rec.nGrid2;
+  recombTempGridN = rec.nGrid1;
+  recombDensGridN = rec.nGrid2;
+  recombinationRates = o::Reals(*rec.data);
+  gridTempRec = o::Reals(*rec.grid1);
+  gridDensRec = o::Reals(*rec.grid2);
+}
+
+// The rest is outdated
 struct IonizeRecombStruct {
     IonizeRecombStruct(std::string sn1, std::string sn2, std::string sn3,
       std::string nm, std::string sg1, std::string sg2, std::string sg3):
@@ -123,44 +163,4 @@ void load3DGridScalarFieldFromFile(const std::string& fName,
   }
   if(nans.size() > 0 || nans1.size() > 0 || nans2.size() > 0) 
     std::cout << "ERROR: NaN in ADAS file/grid\n";
-}
-
-// ADAS_Rates_W_structure for Tungsten W(z=74)
-void GitrmIonizeRecombine::initIonizeRecombRateData(
-  const std::string &fName) {
-  std::cout<< "Loading ionize/recombine data from " << fName << "\n" ;
-  // NOT read: gridChargeState_Ionization, gridChargeState_Recombination
-  IonizeRecombStruct ist {"n_Temperatures_Ionize", 
-    "n_Densities_Ionize", "n_ChargeStates_Ionize", 
-    "IonizationRateCoeff", "gridTemperature_Ionization", 
-    "gridDensity_Ionization", "gridChargeState_Ionization"};
-  load3DGridScalarFieldFromFile(fName, ist);
-
-  IONIZE_TEM_GRID_MIN = ist.gr1Min;
-  IONIZE_DENS_GRID_MIN = ist.gr2Min;
-  IONIZE_TEM_GRID_UNIT = (int)(ist.gr1Max - ist.gr1Min)/ist.nGrid1;
-  IONIZE_DENSITY_GRID_UNIT = (int)(ist.gr2Max - ist.gr2Min)/ist.nGrid2;
-  IONIZE_TEM_GRID_SIZE = ist.nGrid1;
-  IONIZE_DENSITY_GRID_SIZE = ist.nGrid2;
-  ionizationRates = o::Reals(ist.data);
-  gridTempIonize = o::Reals(ist.grid1);
-  gridDensIonize = o::Reals(ist.grid2);
-
-  o::HostWrite<o::Real> rdata;
-  o::HostWrite<o::Real> gridRTemp;
-  o::HostWrite<o::Real> gridRDens;
-  IonizeRecombStruct rst{"n_Temperatures_Recombine", 
-    "n_Densities_Recombine", "n_ChargeStates_Recombine", 
-    "RecombinationRateCoeff", "gridTemperature_Recombination", 
-    "gridDensity_Recombination", "gridChargeState_Recombination"};
-  load3DGridScalarFieldFromFile(fName, rst);
-  RECOMBINE_TEM_GRID_MIN = rst.gr1Min;
-  RECOMBINE_DENS_GRID_MIN = rst.gr2Min;
-  RECOMBINE_TEM_GRID_UNIT = (int)(rst.gr1Max - rst.gr1Min)/rst.nGrid1;
-  RECOMBINE_DENSITY_GRID_UNIT = (int)(rst.gr2Max - rst.gr2Min)/rst.nGrid2;
-  RECOMBINE_TEM_GRID_SIZE = rst.nGrid1;
-  RECOMBINE_DENSITY_GRID_SIZE = rst.nGrid2;
-  recombinationRates = o::Reals(rst.data);
-  gridTempRec = o::Reals(rst.grid1);
-  gridDensRec = o::Reals(rst.grid2);
 }

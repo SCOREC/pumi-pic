@@ -103,13 +103,15 @@ void push(SCS* scs, int np, fp_t distance,
   double totTime = 0;
   timer.reset();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    fp_t dir[3];
-    dir[0] = disp_d(0)*disp_d(1);
-    dir[1] = disp_d(0)*disp_d(2);
-    dir[2] = disp_d(0)*disp_d(3);
-    new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
-    new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
-    new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
+    if(mask) {
+      fp_t dir[3];
+      dir[0] = disp_d(0)*disp_d(1);
+      dir[1] = disp_d(0)*disp_d(2);
+      dir[2] = disp_d(0)*disp_d(3);
+      new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
+      new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
+      new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
+    }
   };
   scs->parallel_for(lamb);
 
@@ -440,7 +442,7 @@ int main(int argc, char** argv) {
   //Create Picparts with the full mesh
   p::Mesh picparts(full_mesh,owner);
   o::Mesh* mesh = picparts.mesh();
-  mesh->ask_elem_verts();
+  mesh->ask_elem_verts(); //caching adjacency info
   
   if (comm_rank == 0)
     printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
@@ -466,7 +468,7 @@ int main(int argc, char** argv) {
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)
-      printf("ppe[%d] %d\n", i, np);
+     printf("ppe[%d] %d\n", i, np);
   });
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure

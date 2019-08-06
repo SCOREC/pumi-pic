@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 
   //********* Construct the PIC parts *********//
-  pumipic::Mesh picparts(mesh, owner, 3, 1);
+  pumipic::Mesh picparts(mesh, owner, 1, 0);
 
   //Create an array with initial values of 0
   Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 1, 0);
@@ -49,40 +49,43 @@ int main(int argc, char** argv) {
   Omega_h::Read<Omega_h::LO> owners = picparts.entOwners(3);
   Omega_h::Read<Omega_h::LO> arr_index = picparts.commArrayIndex(3);
   auto setMyElmsToOne = OMEGA_H_LAMBDA(Omega_h::LO elm_id) {
-    comm_array[arr_index[elm_id]] = owners[elm_id] == rank;
+    comm_array[arr_index[elm_id]] = (owners[elm_id] == rank);
   };
   Omega_h::parallel_for(picparts.mesh()->nelems(), setMyElmsToOne);
-  
+
   picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, comm_array);
 
   //Check that each entry is equal to 1
   Omega_h::HostWrite<Omega_h::LO> host_array(comm_array);
   Omega_h::HostRead<Omega_h::LO> elm_offsets(picparts.nentsOffsets(3));
   bool success = true;
-  for (int i = 0; i < host_array.size(); ++i)
+  for (int i = 0; i < host_array.size(); ++i) {
     if (host_array[i] != 1)
       success = false;
-
+  }
   if (!success) {
     fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
     return EXIT_FAILURE;
   }
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (!rank)
+    printf("Element Sum operation completed\n");
 
   Omega_h::Write<Omega_h::LO> vtx_comm = picparts.createCommArray(0, 1, INT_MAX);
+  Omega_h::Read<Omega_h::LO> arr_index0 = picparts.commArrayIndex(0);
 
   Omega_h::LOs vtx_owners = picparts.entOwners(0);
   auto setOwnedVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
     if (vtx_owners[vtx_id] == rank)
-      vtx_comm[vtx_id] = rank;
+      vtx_comm[arr_index0[vtx_id]] = rank;
   };
   Omega_h::parallel_for(picparts.mesh()->nents(0), setOwnedVtx);
 
   picparts.reduceCommArray(0, pumipic::Mesh::MIN_OP, vtx_comm);
 
-  Omega_h::Write<Omega_h::LO> fail(1);
-
+  Omega_h::Write<Omega_h::LO> fail(1, 0);
   auto checkVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
-    if (vtx_comm[vtx_id] != vtx_owners[vtx_id])
+    if (vtx_comm[arr_index0[vtx_id]] != vtx_owners[vtx_id])
       fail[0] = 1;
   };
   Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtx);
@@ -92,5 +95,9 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Vtx comm failed on %d\n", rank);
     return EXIT_FAILURE;
   }
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (!rank)
+    printf("Vertex Sum operation completed\n");
+
   return 0;
 }

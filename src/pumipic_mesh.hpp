@@ -64,9 +64,7 @@ namespace pumipic {
     //Users should not run the following functions. 
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
-    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner[4],
-                          Omega_h::GOs ent_gid_per_dim[4],
-                          Omega_h::LOs rank_offset_nents_per_dim[4],
+    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,
                           Omega_h::Write<Omega_h::LO> has_part,
                           Omega_h::Write<Omega_h::LO> is_safe);
 
@@ -84,6 +82,8 @@ namespace pumipic {
     int num_cores[4];
     //Global ID of each mesh entity per dimension
     Omega_h::GOs global_ids_per_dim[4];
+    //Global ID of each mesh entity per dimension
+    Omega_h::LOs rank_lids_per_dim[4];
     //Safe tag defined on the mesh elements
     Omega_h::LOs is_ent_safe;
 
@@ -100,13 +100,22 @@ namespace pumipic {
     //Mapping from entity id to local index of the core it belongs to
     //  Note: This is stored in case needed, but is not used beyond setup.
     Omega_h::LOs ent_local_rank_id_per_dim[4];
-    //NOTE: Bounding means that the rank 'owns' at least one entity on the picpart boundary of the bounded part
-    //Flag for each buffered part. True if the entire part is buffered
-    Omega_h::Read<bool> is_complete_part[4];
+    /*Flag for each buffered part. True if the entire part is buffered
+     * 2 = complete
+     * 1 = partial
+     * 0 = empty
+     */
+    Omega_h::HostRead<Omega_h::LO> is_complete_part[4];
+    //Number of parts this part bounds
+    int num_bounds[4];
+    //Number of parts that have boundaries of this part
+    int num_boundaries[4];
+    //List of parts that have boundaries of this part
+    Omega_h::HostWrite<Omega_h::LO> boundary_parts[4];
     //Exclusive sum of number of bounded entities to send to bounded parts
     // size = bounded_parts.size()+1
-    Omega_h::LOs offset_bounded_ents_per_rank_per_dim[4];
-    //The entities on the boundary
-    Omega_h::LOs bounded_ents_ids[4];
+    Omega_h::HostWrite<Omega_h::LO> offset_bounded_per_dim[4];
+    //The entities to send to each part for boundary
+    Omega_h::LOs bounded_ent_ids[4];
   };
 }

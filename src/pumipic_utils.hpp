@@ -46,7 +46,8 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   return true;
 }
 
-OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, Omega_h::Real tol=EPSILON)
+template <class Vec>
+OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<a.size(); ++i)
   {

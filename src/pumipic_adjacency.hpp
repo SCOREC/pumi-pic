@@ -64,6 +64,48 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
 }
 
+//https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates
+#define TriVerts 3
+OMEGA_H_INLINE bool find_barycentric_tri(
+    const Omega_h::Matrix<TriVerts, TriVerts> &faceCoords,
+    const Omega_h::Vector<TriVerts> &pos,
+    Omega_h::Vector<TriVerts> &bcc) {
+  for(Omega_h::LO i=0; i<TriVerts; ++i)
+    bcc[i] = -1;
+
+  //Omega_h::Real vals[TriVerts];
+  for(Omega_h::LO i=0; i<TriVerts; ++i)
+    printf("triangle coordinates of vtx %1d : %.3f %.3f %.3f\n", i,
+        faceCoords(i,0), faceCoords(i,1), faceCoords(i,2));
+  /*
+  auto vab = faceCoords[1] - faceCoords[0]; //b - a;
+  auto vac = abc[2] - abc[0]; //c - a;
+  auto vap = pos - abc[0]; // p - a;
+  vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
+
+  //volume using bottom face=0
+  get_face_coords(Mat, 0, abc);
+  auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
+  OMEGA_H_CHECK(3 == vtx3);
+  // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
+  Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
+  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
+  Omega_h::Real inv_vol = 0.0;
+  if(vol6 > EPSILON) // TODO tolerance
+    inv_vol = 1.0/vol6;
+  else
+  {
+    return 0;
+  }
+  bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
+  bcc[1] = inv_vol * vals[1];
+  bcc[2] = inv_vol * vals[2];
+  bcc[3] = inv_vol * vals[3]; // 1-others
+  */
+
+  return 1; //success
+}
+
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
 //TODO Warning: Check opposite_template use in this before using
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
@@ -211,6 +253,13 @@ template <typename Segment>
 OMEGA_H_DEVICE o::Vector<3> makeVector3(int pid, Segment xyz) {
   o::Vector<3> v;
   for(int i=0; i<3; ++i)
+    v[i] = xyz(pid,i);
+  return v;
+}
+template <typename Segment>
+OMEGA_H_DEVICE o::Vector<2> makeVector2(int pid, Segment xyz) {
+  o::Vector<2> v;
+  for(int i=0; i<2; ++i)
     v[i] = xyz(pid,i);
   return v;
 }
@@ -390,6 +439,177 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
     ++loops;
 
     if(looplimit && loops > looplimit) {
+      if (debug)
+        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      break;
+    }
+  }
+  return found;
+}
+
+template < class ParticleType>
+bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
+                 ps::SellCSigma< ParticleType >* scs, // (in) particle structure
+                 Segment3d x_scs_d, // (in) starting particle positions
+                 Segment3d xtgt_scs_d, // (in) target particle positions
+                 SegmentInt pid_d, // (in) particle ids
+                 o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
+                 o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
+                 int looplimit=0) {
+  printf("%s start\n", __func__);
+  const int meshdim = 2;
+  const int debug = 1;
+
+  const auto dual = mesh.ask_dual();
+  const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto faces2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
+  const auto faceEdges = faces2edges.ab2b;
+  const auto dual_edges = dual.ab2b; // CSR value array
+  const auto dual_faces = dual.a2ab; // CSR offset array, index by mesh element ids
+
+  const auto scsCapacity = scs->capacity();
+
+  // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
+  o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
+  // store the next parent for each particle
+  o::Write<o::LO> elem_ids_next(scsCapacity,-1);
+  // flag to move origin if intersection fails
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      elem_ids[pid] = e;
+      ptcl_done[pid] = 0;
+      if (debug)
+        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
+    } else {
+      elem_ids[pid] = -1;
+      ptcl_done[pid] = 1;
+    }
+  };
+  scs->parallel_for(lamb);
+  bool found = false;
+  int loops = 0;
+  while(!found) {
+    if(debug) {
+      fprintf(stderr, "------------ %d ------------\n", loops);
+    }
+    //pid is same for a particle between iterations in this while loop
+    auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      //inactive particle that is still moving to its target position
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto elmId = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        if(debug)
+          printf("Elem %d ptcl: %d\n", elmId, ptcl);
+        OMEGA_H_CHECK(elmId >= 0);
+        /*
+        auto faceVerts = o::gather_verts<3>(faces2verts, elmId);
+        //M: coordinates of each vertex bounding tri
+        auto M = gatherVectors3x3(coords, faceVerts);
+        auto dest = makeVector3(pid, xtgt_scs_d);
+        auto orig = makeVector3(pid, x_scs_d);
+        Omega_h::Vector<3> faceVertBcc;
+        if(loops == 0) {
+          //make sure particle origin is in initial element
+          find_barycentric_tri(M, orig, faceVertBcc);
+          if(!all_positive(faceVertBcc, 0)) {
+            printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
+              ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
+            printf("Particle doesn't belong to this element at loops=0");
+            OMEGA_H_CHECK(false);
+          }
+        }
+        */
+        /*
+        //check if the destination is this element
+        find_barycentric_tet(M, dest, bcc);
+        if(all_positive(bcc, 0)) {
+          if(debug)
+            printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
+          elem_ids_next[pid] = elem_ids[pid];
+          ptcl_done[pid] = 1;
+        } else {
+          if(debug)
+            printf("ptcl %d checking adj elms\n", ptcl);
+          //get element ID
+          auto dface_ind = dual_faces[elmId];
+          const auto beg_face = elmId *4;
+          const auto end_face = beg_face +4;
+          o::LO f_index = 0;
+          bool detected = false;
+          for(auto iface = beg_face; iface < end_face; ++iface) {
+            const auto face_id = faceEdges[iface];
+            auto xpoint = o::zero_vector<meshdim>();
+            bool exposed = side_is_exposed[face_id];
+            auto fv2v = o::gather_verts<3>(face_verts, face_id);
+            const auto face = gatherVectors3x3(coords, fv2v);
+            o::LO matInd1 = getfmap(f_index*2);
+            o::LO matInd2 = getfmap(f_index*2+1);
+            bool inverse = true;
+            if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
+              inverse = false;
+
+            detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse); //FIXME - need line-line intersection
+            if(debug)
+              printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
+                face_id, inverse, exposed, detected);
+
+            if(detected && exposed) {
+              ptcl_done[pid] = 1;
+              for(o::LO i=0; i<meshdim; ++i)
+                xpoints_d[pid*meshdim+i] = xpoint[i];
+              elem_ids_next[pid] = -1;
+              if(debug) {
+                printf("ptcl %d faceid %d detected and exposed, next parent elm %d\n",
+                    ptcl, face_id, elem_ids_next[pid]);
+              }
+              break;
+            } else if(detected && !exposed) {
+              auto adj_elem  = dual_edges[dface_ind];
+              elem_ids_next[pid] = adj_elem;
+              if(debug) {
+                printf("ptcl %d faceid %d detected and !exposed, next parent elm %d\n",
+                    ptcl, face_id, elem_ids_next[pid]);
+              }
+              break;
+            }
+            // no line triangle intersection found for the current face
+            // appears to be a guess at the next element based on the smallest BCC
+            if(!exposed) {
+              if(debug)
+                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
+              ++dface_ind;
+              const o::LO min_ind = min_index(bcc, 4);
+              if(f_index == min_ind) {
+                elem_ids_next[pid] = dual_edges[dface_ind];
+              }
+            }
+            ++f_index;
+          } //for iface
+
+        } //else not in current element
+        */
+      } //if active particle
+    };
+
+    scs->parallel_for(lamb);
+
+    found = true;
+    auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
+      elem_ids[i] = elem_ids_next[i];
+    };
+    o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
+
+    o::LOs ptcl_done_r(ptcl_done);
+    auto minFlag = o::get_min(ptcl_done_r);
+    if(minFlag == 0)
+      found = false;
+    //Copy particle data from previous to next (adjacent) element
+    ++loops;
+
+    if(looplimit && loops >= looplimit) {
       if (debug)
         fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;

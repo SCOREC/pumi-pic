@@ -6,6 +6,7 @@
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
+#include "Omega_h_shape.hpp"
 
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
@@ -66,44 +67,44 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
 
 //https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates
 #define TriVerts 3
-OMEGA_H_INLINE bool find_barycentric_tri(
-    const Omega_h::Matrix<TriVerts, TriVerts> &faceCoords,
-    const Omega_h::Vector<TriVerts> &pos,
-    Omega_h::Vector<TriVerts> &bcc) {
-  for(Omega_h::LO i=0; i<TriVerts; ++i)
-    bcc[i] = -1;
+#define TriDim 2
+OMEGA_H_DEVICE void barycentric_tri(
+    const o::Reals triArea,
+    const o::Matrix<TriDim, TriVerts> &faceCoords,
+    const o::Vector<TriDim> &pos,
+    o::Vector<TriVerts> &bcc,
+    const int searchElm) {
+  //triangle defined by vertices A,B,C
+  // point P is potentially inside of it
+  //     C
+  //    /  \
+  //   /    \
+  //  A ---- B
+  //omega_h triangles list their vertices following the
+  // right hand rule (counter clockwise)
+  // i.e.; B=0 C=1 A=2 or C=0 A=1 B=2 or A=0 B=1 C=2
+  o::Few<o::Vector<2>, 2> tri;
+  tri[0] = faceCoords[1] - faceCoords[0];
+  tri[1] = faceCoords[2] - faceCoords[0];
+  auto abc_area = o::triangle_area_from_basis(tri);
+  OMEGA_H_CHECK(o::are_close(abc_area, triArea[searchElm])); //sanity check
 
-  //Omega_h::Real vals[TriVerts];
-  for(Omega_h::LO i=0; i<TriVerts; ++i)
-    printf("triangle coordinates of vtx %1d : %.3f %.3f %.3f\n", i,
-        faceCoords(i,0), faceCoords(i,1), faceCoords(i,2));
-  /*
-  auto vab = faceCoords[1] - faceCoords[0]; //b - a;
-  auto vac = abc[2] - abc[0]; //c - a;
-  auto vap = pos - abc[0]; // p - a;
-  vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
+  tri[0] = faceCoords[0] - faceCoords[2];
+  tri[1] = pos           - faceCoords[2];
+  auto cap_area = o::triangle_area_from_basis(tri);
 
-  //volume using bottom face=0
-  get_face_coords(Mat, 0, abc);
-  auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
-  OMEGA_H_CHECK(3 == vtx3);
-  // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
-  Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
-  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
-  Omega_h::Real inv_vol = 0.0;
-  if(vol6 > EPSILON) // TODO tolerance
-    inv_vol = 1.0/vol6;
-  else
-  {
-    return 0;
-  }
-  bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
-  bcc[1] = inv_vol * vals[1];
-  bcc[2] = inv_vol * vals[2];
-  bcc[3] = inv_vol * vals[3]; // 1-others
-  */
+  tri[0] = faceCoords[1] - faceCoords[0];
+  tri[1] = pos           - faceCoords[0];
+  auto abp_area = o::triangle_area_from_basis(tri);
 
-  return 1; //success
+  // barycentric coords
+  bcc[0] = cap_area/abc_area;   //u
+  bcc[1] = abp_area/abc_area;   //v
+  bcc[2] = 1 - bcc[0] - bcc[1]; //w
+
+  for(o::LO i=0; i<TriVerts; ++i)
+    printf("triangle %5d area %.5f %.5f coordinates vtx %1d : %.3f %.3f\n",
+        searchElm, triArea[searchElm], i, faceCoords(0,i), faceCoords(1,i));
 }
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
@@ -145,7 +146,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
 
   return 1; //success
 }
-
 
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 // corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge) ?
@@ -457,7 +457,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   printf("%s start\n", __func__);
-  const int meshdim = 2;
   const int debug = 1;
 
   const auto dual = mesh.ask_dual();
@@ -469,6 +468,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   const auto faceEdges = faces2edges.ab2b;
   const auto dual_edges = dual.ab2b; // CSR value array
   const auto dual_faces = dual.a2ab; // CSR offset array, index by mesh element ids
+  const auto triArea = measure_elements_real(&mesh);
 
   const auto scsCapacity = scs->capacity();
 
@@ -499,98 +499,40 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto elmId = elem_ids[pid];
+        auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
         if(debug)
-          printf("Elem %d ptcl: %d\n", elmId, ptcl);
-        OMEGA_H_CHECK(elmId >= 0);
-        /*
-        auto faceVerts = o::gather_verts<3>(faces2verts, elmId);
+          printf("Elem %d ptcl: %d\n", searchElm, ptcl);
+        OMEGA_H_CHECK(searchElm >= 0);
+        auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         //M: coordinates of each vertex bounding tri
-        auto M = gatherVectors3x3(coords, faceVerts);
-        auto dest = makeVector3(pid, xtgt_scs_d);
-        auto orig = makeVector3(pid, x_scs_d);
-        Omega_h::Vector<3> faceVertBcc;
-        if(loops == 0) {
+        const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+        auto ptclDest = makeVector2(pid, xtgt_scs_d);
+        auto ptclOrigin = makeVector2(pid, x_scs_d);
+        Omega_h::Vector<3> faceBcc;
+        if(loops == 0) { //TODO move this outside the while loop
           //make sure particle origin is in initial element
-          find_barycentric_tri(M, orig, faceVertBcc);
-          if(!all_positive(faceVertBcc, 0)) {
-            printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
-              ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-            printf("Particle doesn't belong to this element at loops=0");
+          barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
+          if(!all_positive(faceBcc)) {
+            printf("Particle not in element! ptcl %d elem %d => %d "
+              "orig %.3f %.3f dest %.3f %.3f "
+              "bcc %.3f %.3f %.3f\n",
+              ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+              ptclDest[0], ptclDest[1],
+              faceBcc[0], faceBcc[1], faceBcc[2]);
             OMEGA_H_CHECK(false);
           }
         }
-        */
-        /*
         //check if the destination is this element
-        find_barycentric_tet(M, dest, bcc);
-        if(all_positive(bcc, 0)) {
+        barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
+        if(all_positive(faceBcc)) {
           if(debug)
-            printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
+            printf("ptcl %d is in destination elm %d\n", ptcl, searchElm);
           elem_ids_next[pid] = elem_ids[pid];
           ptcl_done[pid] = 1;
-        } else {
-          if(debug)
-            printf("ptcl %d checking adj elms\n", ptcl);
-          //get element ID
-          auto dface_ind = dual_faces[elmId];
-          const auto beg_face = elmId *4;
-          const auto end_face = beg_face +4;
-          o::LO f_index = 0;
-          bool detected = false;
-          for(auto iface = beg_face; iface < end_face; ++iface) {
-            const auto face_id = faceEdges[iface];
-            auto xpoint = o::zero_vector<meshdim>();
-            bool exposed = side_is_exposed[face_id];
-            auto fv2v = o::gather_verts<3>(face_verts, face_id);
-            const auto face = gatherVectors3x3(coords, fv2v);
-            o::LO matInd1 = getfmap(f_index*2);
-            o::LO matInd2 = getfmap(f_index*2+1);
-            bool inverse = true;
-            if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
-              inverse = false;
-
-            detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse); //FIXME - need line-line intersection
-            if(debug)
-              printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl, 
-                face_id, inverse, exposed, detected);
-
-            if(detected && exposed) {
-              ptcl_done[pid] = 1;
-              for(o::LO i=0; i<meshdim; ++i)
-                xpoints_d[pid*meshdim+i] = xpoint[i];
-              elem_ids_next[pid] = -1;
-              if(debug) {
-                printf("ptcl %d faceid %d detected and exposed, next parent elm %d\n",
-                    ptcl, face_id, elem_ids_next[pid]);
-              }
-              break;
-            } else if(detected && !exposed) {
-              auto adj_elem  = dual_edges[dface_ind];
-              elem_ids_next[pid] = adj_elem;
-              if(debug) {
-                printf("ptcl %d faceid %d detected and !exposed, next parent elm %d\n",
-                    ptcl, face_id, elem_ids_next[pid]);
-              }
-              break;
-            }
-            // no line triangle intersection found for the current face
-            // appears to be a guess at the next element based on the smallest BCC
-            if(!exposed) {
-              if(debug)
-                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
-              ++dface_ind;
-              const o::LO min_ind = min_index(bcc, 4);
-              if(f_index == min_ind) {
-                elem_ids_next[pid] = dual_edges[dface_ind];
-              }
-            }
-            ++f_index;
-          } //for iface
-
-        } //else not in current element
-        */
+        } else { //not in current element
+          (void)debug; //silence compiler!
+        }
       } //if active particle
     };
 

@@ -193,9 +193,10 @@ namespace pumipic {
     return Omega_h::Write<T>(size,default_value);
   }
 
-  //TODO These only work for ints?
-  //Max and min operations taken from: https://www.geeksforgeeks.org/compute-the-minimum-or-maximum-max-of-two-integers-without-branching/
 
+  //Max and min operations taken from: https://www.geeksforgeeks.org/compute-the-minimum-or-maximum-max-of-two-integers-without-branching/
+  //NOTE These only work for ints, not using them for now
+  /*
   template <class T>
   OMEGA_H_INLINE T maxReduce(T x, T y) {
     return x ^ ((x ^ y) & -(x < y));
@@ -204,15 +205,39 @@ namespace pumipic {
   OMEGA_H_INLINE T minReduce(T x, T y) {
     return y ^ ((x ^ y) & -(x < y));
   }
-  
+  */
+
+  template <class T>
+  OMEGA_H_INLINE T maxReduce(T x, T y) {
+    if (x > y)
+      return x;
+    return y;
+  }
+  template <class T>
+  OMEGA_H_INLINE T minReduce(T x, T y) {
+    if (x < y)
+      return x;
+    return y;
+  }
+
   //Reductions are done by a bulk fan-in fan-out through the core region of each picpart
   template <class T>
-  void Mesh::reduceCommArray(int edim, Op op, Omega_h::Write<T> array) {
+  void Mesh::reduceCommArray(int edim, Op op, Omega_h::Write<T> comm_array) {
     Omega_h::HostRead<Omega_h::LO> ent_offsets(offset_ents_per_rank_per_dim[edim]);
-    if (ent_offsets[commptr->size()] != array.size()) {
+    int length = comm_array.size();
+    if (ent_offsets[commptr->size()] != length) {
       fprintf(stderr, "Comm array size does not match the expected size for dimension %d\n",edim);
       return;
     }
+
+    //Shift comm_array indexing to bulk communication ordering
+    Omega_h::Read<Omega_h::LO> arr_index = commArrayIndex(edim);
+    Omega_h::Write<T> array(length, 0);
+    auto convertToComm = OMEGA_H_LAMBDA(const Omega_h::LO id) {
+      const Omega_h::LO index = arr_index[id];
+      array[index] = comm_array[id];
+    };
+    Omega_h::parallel_for(length, convertToComm, "convertToComm");
     /***************** Fan In ******************/
     //Move values to host
     Omega_h::HostWrite<T> host_array(array);
@@ -262,22 +287,22 @@ namespace pumipic {
       if (status.MPI_TAG == 2) {
         if (op == SUM_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            array[start_index + i] += recv_array[i];
+            Kokkos::atomic_fetch_add(&(array[start_index + i]),recv_array[i]);
           };
           Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
         }
         else if (op == MAX_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            const Omega_h::LO x = array[start_index + i];
-            const Omega_h::LO y = recv_array[i];
+            const T x = array[start_index + i];
+            const T y = recv_array[i];
             array[start_index + i] = maxReduce(x,y);
           };
           Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
         }
         else if (op == MIN_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            const Omega_h::LO x = array[start_index + i];
-            const Omega_h::LO y = recv_array[i];
+            const T x = array[start_index + i];
+            const T y = recv_array[i];
             array[start_index + i] = minReduce(x,y);
           };
           Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
@@ -290,27 +315,27 @@ namespace pumipic {
         if (op == SUM_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
             int index = bounded_ent_ids_local[start+i];
-            array[start_index + index] += recv_array[i];
+            Kokkos::atomic_fetch_add(&(array[start_index + index]),recv_array[i]);
           };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          Omega_h::parallel_for(size, reduce_op, "reduce_op");
         }
         else if (op == MAX_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
             int index = bounded_ent_ids_local[start+i];
-            const Omega_h::LO x = array[start_index + index];
-            const Omega_h::LO y = recv_array[i];
+            const T x = array[start_index + index];
+            const T y = recv_array[i];
             array[start_index + i] = maxReduce(x,y);
           };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          Omega_h::parallel_for(size, reduce_op, "reduce_op");
         }
-        else if (op == MAX_OP) {
+        else if (op == MIN_OP) {
           auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
             int index = bounded_ent_ids_local[start+i];
-            const Omega_h::LO x = array[start_index + index];
-            const Omega_h::LO y = recv_array[i];
+            const T x = array[start_index + index];
+            const T y = recv_array[i];
             array[start_index + i] = minReduce(x,y);
           };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          Omega_h::parallel_for(size, reduce_op, "reduce_op");
         }
       }
       delete neighbor_arrays[finished_neighbor];
@@ -343,7 +368,7 @@ namespace pumipic {
       }
     }
     //Gather the boundary data to send
-    Omega_h::Write<Omega_h::LO> boundary_array(bounded_ent_ids_local.size());
+    Omega_h::Write<T> boundary_array(bounded_ent_ids_local.size());
     const Omega_h::LO start_index = ent_offsets[commptr->rank()];
     auto gatherBoundaryData = OMEGA_H_LAMBDA(const Omega_h::LO id) {
       const Omega_h::LO index = bounded_ent_ids_local[id];
@@ -351,7 +376,7 @@ namespace pumipic {
     };
     Omega_h::parallel_for(bounded_ent_ids_local.size(),gatherBoundaryData, "gatherBoundaryData");
     
-    Omega_h::HostWrite<Omega_h::LO> boundary_array_host(boundary_array);
+    Omega_h::HostWrite<T> boundary_array_host(boundary_array);
     T* sending_data = boundary_array_host.data();
     for (int i = 0; i < num_boundaries[edim]; ++i) {
       int rank = boundary_parts[edim][i];
@@ -371,6 +396,12 @@ namespace pumipic {
       array[i] = reduced_array[i];
     };
     Omega_h::parallel_for(array.size(), setArrayValues, "setArrayValues");
+
+    auto convertFromComm = OMEGA_H_LAMBDA(const Omega_h::LO id) {
+      const Omega_h::LO index = arr_index[id];
+      comm_array[id] = array[index];
+    };
+    Omega_h::parallel_for(length, convertFromComm, "convertFromComm");
   }
 
 
@@ -379,6 +410,6 @@ namespace pumipic {
   template void Mesh::reduceCommArray(int, Op, Omega_h::Write<T>);
   
   INST(Omega_h::LO)
-  //INST(Omega_h::Real)
+  INST(Omega_h::Real)
 #undef INST
 }

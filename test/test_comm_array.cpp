@@ -5,6 +5,9 @@
 #include <pumipic_mesh.hpp>
 #include <Kokkos_Core.hpp>
 
+bool minOwnership(pumipic::Mesh& picparts, int dim);
+bool sumEntities(pumipic::Mesh& picparts, int dim);
+
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
   Omega_h::Library& lib = pic_lib.omega_h_lib();
@@ -47,9 +50,8 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 1, 0);
 
   Omega_h::Read<Omega_h::LO> owners = picparts.entOwners(3);
-  Omega_h::Read<Omega_h::LO> arr_index = picparts.commArrayIndex(3);
   auto setMyElmsToOne = OMEGA_H_LAMBDA(Omega_h::LO elm_id) {
-    comm_array[arr_index[elm_id]] = (owners[elm_id] == rank);
+    comm_array[elm_id] = (owners[elm_id] == rank);
   };
   Omega_h::parallel_for(picparts.mesh()->nelems(), setMyElmsToOne);
 
@@ -65,39 +67,99 @@ int main(int argc, char** argv) {
   }
   if (!success) {
     fprintf(stderr, "Sum operation failed on %d\n", lib.world()->rank());
-    return EXIT_FAILURE;
   }
   MPI_Barrier(MPI_COMM_WORLD);
-  if (!rank)
-    printf("Element Sum operation completed\n");
 
-  Omega_h::Write<Omega_h::LO> vtx_comm = picparts.createCommArray(0, 1, INT_MAX);
-  Omega_h::Read<Omega_h::LO> arr_index0 = picparts.commArrayIndex(0);
+  for (int i = 0; i <= picparts.dim(); ++i) {
+    if (!minOwnership(picparts, i))
+      printf("minOwnership on dimension %d failed on rank %d\n", i, rank);
+  }
 
-  Omega_h::LOs vtx_owners = picparts.entOwners(0);
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  for (int i = 0; i <= picparts.dim(); ++i) {
+    if (!sumEntities(picparts, i))
+      printf("sumEntities on dimension %d failed on rank %d\n", i, rank);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  Omega_h::Write<Omega_h::Real> max_comm = picparts.createCommArray(0, 1, 0.0);
+  auto setLIDVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
+    max_comm[vtx_id] = vtx_id;
+  };
+  Omega_h::parallel_for(picparts.nents(0), setLIDVtx);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  Omega_h::Write<Omega_h::LO> fail(1, 0);
+  auto checkVtxMax = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
+    if (max_comm[vtx_id] < vtx_id)
+      fail[0] = 1;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtxMax);
+  
+  Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
+  if (fail_host[0]) {
+    fprintf(stderr, "Max reduce failed on %d\n", rank);
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  return 0;
+}
+
+bool minOwnership(pumipic::Mesh& picparts, int dim) {
+  int rank = picparts.comm()->rank();
+  Omega_h::Write<Omega_h::LO> owner_comm = picparts.createCommArray(dim, 1, INT_MAX);
+
+  Omega_h::LOs vtx_owners = picparts.entOwners(dim);
   auto setOwnedVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
     if (vtx_owners[vtx_id] == rank)
-      vtx_comm[arr_index0[vtx_id]] = rank;
+      owner_comm[vtx_id] = rank;
   };
-  Omega_h::parallel_for(picparts.mesh()->nents(0), setOwnedVtx);
+  Omega_h::parallel_for(picparts.mesh()->nents(dim), setOwnedVtx);
 
-  picparts.reduceCommArray(0, pumipic::Mesh::MIN_OP, vtx_comm);
+  picparts.reduceCommArray(dim, pumipic::Mesh::MIN_OP, owner_comm);
 
   Omega_h::Write<Omega_h::LO> fail(1, 0);
   auto checkVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
-    if (vtx_comm[arr_index0[vtx_id]] != vtx_owners[vtx_id])
+    if (owner_comm[vtx_id] != vtx_owners[vtx_id])
       fail[0] = 1;
   };
   Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtx);
   
   Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
   if (fail_host[0]) {
-    fprintf(stderr, "Vtx comm failed on %d\n", rank);
-    return EXIT_FAILURE;
+    return false;
   }
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (!rank)
-    printf("Vertex Sum operation completed\n");
+  return true;
+}
 
-  return 0;
+bool sumEntities(pumipic::Mesh& picparts, int dim) {
+  //Sum the occurences of each entity
+  int rank = picparts.comm()->rank();
+  Omega_h::Write<Omega_h::LO> sum_comm = picparts.createCommArray(dim, 1, 1);
+
+  picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, sum_comm);
+
+  Omega_h::Write<Omega_h::Real> contribution_comm = picparts.createCommArray(dim, 1, 0.0);
+
+  auto setContribution = OMEGA_H_LAMBDA(Omega_h::LO id) {
+    contribution_comm[id] = 1.0 / sum_comm[id];
+  };
+  Omega_h::parallel_for(picparts.nents(dim), setContribution, "setContribution");
+
+  picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, contribution_comm);
+  
+  Omega_h::Write<Omega_h::LO> fail(1, 0);
+  auto checkVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
+    if (fabs(contribution_comm[vtx_id] - 1.0) > .00001)
+      fail[0] = 1;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtx);
+  
+  Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
+  if (fail_host[0]) {
+    return false;
+  }
+  return true;
 }

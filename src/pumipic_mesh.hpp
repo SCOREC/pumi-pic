@@ -20,12 +20,14 @@ namespace pumipic {
     //TODO? create picpart with unsafe_layers instead of safe_layers
     ~Mesh();
 
-    //Returns a pointer to the underlying omega_h mesh
-    Omega_h::Mesh* mesh() const {return picpart;}
     //Returns true if the full mesh is buffered
     bool isFullMesh() const;
+    //Returns a pointer to the underlying omega_h mesh
+    Omega_h::Mesh* mesh() const {return picpart;}
     //Returns the dimension of the mesh
     int dim() const {return picpart->dim();}
+    //Returns the number of entities of the picpart
+    Omega_h::LO nents(int dim) const {return picpart->nents(dim);}
     //Returns the commptr
     Omega_h::CommPtr comm() const {return commptr;}
 

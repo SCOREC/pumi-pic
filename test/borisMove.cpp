@@ -61,8 +61,11 @@ void search(GitrmParticles& gp, GitrmMesh& gm, int iter, o::Write<o::LO> &data_d
   gp.collisionPoints = o::Reals(xpoints_d);
   gp.collisionPointFaceIds = o::LOs(xface_ids);
   auto elm_ids = o::LOs(elem_ids);
-  gitrm_ionize(scs, gir, gp, gm, elm_ids, debug);
-  gitrm_recombine(scs, gir, gp, gm, elm_ids, debug);
+  // skipped for neutral particle tracking 
+  if(gir.chargedPtclTracking) {
+    gitrm_ionize(scs, gir, gp, gm, elm_ids, debug);
+    gitrm_recombine(scs, gir, gp, gm, elm_ids, debug);
+  }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //elem_ids to be used in rebuild
@@ -70,23 +73,14 @@ void search(GitrmParticles& gp, GitrmMesh& gm, int iter, o::Write<o::LO> &data_d
   //applySurfaceModel(mesh, scs, elem_ids);
 
   //output particle positions, for converting to vtk
-  storeAndPrintData(mesh, gp, iter, data_d, true);
+  storePiscesData(mesh, gp, iter, data_d, true);
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(scs, elem_ids);
 }
-//TODO move test_interpolateTet() from ionizeRecombine
-void unit_test(SCS* scs, GitrmMesh& gm, bool debug=false) {
-  printf("\nInterpolation Test only for init ptcl's element vertices\n");
-  auto& mesh = gm.mesh;
-  const auto densIon_d = gm.densIon_d;
-  auto x0 = gm.densIonX0;
-  auto z0 = gm.densIonZ0;
-  auto nx = gm.densIonNx;
-  auto nz = gm.densIonNz;
-  auto dx = gm.densIonDx;
-  auto dz = gm.densIonDz;
-  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
-  test_interpolateTet(scs, mesh, densVtx, densIon_d, x0, z0, dx, dz, nx, nz, true);
+
+void profileAndInterpolateTest(GitrmMesh& gm, bool debug=false) {
+  gm.printDensityTempProfile(0.05, 20, 0.7, 2);
+  //gm.test_interpolateFields(true);
 }
 
 int main(int argc, char** argv) {
@@ -104,28 +98,25 @@ int main(int argc, char** argv) {
   if(argc < 7)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh><Bfile><Efiel><prof_file><ptcls_file><rate_file>"
+      << " <mesh><Bfile><prof_file><ptcls_file><rate_file>"
       << "[<nPtcls><nIter>]\n";
     exit(1);
   }
 
-  std::string bFile="", eFile="", profFile="", ptclSource="", ionizeRecombFile="";
+  std::string bFile="", profFile="", ptclSource="", ionizeRecombFile="";
   bool piscesRun = false;
-
+  bool chargedSim = false; //false for neutral tracking
+  printf("WARNING: neutral particle tracking is ON \n");
   //TODO
   piscesRun = true;
-  o::Real shiftE = 0;
   o::Real shiftB = 0;
-  if(piscesRun) {
-    shiftE = 1.6955;
-    shiftB = 0; //TODO
-  }
+  if(piscesRun)
+    shiftB = 0; //TODO 1.6955;
 
   bFile = argv[2];
-  eFile = argv[3];
-  profFile = argv[4];
-  ptclSource  = argv[5];
-  ionizeRecombFile = argv[6];
+  profFile = argv[3];
+  ptclSource  = argv[4];
+  ionizeRecombFile = argv[5];
 
   auto lib = Omega_h::Library(&argc, &argv);
   const auto world = lib.world();
@@ -138,8 +129,8 @@ int main(int argc, char** argv) {
     gm.markDetectorCylinder(true);
 
   printf("Initializing Fields and Boundary data\n");
-  OMEGA_H_CHECK(!(bFile.empty()||eFile.empty()));
-  gm.initEandBFields(bFile, eFile, shiftB, shiftE);
+  OMEGA_H_CHECK(!bFile.empty());
+  gm.initBField(bFile, shiftB);
 
   std::cout << "done E,B \n";
 
@@ -148,7 +139,7 @@ int main(int argc, char** argv) {
   gm.addTagAndLoadData(profFile, profFile);
 
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
-  GitrmIonizeRecombine gir(ionizeRecombFile);
+  GitrmIonizeRecombine gir(ionizeRecombFile, chargedSim);
 
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces();
@@ -156,12 +147,12 @@ int main(int argc, char** argv) {
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
   int numPtcls = 0;
-  double dTime = 1e-8; //gitr:1e-8s for 10,000 iterations
+  double dTime = 5e-9; //pisces:1e-9 for 100,000 iterations
   int NUM_ITERATIONS = 10000; //higher beads needs >10K
+  if(argc > 6)
+    numPtcls = atoi(argv[6]);
   if(argc > 7)
-    numPtcls = atoi(argv[7]);
-  if(argc > 8)
-    NUM_ITERATIONS = atoi(argv[8]);
+    NUM_ITERATIONS = atoi(argv[7]);
 
   GitrmParticles gp(mesh, dTime);
   //current extruded mesh has Y, Z switched
@@ -175,12 +166,14 @@ int main(int argc, char** argv) {
 
   auto &scs = gp.scs;
 
-  //unit_test(scs, gm, true); //move to unit_test
+  profileAndInterpolateTest(gm, true); //move to unit_test
 
-  // o::LO radGrid = (int)(2.45 - 0.8)/(2.0*dr); // x:0.8..2.45 m
   o::LO numGrid = 14;
   o::Write<o::LO>data_d(numGrid, 0);//*thetaGrid*phiGrid, 0);
-  
+
+  o::LO ptclGrids = 20;
+  o::Write<o::GO>ptclDataR(ptclGrids, 0);
+  o::Write<o::GO>ptclDataZ(ptclGrids, 0);
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
   mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
@@ -196,14 +189,16 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "=================iter %d===============\n", iter);
-    gitrm_findDistanceToBdry(gp, gm);
-    //mesh, gm.bdryFaces, gm.bdryFaceInds, SIZE_PER_FACE, FSKIP);
-    gitrm_calculateE(gp, mesh);
+
+    if(gir.chargedPtclTracking) {    
+      gitrm_findDistanceToBdry(gp, gm);
+      gitrm_calculateE(gp, mesh);
+    }
     gitrm_borisMove(scs, gm, dTime);
-    //computeAvgPtclDensity(mesh, scs);
-    //writeDispVectors(scs);
     timer.reset();
     search(gp, gm, iter, data_d, gir );
+    storePtclDataInGridsRZ(scs, iter, ptclDataR, ptclGrids, 1);
+    storePtclDataInGridsRZ(scs, iter, ptclDataZ, 1, ptclGrids);
 
     if(iter%100 ==0)
       fprintf(stderr, "time(s) %f nPtcls %d\n", timer.seconds(), scs->nPtcls());
@@ -212,13 +207,17 @@ int main(int argc, char** argv) {
       fprintf(stderr, "Total iterations = %d\n", iter+1);
       break;
     }
-    //tagParentElements(mesh,scs,iter);
-    //render(mesh,iter);
   }
   auto end_sim = std::chrono::system_clock::now();
   std::chrono::duration<double> dur_sec = end_sim - start_sim;
   std::cout << "Simulation duration " << dur_sec.count()/60 << " min.\n";
+  std::cout << "Profiles in R direction \n";
+  printGridData(ptclDataR);
+  std::cout << "Profiles in Z direction \n";
+  printGridData(ptclDataZ);
+  std::cout << "Pisces detections \n";
   printGridData(data_d);
+
   fprintf(stderr, "done\n");
 
   return 0;

@@ -28,9 +28,6 @@ enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL,
   PTCL_CHARGE, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
   PTCL_PREV_RECOMBINE};
 
-//TODO if multiple species ?
-constexpr o::Real PTCL_AMU=184.0; //47.867; //titanium for pisces ?
-
 typedef SellCSigma<Particle> SCS;
 struct PtclInitStruct;
 
@@ -97,14 +94,14 @@ struct PtclInitStruct {
 
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
-inline void storeAndPrintData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter, 
-    o::Write<o::LO> &data_d, bool print=true) {
+inline void storePiscesData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter, 
+    o::Write<o::LO> &data_d, bool debug=true) {
   // test TODO move test part to separate unit test
-  o::Real radMax = 0.05; //m 0.0446+0.005
-  o::Real zMin = 0; //m height min
-  o::Real zMax = 0.15; //m height max 0.14275
-  o::Real htBead1 =  0.01275; //m ht of 1st bead
-  o::Real dz = 0.01; //m ht of beads 2..14
+  double radMax = 0.05; //m 0.0446+0.005
+  double zMin = 0; //m height min
+  double zMax = 0.15; //m height max 0.14275
+  double htBead1 =  0.01275; //m ht of 1st bead
+  double dz = 0.01; //m ht of beads 2..14
   SCS* scs = gp.scs;
   auto pisces_ids = mesh.get_array<o::LO>(o::FACE, "piscesTiRod_ind");
   auto pid_scs = scs->get<PTCL_ID>();
@@ -121,12 +118,12 @@ inline void storeAndPrintData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter,
       auto x = xpt[0], y = xpt[1], z = xpt[2];
       o::Real rad = std::sqrt(x*x + y*y);
       o::LO zInd = -1;
-      if(rad < radMax && z < zMax && z > zMin)
+      if(rad < radMax && z <= zMax && z >= zMin)
         zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
       
       auto detId = pisces_ids[fid];
       if(detId > -1) { //TODO
-        if(print)
+        if(debug)
           printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
             pid_scs(pid), zInd, detId, x, y, z, iter);
         Kokkos::atomic_fetch_add(&data_d[detId], 1);
@@ -136,20 +133,71 @@ inline void storeAndPrintData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter,
   scs->parallel_for(lamb);
 }
 
-inline void printGridData(o::Write<o::LO> &data_d) {
-  o::Write<o::LO>total(1,0);
+//storePtclDataInGridsRZ(scs, iter, data_d, 1, 10, true);
+// gridsR gets preference. If >1 then gridsZ not taken
+inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d, 
+  int gridsR=1, int gridsZ=10, bool debug=false, double radMax=0.2, 
+  double zMax=0.8, double radMin=0, double zMin=0) {
+  auto dz = (zMax - zMin)/gridsZ;
+  auto dr = (radMax - radMin)/gridsR;
+  auto pid_scs = scs->get<PTCL_ID>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask >0) {
+      auto x = pos_scs(pid, 0);
+      auto y = pos_scs(pid, 1);
+      auto z = pos_scs(pid, 2);
+      auto rad = std::sqrt(x*x + y*y);
+      int ind = -1;
+      if(rad < radMax && radMin >= radMin && z <= zMax && z >= zMin)
+        if(gridsR >1) //prefer radial
+          ind = (int)((rad - radMin)/dr);
+        else if(gridsZ >1)
+          ind = (int)((z - zMin)/dz);
+      int dir = (gridsR >1)?1:0;
+      if(ind >=0) {
+        if(debug)
+          printf("grid_ptclID %d ind %d pos %.5f %.5f %.5f iter %d rdir %d\n", 
+            pid_scs(pid), ind, x, y, z, iter, dir);
+        Kokkos::atomic_fetch_add(&data_d[ind], 1);
+      }
+    } //mask
+  };
+  scs->parallel_for(lamb);
+}
+
+// print from host, since missing entries from device print  
+inline void printGridDataNComp(o::Write<o::GO> &data_d, int nComp=1) {
+  o::HostRead<o::GO> data(data_d);
+  auto maxInd = data.size()/nComp;
+  int sum = 0;
+  for(int i=0; i<data.size(); ++i)
+    sum += data[i];
+  printf("index  fraction1 ...  \n");  
+  for(int i=0; i<maxInd; ++i) {
+    printf("%d ", i);
+    for(int j=0; j<nComp; ++j)
+      printf("%.3f ", data[i*nComp+j]/sum);
+    printf("\n");
+  }
+}
+
+template <typename T>
+inline void printGridData(o::Write<T> &data_d) {
+  o::Write<T>total(1,0);
   o::parallel_for(data_d.size(), OMEGA_H_LAMBDA(const int& i) {
     auto num = data_d[i];
     if(num>0)
       Kokkos::atomic_fetch_add(&total[0], num);
   });
-  o::HostRead<o::LO> tot(total);
+  o::HostRead<T> tot(total);
   printf("total in device %d \n", tot[0]);
-  o::HostRead<o::LO> data(data_d);
+  o::HostRead<T> data(data_d);
   printf("index total  \n");  
-  for(o::LO i=0; i<data.size(); ++i)
+  for(int i=0; i<data.size(); ++i)
       printf("%d %d\n", i, data[i]);
 }
+
 
 /** @brief Calculate distance of particles to domain boundary 
  * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
@@ -184,11 +232,11 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
         o::Real dist = 0;
         o::Real min = 1.0e10;
         o::Matrix<3, 3> face;
-        o::Vector<3> point = o::zero_vector<3>();
-        o::Vector<3> pt;
+        auto point = o::zero_vector<3>();
+        auto pt = o::zero_vector<3>();
         o::LO fe, fel, fi, fid, minRegion;
         fe = fi = fel = fid = minRegion = -1;
-        if(debug)
+        if(debug && pid<1)
           printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
             bdryFaceInds[elem+1]);
 
@@ -206,37 +254,40 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
           }
           auto ref = p::makeVector3(pid, pos_d);
           if(debug && ii == 0)
-            printf("ref: %d %f %f %f \n", pid, ref[0], ref[1], ref[2]);
+            printf("pos: %d %g %g %g \n", pid, ref[0], ref[1], ref[2]);
           //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
           o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
           dist = p::osh_dot(pt - ref, pt - ref);
-          if(debug)
-            printf(": dist_%0.6f e_%d reg_%d fe_%d \n", dist, elem, region, fe);
-
+          dist = sqrt(dist); // use square ?
+          if(debug) {
+            printf(": dist_%g e_%d reg_%d fe_%d \n", dist, elem, region, fe);
+            p::print_osh_vector(pt, "closest_pt");
+          }
           if(ii==0 || dist < min) {
             min = dist;
             fel = fe;
             fid = fi;
             minRegion = region;
             for(int i=0; i<3; ++i)
-              point[0] = pt[i];
+              point[i] = pt[i];
 
             if(debug){
-              printf("update:: e_%d dist_%0.6f region_%d fi_%d fe_%d\n", 
+              printf("update:: e_%d dist_%g region_%d fi_%d fe_%d\n", 
                 elem, min, region, fi, fe);
-              p::print_osh_vector(point, "Nearest_pt");
+              p::print_osh_vector(point, "this_nearest_pt");
             }
           }
-        }
+        } //for
 
-        min = std::sqrt(min);
         if(debug) {
-          printf("  el=%d MINdist=%0.8f fid=%d face_el=%d reg=%d\n", 
+          printf("dist: el=%d MINdist=%g fid=%d face_el=%d reg=%d\n", 
             elem, min, fid, fel, minRegion);
+          p::print_osh_vector(point, "Nearest_pt");
+
         }
         OMEGA_H_CHECK(fid >= 0);
         closestBdryFaceIds[pid] = fid;
-        for(o::LO j=0; j<<3; ++j)
+        for(o::LO j=0; j<3; ++j)
           closestPoints[pid*3+j] = point[j];
       } 
     }

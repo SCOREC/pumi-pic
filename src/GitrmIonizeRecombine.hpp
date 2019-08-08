@@ -8,8 +8,9 @@
 
 class GitrmIonizeRecombine {
 public:
-  GitrmIonizeRecombine(const std::string &fName);
+  GitrmIonizeRecombine(const std::string &fName, bool charged=true);
   void initIonizeRecombRateData(const std::string &fName, int debug=0);
+  bool chargedPtclTracking = true;
   o::Real ionizeTempGridMin = 0;
   o::Real ionizeDensGridMin = 0;
   o::Real ionizeTempGridDT = 0;
@@ -42,8 +43,8 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   const o::Real gridD0, const o::Real dT, const o::Real dD, 
   const o::LO nT,  const o::LO nD, const o::LO charge) {
 
-  //o::LO indT = floor( (log10(tem) - gridT0)/dT );
-  o::LO indT = floor( (tem - gridT0)/dT );
+  o::LO indT = floor( (log10(tem) - gridT0)/dT );
+  //o::LO indT = floor( (tem - gridT0)/dT );
   o::LO indN = floor( (log10(dens) - gridD0)/dD );
   if(indT < 0 || indT > nT-2)
     indT = 0;
@@ -71,67 +72,6 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   o::Real rate = (aT*fx_z1+bT*fx_z2)/abT;
 
   return rate;
-}
-
-
-// TODO move to unit test
-inline void test_interpolateTet(SCS* scs, o::Mesh& mesh, const o::Reals& data3d, 
-  const o::Reals& data2d, double x0, double z0, double dx, double dz, int nx,
-  int nz, bool debug=false) {
-
-  const auto coords = mesh.coords();
-  const auto mesh2verts = mesh.ask_elem_verts();
-  auto lambda = SCS_LAMBDA(const int &el, const int &pid, const int &mask) {
-    if(mask > 0) {
-      const auto tetv2v = o::gather_verts<4>(mesh2verts, el);
-      auto tet = p::gatherVectors4x3(coords, tetv2v);
-      for(int i=0; i<4; ++i) {
-        auto pos = tet[i];
-        auto bcc = o::zero_vector<4>();
-        p::find_barycentric_tet(tet, pos, bcc);
-        if(debug)
-          printf("test: bcc %g %g %g %g\n", bcc[0], bcc[1], bcc[2], bcc[3]);   
-        o::Real val3d = p::interpolateTetVtx(mesh2verts, data3d, el, bcc, 1, 0, true);
-        auto pos2D = o::zero_vector<3>();
-        pos2D[0] = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
-        pos2D[1] = 0;
-        auto val2d = p::interpolate2dField(data2d, x0, z0, dx, 
-          dz, nx, nz, pos2D, false, 1,0,debug);
-        if(debug)
-          printf("test: x0 %g z0 %g dx %g dz %g nx %d nz %d \n",
-           x0, z0, dx, dz, nx, nz);
-        if(debug)
-          printf("test: val2D %g val3D %g pos2D %g %g %g\n",
-            val2d, val3d, pos2D[0], pos2D[1], pos2D[2]);
-
-      }
-
-        //TODO test data point (for unit test only)
-        /*
-        if(pid<2) {
-          //test density
-          auto test = o::zero_vector<3>();
-          //index ix=1,iz=0 first row of x, id=1 (nx*iz+ix)
-          auto ref = 7.9691641e+17;
-          test[0] = 1.005;
-          test[1] = 0;
-          test[2] = -1.45;
-          auto d = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-          dzDens, nxDens, nzDens, test, false, 1,0,true);
-          printf("test Iondensity %f ref: %g @ %f %f %f\n", d, ref, test[0], test[1], test[2]);
-          //index ix=150,iz=300 throw, id= 90450(nx*iz+ix)
-          ref = 3.1642416e+19; 
-          test[0] = 1.75;
-          test[1] = 0;
-          test[2] = 5.00000001402157e-08;
-          d = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-          dzDens, nxDens, nzDens, test, false,1,0,true);
-          printf("test Iondensity %f ref: %g @ %f %f %f\n", d, ref, test[0], test[1], test[2]);
-        }
-        */
-    } //mask 
-  };
-  scs->parallel_for(lambda);  
 }
 
 

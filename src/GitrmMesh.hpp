@@ -12,29 +12,31 @@
 namespace o = Omega_h;
 namespace p = pumipic;
 
-#ifndef USE_3D_FIELDS
-#define USE_3D_FIELDS 0
-#endif
+//presheath efield is always used. Since it is const, set CONSTANT_EBFIELDS.
+// sheath efield is calcualted efield, it is always used. Skip calling 
+// gitrm_calculateE for neutrals.
 
-#ifndef BIASED_SURFACE
-#define BIASED_SURFACE 0
-#endif
+// D3D 0.8 to 2.45 m radial 
 
-#ifndef USEPRESHEATHEFIELD
-#define USEPRESHEATHEFIELD 1
-#endif
-
-#ifndef USECYLSYMM
-#define USECYLSYMM 0 // TODO
-#endif
+constexpr o::LO USE3D_BFIELD = 0; //TOD
+constexpr o::LO USE2D_INPUTFIELDS = 0;
+// GITR only constant EField is used.
+constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
+constexpr o::LO USECYLSYMM = 0; // TODO
+constexpr o::LO PISCESRUN  = 1;
+constexpr o::Real BACKGROUND_AMU = 4.0; //TODO for pisces
+//TODO if multiple species ?
+constexpr o::Real PTCL_AMU=184.0; //W
 
 constexpr o::LO BACKGROUND_Z = 1;
-constexpr o::Real BACKGROUND_AMU = 4.0; //pisces TODO
 
 constexpr o::Real DEPTH_DIST2_BDRY = 0.001; // 1mm
-constexpr o::LO BDRYFACE_SIZE = 20;
+constexpr o::LO BDRYFACE_SIZE = 30; //TODO
 constexpr o::LO BFS_DATA_SIZE = 100;
 constexpr o::Real BIAS_POTENTIAL = 250.0;
+constexpr o::LO BIASED_SURFACE = 1;
+constexpr o::Real CONSTANT_EFIELD[] = {0, 0, 0};
+constexpr o::Real CONSTANT_BFIELD[] = {0,0,-0.08};
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };
@@ -123,8 +125,7 @@ public:
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
-  void initEandBFields(const std::string &, const std::string &,
-    o::Real shiftB=0, o::Real shiftE=0);
+  void initBField(const std::string &, o::Real shiftB=0);
   void parseGridLimits(std::stringstream &, std::string, std::string, bool, 
     bool &, bool &, double &, double &);
   void processFieldFile(const std::string &, o::HostWrite<o::Real> &, 
@@ -142,7 +143,13 @@ public:
     o::Reals&, o::Real shift=0, int debug=0);
   
   void markDetectorCylinder(bool render=false);
-  //TODO move these to suitable location
+
+  void test_interpolateFields(bool debug=false);
+  void printDensityTempProfile(double rmax=0.2, int gridsR=20, 
+    double zmax=0.5, int gridsZ=10);
+  void compareInterpolate2d3d(const o::Reals& data3d, const o::Reals& data2d,
+    double x0, double z0, double dx, double dz, int nx, int nz, bool debug=false);
+
   // Used in boundary init and if 2D field is used for particles
   o::Real bGridX0 = 0;
   o::Real bGridZ0 = 0;

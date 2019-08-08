@@ -36,14 +36,29 @@ It is safe to define OMEGA_H_DEVICE for functions, unless these are not
 used for host only (openmp) compilation.
 
 */
+// TODO use o::are_close() 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON) {
-  return std::abs(a-b) <= tol;
+  auto max = (std::abs(a) < std::abs(b)) ? b : a;
+  max = (max>0 || max<0) ? max:1;
+  return std::abs(a-b)/max <= tol;
 }
 
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b, 
-  Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
-  for(Omega_h::LO i=0; i<n; ++i) {
+template<int N>
+OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b, 
+  Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<N; ++i) {
+    if(!almost_equal(a[i],b, tol)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template<int N>
+OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b, 
+  Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<N; ++i) {
     if(!almost_equal(a[i],b[i], tol)) {
       return false;
     }
@@ -51,7 +66,28 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
   return true;
 }
 
-OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4> a, 
+
+OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b, 
+  Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
+  for(Omega_h::LO i=0; i<n; ++i) {
+    if(!almost_equal(a[i],b, tol)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template<int N>
+inline o::Vector<N> makeVectorHost(const Omega_h::Real(&a)[N], int beg=0) {
+  o::Vector<N> v;
+  for(int i=beg; i<N+beg; ++i) {
+    v[i] = a[i];
+  }
+  return v;
+}
+
+
+OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4>& a, 
   Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<a.size(); ++i) {
     if(a[i] < -tol)
@@ -140,15 +176,16 @@ inline void print_array(const double* a, int n=3, std::string name=" ") {
 template< int N>
 OMEGA_H_INLINE void print_osh_vector(const Omega_h::Vector<N> &v,
  const char* name) {
-  printf("%s %.3f %.3f %.3f",  name, v[0], v[1], v[2]);
-  if(N>3)
-    printf("%.3f",v[3]);
-  printf("\n");
-}
-
-inline void print_osh_vector_host(const Omega_h::Vector<3> &v, 
-  const char* name) {
-  printf("%s %.3f %.3f %.3f %s\n",  name, v[0], v[1], v[2]);
+  if(N==3)
+    printf("%s %g %g %g\n",  name, v[0], v[1], v[2]);
+  else if(N==4)
+    printf("%s %g %g %g %g\n",  name, v[0], v[1], v[2], v[3]);
+  else if(N>4) {
+    printf("%s ", name);
+    for(int i=0; i<N; ++i)
+      printf("%g ", v[i]); 
+    printf("\n");
+  }
 }
 
 /** @brief To interpolate field ONE component at atime from 

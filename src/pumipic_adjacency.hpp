@@ -620,7 +620,8 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   o::Real d2 = osh_dot(vac, vap);
   if (d1 <= 0 && d2 <= 0) {
     // barycentric coordinates (1,0,0)
-    ptq = pta;
+    for(int i=0; i<3; ++i)
+      ptq[i] = pta[i];
     region = VTXA;
     if(verbose >2){
       print_osh_vector(ptq, "QA");
@@ -635,7 +636,8 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   o::Real d4 = osh_dot(vac, vbp);
   if(region <0 && d3 >= 0 && d4 <= d3){ 
     // barycentric coordinates (0,1,0)
-    ptq = ptb;
+    for(int i=0; i<3; ++i)
+      ptq[i] = ptb[i];
     region = VTXB;
     if(verbose >2)
       print_osh_vector(ptq, "QB");
@@ -647,7 +649,8 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   if(region <0 && vc <= 0 && d1 >= 0 && d3 <= 0) {
     o::Real v = d1 / (d1 - d3);
     // barycentric coordinates (1-v,v,0)
-    ptq = pta + v * vab; 
+    ptq = v*vab;
+    ptq = ptq + pta; 
     region = EDGEAB;
     //return EDGEAB;
   }
@@ -658,7 +661,8 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   o::Real d6 = osh_dot(vac, vcp);
   if(region <0 && d6 >= 0 && d5 <= d6) { 
     // barycentric coordinates (0,0,1)
-    ptq = ptc; 
+    for(int i=0; i<3; ++i)
+      ptq[i] = ptc[i]; 
     region = VTXC;
     if(verbose >2)
       print_osh_vector(ptq, "QAB");
@@ -666,11 +670,12 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   }
 
   // Check if P in edge region of AC, if so return projection of P onto AC
-  o::Real vb = d5*d2 - d1*d6;
+  auto vb = d5*d2 - d1*d6;
   if(region <0 && vb <= 0 && d2 >= 0 && d6 <= 0) {
-    o::Real w = d2 / (d2 - d6);
+    auto w = d2 / (d2 - d6);
     // barycentric coordinates (1-w,0,w)
-    ptq = pta + w * vac; 
+    ptq = w*vac;
+    ptq = ptq + pta; 
     region = EDGEAC;
     if(verbose >2)
       print_osh_vector(ptq, "QAC");

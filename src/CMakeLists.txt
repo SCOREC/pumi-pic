@@ -5,9 +5,11 @@ set(HEADERS
   pumipic_constants.hpp
   pumipic_mesh.hpp
   pumipic_library.hpp
+  pumipic_input.hpp
 )
 
 set(SOURCES
+  pumipic_input.cpp
   pumipic_part_construct.cpp
   pumipic_comm.cpp
   pumipic_mesh.cpp

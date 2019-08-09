@@ -1,6 +1,7 @@
 #pragma once
 #include <Omega_h_mesh.hpp>
 #include "pumipic_library.hpp"
+#include "pumipic_input.hpp"
 
 namespace pumipic {
   class Mesh {
@@ -16,8 +17,8 @@ namespace pumipic {
     // All elements in the core and elements within safe_layers from the core are safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector,
          int buffer_layers, int safe_layers);
-    //TODO? create XGC classification method for creating picpart
-    //TODO? create picpart with unsafe_layers instead of safe_layers
+    //Create picparts from input structure
+    Mesh(Input&);
     ~Mesh();
 
     //Returns true if the full mesh is buffered
@@ -28,6 +29,8 @@ namespace pumipic {
     int dim() const {return picpart->dim();}
     //Returns the number of entities of the picpart
     Omega_h::LO nents(int dim) const {return picpart->nents(dim);}
+    //Returns the number of elements of the picpart
+    Omega_h::LO nelems() const {return picpart->nelems();}
     //Returns the commptr
     Omega_h::CommPtr comm() const {return commptr;}
 

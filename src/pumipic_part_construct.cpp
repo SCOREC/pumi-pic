@@ -13,7 +13,7 @@ namespace {
                                      Omega_h::Write<Omega_h::GO> elem_gid);
   Omega_h::LOs rankLidNumbering(Omega_h::LOs owner, Omega_h::LOs offset, Omega_h::GOs gids);
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
-                       Omega_h::Write<Omega_h::LO> is_safe, Omega_h::Write<Omega_h::LO> is_visited,
+                       Omega_h::Write<Omega_h::LO> is_safe,
                        Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> has_part);
   void setSafeEnts(Omega_h::Mesh& mesh, int dim, int size, Omega_h::Write<Omega_h::LO> has_part, 
                    Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> buf);
@@ -53,15 +53,49 @@ namespace pumipic {
     
     // **********Determine safe zone and ghost region**************** //
     Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
-    Omega_h::Write<Omega_h::LO> is_visited(mesh.nelems());
     Omega_h::Write<Omega_h::LO> has_part(comm_size);
     int bridge_dim = 0;
-    bfsBufferLayers(mesh, bridge_dim, safe_layers, ghost_layers, is_safe, is_visited, 
+    bfsBufferLayers(mesh, bridge_dim, safe_layers, ghost_layers, is_safe,
                     owner, has_part);
 
     constructPICPart(mesh, owner, has_part, is_safe);
   }
 
+  Mesh::Mesh(Input& in) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+    /*********** Set safe zone and buffer to be entire mesh****************/
+    Omega_h::LOs owners = in.partition;
+    if (in.ownership_rule == Input::CLASSIFICATION) {
+      Omega_h::Write<Omega_h::LO> owns(in.m.nelems());
+      auto class_ids = in.m.get_array<Omega_h::ClassId>(in.m.dim(), "class id");
+      auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
+        const Omega_h::ClassId c_id = class_ids[id];
+        owns[id] = in.partition[c_id];
+      };
+      Omega_h::parallel_for(in.m.nelems(), ownByClassification, "ownByClassification");
+      owners = Omega_h::LOs(owns);
+    }
+    Omega_h::Write<Omega_h::LO> is_safe(in.m.nelems(),in.safeMethod==Input::FULL);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size,1);
+    if ((in.safeMethod != Input::NONE && in.safeMethod != Input::FULL)
+        || in.bufferMethod != Input::FULL) {
+      Omega_h::Write<Omega_h::LO> safe(in.m.nelems(), 0);
+      Omega_h::Write<Omega_h::LO> part(comm_size, 0);
+
+      bfsBufferLayers(in.m, in.bridge_dim, in.safeBFSLayers, in.bufferBFSLayers, safe,
+                      owners, part);
+
+      if (in.safeMethod == Input::BFS || in.safeMethod == Input::MINIMUM)
+        is_safe = safe;
+      if (in.bufferMethod == Input::BFS || in.bufferMethod == Input::MINIMUM)
+        has_part = part;
+    }
+    constructPICPart(in.m, owners, has_part, is_safe);
+  }
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,
                               Omega_h::Write<Omega_h::LO> has_part,
                               Omega_h::Write<Omega_h::LO> is_safe) {
@@ -274,12 +308,13 @@ namespace {
   }
   
   void bfsBufferLayers(Omega_h::Mesh& mesh, int bridge_dim, int safe_layers, int ghost_layers,
-                       Omega_h::Write<Omega_h::LO> is_safe, Omega_h::Write<Omega_h::LO> is_visited,
+                       Omega_h::Write<Omega_h::LO> is_safe,
                        Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> has_part) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     int comm_size;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    Omega_h::Write<Omega_h::LO> is_visited(mesh.nelems());
     Omega_h::Write<Omega_h::LO> is_visited_next(mesh.nelems());
     const auto initVisit = OMEGA_H_LAMBDA( Omega_h::LO elem_id){
       is_visited[elem_id] = is_safe[elem_id] = (owner[elem_id] == rank);
@@ -306,18 +341,17 @@ namespace {
         is_visited_next[elm] = true;
       }
     };
-    auto copySafe = OMEGA_H_LAMBDA( Omega_h::LO elm_id) {
-      is_safe[elm_id] = is_visited_next[elm_id];
-    };
-    auto copyVisit = OMEGA_H_LAMBDA( Omega_h::LO elm_id) {
-      is_visited[elm_id] = is_visited_next[elm_id];
-      if (is_visited[elm_id])
-        has_part[owner[elm_id]] = 1;
-    };
-    for (int i = 0; i < ghost_layers; ++i) {
+    for (int i = 0; i < ghost_layers || i < safe_layers; ++i) {
       Omega_h::parallel_for(mesh.nents(bridge_dim), ghostingBFS,"ghostingBFS");
-      if (i < safe_layers)
-        Omega_h::parallel_for(mesh.nelems(), copySafe, "copySafe");
+      auto copyVisit = OMEGA_H_LAMBDA( Omega_h::LO elm_id) {
+        is_visited[elm_id] = is_visited_next[elm_id];
+        if (i < safe_layers)
+          is_safe[elm_id] = is_visited_next[elm_id];
+        if (i < ghost_layers)
+          if (is_visited[elm_id])
+            has_part[owner[elm_id]] = 1;
+      };
+
       Omega_h::parallel_for(mesh.nelems(), copyVisit, "copyVisit");
     }
   }

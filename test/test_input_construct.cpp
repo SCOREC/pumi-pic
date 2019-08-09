@@ -104,7 +104,7 @@ bool constructMinNone(Omega_h::Mesh& mesh, char* partition_file) {
   
   pumipic::Mesh picparts(input);
 
-  Omega_h::Write<Omega_h::LO> fail(1);
+  Omega_h::Write<Omega_h::LO> fail(1, 0);
   Omega_h::LOs safe_tag = picparts.safeTag();
   auto checkSafeIsZero = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
     if (safe_tag[id])

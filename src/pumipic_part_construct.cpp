@@ -7,6 +7,8 @@
 #include <Omega_h_scan.hpp>
 #include <Omega_h_file.hpp>
 namespace {
+  void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
+                                Omega_h::Write<Omega_h::LO> owns);
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::LOs owner);
   Omega_h::LOs calculateOwnerOffset(Omega_h::LOs owner, int comm_size);
   Omega_h::LOs createGlobalNumbering(Omega_h::LOs owner, int comm_size,
@@ -71,12 +73,7 @@ namespace pumipic {
     Omega_h::LOs owners = in.partition;
     if (in.ownership_rule == Input::CLASSIFICATION) {
       Omega_h::Write<Omega_h::LO> owns(in.m.nelems());
-      auto class_ids = in.m.get_array<Omega_h::ClassId>(in.m.dim(), "class id");
-      auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-        const Omega_h::ClassId c_id = class_ids[id];
-        owns[id] = in.partition[c_id];
-      };
-      Omega_h::parallel_for(in.m.nelems(), ownByClassification, "ownByClassification");
+      setOwnerByClassification(in.m, in.partition, owns);
       owners = Omega_h::LOs(owns);
     }
     Omega_h::Write<Omega_h::LO> is_safe(in.m.nelems(),in.safeMethod==Input::FULL);
@@ -223,6 +220,16 @@ namespace pumipic {
 }
 
 namespace {
+  void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
+                                Omega_h::Write<Omega_h::LO> owns) {
+    auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class id");
+    auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
+      const Omega_h::ClassId c_id = class_ids[id];
+      owns[id] = class_owners[c_id];
+    };
+    Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
+  }
+  
   //Ownership of lower entity dimensions is determined by the minimum owner of surrounding elements
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::LOs elm_owner) {
     int comm_size;

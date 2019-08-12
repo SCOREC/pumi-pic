@@ -489,6 +489,30 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     }
   };
   scs->parallel_for(lamb);
+
+  //pid is same for a particle between iterations in this while loop
+  auto checkParent = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    //inactive particle that is still moving to its target position
+    if( mask > 0 && !ptcl_done[pid] ) {
+      auto searchElm = elem_ids[pid];
+      auto ptcl = pid_d(pid);
+      OMEGA_H_CHECK(searchElm >= 0);
+      auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
+      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+      auto ptclOrigin = makeVector2(pid, x_scs_d);
+      Omega_h::Vector<3> faceBcc;
+      barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
+      if(!all_positive(faceBcc)) {
+        printf("Particle not in element! ptcl %d elem %d => %d "
+          "orig %.3f %.3f bcc %.3f %.3f %.3f\n",
+          ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+          faceBcc[0], faceBcc[1], faceBcc[2]);
+        OMEGA_H_CHECK(false);
+      }
+    } //if active
+  };
+  scs->parallel_for(checkParent);
+
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -510,22 +534,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto ptclDest = makeVector2(pid, xtgt_scs_d);
         auto ptclOrigin = makeVector2(pid, x_scs_d);
         Omega_h::Vector<3> faceBcc;
-        if(loops == 0) { //TODO move this outside the while loop
-          //make sure particle origin is in initial element
-          barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
-          if(!all_positive(faceBcc)) {
-            printf("Particle not in element! ptcl %d elem %d => %d "
-              "orig %.3f %.3f dest %.3f %.3f "
-              "bcc %.3f %.3f %.3f\n",
-              ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
-              ptclDest[0], ptclDest[1],
-              faceBcc[0], faceBcc[1], faceBcc[2]);
-            OMEGA_H_CHECK(false);
-          }
-        }
-        //check if the destination is this element
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
-        if(all_positive(faceBcc)) {
+        if(all_positive(faceBcc)) { //if the destination is this element
           if(debug)
             printf("ptcl %d is in destination elm %d\n", ptcl, searchElm);
           elem_ids_next[pid] = elem_ids[pid];

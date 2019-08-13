@@ -5,6 +5,7 @@ function(make_test exename srcname)
 endfunction(make_test)
 
 make_test(print_partition print_partition.cpp)
+make_test(print_classification print_classification.cpp)
 make_test(full_mesh test_full_mesh.cpp)
 make_test(ptn_loading test_ptn_loading.cpp)
 make_test(comm_array test_comm_array.cpp)

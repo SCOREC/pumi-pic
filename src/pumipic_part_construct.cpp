@@ -222,7 +222,7 @@ namespace pumipic {
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
                                 Omega_h::Write<Omega_h::LO> owns) {
-    auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class id");
+    auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       owns[id] = class_owners[c_id];

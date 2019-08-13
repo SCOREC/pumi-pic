@@ -36,6 +36,14 @@ It is safe to define OMEGA_H_DEVICE for functions, unless these are not
 used for host only (openmp) compilation.
 
 */
+
+OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
+  o::Vector<3> v;
+  for(int i=0; i<3; ++i)
+    v[i] = arr[i];
+  return v;
+}
+
 // TODO use o::are_close() 
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON) {

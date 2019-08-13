@@ -76,8 +76,8 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
   const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
 
   auto pid_scs = scs->get<PTCL_ID>();
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto pos_prev_scs = scs->get<PTCL_POS_PREV>();
+  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
+  auto pos_prev_scs = scs->get<PTCL_POS>();
   auto vel_scs = scs->get<PTCL_VEL>();
   auto weight_scs = scs->get<PTCL_WEIGHT>();
 
@@ -130,7 +130,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         o::Vector<3> xpt;
         for(o::LO i=0; i<3; ++i)
           xpt[i] = xpoints[pid*3+i];
-        auto pos = p::makeVector3(pid, pos_scs);
+        auto pos = p::makeVector3(pid, tgt_scs);
 
         o::Real dEdist = 0;
         o::Real dAdist = 0;
@@ -288,7 +288,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
 
             auto newPos = -dbryInDir *surfNorm*vSampled; //boundaryVector[wallHit].inDir
             for(o::LO i=0; i<3; ++i)
-              pos_scs(pid,i) = newPos[i];
+              tgt_scs(pid,i) = newPos[i];
 
             auto prevPos = pos - 1e-6*dbryInDir *surfNorm;
 

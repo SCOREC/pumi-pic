@@ -146,18 +146,17 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
       nR, nZ, pos, false);
     tag_d[fid] = val; 
 
-    if(verbose > 4 && fid<10){
+    if(verbose > 4 && fid<10)
       printf(" tag_d[%d]= %.5f\n", fid, val);
-    }
-
   };
   o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
   o::Reals tag(tag_d);
   mesh.set_tag(o::FACE, tagName, tag);
 }
-
+ 
 void GitrmMesh::load1DFieldOnVtxFromFile(const std::string& file, 
-  FieldStruct3& fs, o::Reals& readInData_d, o::Real shift, int debug) {
+  FieldStruct3& fs, o::Reals& readInData_d, o::Reals& tagData, 
+  o::Real shift, int debug) {
   std::cout<< "Loading " << fs.name << " from " << file << " on vtx\n" ;
   processFieldFileFS3(file, fs, debug);
   std::string tagName = fs.name;
@@ -214,14 +213,13 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string& file,
     }
   };
   o::parallel_for(mesh.nverts(), fill, "Fill Tag");
-
-  o::Reals tag(tag_d);
-  mesh.set_tag(o::VERT, tagName, tag);
+  tagData = o::Reals (tag_d);
+  mesh.set_tag(o::VERT, tagName, tagData);
 }
 
 void GitrmMesh::addTagAndLoadData(const std::string &profileFile, 
   const std::string &profileFileDensity) {
-  mesh.add_tag<o::Real>(o::FACE, "ElDensity", 1); 
+  mesh.add_tag<o::Real>(o::FACE, "ElDensity", 1);
   mesh.add_tag<o::Real>(o::FACE, "IonDensity", 1); //=ni 
   mesh.add_tag<o::Real>(o::FACE, "IonTemp", 1);
   mesh.add_tag<o::Real>(o::FACE, "ElTemp", 1);
@@ -235,8 +233,8 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
   loadScalarFieldOnBdryFaceFromFile(profileFileDensity, fd); 
 
   FieldStruct3 fdv("IonDensityVtx", "ni", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);  
-  load1DFieldOnVtxFromFile(profileFileDensity, fdv, densIon_d, 0, 1);
+    "nR", "nZ", "", 1, 2, 2);   
+  load1DFieldOnVtxFromFile(profileFileDensity, fdv, densIon_d, densIonVtx_d, 0, 1);
   densIonX0 = fdv.gr1Min;
   densIonZ0 = fdv.gr2Min;
   densIonNx = fdv.nGrid1;
@@ -249,13 +247,13 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
   loadScalarFieldOnBdryFaceFromFile(profileFile, fne); 
   FieldStruct3 fnev("ElDensityVtx", "ne", "", "", "gridR", "gridZ", "", 
     "nR", "nZ", "", 1, 2, 2);  
-  load1DFieldOnVtxFromFile(profileFile, fnev, densEl_d);
+  load1DFieldOnVtxFromFile(profileFile, fnev, densEl_d, densElVtx_d);
   FieldStruct3 fti("IonTemp", "ti", "", "", "gridR", "gridZ", "", 
     "nR", "nZ", "", 1, 2, 2); 
   loadScalarFieldOnBdryFaceFromFile(profileFile, fti); 
   FieldStruct3 ftiv("IonTempVtx", "ti", "", "", "gridR", "gridZ", "", 
     "nR", "nZ", "", 1, 2, 2);
-  load1DFieldOnVtxFromFile(profileFile, ftiv, temIon_d);
+  load1DFieldOnVtxFromFile(profileFile, ftiv, temIon_d, tempIonVtx_d);
 
   tempIonX0 = ftiv.gr1Min;
   tempIonZ0 = ftiv.gr2Min;
@@ -270,8 +268,16 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
   loadScalarFieldOnBdryFaceFromFile(profileFile, fte); 
   FieldStruct3 ftev("ElTempVtx", "te", "", "", "gridR", "gridZ", "", 
     "nR", "nZ", "", 1, 2, 2);
-  load1DFieldOnVtxFromFile(profileFile, ftev, temEl_d);
+  load1DFieldOnVtxFromFile(profileFile, ftev, temEl_d, tempElVtx_d);
 }
+
+
+//NOTE: Importance of mesh size in GITRm over all boundary faces:
+// mesh of size set comp.to GITR: 573742 (GITR) vs 506832 (GITRm)
+// mesh of large face dim: 573742 (GITR) vs 361253 (GITRm)
+// El temperature is different at center of face, compared to GITR
+// when same 1st 2 particles were compared in calcE. For simulation
+// using biased surface, TEl decides DLength and CLDist.
 
 //TODO spli this function
 void GitrmMesh::initBoundaryFaces() {
@@ -763,7 +769,7 @@ void GitrmMesh::markDetectorCylinder(bool renderPiscesCylCells) {
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);
   auto numFaceIds = faceIds.size();
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto side_is_exposed = o::mark_exposed_sides(&mesh);
   auto face_class_ids = mesh.get_array<o::ClassId>(2, "class_id");
   o::Write<o::LO> faceTagIds(mesh.nfaces(), -1);
   o::Write<o::LO> elemTagIds(mesh.nelems(), 0);

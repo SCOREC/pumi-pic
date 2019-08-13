@@ -37,10 +37,10 @@ set(MPIRUN_PROCFLAG "-np" CACHE string
   "the command line flag to give process count to MPIRUN")
 
 #set debug flag
-set(debug_flag)
-if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
-  set(debug_flag "-g")
-endif()
+#set(debug_flag)
+#if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
+#  set(debug_flag "-g")
+#endif()
 
 find_package(particle_structures 0.0.1 REQUIRED)
 set(pumipic_USE_particle_structures_DEFAULT ON)

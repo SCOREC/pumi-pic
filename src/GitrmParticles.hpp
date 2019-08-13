@@ -24,9 +24,8 @@ typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d,
    int, fp_t, int, fp_t, fp_t> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PTCL_POS_PREV, PTCL_POS, PTCL_ID, PTCL_EFIELD_PREV, PTCL_VEL, 
-  PTCL_CHARGE, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
-  PTCL_PREV_RECOMBINE};
+enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
+  PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, PTCL_PREV_RECOMBINE};
 
 typedef SellCSigma<Particle> SCS;
 struct PtclInitStruct;
@@ -141,12 +140,12 @@ inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d
   auto dz = (zMax - zMin)/gridsZ;
   auto dr = (radMax - radMin)/gridsR;
   auto pid_scs = scs->get<PTCL_ID>();
-  auto pos_scs = scs->get<PTCL_POS>();
+  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask >0) {
-      auto x = pos_scs(pid, 0);
-      auto y = pos_scs(pid, 1);
-      auto z = pos_scs(pid, 2);
+      auto x = tgt_scs(pid, 0);
+      auto y = tgt_scs(pid, 1);
+      auto z = tgt_scs(pid, 2);
       auto rad = std::sqrt(x*x + y*y);
       int ind = -1;
       if(rad < radMax && radMin >= radMin && z <= zMax && z >= zMin)
@@ -221,7 +220,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   o::LO fskip = FSKIP;
   //fskip is 2, since 1st 2 are not part of face vertices
   OMEGA_H_CHECK(fsize > 0 && nel >0);
-  auto pos_d = scs->template get<PTCL_POS>();
+  auto pos_d = scs->template get<PTCL_NEXT_POS>();
 
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
                                 const int &mask){ 

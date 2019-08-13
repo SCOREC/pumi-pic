@@ -140,7 +140,7 @@ public:
   void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct3 &, 
     o::Real shift=0, int debug=0);
   void load1DFieldOnVtxFromFile(const std::string &, FieldStruct3 &, 
-    o::Reals&, o::Real shift=0, int debug=0);
+    o::Reals&, o::Reals&, o::Real shift=0, int debug=0);
   
   void markDetectorCylinder(bool render=false);
 
@@ -190,6 +190,12 @@ public:
   o::LO tempIonNz = 0;
   o::Real tempIonDx = 0;
   o::Real tempIonDz = 0;
+
+  // to replace tag
+  o::Reals densIonVtx_d;
+  o::Reals tempIonVtx_d;  
+  o::Reals densElVtx_d;
+  o::Reals tempElVtx_d;
 };
 
 struct FieldStruct2d {
@@ -215,14 +221,14 @@ struct FieldStruct2d {
 };
 
 struct FieldStruct3 {
-    FieldStruct3(std::string n, std::string c1, std::string c2, std::string c3,
-      std::string g1, std::string g2, std::string g3,
-      std::string ng1, std::string ng2, std::string ng3, 
-      int nc, int ng, int ngr):
-      name(n), comp1(c1), comp2(c2), comp3(c3), 
-      grid1str(g1), grid2str(g2), grid3str(g3),
-      nGrid1str(ng1), nGrid2str(ng2), nGrid3str(ng3),
-      nComp(nc), nGrids(ng), nGridsRead(ngr)
+  FieldStruct3(std::string n, std::string c1, std::string c2, std::string c3,
+    std::string g1, std::string g2, std::string g3,
+    std::string ng1, std::string ng2, std::string ng3, 
+    int nc, int ng, int ngr):
+    name(n), comp1(c1), comp2(c2), comp3(c3), 
+    grid1str(g1), grid2str(g2), grid3str(g3),
+    nGrid1str(ng1), nGrid2str(ng2), nGrid3str(ng3),
+    nComp(nc), nGrids(ng), nGridsRead(ngr)
     {}
     ~FieldStruct3() {
       if(data && nComp >0)

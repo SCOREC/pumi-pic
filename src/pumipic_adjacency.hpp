@@ -294,7 +294,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
         auto dest = makeVector3(pid, xtgt_scs_d);
         auto orig = makeVector3(pid, x_scs_d);
         o::Vector<4> bcc;
-        if(loops == 0) {
+        if(debug && loops == 0) {
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, tol)) {
@@ -439,23 +439,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
 
-  if(debug && !found) {
-    auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if(mask > 0 && ptcl_done[pid] ==0) {
-        auto tetv2v = o::gather_verts<4>(mesh2verts, e);
-        auto M = gatherVectors4x3(coords, tetv2v);
-        auto dest = makeVector3(pid, xtgt_scs_d);
-        auto orig = makeVector3(pid, x_scs_d);
-        o::Vector<4> bcc;
-        find_barycentric_tet(M, orig, bcc);
-        auto ptcl = pid_scs_d(pid);
-        printf("ptcl %d elem %d orig %.6f %.6f %.6f dest %.6f %.6f %.6f\n",
-          ptcl, e, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-        printf("ERROR:notFound: pid %3d elem_ids %6d\n", ptcl, elem_ids[pid]);
-      }
-    };
-    scs->parallel_for(lamb);
-  }
   return found;
 }
 

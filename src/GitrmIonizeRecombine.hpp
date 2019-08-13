@@ -74,7 +74,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   return rate;
 }
 
-
+// TODO split 
 // dt is timestep
 inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir, 
   const GitrmParticles& gp, const GitrmMesh& gm, o::LOs& elm_ids, 
@@ -110,9 +110,11 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "IonTempVtx");
-  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
+  const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx"); 
+  //const auto& tIonVtx = gm.tempIonVtx_d;
+  //const auto& densVtx = gm.densIonVtx_d;
   auto pid_scs = scs->get<PTCL_ID>();
-  auto pos_scs = scs->get<PTCL_POS>();
+  auto new_pos = scs->get<PTCL_NEXT_POS>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
   auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
@@ -127,19 +129,21 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   auto rands = o::Reals(rand1);
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     // invalid elem_ids init to -1
-    o::LO el = elm_ids[pid];
-    if(mask > 0 && el >= 0) {
+    if(mask > 0 && elm_ids[pid] >= 0) {
+     // element of next_pos
+      o::LO el = elm_ids[pid];
       auto ptcl = pid_scs(pid);
-      auto pos = p::makeVector3(pid, pos_scs);
+      auto pos = p::makeVector3(pid, new_pos);
       auto charge = charge_scs(pid);
-  	  auto bcc = o::zero_vector<4>();
-      p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
-      //if(debug)
-      //  printf("Ionize: bcc %g %g %g \n", bcc[0], bcc[1], bcc[2]);      
-      // from tags
-      o::Real tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
-	    o::Real nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
+      o::Real tlocal = 0;
+      o::Real nlocal = 0;
+      if(!use2DRatesData) {
+  	    auto bcc = o::zero_vector<4>();
+        p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
 
+        tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
+	      nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
+      }
       if(charge > 74-1) //W=74, charge index=73
         charge = 0;
 	    // from data array
@@ -155,6 +159,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
           dzDens, nxDens, nzDens, pos2D, false, 1,0,debug);
         auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
           dzTemp, nxTemp, nzTemp, pos2D, false, 1,0,debug);
+
         if(debug)
           printf("Ioni Dens: x0 %g z0 %g dx %g dz %g nx %d " 
           " nz %d \n", x0Dens, z0Dens, dxDens, dzDens, nxDens, nzDens);
@@ -166,6 +171,9 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
             " pos2D %g %g %g nxTemp %d nzTemp %d\n", 
             temp, dens, tlocal, nlocal, pos2D[0], pos2D[1], pos2D[2], 
               nxTemp, nzTemp);
+        nlocal = dens;
+        tlocal = temp;
+        
       }
       
       o::Real rate = interpolateRateCoeff(iRates, gridTemp, gridDens, tlocal, 
@@ -237,8 +245,10 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "IonTempVtx");
   const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
+  //const auto& tIonVtx = gm.densElVtx_d;
+  //const auto& densVtx = gm.tempElVtx_d;
   auto pid_scs = scs->get<PTCL_ID>();
-  auto pos_scs = scs->get<PTCL_POS>();
+  auto new_pos = scs->get<PTCL_NEXT_POS>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
   auto prev_recombination_scs = scs->get<PTCL_PREV_RECOMBINE>();
@@ -252,23 +262,25 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   auto rands = o::Reals(rand1);
 
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
-    auto el = elm_ids[pid];
-    if(mask > 0 && el >= 0) {
+    if(mask > 0 && elm_ids[pid] >= 0) {
+      auto el = elm_ids[pid];
       auto ptcl = pid_scs(pid);
       auto charge = charge_scs(pid);
-      auto pos = p::makeVector3(pid, pos_scs);
+      auto pos = p::makeVector3(pid, new_pos);
 
       o::Real rateRecomb = 0;
       o::Real rate = 0;
       o::Real P1 = 0;
       if(charge > 0) {
-        auto bcc = o::zero_vector<4>();
-        p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
-        //if(debug)
-        //   printf("Recomb: bcc %g %g %g \n", bcc[0], bcc[1], bcc[2]);
-        // from tags
-        o::Real tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
-        o::Real nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
+        o::Real tlocal = 0;
+        o::Real nlocal = 0;
+        if(!use2DRatesData) {
+          auto bcc = o::zero_vector<4>();
+          p::findBCCoordsInTet(coords, mesh2verts, pos, el, bcc);
+          // from tags
+          tlocal = p::interpolateTetVtx(mesh2verts, tIonVtx, el, bcc, 1);
+          nlocal = p::interpolateTetVtx(mesh2verts, densVtx, el, bcc, 1);
+        }
         // from data array
         if(use2DRatesData) {
           //TODO move this to a unit test
@@ -292,6 +304,8 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
           if(debug)
             printf("Recomb point: temp2D %g dens2D %g t3D %g d3D %g pos2D %g %g %g \n", 
               temp, dens, tlocal, nlocal, pos2D[0], pos2D[1], pos2D[2]);
+          nlocal = dens;
+          tlocal = temp;
         }
         // rate is from global data
         rate = interpolateRateCoeff(rRates, gridTemp, gridDens, tlocal,

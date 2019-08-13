@@ -272,8 +272,8 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
   //TODO
   dof = 6;
   OMEGA_H_CHECK(dof==6);
-  auto x_scs_d = scs->get<PTCL_POS>();
-  auto x_scs_prev_d = scs->get<PTCL_POS_PREV>();
+  auto x_scs_d = scs->get<PTCL_NEXT_POS>();
+  auto x_scs_prev_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
   auto pid_scs = scs->get<PTCL_ID>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
@@ -489,8 +489,8 @@ void GitrmParticles::setImpurityPtclInitRndDistribution(
   const auto dual_elems = dual.a2ab;
 
   //Set particle coordinates. Initialized only on one face. TODO confirm this ? 
-  auto x_scs_d = scs->get<PTCL_POS>();
-  auto x_scs_prev_d = scs->get<PTCL_POS_PREV>();
+  auto x_scs_d = scs->get<PTCL_NEXT_POS>();
+  auto x_scs_prev_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
   int scsCapacity = scs->capacity();
   o::HostWrite<o::Real> rnd1(scsCapacity, 0);

@@ -57,7 +57,7 @@ void updatePtclPositions(SCS* scs) {
     xtgt_scs_d(pid,1) = 0;
     xtgt_scs_d(pid,2) = 0;
   };
-  scs->parallel_for(updatePtclPos);
+  scs->parallel_for(updatePtclPos, "updatePtclPos");
 }
 
 
@@ -71,7 +71,7 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
     (void)e;
     scs_elem_ids(pid) = elem_ids[pid];
   };
-  scs->parallel_for(lamb);
+  scs->parallel_for(lamb, "rebuild");
   scs->rebuild(scs_elem_ids);
 }
 
@@ -128,7 +128,7 @@ void neutralBorisMove(SCS* scs,  const o::Real dTime) {
       vel_scs(pid, 2) = vel[2];      
     }// mask
   };
-  scs->parallel_for(boris);
+  scs->parallel_for(boris, "neutralBorisMove");
 } 
 
 void search(SCS* scs, o::Mesh& mesh, int iter, o::Write<o::LO>& data_d, 
@@ -158,7 +158,9 @@ void search(SCS* scs, o::Mesh& mesh, int iter, o::Write<o::LO>& data_d,
 }
 
 int main(int argc, char** argv) {
-  Kokkos::initialize(argc,argv);
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
+
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
   printf("Kokkos execution space memory %s name %s\n",
@@ -175,6 +177,7 @@ int main(int argc, char** argv) {
     exit(1);
   }
 
+  auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   std::string ptclSource = argv[2];
   bool piscesRun = true;
   bool debug = false;
@@ -183,9 +186,6 @@ int main(int argc, char** argv) {
   if(!chargedTracking)
     printf("WARNING: neutral particle tracking is ON \n");
 
-  auto lib = Omega_h::Library(&argc, &argv);
-  const auto world = lib.world();
-  auto mesh = Omega_h::read_mesh_file(argv[1], world);
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 
   if(piscesRun)
@@ -245,7 +245,6 @@ int main(int argc, char** argv) {
     printGridData(data_d);
   }
   fprintf(stderr, "done\n");
-
   return 0;
 }
 

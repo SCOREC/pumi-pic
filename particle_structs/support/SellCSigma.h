@@ -47,11 +47,15 @@ class SellCSigma {
     num_elements - the number of elements in the mesh
     num_particles - the number of particles needed
     particles_per_element - the number of particles in each element
-    element_gids - (for MPI parallelism) global ids for each element
+    element_gids - (for MPI parallelism) global ids for each element (size 0 is ignored)
+    particle_elements - parent element for each particle (optional)
+    particle_info - Initial values for the particle information (optional)
   */
   SellCSigma(PolicyType& p,
 	     lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
-             kkLidView particles_per_element, kkGidView element_gids);
+             kkLidView particles_per_element, kkGidView element_gids,
+             kkLidView particle_elements = kkLidView(),
+             MemberTypeViews<DataTypes> particle_info = NULL);
   ~SellCSigma();
 
   //Returns the horizontal slicing(C)
@@ -131,7 +135,8 @@ class SellCSigma {
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths, 
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
   void setupParticleMask(kkLidView mask, PairView<ExecSpace> ptcls, kkLidView chunk_widths);
-
+  void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
+                   MemberTypeViews<DataTypes> particle_info);
 private:
   //Number of Data types
   static constexpr std::size_t num_types = DataTypes::size;
@@ -372,14 +377,52 @@ void SellCSigma<DataTypes, ExecSpace>::setupParticleMask(kkLidView mask, PairVie
       });
     });
   });
-
+\
+}
+template<class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::initSCSData(kkLidView chunk_widths,
+                                                   kkLidView particle_elements,
+                                                   MemberTypeViews<DataTypes> particle_info) {
+  int given_particles = particle_elements.size();
+  //Create element->row mapping
+  kkLidView element_to_row("element_to_row", numRows());
+  auto row_to_element_local = row_to_element;
+  Kokkos::parallel_for(numRows(), KOKKOS_LAMBDA(const int& i) {
+    const int elm = row_to_element_local(i);
+    element_to_row(elm) = i;
+  });
+  //Setup starting point for each row
+  int C_local = C_;    
+  kkLidView row_index("row_index", numRows());
+  Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const int& i, int& sum, const bool& final) {
+      if (final) {
+        for (int j = 0; j < C_local; ++j)
+          row_index(i*C_local+j) = sum + j;
+      }
+      sum += chunk_widths(i) * C_local;
+    });
+  //Determine index for each particle
+  kkLidView particle_indices("new_particle_scs_indices", given_particles);
+  Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const int& i) {
+      int new_elem = particle_elements(i);
+      int new_row = element_to_row(new_elem);
+      particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
+    });
+  
+  CopyNewParticlesToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, scs_data,
+                                                                     particle_info,
+                                                                     given_particles,
+                                                                     particle_indices);
 }
 
 template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne, 
                                              lid_t np, kkLidView ptcls_per_elem, 
-                                             kkGidView element_gids)  : policy(p),
-                                                                        element_gid_to_lid(ne) {
+                                             kkGidView element_gids,
+                                             kkLidView particle_elements,
+                                             MemberTypeViews<DataTypes> particle_info) :
+  policy(p), element_gid_to_lid(ne) {
+  
   C_ = policy.team_size();
   sigma = sig;
   V_ = v;
@@ -409,6 +452,12 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
   if (np > 0)
     setupParticleMask(particle_mask, ptcls, chunk_widths);
+
+  //If particle info is provided then enter the information
+  int given_particles = particle_elements.size();
+  if (given_particles > 0 && particle_info != NULL) {
+    initSCSData(chunk_widths, particle_elements, particle_info);
+  }
 }
 
 template<class DataTypes, typename ExecSpace>
@@ -688,8 +737,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   offsets = new_offsets;
   slice_to_chunk = new_slice_to_chunk;
   particle_mask = new_particle_mask;
-  for (size_t i = 0; i < num_types; ++i)
-    scs_data[i] = new_scs_data[i];
+  scs_data = new_scs_data;
 }
 
 template<class DataTypes, typename ExecSpace>

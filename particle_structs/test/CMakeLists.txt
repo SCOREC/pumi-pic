@@ -7,6 +7,8 @@ make_test(typeTest typeTest.cpp)
 
 make_test(buildSCSTest buildSCSTest.cpp)
 
+make_test(initParticles initParticles.cpp)
+
 make_test(rebuild rebuild.cpp)
 
 make_test(lambdaTest lambdaTest.cpp)

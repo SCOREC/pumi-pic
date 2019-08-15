@@ -12,7 +12,7 @@
 namespace particle_structs {
 
   //This type represents an array of views for each type of the given DataTypes
-  template <typename DataTypes> using MemberTypeViews = void*[DataTypes::size];
+  template <typename DataTypes> using MemberTypeViews = void**;
   template <typename DataTypes> using MemberTypeViewsConst = void* const*;
   //TODO don't use default execution space
   template <typename T> using MemberTypeView = 
@@ -34,10 +34,24 @@ namespace particle_structs {
   template <typename... Types> struct CreateViews;
   template <typename... Types> struct CreateViews<MemberTypes<Types...> > {
     CreateViews(MemberTypeViews<MemberTypes<Types...> >& views, int size) {
+      views = new void*[MemberTypes<Types...>::size];
       CreateViewsImpl<Types...>(views, size);
     }
   };
-  
+
+  template <typename DataTypes>
+  MemberTypeViews<DataTypes> createMemberViews(int size) {
+    MemberTypeViews<DataTypes> views;
+    CreateViews<DataTypes>(views, size);
+    return views;
+  }
+  template <typename DataTypes, size_t N>
+  MemberTypeView<typename MemberTypeAtIndex<N, DataTypes>::type>
+  getMemberView(MemberTypeViews<DataTypes> view) {
+    using Type = typename MemberTypeAtIndex<N, DataTypes>::type;
+    return *(static_cast<MemberTypeView<Type>*>(view[N]));
+  }
+
   template <typename SCS, typename... Types> struct CopyParticlesToSendImpl;
   template <typename SCS> struct CopyParticlesToSendImpl<SCS> {
     CopyParticlesToSendImpl(SCS* scs, MemberTypeViewsConst<MemberTypes<void> >,
@@ -217,7 +231,14 @@ namespace particle_structs {
   template <typename... Types> struct DestroyViews<MemberTypes<Types...> > {
     DestroyViews(MemberTypeViews<MemberTypes<Types...> > data) {
       DestroyViewsImpl<Types...>(data+0);
+      delete [] data;
     }
   };
+
+  template <typename DataTypes>
+  void destroyViews(MemberTypeViews<DataTypes> data) {
+    DestroyViews<DataTypes>(data+0);
+  }
+
 
 }

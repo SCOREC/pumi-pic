@@ -199,7 +199,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
 void search(p::Mesh& picparts, SCS* scs, bool output) {
   o::Mesh* mesh = picparts.mesh();
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 1;
+  Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   Kokkos::Timer timer;

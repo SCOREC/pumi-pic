@@ -462,16 +462,14 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   printf("%s start\n", __func__);
   const int debug = 1;
 
-  const auto dual = mesh.ask_dual();
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
+  const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto faces2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
   const auto faceEdges = faces2edges.ab2b;
   printf("faceEdges.size() %d\n", faceEdges.size());
-  const auto dual_edges = dual.ab2b; // CSR value array
-  const auto dual_faces = dual.a2ab; // CSR offset array, index by mesh element ids
   const auto triArea = measure_elements_real(&mesh);
 
   const auto scsCapacity = scs->capacity();
@@ -565,8 +563,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         ptclSeg.P1[0] = ptclDest[0];
         ptclSeg.P1[1] = ptclDest[1];
 
-        int isLastEdge[3];
-        int isect[3] = {0,0,0};
+        auto nextEdge = -1;
         for(int i = 0; i < 3; i++) {
           const auto edgeVerts = o::gather_verts<2>(edge_verts, edges[i]);
           const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
@@ -575,26 +572,51 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           edgeSeg.P1[0] = edgeCoords(0,1);
           edgeSeg.P1[1] = edgeCoords(1,1); 
           Point2D a,b;
-          isect[i] = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
-          isLastEdge[i] = (lastEdge[ptcl] == edges[i]);
+          auto isect = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
+          auto isLastEdge = (lastEdge[ptcl] == edges[i]);
+          if( isect && !isLastEdge )
+            nextEdge = edges[i];
           if(debug) {
             printf("Elem %d ptcl %d lastEdge %d "
                 "edge %d pt0 %f %f pt1 %f %f "
                 "ptcl.src %f %f ptcl.dest %f %f "
-                "isect %d isLastEdge %d\n",
+                "isect %d isLastEdge %d nextEdge %d\n",
                 searchElm, ptcl, lastEdge[ptcl], edges[i], 
                 edgeCoords(0,0), edgeCoords(1,0),
                 edgeCoords(0,1), edgeCoords(1,1),
                 ptclOrigin[0], ptclOrigin[1],
                 ptclDest[0], ptclDest[1],
-                isect[i], isLastEdge[i]);
+                isect, isLastEdge, nextEdge);
           }
         }
-        //HERE set lastEdge
-
+        assert(nextEdge != -1);
+        lastEdge[ptcl] = nextEdge;
       } //if active particle
     };
     scs->parallel_for(checkAdjElm, "pumipic_checkAdjElm");
+
+    //TODO check if lastEdge is an 'exposed side' (on the model boundary) - if
+    //  so, mark the particle as 'done' (ptcl_done[pid] = 1)
+
+    auto e2f_vals = edges2faces.ab2b; // CSR value array
+    auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh element ids
+    auto setNextElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        auto bridge = lastEdge[ptcl];
+        auto e2f_first = e2f_offsets[bridge];
+        auto e2f_last = e2f_offsets[bridge+1];
+        auto upFaces = e2f_last - e2f_first;
+        assert(upFaces==2);
+        auto faceA = e2f_vals[e2f_first];
+        auto faceB = e2f_vals[e2f_last];
+        ptcl_done[pid] = 1;
+        auto nextElm = (faceA == searchElm) ? faceB : faceA;
+        elem_ids_next[pid] = nextElm;
+      }
+    };
+    scs->parallel_for(setNextElm, "pumipic_setNextElm");
 
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {

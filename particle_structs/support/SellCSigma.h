@@ -620,6 +620,7 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element, 
                                               kkLidView new_particle_elements, 
                                               MemberTypeViews<DataTypes> new_particles) {
+  Kokkos::Profiling::pushRegion("scs_rebuild");
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(int element_id,int particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
@@ -740,6 +741,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   slice_to_chunk = new_slice_to_chunk;
   particle_mask = new_particle_mask;
   scs_data = new_scs_data;
+  Kokkos::Profiling::popRegion();
 }
 
 template<class DataTypes, typename ExecSpace>

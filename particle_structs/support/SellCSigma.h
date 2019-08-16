@@ -473,6 +473,7 @@ SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView new_process) {
+  Kokkos::Profiling::pushRegion("scs_migrate");
   /********* Send # of particles being sent to each process *********/
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -606,6 +607,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   rebuild(new_element, recv_element, recv_particle);
 
   DestroyViews<DataTypes>(recv_particle+0);
+  Kokkos::Profiling::popRegion();
 }
 
 template<class DataTypes, typename ExecSpace>

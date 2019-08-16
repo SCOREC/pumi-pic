@@ -573,7 +573,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           edgeSeg.P1[1] = edgeCoords(1,1); 
           Point2D a,b;
           auto isect = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
-          auto isLastEdge = (lastEdge[ptcl] == edges[i]);
+          auto isLastEdge = (lastEdge[pid] == edges[i]);
           if( isect && !isLastEdge )
             nextEdge = edges[i];
           if(debug) {
@@ -581,7 +581,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                 "edge %d pt0 %f %f pt1 %f %f "
                 "ptcl.src %f %f ptcl.dest %f %f "
                 "isect %d isLastEdge %d nextEdge %d\n",
-                searchElm, ptcl, lastEdge[ptcl], edges[i], 
+                searchElm, ptcl, lastEdge[pid], edges[i], 
                 edgeCoords(0,0), edgeCoords(1,0),
                 edgeCoords(0,1), edgeCoords(1,1),
                 ptclOrigin[0], ptclOrigin[1],
@@ -590,13 +590,26 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           }
         }
         assert(nextEdge != -1);
-        lastEdge[ptcl] = nextEdge;
+        lastEdge[pid] = nextEdge;
       } //if active particle
     };
     scs->parallel_for(checkAdjElm, "pumipic_checkAdjElm");
 
-    //TODO check if lastEdge is an 'exposed side' (on the model boundary) - if
-    //  so, mark the particle as 'done' (ptcl_done[pid] = 1)
+    auto checkExposedEdges = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        auto bridge = lastEdge[pid];
+        auto exposed = side_is_exposed[bridge];
+        if( exposed ) {
+          printf("exposed edge searchElm %d ptcl %d lastEdge %d\n",
+              searchElm, ptcl, bridge);
+        }
+        ptcl_done[pid] = exposed;
+        elem_ids_next[pid] = elem_ids[pid];
+      }
+    };
+    scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
 
     auto e2f_vals = edges2faces.ab2b; // CSR value array
     auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh element ids
@@ -604,7 +617,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
-        auto bridge = lastEdge[ptcl];
+        auto bridge = lastEdge[pid];
         auto e2f_first = e2f_offsets[bridge];
         auto e2f_last = e2f_offsets[bridge+1];
         auto upFaces = e2f_last - e2f_first;
@@ -628,7 +641,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     auto minFlag = o::get_min(ptcl_done_r);
     if(minFlag == 0)
       found = false;
-    //Copy particle data from previous to next (adjacent) element
     ++loops;
 
     if(looplimit && loops >= looplimit) {

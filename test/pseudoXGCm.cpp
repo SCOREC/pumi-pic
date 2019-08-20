@@ -581,8 +581,6 @@ int main(int argc, char** argv) {
   Omega_h::LOs forward_map;
   Omega_h::LOs backward_map;
   createGyroRingMappings(mesh, forward_map, backward_map);
-
-  return 0;
   
   /* Particle data */
   int numPtcls = atoi(argv[3]);

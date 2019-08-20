@@ -455,7 +455,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
-  printf("%s start\n", __func__);
   const int debug = 1;
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
@@ -465,7 +464,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   const auto coords = mesh.coords();
   const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
   const auto faceEdges = faces2edges.ab2b;
-  printf("faceEdges.size() %d\n", faceEdges.size());
   const auto triArea = measure_elements_real(&mesh);
 
   const auto scsCapacity = scs->capacity();
@@ -480,8 +478,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     if(mask > 0) {
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
-      if (debug)
-        printf("ptcl %3d mask %1d elem_ids %6d\n", pid_d(pid), mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -514,16 +510,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   bool found = false;
   int loops = 0;
   while(!found) {
-    if(debug) {
-      fprintf(stderr, "------------ %d ------------\n", loops);
-    }
     auto checkCurrentElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //active particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
-        if(debug)
-          printf("Elem %d ptcl %d\n", searchElm, ptcl);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
@@ -534,9 +525,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto isDestInParentElm = all_positive(faceBcc);
         ptcl_done[pid] = isDestInParentElm;
         elem_ids_next[pid] = elem_ids[pid]; //NOT SURE ABOUT SETTING THIS UNCONDITIONALLY
-        if(debug)
-          printf("checkCurrentElm Elem %d ptcl %d isDestInParentElm %2d elem_ids[pid] %5d\n",
-              searchElm, ptcl, isDestInParentElm, elem_ids[pid]);
       }
     };
     scs->parallel_for(checkCurrentElm);
@@ -547,12 +535,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
-        if(debug)
-          printf("Elem %d ptcl %d\n", searchElm, ptcl);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto edges = o::gather_down<3>(faceEdges, searchElm);
-        if(debug)
-          printf("Elem %d ptcl %d edges.size() %d\n", searchElm, ptcl, edges.size());
         const auto ptclDest = makeVector2(pid, xtgt_scs_d);
         const auto ptclOrigin = makeVector2(pid, x_scs_d);
         // check each edge of triangle for line-line intersection
@@ -575,22 +559,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           auto isLastEdge = (lastEdge[pid] == edges[i]);
           if( isect && !isLastEdge )
             nextEdge = edges[i];
-          if( debug ) {
-            printf("checkAdjElm Elem %d ptcl %d lastEdge %d "
-                "edge %d pt0 %f %f pt1 %f %f "
-                "ptcl.src %f %f ptcl.dest %f %f "
-                "isect %d isLastEdge %d nextEdge %d\n",
-                searchElm, ptcl, lastEdge[pid], edges[i], 
-                edgeCoords(0,0), edgeCoords(1,0),
-                edgeCoords(0,1), edgeCoords(1,1),
-                ptclOrigin[0], ptclOrigin[1],
-                ptclDest[0], ptclDest[1],
-                isect, isLastEdge, nextEdge);
-          }
-        }
-        if( nextEdge == -1 ) {
-          printf("checkAdjElm2 nextEdge -1 Elem %d ptcl %d\n",
-              searchElm, ptcl);
         }
         assert(nextEdge != -1);
         lastEdge[pid] = nextEdge;
@@ -604,10 +572,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto ptcl = pid_d(pid);
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
-        if( debug && exposed ) {
-          printf("checkExposedEdges exposed edge searchElm %d ptcl %d lastEdge %d\n",
-              searchElm, ptcl, bridge);
-        }
         ptcl_done[pid] = exposed;
         elem_ids_next[pid] = -1; //leaves domain
       }
@@ -631,9 +595,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         assert(faceA == searchElm || faceB == searchElm);
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
         elem_ids_next[pid] = nextElm;
-        if( debug )
-          printf("setNextElm searchElm %d ptcl %d nextElm %d\n",
-              searchElm, ptcl, nextElm);
       }
     };
     scs->parallel_for(setNextElm, "pumipic_setNextElm");

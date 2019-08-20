@@ -45,6 +45,10 @@ mpi_test(pseudoPushAndSearch_cube_t2 1
   ./pseudoPushAndSearch --kokkos-threads=2
   ${TEST_DATA_DIR}/cube/7k.osh ignored 200 156 0 0 1)
 
+mpi_test(pseudoXGCm 1
+  ./pseudoXGCm --kokkos-threads=1
+  ${TEST_DATA_DIR}/xgc/itg24k.osh ignored 100 81 0.1 0.0 0)
+
 #MPI+X testing
 mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube)
 mpi_test(ptn_loading_cube 2 ./ptn_loading ${TEST_DATA_DIR}/cube.msh testing_cube_2.ptn 1 3)

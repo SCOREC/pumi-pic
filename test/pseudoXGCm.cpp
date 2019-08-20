@@ -9,6 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
+#include "gyroScatter.hpp"
 #define NUM_ITERATIONS 1000
 
 using particle_structs::fp_t;
@@ -45,137 +46,6 @@ void printTimerResolution() {
   Kokkos::Timer timer;
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
-}
-
-typedef MemberTypes<Vector3d, Vector3d, int> Point;
-
-Omega_h::LOs searchAndBuildMap(Omega_h::Mesh* mesh, Omega_h::Reals element_centroids,
-                               Omega_h::Reals projected_points, Omega_h::LOs starting_element) {
-  Omega_h::LO num_points = starting_element.size();
-
-  //Create SCS for the projected points to perform adjacency search on
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", mesh->nelems());
-  SCS::kkLidView point_element("point_element", num_points);
-  auto point_info = particle_structs::createMemberViews<Point>(num_points);
-  auto start_pos = particle_structs::getMemberView<Point, 0>(point_info);
-  auto end_pos = particle_structs::getMemberView<Point, 1>(point_info);
-  auto point_id = particle_structs::getMemberView<Point, 2>(point_info);
-  auto countPointsInElement = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-    const Omega_h::LO elm = starting_element[id];
-    Kokkos::atomic_fetch_add(&(ptcls_per_elem(elm)), 1);
-    point_id(id) = id;
-    point_element(id) = elm;
-    for (int i = 0; i < 2; ++i) {
-      start_pos(id,i) = element_centroids[elm*2+i];
-      end_pos(id,i) = projected_points[id*2+i];
-    }
-  };
-  Omega_h::parallel_for(num_points, countPointsInElement, "countPointsInElement");
-  
-  const int sigma = INT_MAX;
-  const int V = 64;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  SCS::kkGidView empty_gids("empty_gids", 0);
-  SellCSigma<Point>* gyro_scs = new SellCSigma<Point>(policy, sigma, V,
-                                                      mesh->nelems(), num_points,
-                                                      ptcls_per_elem, empty_gids,
-                                                      point_element, point_info);
-
-  //Adjacency search
-  auto start = gyro_scs->get<0>();
-  auto end = gyro_scs->get<1>();
-  auto pids = gyro_scs->get<2>();
-  int maxLoops = 100;
-  int scsCapacity = gyro_scs->capacity();
-  o::Write<o::LO> elem_ids(scsCapacity, -1);
-  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
-  bool isFound = p::search_mesh_2d<Point>(*mesh, gyro_scs, start, end, pids,
-                                          elem_ids, xpoints_d, maxLoops);
-
-  //Gyro avg mapping: 3 vertices per ring point (Assumes all elements are triangles)
-  const Omega_h::LO nvpe = 3;
-  Omega_h::Write<Omega_h::LO> gyro_avg_map(nvpe * num_points);
-  auto elm2Verts = mesh->ask_down(mesh->dim(), 0);
-  auto createGyroMapping = SCS_LAMBDA(const int, const int pid, const bool mask) {
-    if (mask) {
-      const Omega_h::LO id = pids(pid);
-      const Omega_h::LO elm = starting_element[id];//TODO: change when adjacency search works elem_ids[pid];
-      const Omega_h::LO start_index = id* nvpe;
-      const Omega_h::LO start_elm = elm*nvpe;
-      for (int i = 0; i < 3; ++i)
-        gyro_avg_map[start_index+i] = elm2Verts.ab2b[start_elm+i];
-    }
-  };
-  gyro_scs->parallel_for(createGyroMapping);
-  return Omega_h::LOs(gyro_avg_map);
-}
-/* Build gyro-avg mapping */
-void createGyroRingMappings(Omega_h::Mesh* mesh, Omega_h::LOs& forward_map,
-                           Omega_h::LOs& backward_map) {
-  //Max ring length
-  Omega_h::Real Rmax = 0.038;
-  Omega_h::LO nverts = mesh->nverts();
-  Omega_h::LO num_rings = 3;
-  Omega_h::LO points_per_ring = 8;
-  Omega_h::LO num_points = nverts * num_rings * points_per_ring;
-  Omega_h::Write<Omega_h::Real> ring_points(num_points * 2);
-  Omega_h::Reals coords = mesh->coords();
-
-  //Calculate points of each ring around every vertex
-  auto generateRingPoints = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-    const Omega_h::LO point_id = id %  points_per_ring;
-    const Omega_h::LO id2 = id /points_per_ring;
-    const Omega_h::LO ring_id = id2 % num_rings;
-    const Omega_h::LO vert_id = id2 / num_rings;
-    const Omega_h::Real rad = Rmax*(ring_id+1)/num_rings;
-    const Omega_h::Real theta = 2 * M_PI * point_id/num_points;
-    ring_points[id*2] = coords[vert_id*2] + rad * cos(theta);
-    ring_points[id*2+1] = coords[vert_id*2+1] + rad * sin(theta);
-  };
-  Omega_h::parallel_for(num_points, generateRingPoints, "generateRingPoints");
-
-  //Project ring points to +/- planes
-  Omega_h::Write<Omega_h::Real> forward_ring_points(num_points * 2);
-  Omega_h::Write<Omega_h::Real> backward_ring_points(num_points * 2);
-  auto projectCoords = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-    //TODO Project the points along field lines
-    for (int i = 0; i < 2; ++i) {
-      forward_ring_points[id*2+i] = ring_points[id*2+i];
-      backward_ring_points[id*2+i] = ring_points[id*2+i];
-    }
-  };
-  Omega_h::parallel_for(num_points, projectCoords, "projectCoords");
-
-  //Use adjacency search to find the element that the projected point is in
-  Omega_h::Write<Omega_h::LO> starting_element(num_points,0, "starting_element");
-  auto verts2Elm = mesh->ask_up(0, mesh->dim());
-  auto setInitialElement = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-    //Note: Setting initial element to be the first element adjacent to the vertex
-    const Omega_h::LO vert_id = id / points_per_ring / num_rings;
-    const auto firstElm = verts2Elm.a2ab[vert_id];
-    starting_element[id] = verts2Elm.ab2b[firstElm];
-  };
-  Omega_h::parallel_for(num_points, setInitialElement, "setInitialElement");
-
-  //Calculate centroids of each element
-  Omega_h::Write<Omega_h::Real> element_centroids(mesh->nelems()*2);
-  auto cells2nodes = mesh->get_adj(mesh->dim(), o::VERT).ab2b;
-  auto calculateCentroids = OMEGA_H_LAMBDA(const Omega_h::LO& elm) {
-    auto elmVerts = o::gather_verts<3>(cells2nodes, elm);
-    auto vtxCoords = o::gather_vectors<3,2>(coords, elmVerts);
-    auto center = average(vtxCoords);
-    element_centroids[elm*2] = center[0];
-    element_centroids[elm*2+1] = center[1];
-  };
-  Omega_h::parallel_for(mesh->nelems(), calculateCentroids, "calculateCentroids");
-
-  //Create both mapping
-  forward_map = searchAndBuildMap(mesh, Omega_h::Reals(element_centroids),
-                                  Omega_h::Reals(forward_ring_points),
-                                  Omega_h::LOs(starting_element));
-  backward_map = searchAndBuildMap(mesh, Omega_h::Reals(element_centroids),
-                                   Omega_h::Reals(backward_ring_points),
-                                   Omega_h::LOs(starting_element));
 }
 
 void writeDispVectors(SCS* scs) {
@@ -420,10 +290,10 @@ void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
   //set particle positions and parent element ids
   auto x_scs_d = scs->get<0>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
-    auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
-    auto center = average(vtxCoords);
     if(mask > 0) {
+      auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
+      auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
+      auto center = average(vtxCoords);
       if (output)
         printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
       for(int i=0; i<3; i++)
@@ -473,42 +343,6 @@ void setTargetPtclCoords(SCS* scs) {
   setSunflowerPositions(scs, insetFaceDiameter, insetFacePlane, insetFaceRim, insetFaceCenter);
 }
 
-void computeAvgPtclDensity(p::Mesh& picparts, SCS* scs){
-  o::Mesh* mesh = picparts.mesh();
-  //create an array to store the number of particles in each element
-  o::Write<o::LO> elmPtclCnt_w(mesh->nelems(),0);
-  //parallel loop over elements and particles
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-
-    Kokkos::atomic_fetch_add(&(elmPtclCnt_w[e]), 1);
-  };
-  scs->parallel_for(lamb);
-  o::Write<o::Real> epc_w(mesh->nelems(),0);
-  const auto convert = OMEGA_H_LAMBDA(o::LO i) {
-     epc_w[i] = static_cast<o::Real>(elmPtclCnt_w[i]);
-   };
-  o::parallel_for(mesh->nelems(), convert, "convert_to_real");
-  o::Reals epc(epc_w);
-  mesh->add_tag(o::FACE, "element_particle_count", 1, o::Reals(epc));
-  //get the list of elements adjacent to each vertex
-  auto verts2elems = mesh->ask_up(o::VERT, picparts.dim());
-  //create a device writeable array to store the computed density
-  o::Write<o::Real> ad_w(mesh->nverts(),0);
-  const auto accumulate = OMEGA_H_LAMBDA(o::LO i) {
-    const auto deg = verts2elems.a2ab[i+1]-verts2elems.a2ab[i];
-    const auto firstElm = verts2elems.a2ab[i];
-    o::Real vertVal = 0.00;
-    for (int j = 0; j < deg; j++){
-      const auto elm = verts2elems.ab2b[firstElm+j];
-      vertVal += epc[elm];
-    }
-    ad_w[i] = vertVal / deg;
-  };
-  o::parallel_for(mesh->nverts(), accumulate, "calculate_avg_density");
-  o::Read<o::Real> ad_r(ad_w);
-  mesh->set_tag(o::VERT, "avg_density", ad_r);
-}
-
 o::Mesh readMesh(char* meshFile, o::Library& lib) {
   (void)lib;
   std::string fn(meshFile);
@@ -531,10 +365,10 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 8;
+  const int numargs = 12;
   if( argc != numargs ) {
-    auto args = " <mesh> <owner_file> <numPtcls> "
-      "<initial model face> <push vector>";
+    auto args = " <mesh> <owner_file> <numPtcls> <initial model face> "
+      "<gyro rmax> <gyro rings> <gyro points per ring> <gyro theta> <push vector>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -562,6 +396,8 @@ int main(int argc, char** argv) {
            mesh->nfaces(), mesh->nelems());
 
   //Build gyro avg mappings
+  setGyroConfig(atof(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]));
+  if (!comm_rank) printGyroConfig();
   Omega_h::LOs forward_map;
   Omega_h::LOs backward_map;
   createGyroRingMappings(mesh, forward_map, backward_map);
@@ -602,9 +438,7 @@ int main(int argc, char** argv) {
   setPtclIds(scs);
 
   //define parameters controlling particle motion
-  //move the particles in +y direction by 1/20th of the
-  //pisces model's height
-  const double pushDir[3] = {atof(argv[5]), atof(argv[6]), atof(argv[7])};
+  const double pushDir[3] = {atof(argv[9]), atof(argv[10]), atof(argv[11])};
   auto bb = o::get_bounding_box<2>(&full_mesh);
   double maxDimLen = 0;
   printf("bbox ");
@@ -627,6 +461,10 @@ int main(int argc, char** argv) {
   o::LOs elmTags(ne, -1, "elmTagVals");
   mesh->add_tag(o::FACE, "has_particles", 1, elmTags);
   mesh->add_tag(o::VERT, "avg_density", 1, o::Reals(mesh->nverts(), 0));
+  const auto fwdTagName = "ptclToMeshScatterFwd";
+  mesh->add_tag(o::VERT, fwdTagName, 1, o::Reals(mesh->nverts(), 0));
+  const auto bkwdTagName = "ptclToMeshScatterBkwd";
+  mesh->add_tag(o::VERT, bkwdTagName, 1, o::Reals(mesh->nverts(), 0));
   tagParentElements(picparts, scs, 0);
   render(picparts,0, comm_rank);
 
@@ -644,7 +482,6 @@ int main(int argc, char** argv) {
     }
     if (comm_rank == 0)
       fprintf(stderr, "iter %d\n", iter);
-    //computeAvgPtclDensity(picparts, scs);
     timer.reset();
     push(scs, scs->nPtcls(), distance, dx, dy, dz);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -665,6 +502,8 @@ int main(int argc, char** argv) {
     tagParentElements(picparts,scs,iter);
     if(!iter%20)
       render(picparts,iter, comm_rank);
+    gyroScatter(mesh,scs,forward_map,fwdTagName);
+    gyroScatter(mesh,scs,backward_map,bkwdTagName);
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());

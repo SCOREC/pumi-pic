@@ -6,6 +6,7 @@
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
+#include "Omega_h_shape.hpp"
 
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
@@ -13,6 +14,8 @@
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
+
+#include "segSegIsect.hpp"
 
 namespace o = Omega_h;
 namespace ps = particle_structs;
@@ -64,6 +67,44 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
 }
 
+//https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates
+#define TriVerts 3
+#define TriDim 2
+OMEGA_H_DEVICE void barycentric_tri(
+    const o::Reals triArea,
+    const o::Matrix<TriDim, TriVerts> &faceCoords,
+    const o::Vector<TriDim> &pos,
+    o::Vector<TriVerts> &bcc,
+    const int searchElm) {
+  //triangle defined by vertices A,B,C
+  // point P is potentially inside of it
+  //     C
+  //    /  \
+  //   /    \
+  //  A ---- B
+  //omega_h triangles list their vertices following the
+  // right hand rule (counter clockwise)
+  // i.e.; B=0 C=1 A=2 or C=0 A=1 B=2 or A=0 B=1 C=2
+  o::Few<o::Vector<2>, 2> tri;
+  tri[0] = faceCoords[1] - faceCoords[0];
+  tri[1] = faceCoords[2] - faceCoords[0];
+  auto abc_area = o::triangle_area_from_basis(tri);
+  OMEGA_H_CHECK(o::are_close(abc_area, triArea[searchElm])); //sanity check
+
+  tri[0] = faceCoords[0] - faceCoords[2];
+  tri[1] = pos           - faceCoords[2];
+  auto cap_area = o::triangle_area_from_basis(tri);
+
+  tri[0] = faceCoords[1] - faceCoords[0];
+  tri[1] = pos           - faceCoords[0];
+  auto abp_area = o::triangle_area_from_basis(tri);
+
+  // barycentric coords
+  bcc[0] = cap_area/abc_area;   //u
+  bcc[1] = abp_area/abc_area;   //v
+  bcc[2] = 1 - bcc[0] - bcc[1]; //w
+}
+
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
 //TODO Warning: Check opposite_template use in this before using
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
@@ -103,7 +144,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
 
   return 1; //success
 }
-
 
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 // corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge) ?
@@ -214,6 +254,13 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3(int pid, Segment xyz) {
     v[i] = xyz(pid,i);
   return v;
 }
+template <typename Segment>
+OMEGA_H_DEVICE o::Vector<2> makeVector2(int pid, Segment xyz) {
+  o::Vector<2> v;
+  for(int i=0; i<2; ++i)
+    v[i] = xyz(pid,i);
+  return v;
+}
 OMEGA_H_DEVICE o::LO getfmap(int i) {
   assert(i>=0 && i<8);
   const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
@@ -268,7 +315,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       ptcl_done[pid] = 1;
     }
   };
-  scs->parallel_for(lamb);
+  scs->parallel_for(lamb, "init_search");
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -374,7 +421,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       } //if active particle
     };
 
-    scs->parallel_for(lamb);
+    scs->parallel_for(lamb, "adj_search");
 
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
@@ -395,6 +442,182 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       break;
     }
   }
+  return found;
+}
+
+template < class ParticleType>
+bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
+                 ps::SellCSigma< ParticleType >* scs, // (in) particle structure
+                 Segment3d x_scs_d, // (in) starting particle positions
+                 Segment3d xtgt_scs_d, // (in) target particle positions
+                 SegmentInt pid_d, // (in) particle ids
+                 o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
+                 o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
+                 int looplimit=0) {
+  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
+  const int debug = 1;
+
+  const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
+  const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto faces2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
+  const auto faceEdges = faces2edges.ab2b;
+  const auto triArea = measure_elements_real(&mesh);
+
+  const auto scsCapacity = scs->capacity();
+
+  // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
+  o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
+  // store the next parent for each particle
+  o::Write<o::LO> elem_ids_next(scsCapacity,-1);
+  // store the last crossed edge
+  o::Write<o::LO> lastEdge(scsCapacity,-1);
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      elem_ids[pid] = e;
+      ptcl_done[pid] = 0;
+    } else {
+      elem_ids[pid] = -1;
+      ptcl_done[pid] = 1;
+    }
+  };
+  scs->parallel_for(lamb);
+
+  auto checkParent = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    //inactive particle that is still moving to its target position
+    if( mask > 0 && !ptcl_done[pid] ) {
+      auto searchElm = elem_ids[pid];
+      auto ptcl = pid_d(pid);
+      OMEGA_H_CHECK(searchElm >= 0);
+      auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
+      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+      auto ptclOrigin = makeVector2(pid, x_scs_d);
+      Omega_h::Vector<3> faceBcc;
+      barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
+      if(!all_positive(faceBcc)) {
+        printf("Particle not in element! ptcl %d elem %d => %d "
+          "orig %.3f %.3f bcc %.3f %.3f %.3f\n",
+          ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+          faceBcc[0], faceBcc[1], faceBcc[2]);
+        OMEGA_H_CHECK(false);
+      }
+    } //if active
+  };
+  scs->parallel_for(checkParent);
+
+  bool found = false;
+  int loops = 0;
+  while(!found) {
+    auto checkCurrentElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      //active particle that is still moving to its target position
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        OMEGA_H_CHECK(searchElm >= 0);
+        const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
+        const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+        const auto ptclDest = makeVector2(pid, xtgt_scs_d);
+        const auto ptclOrigin = makeVector2(pid, x_scs_d);
+        Omega_h::Vector<3> faceBcc;
+        barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
+        auto isDestInParentElm = all_positive(faceBcc);
+        ptcl_done[pid] = isDestInParentElm;
+        elem_ids_next[pid] = elem_ids[pid]; //NOT SURE ABOUT SETTING THIS UNCONDITIONALLY
+      }
+    };
+    scs->parallel_for(checkCurrentElm);
+
+    auto checkAdjElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      //active particle that is still moving to its target position and is not
+      //in the current element
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        OMEGA_H_CHECK(searchElm >= 0);
+        const auto edges = o::gather_down<3>(faceEdges, searchElm);
+        const auto ptclDest = makeVector2(pid, xtgt_scs_d);
+        const auto ptclOrigin = makeVector2(pid, x_scs_d);
+        // check each edge of triangle for line-line intersection
+        Segment2D ptclSeg, edgeSeg;
+        ptclSeg.P0[0] = ptclOrigin[0];
+        ptclSeg.P0[1] = ptclOrigin[1];
+        ptclSeg.P1[0] = ptclDest[0];
+        ptclSeg.P1[1] = ptclDest[1];
+
+        auto nextEdge = -1;
+        for(int i = 0; i < 3; i++) {
+          const auto edgeVerts = o::gather_verts<2>(edge_verts, edges[i]);
+          const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
+          edgeSeg.P0[0] = edgeCoords(0,0);
+          edgeSeg.P0[1] = edgeCoords(1,0);
+          edgeSeg.P1[0] = edgeCoords(0,1);
+          edgeSeg.P1[1] = edgeCoords(1,1); 
+          Point2D a,b;
+          auto isect = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
+          auto isLastEdge = (lastEdge[pid] == edges[i]);
+          if( isect && !isLastEdge )
+            nextEdge = edges[i];
+        }
+        assert(nextEdge != -1);
+        lastEdge[pid] = nextEdge;
+      } //if active particle
+    };
+    scs->parallel_for(checkAdjElm, "pumipic_checkAdjElm");
+
+    auto checkExposedEdges = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        auto bridge = lastEdge[pid];
+        auto exposed = side_is_exposed[bridge];
+        ptcl_done[pid] = exposed;
+        elem_ids_next[pid] = -1; //leaves domain
+      }
+    };
+    scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
+
+    auto e2f_vals = edges2faces.ab2b; // CSR value array
+    auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh edge ids
+    auto setNextElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto ptcl = pid_d(pid);
+        auto bridge = lastEdge[pid];
+        auto e2f_first = e2f_offsets[bridge];
+        auto e2f_last = e2f_offsets[bridge+1];
+        auto upFaces = e2f_last - e2f_first;
+        assert(upFaces==2);
+        auto faceA = e2f_vals[e2f_first];
+        auto faceB = e2f_vals[e2f_first+1];
+        assert(faceA != faceB);
+        assert(faceA == searchElm || faceB == searchElm);
+        auto nextElm = (faceA == searchElm) ? faceB : faceA;
+        elem_ids_next[pid] = nextElm;
+      }
+    };
+    scs->parallel_for(setNextElm, "pumipic_setNextElm");
+
+    found = true;
+    auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
+      elem_ids[i] = elem_ids_next[i];
+    };
+    o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
+
+    o::LOs ptcl_done_r(ptcl_done);
+    auto minFlag = o::get_min(ptcl_done_r);
+    if(minFlag == 0)
+      found = false;
+    ++loops;
+
+    if(looplimit && loops >= looplimit) {
+      if (debug)
+        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      break;
+    }
+  }
+  Kokkos::Profiling::popRegion();
   return found;
 }
 

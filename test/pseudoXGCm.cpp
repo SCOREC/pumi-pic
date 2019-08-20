@@ -9,7 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
-#define NUM_ITERATIONS 30
+#define NUM_ITERATIONS 1000
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -137,7 +137,7 @@ void tagParentElements(p::Mesh& picparts, SCS* scs, int loop) {
   scs->parallel_for(lamb);
 
   o::LOs ehp_nm0_r(ehp_nm0);
-  mesh->set_tag(o::REGION, "has_particles", ehp_nm0_r);
+  mesh->set_tag(o::FACE, "has_particles", ehp_nm0_r);
 }
 
 void updatePtclPositions(SCS* scs) {
@@ -208,8 +208,8 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   auto pid = scs->get<2>();
   o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
   o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
-  bool isFound = p::search_mesh<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
-                                          xpoints_d, xface_id, maxLoops);
+  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
+                                          xpoints_d, maxLoops);
   fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
@@ -217,11 +217,6 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   rebuild(picparts, scs, elem_ids, output);
   fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
 
-}
-
-//HACK to avoid having an unguarded comma in the SCS PARALLEL macro
-OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4> v) {
-  return o::gather_vectors<4, 3>(a, v);
 }
 
 void setPtclIds(SCS* scs) {
@@ -236,6 +231,7 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
     const int mdlFace, const int numPtcls) {
   const auto elm_dim = picparts.dim();
   const auto side_dim = elm_dim-1;
+  printf("elm_dim %d side_dim %d\n", elm_dim, side_dim);
   o::Mesh* mesh = picparts.mesh();
   auto face_class_ids = mesh->get_array<o::ClassId>(side_dim, "class_id");
   auto exposed_faces = o::mark_exposed_sides(mesh);
@@ -260,15 +256,17 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
     auto numPpe = numPtcls / numMarkedElms;
     printf("num ptcls per elm %d\n", numPpe);
     auto numPpeR = numPtcls % numMarkedElms;
-    auto cells2nodes = mesh->get_adj(o::REGION, o::VERT).ab2b;
+    auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
     auto nodes2coords = mesh->coords();
+    printf("markedElms.size() %d\n", markedElms.size());
     o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
-        auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(i));
-        auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
-        auto center = average(cell_nodes2coords);
+        auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(i));
+        auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
+        auto center = average(vtxCoords);
         if( markedElms[i] )
           ppe[i] = numPpe + ( (i==lastMarkedElm) * numPpeR );
       });
+    printf("done source elms\n");
     Omega_h::LO totPtcls = 0;
     Kokkos::parallel_reduce(ppe.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
         lsum += ppe[i];
@@ -286,14 +284,14 @@ void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
   //sized eight... maybe something to do with the 'Overlay'.  Given that there
   //are four vertices bounding a tet, I'm setting that parameter to four below.
   o::Mesh* mesh = picparts.mesh();
-  auto cells2nodes = mesh->get_adj(o::REGION, o::VERT).ab2b;
+  auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
   auto nodes2coords = mesh->coords();
   //set particle positions and parent element ids
   auto x_scs_d = scs->get<0>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
-    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
-    auto center = average(cell_nodes2coords);
+    auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
+    auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
+    auto center = average(vtxCoords);
     if(mask > 0) {
       if (output)
         printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
@@ -360,7 +358,7 @@ void computeAvgPtclDensity(p::Mesh& picparts, SCS* scs){
    };
   o::parallel_for(mesh->nelems(), convert, "convert_to_real");
   o::Reals epc(epc_w);
-  mesh->add_tag(o::REGION, "element_particle_count", 1, o::Reals(epc));
+  mesh->add_tag(o::FACE, "element_particle_count", 1, o::Reals(epc));
   //get the list of elements adjacent to each vertex
   auto verts2elems = mesh->ask_up(o::VERT, picparts.dim());
   //create a device writeable array to store the computed density
@@ -487,7 +485,7 @@ int main(int argc, char** argv) {
   //move the particles in +y direction by 1/20th of the
   //pisces model's height
   const double pushDir[3] = {atof(argv[5]), atof(argv[6]), atof(argv[7])};
-  auto bb = o::get_bounding_box<3>(&full_mesh);
+  auto bb = o::get_bounding_box<2>(&full_mesh);
   double maxDimLen = 0;
   printf("bbox ");
   for(int i=0; i< picparts.dim(); i++) {
@@ -507,7 +505,7 @@ int main(int argc, char** argv) {
             distance, dx, dy, dz);
 
   o::LOs elmTags(ne, -1, "elmTagVals");
-  mesh->add_tag(o::REGION, "has_particles", 1, elmTags);
+  mesh->add_tag(o::FACE, "has_particles", 1, elmTags);
   mesh->add_tag(o::VERT, "avg_density", 1, o::Reals(mesh->nverts(), 0));
   tagParentElements(picparts, scs, 0);
   render(picparts,0, comm_rank);
@@ -545,7 +543,8 @@ int main(int argc, char** argv) {
       break;
     }
     tagParentElements(picparts,scs,iter);
-    render(picparts,iter, comm_rank);
+    if(!iter%20)
+      render(picparts,iter, comm_rank);
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());

@@ -91,6 +91,7 @@ namespace pumipic {
       if (in.bufferMethod == Input::BFS || in.bufferMethod == Input::MINIMUM)
         has_part = part;
     }
+
     constructPICPart(in.m, owners, has_part, is_safe);
   }
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,

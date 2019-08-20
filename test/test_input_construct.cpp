@@ -122,17 +122,18 @@ bool constructClassMinBFS(Omega_h::Mesh& mesh, char* class_file) {
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   //********* Load the partition vector ***********//
-  Omega_h::HostWrite<Omega_h::LO> host_owners(ne);
   std::ifstream in_str(class_file);
   if (!in_str) {
     if (!rank)
       fprintf(stderr,"Cannot open file %s\n", class_file);
     return EXIT_FAILURE;
   }
-  int own;
-  int index = 0;
-  while(in_str >> own) 
-    host_owners[index++] = own;
+  int size;
+  in_str>>size;
+  Omega_h::HostWrite<Omega_h::LO> host_owners(size+1);
+  int cid, own;
+  while(in_str >> cid >> own) 
+    host_owners[cid] = own;
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 

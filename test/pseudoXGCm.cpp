@@ -9,7 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
-#define NUM_ITERATIONS 30
+#define NUM_ITERATIONS 1000
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -543,7 +543,8 @@ int main(int argc, char** argv) {
       break;
     }
     tagParentElements(picparts,scs,iter);
-    render(picparts,iter, comm_rank);
+    if(!iter%20)
+      render(picparts,iter, comm_rank);
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());

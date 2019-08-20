@@ -623,8 +623,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto upFaces = e2f_last - e2f_first;
         assert(upFaces==2);
         auto faceA = e2f_vals[e2f_first];
-        auto faceB = e2f_vals[e2f_last];
-        ptcl_done[pid] = 1;
+        auto faceB = e2f_vals[e2f_first+1];
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
         elem_ids_next[pid] = nextElm;
       }

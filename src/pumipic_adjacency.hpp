@@ -103,10 +103,6 @@ OMEGA_H_DEVICE void barycentric_tri(
   bcc[0] = cap_area/abc_area;   //u
   bcc[1] = abp_area/abc_area;   //v
   bcc[2] = 1 - bcc[0] - bcc[1]; //w
-
-  for(o::LO i=0; i<TriVerts; ++i)
-    printf("triangle %5d area %.5f %.5f coordinates vtx %1d : %.3f %.3f\n",
-        searchElm, triArea[searchElm], i, faceCoords(0,i), faceCoords(1,i));
 }
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
@@ -485,7 +481,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
       if (debug)
-        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
+        printf("ptcl %3d mask %1d elem_ids %6d\n", pid_d(pid), mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -527,7 +523,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
         if(debug)
-          printf("Elem %d ptcl: %d\n", searchElm, ptcl);
+          printf("Elem %d ptcl %d\n", searchElm, ptcl);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
@@ -538,6 +534,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto isDestInParentElm = all_positive(faceBcc);
         ptcl_done[pid] = isDestInParentElm;
         elem_ids_next[pid] = elem_ids[pid]; //NOT SURE ABOUT SETTING THIS UNCONDITIONALLY
+        if(debug)
+          printf("checkCurrentElm Elem %d ptcl %d isDestInParentElm %2d elem_ids[pid] %5d\n",
+              searchElm, ptcl, isDestInParentElm, elem_ids[pid]);
       }
     };
     scs->parallel_for(checkCurrentElm);
@@ -549,11 +548,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
         if(debug)
-          printf("Elem %d ptcl: %d\n", searchElm, ptcl);
+          printf("Elem %d ptcl %d\n", searchElm, ptcl);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto edges = o::gather_down<3>(faceEdges, searchElm);
         if(debug)
-          printf("Elem %d ptcl: %d edges.size() %d\n", searchElm, ptcl, edges.size());
+          printf("Elem %d ptcl %d edges.size() %d\n", searchElm, ptcl, edges.size());
         const auto ptclDest = makeVector2(pid, xtgt_scs_d);
         const auto ptclOrigin = makeVector2(pid, x_scs_d);
         // check each edge of triangle for line-line intersection
@@ -576,8 +575,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           auto isLastEdge = (lastEdge[pid] == edges[i]);
           if( isect && !isLastEdge )
             nextEdge = edges[i];
-          if(debug) {
-            printf("Elem %d ptcl %d lastEdge %d "
+          if( debug ) {
+            printf("checkAdjElm Elem %d ptcl %d lastEdge %d "
                 "edge %d pt0 %f %f pt1 %f %f "
                 "ptcl.src %f %f ptcl.dest %f %f "
                 "isect %d isLastEdge %d nextEdge %d\n",
@@ -588,6 +587,10 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                 ptclDest[0], ptclDest[1],
                 isect, isLastEdge, nextEdge);
           }
+        }
+        if( nextEdge == -1 ) {
+          printf("checkAdjElm2 nextEdge -1 Elem %d ptcl %d\n",
+              searchElm, ptcl);
         }
         assert(nextEdge != -1);
         lastEdge[pid] = nextEdge;
@@ -601,8 +604,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto ptcl = pid_d(pid);
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
-        if( exposed ) {
-          printf("exposed edge searchElm %d ptcl %d lastEdge %d\n",
+        if( debug && exposed ) {
+          printf("checkExposedEdges exposed edge searchElm %d ptcl %d lastEdge %d\n",
               searchElm, ptcl, bridge);
         }
         ptcl_done[pid] = exposed;
@@ -612,7 +615,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
 
     auto e2f_vals = edges2faces.ab2b; // CSR value array
-    auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh element ids
+    auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh edge ids
     auto setNextElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
@@ -624,8 +627,13 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         assert(upFaces==2);
         auto faceA = e2f_vals[e2f_first];
         auto faceB = e2f_vals[e2f_first+1];
+        assert(faceA != faceB);
+        assert(faceA == searchElm || faceB == searchElm);
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
         elem_ids_next[pid] = nextElm;
+        if( debug )
+          printf("setNextElm searchElm %d ptcl %d nextElm %d\n",
+              searchElm, ptcl, nextElm);
       }
     };
     scs->parallel_for(setNextElm, "pumipic_setNextElm");

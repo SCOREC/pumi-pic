@@ -609,7 +609,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
               searchElm, ptcl, bridge);
         }
         ptcl_done[pid] = exposed;
-        elem_ids_next[pid] = elem_ids[pid];
+        elem_ids_next[pid] = -1; //leaves domain
       }
     };
     scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");

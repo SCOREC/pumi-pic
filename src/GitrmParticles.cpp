@@ -41,7 +41,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (np > 0)
-      printf(" [%d]%d:", i, np);
+      printf("%d , ", np);
     //TODO fix this for mpi
     //element_gids(i) = i; 
   });
@@ -50,7 +50,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
-  const int V = 1024;
+  const int V = 128;//1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   printf("Constructing Particles\n");
   //Create the particle structure
@@ -137,9 +137,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls,
   const auto dual_elems = dual.a2ab;
   
   auto size = data_r.size();
-  auto dof = numPtcls/size;
-  //TODO
-  dof = 6;
+  int dof = PTCL_READIN_DATA_SIZE_PER_PTCL;
   o::Write<o::LO> elemDet(1, -1);
   // Beginning element id of this x,y,z
   o::LO elmBeg=-1, ii=0;
@@ -268,12 +266,9 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
   MESHDATA(mesh);
 
   auto size = data.size();
-  auto dof = numPtcls/size;
-  //TODO
-  dof = 6;
-  OMEGA_H_CHECK(dof==6);
-  auto x_scs_d = scs->get<PTCL_NEXT_POS>();
-  auto x_scs_prev_d = scs->get<PTCL_POS>();
+  auto dof = PTCL_READIN_DATA_SIZE_PER_PTCL;
+  auto next_scs_d = scs->get<PTCL_NEXT_POS>();
+  auto pos_scs_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
   auto pid_scs = scs->get<PTCL_ID>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
@@ -305,16 +300,19 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
       pos[2] = data[ip*dof+2];
       vel[0] = data[ip*dof+3];
       vel[1] = data[ip*dof+4];
-      vel[2] = data[ip*dof+5];                
+      vel[2] = data[ip*dof+5];
+
+    printf("ip %d pos %g %g %g vel %g %g %g\n", ip, pos[0], pos[1], pos[2], 
+        vel[0], vel[1], vel[2]);
       p::find_barycentric_tet(M, pos, bcc);
       OMEGA_H_CHECK(p::all_positive(bcc, 0));
       for(int i=0; i<3; i++) {
-        x_scs_prev_d(pid,i) = pos[i];
-        x_scs_d(pid,i) = pos[i];
+        pos_scs_d(pid,i) = pos[i];
         vel_d(pid, i) = vel[i];
+        next_scs_d(pid,i) = 0;
       }
 
-      pid_scs(pid) = pid;
+      pid_scs(pid) = ip; //pid; //TODO check if index is ok
       charge_scs(pid) = 0;
       first_ionizeZ_scs(pid) = 0;
       prev_ionize_scs(pid) = 0;
@@ -356,8 +354,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     Omega_h_fail("Error opening PtclInitFile file %s \n", fName.c_str());
   
   // can't set in ps, since field names in ps used below not from array
-  constexpr int nComp = 6;
-
+  constexpr int nComp = PTCL_READIN_DATA_SIZE_PER_PTCL;
   OMEGA_H_CHECK(ps.nComp == nComp);
   bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
   std::string fieldNames[nComp];
@@ -388,9 +385,9 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     std::stringstream ss(line);
     // first string or number of EACH LINE is got here
     ss >> s1;
-    if(verbose >4){
-          std::cout << "str s1:" << s1 << "\n";
-    }
+    if(verbose >4)
+      std::cout << "str s1:" << s1 << "\n";
+    
     // Skip blank line
     if(s1.find_first_not_of(' ') == std::string::npos) {
       s1 = "";
@@ -414,7 +411,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
           std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
     }
     if(!dataInit && foundNP) {
-      data = o::HostWrite<o::Real>(ps.nComp*ps.nP);
+      data = o::HostWrite<o::Real>(nComp*ps.nP);
       dataInit = true;
     }
     int compBeg = 0, compEnd = nComp;
@@ -426,15 +423,19 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
         compEnd = compBeg + 1;
       }
     }
-
+    // NOTE: NaN is replaced with 0 to preserve sequential index of particle
+    //TODO change it in storeData()
     if(dataInit) {
-      // stored in a single data array of 6 components.
+      // stored in a single data array of 6+1 components.
       for(int iComp = compBeg; iComp<compEnd; ++iComp) {
         parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
           dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls);
-        
-        if(!foundComp[iComp] && dataLine[iComp])
+
+        if(!foundComp[iComp] && dataLine[iComp]) {
           foundComp[iComp] = true;
+          if(verbose >1)
+            printf("Found data Component %d\n", iComp);
+        }
       }
     }
     s1 = s2 = s3 = "";
@@ -468,8 +469,13 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
   } //if any invalid
 
   OMEGA_H_CHECK(dataInit && foundNP);
-  for(int i=0; i<6; ++i)
+  for(int i=0; i<nComp; ++i) {
+    if(foundComp[i]==false)
+      printf("Not Found data component %d \n", i);
+    //TODO if only single line of data, the flag is reset instantly
+    // in which case this check should be disabled
     OMEGA_H_CHECK(foundComp[i]==true);
+  }
   if(ifs.is_open()) {
     ifs.close();
   }

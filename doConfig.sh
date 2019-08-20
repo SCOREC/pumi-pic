@@ -11,5 +11,5 @@ cmake  -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
       -DIS_TESTING=ON \
       -DTEST_DATA_DIR=$src/pumipic-data \
       $src
-# -DCUDA_NVCC_FLAGS="-O" \
+
 #      -DCMAKE_BUILD_TYPE=DEBUG \

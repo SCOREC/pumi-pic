@@ -248,16 +248,15 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
            
   bool debug =0;
   o::Real tol = 1.0e-10;
-
-  const auto dual = mesh.ask_dual();
-  const auto down_r2f = mesh.ask_down(3, 2);
+  
+  Kokkos::Profiling::pushRegion("pumipic_search");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);
-  const auto down_r2fs = down_r2f.ab2b;
-  const auto dual_faces = dual.ab2b;
-  const auto dual_elems = dual.a2ab;
+  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
+  const auto dual_faces = mesh.ask_dual().ab2b;
+  const auto dual_elems = mesh.ask_dual().a2ab;
   const auto scsCapacity = scs->capacity();
   // ptcl_done[i] = 1 : particle hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
@@ -274,7 +273,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       ptcl_done[pid] = 1;
     }
   };
-  scs->parallel_for(lamb);
+  scs->parallel_for(lamb, "searchMesh_fill_elem_ids");
 
   bool found = false;
   int loops = 0;
@@ -416,7 +415,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       } //if active particle
     };
 
-    scs->parallel_for(lamb);
+    scs->parallel_for(lamb, "search_mesh");
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
       elem_ids[i] = elem_ids_next[i];
@@ -438,7 +437,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   }
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
-
+  Kokkos::Profiling::popRegion();
   return found;
 }
 

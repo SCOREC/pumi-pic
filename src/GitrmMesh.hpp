@@ -319,24 +319,28 @@ inline o::LO calculateCsrIndices(const o::LOs& numsPerSlot,
   return sum;
 }
 
+//TODO NaN is replaced by 0 to preserve index. 
 inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind, 
-  int iComp, int nComp, std::set<int>& nans, bool debug=false) {
-  bool add2nan = false;
+  int iComp, int nComp, std::set<int>& nans, bool replaceNaN=false, 
+  bool debug=false) {
+  bool invalid = false;
   try {
     double num = std::stod(sd);
+    if(replaceNaN && std::isnan(num)) 
+      num = 0;
     if(! std::isnan(num)) { 
-      data[nComp*ind+iComp] = num;    
-      ++ind;     
+      data[nComp*ind+iComp] = num;
+      ++ind; 
     } else 
-      add2nan = true;
+      invalid = true;
   } catch (const std::invalid_argument& ia) {
-    add2nan = true;
+    invalid = true;
   }
-  if(add2nan) {
-      nans.insert(ind);
-      if(debug)
-        std::cout << "WARNING skipping Invalid  input : " << sd 
-          << " ind: " << ind << " iComp: " << iComp << "\n";
+  if(invalid) {
+    nans.insert(ind);
+    if(debug)
+      std::cout << "WARNING Invalid  input : " << sd 
+      << " ind: " << ind << " iComp: " << iComp << "\n";
   }
 }
 
@@ -351,7 +355,7 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
 inline void parseFileFieldData(std::stringstream& ss, std::string sFirst, 
    std::string fieldName, bool semi, o::HostWrite<o::Real>& data, int& ind,
    bool& dataLine, std::set<int>& nans, bool& expectEqual, int iComp=0, 
-   int nComp=1, int numPtcls=0, bool debug=false) {
+   int nComp=1, int numPtcls=0, bool debug=false, bool replaceNaN=false) {
 
   std::string s2 = "", sd = "";
   // restart index when string matches
@@ -376,7 +380,7 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
     // this is done for every line, not only that of fieldName string
     if(!(sFirst.empty() || sFirst == fieldName)) {
       if(ind < numPtcls || !numPtcls){
-        storeData(data, sFirst, ind, iComp, nComp, nans, debug);
+        storeData(data, sFirst, ind, iComp, nComp, nans, replaceNaN, debug);
       }
     }  
     if(! ss.str().empty()) {
@@ -389,7 +393,7 @@ inline void parseFileFieldData(std::stringstream& ss, std::string sFirst,
           if(sd=="=")
             continue;
         }
-        storeData(data, sd, ind, iComp, nComp, nans, debug);
+        storeData(data, sd, ind, iComp, nComp, nans, replaceNaN, debug);
       } 
     }
     if(semi)
@@ -559,7 +563,7 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
   
   
  // for(int i=0; i<nComp; ++i){
-    // if ; on first line, dataLine is reset before reaching back
+    // if ; on first line, dataLine is reset before setting foundData
     //OMEGA_H_CHECK(foundData[i]);
  // }
   if(ifs.is_open()) {

@@ -60,7 +60,6 @@ void updatePtclPositions(SCS* scs) {
   scs->parallel_for(updatePtclPos, "updatePtclPos");
 }
 
-
 void rebuild(SCS* scs, o::LOs elem_ids) {
   //fprintf(stderr, "rebuilding..\n");
   updatePtclPositions(scs);
@@ -76,7 +75,7 @@ void rebuild(SCS* scs, o::LOs elem_ids) {
 }
 
 void storePiscesData(SCS* scs, o::Mesh& mesh, o::Write<o::LO>& data_d, 
-  o::Write<o::Real>& xpoints, o::Write<o::LO>& xpointFids, o::LO iter, 
+  o::Write<o::Real>& xpoints, o::Write<o::LO>& xface_ids, o::LO iter, 
   bool debug=true) {
   double radMax = 0.05; //m 0.0446+0.005
   double zMin = 0; //m height min
@@ -87,7 +86,7 @@ void storePiscesData(SCS* scs, o::Mesh& mesh, o::Write<o::LO>& data_d,
   auto pid_scs = scs->get<PTCL_ID>();
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto fid = xpointFids[pid];
+    auto fid = xface_ids[pid];
     if(mask >0 && fid>=0) {
       // test
       o::Vector<3> xpt;
@@ -101,14 +100,14 @@ void storePiscesData(SCS* scs, o::Mesh& mesh, o::Write<o::LO>& data_d,
       
       auto detId = pisces_ids[fid];
       if(detId >=0) {
-        if(debug)
+        //if(debug)
           printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
             pid_scs(pid), zInd, detId, x, y, z, iter);
         Kokkos::atomic_fetch_add(&data_d[detId], 1);
       }
     }
   };
-  scs->parallel_for(lamb);
+  scs->parallel_for(lamb, "storePiscesData");
 }
 
 void neutralBorisMove(SCS* scs,  const o::Real dTime) {
@@ -132,34 +131,45 @@ void neutralBorisMove(SCS* scs,  const o::Real dTime) {
 } 
 
 void search(SCS* scs, o::Mesh& mesh, int iter, o::Write<o::LO>& data_d, 
-  bool debug=false) {
+  o::Write<o::Real>& xpoints_d, bool debug=false ) {
+  
+  Kokkos::Profiling::pushRegion("gitrm_search");
   assert(scs->nElems() == mesh.nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  o::Write<o::Real>xpoints_d(3*scsCapacity, 0, "xpoints");
+  //o::Write<o::Real>xpoints_d(3*scsCapacity, 0, "xpoints");
   o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
+  //o::fill(xface_ids, -1);
+
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
-
   bool isFound = p::search_mesh<Particle>(mesh, scs, x_scs, xtgt_scs, pid_scs, 
     elem_ids, xpoints_d, xface_ids, maxLoops);
   assert(isFound);
-
-  auto elm_ids = o::LOs(elem_ids);
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("storePiscesData");
+  //auto elm_ids = o::LOs(elem_ids);
   //o::Reals collisionPoints = o::Reals(xpoints_d);
   //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
  
   //output particle positions, for converting to vtk
   storePiscesData(scs, mesh, data_d, xpoints_d, xface_ids, iter, debug);
+  Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
+  Kokkos::Profiling::pushRegion("rebuild");
   rebuild(scs, elem_ids);
+  Kokkos::Profiling::popRegion();
 }
 
 int main(int argc, char** argv) {
+  auto start_sim = std::chrono::system_clock::now(); 
   pumipic::Library pic_lib(&argc, &argv);
   Omega_h::Library& lib = pic_lib.omega_h_lib();
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
@@ -176,17 +186,18 @@ int main(int argc, char** argv) {
       << " <mesh><ptcls_file>[<nPtcls><nIter><timeStep>]\n";
     exit(1);
   }
-
   auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
+  printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
   std::string ptclSource = argv[2];
+  printf(" Mesh file %s\n", argv[1]);
+  printf(" Particle Source file %s\n", argv[2]);
   bool piscesRun = true;
   bool debug = false;
+  bool printTimePerIter = false;
   bool chargedTracking = false; //false for neutral tracking
 
   if(!chargedTracking)
     printf("WARNING: neutral particle tracking is ON \n");
-
-  printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 
   if(piscesRun)
     markDetectorCylinder(mesh, true);
@@ -209,6 +220,10 @@ int main(int argc, char** argv) {
   gp.initImpurityPtclsFromFile(ptclSource, numPtcls, 100, false);
 
   auto &scs = gp.scs;
+  //what if scs capacity increases ?
+  const auto scsCapacity = scs->capacity();
+  o::Write<o::Real>xpoints_d(4*scsCapacity, 0, "xpoints");
+  //o::Write<o::LO>xface_ids((int)(1.5*scsCapacity), -1, "xface_ids"); //crash
 
   o::LO numGrid = 14;
   o::Write<o::LO>data_d(numGrid, 0);
@@ -216,8 +231,7 @@ int main(int argc, char** argv) {
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
   fprintf(stderr, "\n*********Main Loop**********\n");
-  auto start_sim = std::chrono::system_clock::now(); 
-  //Kokkos::Timer timer;
+  auto end_init = std::chrono::system_clock::now();
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->nPtcls() == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
@@ -225,21 +239,17 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "=================iter %d===============\n", iter);
-
     neutralBorisMove(scs, dTime);
-    search(scs, mesh, iter, data_d, debug);
-
+    search(scs, mesh, iter, data_d, xpoints_d, debug);
+    
     if(iter%100 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
-    if(scs->nPtcls() == 0) {
-      fprintf(stderr, "No particles remain... exiting push loop\n");
-      fprintf(stderr, "Total iterations = %d\n", iter+1);
-      break;
-    }
   }
   auto end_sim = std::chrono::system_clock::now();
-  std::chrono::duration<double> dur_sec = end_sim - start_sim;
-  std::cout << "Simulation duration " << dur_sec.count()/60 << " min.\n";
+  std::chrono::duration<double> dur_init = end_init - start_sim;
+  std::cout << "Initialization duration " << dur_init.count()/60 << " min.\n";
+  std::chrono::duration<double> dur_steps = end_sim - end_init;
+  std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
   if(piscesRun) {
     std::cout << "Pisces detections \n";
     printGridData(data_d);

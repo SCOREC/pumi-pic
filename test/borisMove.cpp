@@ -102,7 +102,12 @@ void profileAndInterpolateTest(GitrmMesh& gm, bool debug=false) {
 }
 
 int main(int argc, char** argv) {
-  Kokkos::initialize(argc,argv);
+  auto start_sim = std::chrono::system_clock::now(); 
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
   printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
   printf("Kokkos execution space memory %s name %s\n",
@@ -138,10 +143,11 @@ int main(int argc, char** argv) {
   profFile = argv[3];
   ptclSource  = argv[4];
   ionizeRecombFile = argv[5];
-
-  auto lib = Omega_h::Library(&argc, &argv);
-  const auto world = lib.world();
-  auto mesh = Omega_h::read_mesh_file(argv[1], world);
+  printf(" Mesh file %s\n", argv[1]);
+  printf(" Particle Source file %s\n", ptclSource);
+  printf(" Profile file %s\n", profFile);
+  printf(" IonizeRecomb File %s\n", ionizeRecombFile);
+  auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 
   GitrmMesh gm(mesh);

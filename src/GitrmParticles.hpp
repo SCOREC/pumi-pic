@@ -19,6 +19,8 @@ using particle_structs::MemberTypes;
 namespace o = Omega_h;
 namespace p = pumipic;
 
+constexpr int PTCL_READIN_DATA_SIZE_PER_PTCL = 6;
+
 // TODO: initialize these to its default values: ids =-1, reals=0
 typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
    int, fp_t, int, fp_t, fp_t> Particle;

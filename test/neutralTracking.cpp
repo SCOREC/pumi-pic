@@ -110,10 +110,11 @@ void storePiscesData(SCS* scs, o::Mesh& mesh, o::Write<o::LO>& data_d,
   scs->parallel_for(lamb, "storePiscesData");
 }
 
-void neutralBorisMove(SCS* scs,  const o::Real dTime) {
+void neutralBorisMove(SCS* scs,  const o::Real dTime, bool debug=false) {
   auto vel_scs = scs->get<PTCL_VEL>();
   auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto pos_scs = scs->get<PTCL_POS>();
+  auto pid_scs = scs->get<PTCL_ID>();
   auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
       auto vel = p::makeVector3(pid, vel_scs);
@@ -124,7 +125,10 @@ void neutralBorisMove(SCS* scs,  const o::Real dTime) {
       tgt_scs(pid, 2) = pos[2] + vel[2] * dTime;
       vel_scs(pid, 0) = vel[0];
       vel_scs(pid, 1) = vel[1];
-      vel_scs(pid, 2) = vel[2];      
+      vel_scs(pid, 2) = vel[2];    
+      if(debug)  
+        printf("id %d pos %g %g %g vel %g %g %g %g %g %g\n", pid_scs(pid), pos[0], pos[1], pos[2],
+          vel[0], vel[1], vel[2], tgt_scs(pid, 0),tgt_scs(pid, 1), tgt_scs(pid, 2));
     }// mask
   };
   scs->parallel_for(boris, "neutralBorisMove");
@@ -188,12 +192,16 @@ int main(int argc, char** argv) {
   }
   auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
+
+
+  Omega_h::vtk::write_parallel("mesh_vtk", &mesh, mesh.dim());
+
+
   std::string ptclSource = argv[2];
   printf(" Mesh file %s\n", argv[1]);
   printf(" Particle Source file %s\n", argv[2]);
   bool piscesRun = true;
   bool debug = false;
-  bool printTimePerIter = false;
   bool chargedTracking = false; //false for neutral tracking
 
   if(!chargedTracking)
@@ -239,7 +247,7 @@ int main(int argc, char** argv) {
       break;
     }
     fprintf(stderr, "=================iter %d===============\n", iter);
-    neutralBorisMove(scs, dTime);
+    neutralBorisMove(scs, dTime, debug);
     search(scs, mesh, iter, data_d, xpoints_d, debug);
     
     if(iter%100 ==0)

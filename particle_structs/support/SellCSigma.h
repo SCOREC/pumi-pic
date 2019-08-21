@@ -180,8 +180,9 @@ private:
   GID_Mapping element_gid_to_lid;
   //Pointers to the start of each SCS for each data type
   MemberTypeViews<DataTypes> scs_data;
+  MemberTypeViews<DataTypes> scs_data_swap;
 
-  void destroy(bool destroyGid2Row=true);
+  void destroy();
 
 };
 
@@ -448,10 +449,11 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   //Create offsets into each chunk/vertical slice
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk,capacity_);
 
-  //Allocate the SCS  
+  //Allocate the SCS and backup with 10% extra space
   lid_t cap = getLastValue<lid_t>(offsets);
   Kokkos::resize(particle_mask, cap);
-  CreateViews<DataTypes>(scs_data, cap);
+  CreateViews<DataTypes>(scs_data, cap*1.1);
+  CreateViews<DataTypes>(scs_data_swap, cap*1.1);
 
   if (np > 0)
     setupParticleMask(particle_mask, ptcls, chunk_widths);
@@ -464,10 +466,9 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 }
 
 template<class DataTypes, typename ExecSpace>
-void SellCSigma<DataTypes, ExecSpace>::destroy(bool destroyGid2Row) {
-  DestroyViews<DataTypes>(scs_data+0);
-  if (destroyGid2Row)
-    element_gid_to_lid.clear();
+void SellCSigma<DataTypes, ExecSpace>::destroy() {
+  destroyViews<DataTypes>(scs_data);
+  destroyViews<DataTypes>(scs_data_swap);
 }
 template<class DataTypes, typename ExecSpace>
 SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
@@ -588,7 +589,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   PS_Comm_Waitall<ExecSpace>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
   delete [] send_requests;
   delete [] recv_requests;
-  DestroyViews<DataTypes>(send_particle+0);
+  destroyViews<DataTypes>(send_particle);
 
   /********** Convert the received element from element gid to element lid *********/
   auto element_gid_to_lid_local = element_gid_to_lid;
@@ -609,7 +610,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   /********** Combine and shift particles to their new destination **********/
   rebuild(new_element, recv_element, recv_particle);
 
-  DestroyViews<DataTypes>(recv_particle+0);
+  destroyViews<DataTypes>(recv_particle);
   Kokkos::Profiling::popRegion();
 }
 
@@ -653,14 +654,14 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
     return false;
   }
   
-  //Offset array the count
-  
-  //Create list of holes
+  //Offset moving particles
 
-  //Assign index for particles that are shifting
+  //Gather moving particle list
+  
+  //Assign hole index for moving particles 
 
   //Shift SCS values
-
+  
   return true;
 }
 
@@ -670,8 +671,8 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                               MemberTypeViews<DataTypes> new_particles) {
   Kokkos::Profiling::pushRegion("scs_rebuild");
 
-  if (reshuffle(new_element, new_particle_elements, new_particles))
-    return;
+  // if (reshuffle(new_element, new_particle_elements, new_particles))
+  //   return;
 
   printf("Rebuilding\n");
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
@@ -721,8 +722,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Allocate the SCS
   int new_cap = getLastValue<lid_t>(new_offsets);
   kkLidView new_particle_mask("new_particle_mask", new_cap);
-  MemberTypeViews<DataTypes> new_scs_data;
-  CreateViews<DataTypes>(new_scs_data, new_cap);
+  if (getMemberView<DataTypes, 0>(scs_data_swap).size() < new_cap) {
+    destroyViews<DataTypes>(scs_data_swap);
+    CreateViews<DataTypes>(scs_data_swap, new_cap*1.1);
+  }
 
   
   /* //Fill the SCS */
@@ -755,7 +758,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   };
   parallel_for(copySCS);
 
-  CopySCSToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, new_scs_data, scs_data,
+  CopySCSToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, scs_data_swap, scs_data,
                                                             new_element, new_indices);
   //Add new particles
   int num_new_ptcls = new_particle_elements.size(); 
@@ -770,12 +773,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   });
   
   if (new_particle_elements.size() > 0)
-    CopyNewParticlesToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, new_scs_data,
+    CopyNewParticlesToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, scs_data_swap,
                                                                        new_particles,
                                                                        num_new_ptcls,
                                                                        new_particle_indices);
-  //Destroy old scs
-  destroy(false);
 
   //set scs to point to new values
   num_ptcls = new_num_ptcls;
@@ -787,7 +788,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   offsets = new_offsets;
   slice_to_chunk = new_slice_to_chunk;
   particle_mask = new_particle_mask;
-  scs_data = new_scs_data;
+  MemberTypeViews<DataTypes> tmp = scs_data;
+  scs_data = scs_data_swap;
+  scs_data_swap = tmp;
   Kokkos::Profiling::popRegion();
 }
 

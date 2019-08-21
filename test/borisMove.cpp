@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
 
   fprintf(stderr, "\n*********Main Loop**********\n");
 
-  auto start_sim = std::chrono::system_clock::now(); 
+  auto start_main = std::chrono::system_clock::now(); 
   Kokkos::Timer timer;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     if(scs->nPtcls() == 0) {
@@ -244,8 +244,10 @@ int main(int argc, char** argv) {
     }
   }
   auto end_sim = std::chrono::system_clock::now();
-  std::chrono::duration<double> dur_sec = end_sim - start_sim;
-  std::cout << "Simulation duration " << dur_sec.count()/60 << " min.\n";
+  std::chrono::duration<double> dur_sec = end_sim - start_main;
+  std::cout << "Main duration " << dur_sec.count()/60 << " min.\n";
+  std::chrono::duration<double> dur_sec2 = start_main - start_sim;
+  std::cout << "Pre-procesing duration " << dur_sec2.count()/60 << " min.\n";
   std::cout << "Profiles in R direction \n";
   if(storePtclsGrids) {
     printGridData(ptclDataR);

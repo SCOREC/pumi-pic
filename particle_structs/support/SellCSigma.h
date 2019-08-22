@@ -181,7 +181,7 @@ private:
   //Pointers to the start of each SCS for each data type
   MemberTypeViews<DataTypes> scs_data;
   MemberTypeViews<DataTypes> scs_data_swap;
-
+  int current_size, swap_size;
   void destroy();
 
 };
@@ -454,6 +454,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   Kokkos::resize(particle_mask, cap);
   CreateViews<DataTypes>(scs_data, cap*1.1);
   CreateViews<DataTypes>(scs_data_swap, cap*1.1);
+  swap_size = current_size = cap*1.1;
 
   if (np > 0)
     setupParticleMask(particle_mask, ptcls, chunk_widths);
@@ -722,9 +723,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   //Allocate the SCS
   int new_cap = getLastValue<lid_t>(new_offsets);
   kkLidView new_particle_mask("new_particle_mask", new_cap);
-  if (getMemberView<DataTypes, 0>(scs_data_swap).size() < new_cap) {
+  if (swap_size < new_cap) {
     destroyViews<DataTypes>(scs_data_swap);
     CreateViews<DataTypes>(scs_data_swap, new_cap*1.1);
+    swap_size = new_cap * 1.1;
   }
 
   
@@ -791,6 +793,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   MemberTypeViews<DataTypes> tmp = scs_data;
   scs_data = scs_data_swap;
   scs_data_swap = tmp;
+  int tmp_size = current_size;
+  current_size = swap_size;
+  swap_size = tmp_size;
   Kokkos::Profiling::popRegion();
 }
 

@@ -546,7 +546,15 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         ptclSeg.P1[0] = ptclDest[0];
         ptclSeg.P1[1] = ptclDest[1];
 
-        auto nextEdge = -1;
+        struct {
+          int isect[3] = {0,0,0};
+          int exposed[3] = {0,0,0};
+          int isLast[3] = {0,0,0};
+        } edgeProps;
+        for(int i = 0; i < 3; i++) {
+          edgeProps.exposed[i] = side_is_exposed[edges[i]];
+          edgeProps.isLast[i] = (lastEdge[pid] == edges[i]);
+        }
         for(int i = 0; i < 3; i++) {
           const auto edgeVerts = o::gather_verts<2>(edge_verts, edges[i]);
           const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
@@ -555,13 +563,30 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           edgeSeg.P1[0] = edgeCoords(0,1);
           edgeSeg.P1[1] = edgeCoords(1,1); 
           Point2D a,b;
-          auto isect = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
-          auto isLastEdge = (lastEdge[pid] == edges[i]);
-          if( isect && !isLastEdge )
-            nextEdge = edges[i];
+          edgeProps.isect[i] = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
         }
-        assert(nextEdge != -1);
-        lastEdge[pid] = nextEdge;
+        auto nextEdge = 0;
+        // first, check for an exposed edge that is intersected
+        for(int i = 0; i < 3; i++) {
+          const auto check = (
+              edgeProps.isect[i] &&
+              edgeProps.exposed[i] &&
+              !edgeProps.isLast[i] );
+          //nextEdge is zero when an edge is not found, there is an edge 0 so add 1 to the ids
+          if(check)
+            nextEdge = edges[i]+1;
+        }
+        // next, if we have not found an exposed edge, check for an internal edge that is intersected
+        for(int i = 0; i < 3; i++) {
+          const auto check = (
+              !nextEdge &&
+              edgeProps.isect[i] &&
+              !edgeProps.isLast[i] );
+          if(check)
+            nextEdge = edges[i]+1;
+        }
+        assert(nextEdge);
+        lastEdge[pid] = nextEdge-1; //remove 1 to get the 0-based edge id
       } //if active particle
     };
     scs->parallel_for(checkAdjElm, "pumipic_checkAdjElm");

@@ -22,6 +22,9 @@ namespace pumipic {
       CLASSIFICATION //partition vector holds ownership for each classification id
     };
 
+    Input(Omega_h::Mesh& mesh, char* partition_filename, 
+          Method bufferMethod_, Method safeMethod_);
+
     Input(Omega_h::Mesh& mesh, Ownership rule, Omega_h::LOs partition_vector,
           Method bufferMethod, Method safeMethod);
 

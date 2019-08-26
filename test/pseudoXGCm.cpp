@@ -550,26 +550,10 @@ int main(int argc, char** argv) {
     printTimerResolution();
   }
   auto full_mesh = readMesh(argv[1], lib);
-  Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
-  if (comm_size > 1) {
-    std::ifstream in_str(argv[2]);
-    if (!in_str) {
-      if (!comm_rank)
-        fprintf(stderr,"Cannot open file %s\n", argv[2]);
-      return EXIT_FAILURE;
-    }
-    int own;
-    int index = 0;
-    while(in_str >> own) 
-      host_owners[index++] = own;
-  }
-  else
-    for (int i = 0; i < full_mesh.nelems(); ++i)
-      host_owners[i] = 0;
-  Omega_h::Write<Omega_h::LO> owner(host_owners);
-  
-  //Create Picparts with the full mesh
-  p::Mesh picparts(full_mesh,owner);
+
+  //Create picparts using classification with the full mesh buffered and minimum safe zone
+  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::MINIMUM);
+  p::Mesh picparts(input);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
   

@@ -672,7 +672,11 @@ int main(int argc, char** argv) {
   //cleanup
   delete scs;
 
-  Omega_h::vtk::write_parallel("pseudoPush_tf", mesh, picparts.dim());
+  std::stringstream ss;
+  ss << "pseudoPush_tf" << "_r"<<comm_rank;
+  std::string s = ss.str();
+  Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
+
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

@@ -39,6 +39,13 @@ mpi_test(pseudoXGCm_24kElms 1
   100 81 
   0.038 3 8 0
   0.1 0.0 0)
+mpi_test(pseudoXGCm_24kElms_4 4
+  ./pseudoXGCm --kokkos-threads=1
+  ${TEST_DATA_DIR}/xgc/itg24k.osh ${TEST_DATA_DIR}/xgc/itg24k.cpn
+  100 81 
+  0.038 3 8 0
+  0.1 0.0 0)
+
 mpi_test(pseudoXGCm_126kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg126k.osh ignored

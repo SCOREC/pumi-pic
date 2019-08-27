@@ -10,8 +10,10 @@
 #include "pumipic_mesh.hpp"
 #include <fstream>
 #include "gyroScatter.hpp"
+#include <random>
 #define NUM_ITERATIONS 1000
-
+#define ELEMENT_SEED 1024*1024
+#define PARTICLE_SEED 512*512
 using particle_structs::fp_t;
 using particle_structs::lid_t;
 using particle_structs::Vector3d;
@@ -33,7 +35,7 @@ typedef SellCSigma<Particle> SCS;
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
-  ss << "pseudoPush_t" << iter<<"_r"<<comm_rank;
+  ss << "pseudoPush_r" << comm_rank<<"_t"<<iter;
   std::string s = ss.str();
   Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 }
@@ -230,60 +232,78 @@ void setPtclIds(SCS* scs) {
 
 int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
     const int mdlFace, const int numPtcls) {
+  //Deterministically generate random number of particles on each element with classification less than mdlFace
+  int comm_rank = picparts.comm()->rank();
   const auto elm_dim = picparts.dim();
-  const auto side_dim = elm_dim-1;
-  printf("elm_dim %d side_dim %d\n", elm_dim, side_dim);
   o::Mesh* mesh = picparts.mesh();
-  auto face_class_ids = mesh->get_array<o::ClassId>(side_dim, "class_id");
-  auto exposed_faces = o::mark_exposed_sides(mesh);
-  o::Write<o::Byte> isClassOnFace(face_class_ids.size());
+  auto face_class_ids = mesh->get_array<o::ClassId>(elm_dim, "class_id");
+  auto face_owners = picparts.entOwners(elm_dim);
+  o::Write<o::LO> isFaceOnClass(face_class_ids.size(), 0);
   o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
-    isClassOnFace[i] = 0;
-    if( face_class_ids[i] == mdlFace && exposed_faces[i] )
-      isClassOnFace[i] = 1;
+    if( face_class_ids[i] <= mdlFace && face_owners[i] == comm_rank)
+      isFaceOnClass[i] = 1;
   });
-  auto markedElms = mark_up(mesh, side_dim, elm_dim, isClassOnFace);
-  o::Write<o::LO> markedElmIds(markedElms.size(),-1);
-  o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
-     markedElmIds[i] = markedElms[i] * i;
-  });
-  Omega_h::LO lastMarkedElm = o::get_max(o::LOs(markedElmIds));
-  auto numMarkedElms = 0;
-  Kokkos::parallel_reduce(markedElms.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
-    lsum += markedElms[i] > 0 ;
-  }, numMarkedElms);
-  printf("mesh elements classified on model face %d: %d\n", mdlFace, numMarkedElms);
-  if (numMarkedElms > 0) {
-    auto numPpe = numPtcls / numMarkedElms;
-    printf("num ptcls per elm %d\n", numPpe);
-    auto numPpeR = numPtcls % numMarkedElms;
-    auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
-    auto nodes2coords = mesh->coords();
-    printf("markedElms.size() %d\n", markedElms.size());
-    o::parallel_for(markedElms.size(), OMEGA_H_LAMBDA(const int i) {
-        auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(i));
-        auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
-        auto center = average(vtxCoords);
-        if( markedElms[i] )
-          ppe[i] = numPpe + ( (i==lastMarkedElm) * numPpeR );
-      });
-    printf("done source elms\n");
-    Omega_h::LO totPtcls = 0;
-    Kokkos::parallel_reduce(ppe.size(), OMEGA_H_LAMBDA(const int i, Omega_h::LO& lsum) {
-        lsum += ppe[i];
-      }, totPtcls);
-    assert(totPtcls == numPtcls);
-    return totPtcls;
+  o::LO numMarked = o::get_sum(o::LOs(isFaceOnClass));
+  int nppe = numPtcls / numMarked;
+  o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
+
+  //Gaussian Random generator with mean = number of particles per element
+  std::default_random_engine generator(ELEMENT_SEED);
+  std::normal_distribution<double> dist(nppe, nppe / 4);
+
+  Omega_h::HostWrite<o::LO> isFaceOnClass_host(isFaceOnClass);
+  int total = 0;
+  int last = -1;
+  for (int i = 0; i < mesh->nelems(); ++i) {
+    rand_per_elem[i] = 0;
+    if (isFaceOnClass_host[i]) {
+      last = i;
+      rand_per_elem[i] = round(dist(generator));
+      if (rand_per_elem[i] < 0)
+        rand_per_elem[i] = 0;
+      total += rand_per_elem[i];
+      //Stop if we hit the number of particles
+      if (total > numPtcls) {
+        int over = total - numPtcls;
+        rand_per_elem[i] -= over;
+        break;
+      }
+    }
   }
-  return 0;
+  //If we didn't put all particles in, fill them in the last element we touched
+  if (total < numPtcls) {
+    int under = numPtcls - total;
+    rand_per_elem[last] += under;
+  }
+  o::Write<o::LO> ppe_write(rand_per_elem);
+
+  
+  int np = o::get_sum(o::LOs(ppe_write));
+  o::parallel_for(mesh->nelems(), OMEGA_H_LAMBDA(const o::LO& i) {
+    ppe(i) = ppe_write[i];
+  });
+  return np;
 }
 
 void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
-  //get centroid of parent element and set the child particle coordinates
-  //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
-  //It isn't clear why the template parameter for gather_[verts|vectors] was
-  //sized eight... maybe something to do with the 'Overlay'.  Given that there
-  //are four vertices bounding a tet, I'm setting that parameter to four below.
+  //Randomly distrubite particles within each element (uniformly within the element)
+  //Create a deterministic generation of random numbers on the host with 2 number per particle
+
+  o::HostWrite<o::Real> rand_num_per_ptcl(2*scs->capacity());
+  std::default_random_engine generator(PARTICLE_SEED);
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  for (int i = 0; i < scs->capacity(); ++i) {
+    o::Real x = dist(generator);
+    o::Real y = dist(generator);
+    if (x+y > 1) {
+      x = 1-x;
+      y = 1-y;
+    }
+    rand_num_per_ptcl[2*i] = x;
+    rand_num_per_ptcl[2*i+1] = y;
+  }
+  o::Write<o::Real> rand_nums(rand_num_per_ptcl);
   o::Mesh* mesh = picparts.mesh();
   auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
   auto nodes2coords = mesh->coords();
@@ -293,11 +313,15 @@ void setInitialPtclCoords(p::Mesh& picparts, SCS* scs, bool output) {
     if(mask > 0) {
       auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
       auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
-      auto center = average(vtxCoords);
+      o::Real r1 = rand_nums[2*pid];
+      o::Real r2 = rand_nums[2*pid+1];
+      // X = A + r1(B-A) + r2(C-A)
+      for (int i = 0; i < 2; i++)
+        x_scs_d(pid,i) = vtxCoords[0][i] + r1 * (vtxCoords[1][i] - vtxCoords[0][i])
+                                        + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
+      x_scs_d(pid,2) = 0;
       if (output)
-        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
-      for(int i=0; i<3; i++)
-        x_scs_d(pid,i) = center[i];
+        printf("pid %d: %.3f %.3f %.3f\n", pid, x_scs_d(pid,0), x_scs_d(pid,1), x_scs_d(pid,2));
     }
   };
   scs->parallel_for(lamb);
@@ -367,7 +391,7 @@ int main(int argc, char** argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   const int numargs = 12;
   if( argc != numargs ) {
-    auto args = " <mesh> <owner_file> <numPtcls> <initial model face> "
+    auto args = " <mesh> <owner_file> <numPtcls> <max initial model face> "
       "<gyro rmax> <gyro rings> <gyro points per ring> <gyro theta> <push vector>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
@@ -403,14 +427,11 @@ int main(int argc, char** argv) {
   createGyroRingMappings(mesh, forward_map, backward_map);
   
   /* Particle data */
-  int numPtcls = atoi(argv[3]);
+  int numPtcls = atoi(argv[3]) / comm_size;
   const bool output = numPtcls <= 30;
-  if (comm_rank != 0)
-    numPtcls = 0;
   Omega_h::Int ne = mesh->nelems();
-  if (comm_rank == 0)
-    fprintf(stderr, "number of elements %d number of particles %d\n",
-            ne, numPtcls);
+
+  
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   SCS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
@@ -424,6 +445,10 @@ int main(int argc, char** argv) {
     if (output && np > 0)
      printf("ppe[%d] %d\n", i, np);
   });
+
+  if (comm_rank == 0)
+    fprintf(stderr, "number of elements %d number of particles %d\n",
+            ne, actualParticles);
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
@@ -515,7 +540,7 @@ int main(int argc, char** argv) {
   delete scs;
 
   std::stringstream ss;
-  ss << "pseudoPush_tf" << "_r"<<comm_rank;
+  ss << "pseudoPush" << "_r"<<comm_rank << "_tf";
   std::string s = ss.str();
   Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 

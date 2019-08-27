@@ -90,7 +90,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   const auto numElms = mesh->nelems();
   //Gyro avg mapping: 3 vertices per ring point (Assumes all elements are triangles)
   const o::LO nvpe = 3;
-  o::Write<o::LO> gyro_avg_map(nvpe * num_points);
+  o::Write<o::LO> gyro_avg_map(nvpe * num_points, -1);
   auto elm2Verts = mesh->ask_down(mesh->dim(), 0);
   auto createGyroMapping = SCS_LAMBDA(const int&, const int& pid, const int& mask) {
     const o::LO parent = elem_ids[pid];
@@ -215,6 +215,7 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
     }
   };
   scs->parallel_for(accumulateToRings);
+  const Omega_h::LO nverts = mesh->nverts();
   o::Write<o::Real> scatter_w(mesh->nverts(),0,"scatterTag_w");
   auto scatterToMappedVerts = OMEGA_H_LAMBDA(const o::LO& v) {
      const auto vtxIdx = v*gnr*gppr;
@@ -227,7 +228,8 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
           for(int elmVtx=0; elmVtx<nvpe; elmVtx++) {
             const auto mappedIdx = ptIdx + elmVtx;
             const auto mappedVtx = v2v[mappedIdx];
-            Kokkos::atomic_fetch_add(&(scatter_w[mappedVtx]), accumRingVal); //replace with add
+            if (mappedVtx >= 0)
+              Kokkos::atomic_fetch_add(&(scatter_w[mappedVtx]), accumRingVal); //replace with add
           }
         }
      }
@@ -237,4 +239,21 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
   Kokkos::Profiling::popRegion();
 }
 
+void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
+              const std::string& bkwdTagName, const std::string& syncTagName) {
+  Omega_h::Write<Omega_h::Real> sync_array = picparts.createCommArray(0, 2, Omega_h::Real(0.0));
+  Omega_h::Mesh* mesh = picparts.mesh();
+  Omega_h::Read<Omega_h::Real> fwdTag = mesh->get_array<Omega_h::Real>(0, fwdTagName);
+  Omega_h::Read<Omega_h::Real> bkwdTag = mesh->get_array<Omega_h::Real>(0, bkwdTagName);
+
+  auto setSyncArray = OMEGA_H_LAMBDA(const Omega_h::LO vtx_id) {
+    sync_array[2*vtx_id] = fwdTag[vtx_id];
+    sync_array[2*vtx_id+1] = bkwdTag[vtx_id];
+  };
+  Omega_h::parallel_for(mesh->nverts(), setSyncArray);
+  
+  picparts.reduceCommArray(0, p::Mesh::Op::SUM_OP, sync_array);
+
+  mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
+}
 #endif

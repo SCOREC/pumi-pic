@@ -465,6 +465,8 @@ int main(int argc, char** argv) {
   mesh->add_tag(o::VERT, fwdTagName, 1, o::Reals(mesh->nverts(), 0));
   const auto bkwdTagName = "ptclToMeshScatterBkwd";
   mesh->add_tag(o::VERT, bkwdTagName, 1, o::Reals(mesh->nverts(), 0));
+  const auto syncTagName = "ptclToMeshSync";
+  mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
   render(picparts,0, comm_rank);
 
@@ -500,10 +502,11 @@ int main(int argc, char** argv) {
       break;
     }
     tagParentElements(picparts,scs,iter);
-    if(!iter%20)
+    if(!(iter%20))
       render(picparts,iter, comm_rank);
     gyroScatter(mesh,scs,forward_map,fwdTagName);
     gyroScatter(mesh,scs,backward_map,bkwdTagName);
+    gyroSync(picparts,fwdTagName,bkwdTagName,syncTagName);
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());

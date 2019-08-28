@@ -455,7 +455,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
-  const int debug = 1;
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
   const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
@@ -548,6 +547,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 
         struct {
           int isect[3] = {0,0,0};
+          int isectEndPt[3] = {0,0,0};
           int exposed[3] = {0,0,0};
           int isLast[3] = {0,0,0};
         } edgeProps;
@@ -561,9 +561,15 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           edgeSeg.P0[0] = edgeCoords(0,0);
           edgeSeg.P0[1] = edgeCoords(1,0);
           edgeSeg.P1[0] = edgeCoords(0,1);
-          edgeSeg.P1[1] = edgeCoords(1,1); 
+          edgeSeg.P1[1] = edgeCoords(1,1);
           Point2D a,b;
           edgeProps.isect[i] = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
+          const auto isectEndPt0 = o::are_close(ptclSeg.P0[0],a.x) &&
+                                   o::are_close(ptclSeg.P0[1],a.y);
+          const auto isectEndPt1 = o::are_close(ptclSeg.P1[0],a.x) &&
+                                   o::are_close(ptclSeg.P1[1],a.y);
+          edgeProps.isectEndPt[i] = isectEndPt0 || isectEndPt1;
+
         }
         auto nextEdge = 0;
         // first, check for an exposed edge that is intersected
@@ -573,17 +579,39 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
               edgeProps.exposed[i] &&
               !edgeProps.isLast[i] );
           //nextEdge is zero when an edge is not found, there is an edge 0 so add 1 to the ids
-          if(check)
+          if(check) {
             nextEdge = edges[i]+1;
+          }
         }
-        // next, if we have not found an exposed edge, check for an internal edge that is intersected
+        // next, if we have not found an exposed edge,
+        //  check for an internal edge that is intersected
+        //  at a point other than one of the end points
+        for(int i = 0; i < 3; i++) {
+          const auto check = (
+              !nextEdge &&
+              edgeProps.isect[i] &&
+              !edgeProps.isectEndPt[i] &&
+              !edgeProps.isLast[i] );
+          if(check) {
+            nextEdge = edges[i]+1;
+          }
+        }
+        // last, if we have not found an edge, then select
+        //  one of the end point intersected internal edges
         for(int i = 0; i < 3; i++) {
           const auto check = (
               !nextEdge &&
               edgeProps.isect[i] &&
               !edgeProps.isLast[i] );
-          if(check)
+          if(check) {
             nextEdge = edges[i]+1;
+          }
+        }
+        if(!nextEdge) {
+          printf("ptcl %d elm %d src %f %f dest %f %f\n",
+              ptcl, searchElm,
+              ptclSeg.P0[0], ptclSeg.P0[1],
+              ptclSeg.P1[0], ptclSeg.P1[1]);
         }
         assert(nextEdge);
         lastEdge[pid] = nextEdge-1; //remove 1 to get the 0-based edge id
@@ -598,7 +626,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
-        elem_ids_next[pid] = -1; //leaves domain
+        elem_ids_next[pid] = -1; //leaves domain if exposed
       }
     };
     scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
@@ -637,8 +665,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     ++loops;
 
     if(looplimit && loops >= looplimit) {
-      if (debug)
-        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   }

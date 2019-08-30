@@ -1,26 +1,8 @@
 #ifndef GYRO_SCATTER_H
 #define GYRO_SCATTER_H
 
-#include "pumipic_kktypes.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
+#include "pseudoXGCmTypes.hpp"
 #include <SCS_Macros.h>
-#include <Kokkos_Core.hpp>
-
-using particle_structs::fp_t;
-using particle_structs::lid_t;
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
-
-namespace o = Omega_h;
-namespace p = pumipic;
-
-typedef MemberTypes<Vector3d, Vector3d, int> Point;
-typedef SellCSigma<Point> SCS;
 
 namespace {
   o::Real gyro_rmax = 0.038; //max ring radius
@@ -46,8 +28,8 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   o::LO num_points = starting_element.size();
 
   //Create SCS for the projected points to perform adjacency search on
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", mesh->nelems());
-  SCS::kkLidView point_element("point_element", num_points);
+  SCSpt::kkLidView ptcls_per_elem("ptcls_per_elem", mesh->nelems());
+  SCSpt::kkLidView point_element("point_element", num_points);
   auto point_info = particle_structs::createMemberViews<Point>(num_points);
   auto start_pos = particle_structs::getMemberView<Point, 0>(point_info);
   auto end_pos = particle_structs::getMemberView<Point, 1>(point_info);
@@ -67,7 +49,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   const int sigma = INT_MAX;
   const int V = 64;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  SCS::kkGidView empty_gids("empty_gids", 0);
+  SCSpt::kkGidView empty_gids("empty_gids", 0);
   SellCSigma<Point>* gyro_scs = new SellCSigma<Point>(policy, sigma, V,
                                                       mesh->nelems(), num_points,
                                                       ptcls_per_elem, empty_gids,

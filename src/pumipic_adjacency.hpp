@@ -67,42 +67,29 @@ OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
     OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
 }
 
-//https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/barycentric-coordinates
 #define TriVerts 3
 #define TriDim 2
+//compute the area coordinates formed by each edge of searchElm
+//the coordinates are returned in the order of the edges bounding
+//searchElm
 OMEGA_H_DEVICE void barycentric_tri(
     const o::Reals triArea,
     const o::Matrix<TriDim, TriVerts> &faceCoords,
     const o::Vector<TriDim> &pos,
     o::Vector<TriVerts> &bcc,
     const int searchElm) {
-  //triangle defined by vertices A,B,C
-  // point P is potentially inside of it
-  //     C
-  //    /  \
-  //   /    \
-  //  A ---- B
-  //omega_h triangles list their vertices following the
-  // right hand rule (counter clockwise)
-  // i.e.; B=0 C=1 A=2 or C=0 A=1 B=2 or A=0 B=1 C=2
-  o::Few<o::Vector<2>, 2> tri;
-  tri[0] = faceCoords[1] - faceCoords[0];
-  tri[1] = faceCoords[2] - faceCoords[0];
-  auto abc_area = o::triangle_area_from_basis(tri);
-  OMEGA_H_CHECK(o::are_close(abc_area, triArea[searchElm])); //sanity check
-
-  tri[0] = faceCoords[0] - faceCoords[2];
-  tri[1] = pos           - faceCoords[2];
-  auto cap_area = o::triangle_area_from_basis(tri);
-
-  tri[0] = faceCoords[1] - faceCoords[0];
-  tri[1] = pos           - faceCoords[0];
-  auto abp_area = o::triangle_area_from_basis(tri);
-
-  // barycentric coords
-  bcc[0] = cap_area/abc_area;   //u
-  bcc[1] = abp_area/abc_area;   //v
-  bcc[2] = 1 - bcc[0] - bcc[1]; //w
+  const auto parent_area = triArea[searchElm];
+  for(int i=0; i<3; i++) {
+    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i, 0);
+    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i, 1);
+    const auto kxy = faceCoords[kIdx];
+    const auto lxy = faceCoords[lIdx];
+    o::Few<o::Vector<2>, 2> tri;
+    tri[0] = lxy - kxy;
+    tri[1] = pos - kxy;
+    const auto area = o::triangle_area_from_basis(tri);
+    bcc[i] = area/parent_area;
+  }
 }
 
 // BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
@@ -456,6 +443,10 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  int looplimit=0) {
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
 
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+  const auto rank_d = rank;
+
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
   const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -495,10 +486,10 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       auto ptclOrigin = makeVector2(pid, x_scs_d);
       Omega_h::Vector<3> faceBcc;
       barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
-      if(!all_positive(faceBcc)) {
-        printf("Particle not in element! ptcl %d elem %d => %d "
-          "orig %.3f %.3f bcc %.3f %.3f %.3f\n",
-          ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+      if(!all_positive(faceBcc,1e-8)) {
+        printf("%d Particle not in element! ptcl %d elem %d => %d "
+          "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
+          rank_d, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
           faceBcc[0], faceBcc[1], faceBcc[2]);
         OMEGA_H_CHECK(false);
       }
@@ -515,6 +506,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
         OMEGA_H_CHECK(searchElm >= 0);
+        const auto edges = o::gather_down<3>(faceEdges, searchElm);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
         const auto ptclDest = makeVector2(pid, xtgt_scs_d);
@@ -523,106 +515,18 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
         auto isDestInParentElm = all_positive(faceBcc);
         ptcl_done[pid] = isDestInParentElm;
-        elem_ids_next[pid] = elem_ids[pid]; //NOT SURE ABOUT SETTING THIS UNCONDITIONALLY
+        elem_ids_next[pid] = elem_ids[pid];
+        const int idx = min3(faceBcc);
+        lastEdge[pid] = edges[idx];
       }
     };
     scs->parallel_for(checkCurrentElm);
-
-    auto checkAdjElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      //active particle that is still moving to its target position and is not
-      //in the current element
-      if( mask > 0 && !ptcl_done[pid] ) {
-        auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
-        OMEGA_H_CHECK(searchElm >= 0);
-        const auto edges = o::gather_down<3>(faceEdges, searchElm);
-        const auto ptclDest = makeVector2(pid, xtgt_scs_d);
-        const auto ptclOrigin = makeVector2(pid, x_scs_d);
-        // check each edge of triangle for line-line intersection
-        Segment2D ptclSeg, edgeSeg;
-        ptclSeg.P0[0] = ptclOrigin[0];
-        ptclSeg.P0[1] = ptclOrigin[1];
-        ptclSeg.P1[0] = ptclDest[0];
-        ptclSeg.P1[1] = ptclDest[1];
-
-        struct {
-          int isect[3] = {0,0,0};
-          int isectEndPt[3] = {0,0,0};
-          int exposed[3] = {0,0,0};
-          int isLast[3] = {0,0,0};
-        } edgeProps;
-        for(int i = 0; i < 3; i++) {
-          edgeProps.exposed[i] = side_is_exposed[edges[i]];
-          edgeProps.isLast[i] = (lastEdge[pid] == edges[i]);
-        }
-        for(int i = 0; i < 3; i++) {
-          const auto edgeVerts = o::gather_verts<2>(edge_verts, edges[i]);
-          const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
-          edgeSeg.P0[0] = edgeCoords(0,0);
-          edgeSeg.P0[1] = edgeCoords(1,0);
-          edgeSeg.P1[0] = edgeCoords(0,1);
-          edgeSeg.P1[1] = edgeCoords(1,1);
-          Point2D a,b;
-          edgeProps.isect[i] = (intersect2D_2Segments(ptclSeg,edgeSeg,&a,&b) == 1);
-          const auto isectEndPt0 = o::are_close(ptclSeg.P0[0],a.x) &&
-                                   o::are_close(ptclSeg.P0[1],a.y);
-          const auto isectEndPt1 = o::are_close(ptclSeg.P1[0],a.x) &&
-                                   o::are_close(ptclSeg.P1[1],a.y);
-          edgeProps.isectEndPt[i] = isectEndPt0 || isectEndPt1;
-
-        }
-        auto nextEdge = 0;
-        // first, check for an exposed edge that is intersected
-        for(int i = 0; i < 3; i++) {
-          const auto check = (
-              edgeProps.isect[i] &&
-              edgeProps.exposed[i] &&
-              !edgeProps.isLast[i] );
-          //nextEdge is zero when an edge is not found, there is an edge 0 so add 1 to the ids
-          if(check) {
-            nextEdge = edges[i]+1;
-          }
-        }
-        // next, if we have not found an exposed edge,
-        //  check for an internal edge that is intersected
-        //  at a point other than one of the end points
-        for(int i = 0; i < 3; i++) {
-          const auto check = (
-              !nextEdge &&
-              edgeProps.isect[i] &&
-              !edgeProps.isectEndPt[i] &&
-              !edgeProps.isLast[i] );
-          if(check) {
-            nextEdge = edges[i]+1;
-          }
-        }
-        // last, if we have not found an edge, then select
-        //  one of the end point intersected internal edges
-        for(int i = 0; i < 3; i++) {
-          const auto check = (
-              !nextEdge &&
-              edgeProps.isect[i] &&
-              !edgeProps.isLast[i] );
-          if(check) {
-            nextEdge = edges[i]+1;
-          }
-        }
-        if(!nextEdge) {
-          printf("nextEdge not found ptcl %d elm %d src %f %f dest %f %f\n",
-              ptcl, searchElm,
-              ptclSeg.P0[0], ptclSeg.P0[1],
-              ptclSeg.P1[0], ptclSeg.P1[1]);
-        }
-        assert(nextEdge);
-        lastEdge[pid] = nextEdge-1; //remove 1 to get the 0-based edge id
-      } //if active particle
-    };
-    scs->parallel_for(checkAdjElm, "pumipic_checkAdjElm");
 
     auto checkExposedEdges = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
+        assert(lastEdge[pid] != -1);
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;

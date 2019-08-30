@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
       break;
     }
     tagParentElements(picparts,scs,iter);
-    if(!(iter%20))
+    if(output && !(iter%100))
       render(picparts,iter, comm_rank);
     gyroScatter(mesh,scs,forward_map,fwdTagName);
     gyroScatter(mesh,scs,backward_map,bkwdTagName);

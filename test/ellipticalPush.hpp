@@ -9,7 +9,6 @@ namespace ellipticalPush {
 
   void setup(SCS* scs, const double h_in, const double k_in,
       const double d_in) {
-    printf("pushPosition, iter, pid, rad, x, y\n");
     h = h_in;
     k = k_in;
     d = d_in;
@@ -30,7 +29,6 @@ namespace ellipticalPush {
                                 std::pow(v*sin(phi),2));
         ptcl_phi(pid) = phi;
         ptcl_b(pid) = b;
-        printf("pushPosition, %d, %d, %f, %f, %f\n", 0, ptcl_id(pid), phi, w, z);
       }
     };
     scs->parallel_for(setMajorAxis);
@@ -56,7 +54,6 @@ namespace ellipticalPush {
         x_nm0(pid,0) = x;
         x_nm0(pid,1) = y;
         ptcl_phi(pid) = rad;
-        printf("pushPosition, %d, %d, %f, %f, %f\n", iter, ptcl_id(pid), rad, x, y);
       }
     };
     scs->parallel_for(setPosition);

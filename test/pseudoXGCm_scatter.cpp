@@ -1,35 +1,10 @@
 #include <Omega_h_mesh.hpp>
-#include <Omega_h_bbox.hpp>
-#include "pumipic_kktypes.hpp"
-#include "pumipic_adjacency.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
 #include <SCS_Macros.h>
-#include <Distribute.h>
-#include <Kokkos_Core.hpp>
+#include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
-#include <fstream>
+#include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
-#define NUM_ITERATIONS 1000
-
-using particle_structs::fp_t;
-using particle_structs::lid_t;
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
-
-namespace o = Omega_h;
-namespace p = pumipic;
-
-//To demonstrate push and adjacency search we store:
-//-two fp_t[3] arrays, 'Vector3d', for the current and
-// computed (pre adjacency search) positions, and
-//-an integer to store the particles id
-typedef MemberTypes<Vector3d, Vector3d, int> Particle;
-typedef SellCSigma<Particle> SCS;
+#include <fstream>
 
 void setPtclIds(SCS* scs) {
   auto pid_d = scs->get<2>();

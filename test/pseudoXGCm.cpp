@@ -7,7 +7,6 @@
 #include <fstream>
 #include "ellipticalPush.hpp"
 #include <random>
-#define NUM_ITERATIONS 1000
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
@@ -296,10 +295,11 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 5;
+  const int numargs = 6;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
-    auto args = " <mesh> <owner_file> <numPtcls> <max initial model face>";
+    auto args = " <mesh> <owner_file> <numPtcls> "
+      "<max initial model face> <maxIterations>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -357,9 +357,11 @@ int main(int argc, char** argv) {
      printf("ppe[%d] %d\n", i, np);
   });
 
+  const auto maxIter = atoi(argv[5]);
+
   if (comm_rank == 0)
-    fprintf(stderr, "number of elements %d number of particles %d\n",
-            ne, actualParticles);
+    fprintf(stderr, "number of elements %d number of particles %d "
+        "max number of iterations\n", ne, actualParticles, maxIter);
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
@@ -399,7 +401,7 @@ int main(int argc, char** argv) {
   int iter;
   int np;
   int scs_np;
-  for(iter=1; iter<=NUM_ITERATIONS; iter++) {
+  for(iter=1; iter<=maxIter; iter++) {
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if(np == 0) {

@@ -39,16 +39,16 @@ mpi_test(pseudoXGCm_scatter 1
 mpi_test(pseudoXGCm_24kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg24k.osh ignored 
-  100 81)
+  1000 5 100)
 mpi_test(pseudoXGCm_24kElms_4 4
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg24k.osh ${TEST_DATA_DIR}/xgc/itg24k.cpn
-  100 81)
+  1000 2 100)
 
 mpi_test(pseudoXGCm_126kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg126k.osh ignored
-  10000 141)
+  10000 141 10)
 
 
 #MPI+X testing

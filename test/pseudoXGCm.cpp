@@ -296,11 +296,10 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 9;
+  const int numargs = 5;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
-    auto args = " <mesh> <owner_file> <numPtcls> <max initial model face> "
-      "<gyro rmax> <gyro rings> <gyro points per ring> <gyro theta>";
+    auto args = " <mesh> <owner_file> <numPtcls> <max initial model face>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -328,7 +327,11 @@ int main(int argc, char** argv) {
            mesh->nfaces(), mesh->nelems());
 
   //Build gyro avg mappings
-  setGyroConfig(atof(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]));
+  const auto rmax = 0.038;
+  const auto numRings = 3;
+  const auto ptsPerRing = 8;
+  const auto theta = 0.0;
+  setGyroConfig(rmax,numRings,ptsPerRing,theta);
   if (!comm_rank) printGyroConfig();
   Omega_h::LOs forward_map;
   Omega_h::LOs backward_map;

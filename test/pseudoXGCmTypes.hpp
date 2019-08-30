@@ -27,7 +27,8 @@ typedef SellCSigma<Point> SCSpt;
 //-an integer to store the particles id
 //-a float to store the value of the constant 'b' 
 // that defines the ellipse
-typedef MemberTypes<Vector3d, Vector3d, int, float> Particle;
+//-a float to store the angle of the particle in polar coordinates
+typedef MemberTypes<Vector3d, Vector3d, int, float, float> Particle;
 typedef SellCSigma<Particle> SCS;
 
 #endif

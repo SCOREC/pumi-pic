@@ -1,11 +1,11 @@
 #include <Omega_h_mesh.hpp>
-#include <Omega_h_bbox.hpp>
 #include <SCS_Macros.h>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
 #include <fstream>
+#include "ellipticalPush.hpp"
 #include <random>
 #define NUM_ITERATIONS 1000
 #define ELEMENT_SEED 1024*1024
@@ -27,78 +27,6 @@ void printTimerResolution() {
   Kokkos::Timer timer;
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
-}
-
-void writeDispVectors(SCS* scs) {
-  const int capacity = scs->capacity();
-  auto x_nm1 = scs->get<0>();
-  auto x_nm0 = scs->get<1>();
-  auto pid_d = scs->get<2>();
-  o::Write<o::Real> px_nm1(capacity*3);
-  o::Write<o::Real> px_nm0(capacity*3);
-  o::Write<o::LO> pid_w(capacity);
-
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    pid_w[pid] = -1;
-    if(mask > 0) {
-      pid_w[pid] = pid_d(pid);
-      for(int i=0; i<3; i++) {
-        px_nm1[pid*3+i] = x_nm1(pid,i);
-        px_nm0[pid*3+i] = x_nm0(pid,i);
-      }
-    }
-  };
-  scs->parallel_for(lamb);
-
-  o::HostRead<o::Real> px_nm0_hr(px_nm0);
-  o::HostRead<o::Real> px_nm1_hr(px_nm1);
-  o::HostRead<o::LO> pid_hr(pid_w);
-  for(int i=0; i< capacity; i++) {
-    if(pid_hr[i] != -1) {
-      fprintf(stderr, "ptclID%d  %.3f %.3f %.3f initial\n",
-        pid_hr[i], px_nm1_hr[i*3+0], px_nm1_hr[i*3+1], px_nm1_hr[i*3+2]);
-    }
-  }
-  for(int i=0; i< capacity; i++) {
-    if(pid_hr[i] != -1) {
-      fprintf(stderr, "ptclID%d  %.3f %.3f %.3f final\n",
-        pid_hr[i], px_nm0_hr[i*3+0], px_nm0_hr[i*3+1], px_nm0_hr[i*3+2]);
-    }
-  }
-}
-
-void push(SCS* scs, int np, fp_t distance,
-    fp_t dx, fp_t dy, fp_t dz) {
-  Kokkos::Timer timer;
-  auto position_d = scs->get<0>();
-  auto new_position_d = scs->get<1>();
-
-  const auto capacity = scs->capacity();
-
-  fp_t disp[4] = {distance,dx,dy,dz};
-  p::kkFpView disp_d("direction_d", 4);
-  p::hostToDeviceFp(disp_d, disp);
-  fprintf(stderr, "kokkos scs host to device transfer (seconds) %f\n", timer.seconds());
-
-  o::Write<o::Real> ptclUnique_d(capacity, 0);
-
-  double totTime = 0;
-  timer.reset();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask) {
-      fp_t dir[3];
-      dir[0] = disp_d(0)*disp_d(1);
-      dir[1] = disp_d(0)*disp_d(2);
-      dir[2] = disp_d(0)*disp_d(3);
-      new_position_d(pid,0) = position_d(pid,0) + dir[0] + ptclUnique_d[pid];
-      new_position_d(pid,1) = position_d(pid,1) + dir[1] + ptclUnique_d[pid];
-      new_position_d(pid,2) = position_d(pid,2) + dir[2] + ptclUnique_d[pid];
-    }
-  };
-  scs->parallel_for(lamb);
-
-  totTime += timer.seconds();
-  printTiming("scs push", totTime);
 }
 
 void tagParentElements(p::Mesh& picparts, SCS* scs, int loop) {
@@ -368,10 +296,11 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 12;
+  const int numargs = 9;
   if( argc != numargs ) {
+    printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> <max initial model face> "
-      "<gyro rmax> <gyro rings> <gyro points per ring> <gyro theta> <push vector>";
+      "<gyro rmax> <gyro rings> <gyro points per ring> <gyro theta>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -442,25 +371,13 @@ int main(int argc, char** argv) {
   setPtclIds(scs);
 
   //define parameters controlling particle motion
-  const double pushDir[3] = {atof(argv[9]), atof(argv[10]), atof(argv[11])};
-  auto bb = o::get_bounding_box<2>(&full_mesh);
-  double maxDimLen = 0;
-  printf("bbox ");
-  for(int i=0; i< picparts.dim(); i++) {
-    printf("%3d %.3f %.3f ", i, bb.min[i], bb.max[i]);
-    auto len = bb.max[i]-bb.min[i];
-    if( len > maxDimLen ) maxDimLen = len;
-  }
-  printf("\n");
-  const fp_t heightOfDomain = maxDimLen;
-  const fp_t distance = heightOfDomain/20;
-  const fp_t dx = pushDir[0];
-  const fp_t dy = pushDir[1];
-  const fp_t dz = pushDir[2];
+  const double h = 1.72479370-.08;
+  const auto k = .020558260;
+  const auto d = 0.6;
+  ellipticalPush::setup(scs, h, k, d);
 
   if (comm_rank == 0)
-    fprintf(stderr, "push distance %.3f push direction %.3f %.3f %.3f\n",
-            distance, dx, dy, dz);
+    fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
 
   o::LOs elmTags(ne, -1, "elmTagVals");
   mesh->add_tag(o::FACE, "has_particles", 1, elmTags);
@@ -489,12 +406,10 @@ int main(int argc, char** argv) {
     if (comm_rank == 0)
       fprintf(stderr, "iter %d\n", iter);
     timer.reset();
-    push(scs, scs->nPtcls(), distance, dx, dy, dz);
+    ellipticalPush::push(scs, 1, iter); //one degree per iteration
     MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
-    if (output)
-      writeDispVectors(scs);
     timer.reset();
     search(picparts,scs, output);
     if (comm_rank == 0)

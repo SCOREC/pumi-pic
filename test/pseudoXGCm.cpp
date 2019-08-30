@@ -150,6 +150,7 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
       isFaceOnClass[i] = 1;
   });
   o::LO numMarked = o::get_sum(o::LOs(isFaceOnClass));
+  assert(numMarked);
   int nppe = numPtcls / numMarked;
   o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
 

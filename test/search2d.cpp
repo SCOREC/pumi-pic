@@ -78,7 +78,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
     }
   };
   scs->parallel_for(lamb);
-  
+
   scs->migrate(scs_elem_ids, scs_process_ids);
 
   printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
@@ -115,8 +115,7 @@ void search(p::Mesh& picparts, SCS* scs, bool output=false) {
   fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
 }
 
-o::Mesh readMesh(char* meshFile, o::Library& lib) {
-  (void)lib;
+o::Mesh readMesh(const char* meshFile, o::Library& lib) {
   std::string fn(meshFile);
   auto ext = fn.substr(fn.find_last_of(".") + 1);
   if( ext == "msh") {
@@ -186,17 +185,11 @@ void particleSearch(p::Mesh& picparts,
   delete scs;
 }
 
-int main(int argc, char** argv) {
-  pumipic::Library pic_lib(&argc, &argv);
-  Omega_h::Library& lib = pic_lib.omega_h_lib();
-  int comm_rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  if( argc != 2 ) {
-    std::cout << "Usage: " << argv[0] << " <mesh> " << "\n";
-    exit(1);
-  }
-  auto full_mesh = readMesh(argv[1], lib);
+int comm_rank, comm_size;
+
+void testTri8(Omega_h::Library& lib, std::string meshDir) {
+  const auto meshName = meshDir+"/plate/tri8_parDiag.osh";
+  auto full_mesh = readMesh(meshName.c_str(), lib);
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   for (int i = 0; i < full_mesh.nelems(); ++i)
     host_owners[i] = 0;
@@ -206,28 +199,78 @@ int main(int argc, char** argv) {
   p::Mesh picparts(input);
   for (int i = 0; i <= full_mesh.dim(); ++i)
     assert(picparts.nents(i) == full_mesh.nents(i));
-  
+
   //Create Picparts with the full mesh
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
 
   if (comm_rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(),
            mesh->nfaces(), mesh->nelems());
 
-  {
+  { // start at a vertex and go along an adjacent edge
     const auto parentElm = 0;
     const double start[2] = {.5,.5};
     const double end[2]  = {.8,.8};
     particleSearch(picparts,parentElm,start,end);
   }
   printf("\n\n");
-  {
+  { // start at a vertex and go through a bounded triangle
     const auto parentElm = 0;
     const double start[2] = {.5,.5};
     const double end[2]  = {.8,0};
     particleSearch(picparts,parentElm,start,end);
   }
+  printf("\n\n");
+  { // start and stop along the same edge
+    const auto parentElm = 0;
+    const double start[2] = {.25,.25};
+    const double end[2]  = {.4,.4};
+    particleSearch(picparts,parentElm,start,end);
+  }
+}
+
+void testItg24k(Omega_h::Library& lib, std::string meshDir) {
+  const auto meshName = meshDir+"/xgc/itg24k.osh";
+  auto full_mesh = readMesh(meshName.c_str(), lib);
+  Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
+  for (int i = 0; i < full_mesh.nelems(); ++i)
+    host_owners[i] = 0;
+  Omega_h::Write<Omega_h::LO> owner(host_owners);
+  pumipic::Input input(full_mesh, pumipic::Input::PARTITION, owner, pumipic::Input::FULL,
+                       pumipic::Input::BFS);
+  p::Mesh picparts(input);
+  for (int i = 0; i <= full_mesh.dim(); ++i)
+    assert(picparts.nents(i) == full_mesh.nents(i));
+
+  //Create Picparts with the full mesh
+  o::Mesh* mesh = picparts.mesh();
+  mesh->ask_elem_verts(); //caching adjacency info
+
+  if (comm_rank == 0)
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(),
+           mesh->nfaces(), mesh->nelems());
+
+  {
+    const auto parentElm = 2554;
+    const double start[2] = {1.514768,0.261045};
+    const double end[2]  = {1.512270,0.257226};
+    particleSearch(picparts,parentElm,start,end);
+  }
+}
+
+int main(int argc, char** argv) {
+  pumipic::Library pic_lib(&argc, &argv);
+  Omega_h::Library& lib = pic_lib.omega_h_lib();
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  if( argc != 2 ) {
+    std::cout << "Usage: " << argv[0] << " <testMeshDir>\n";
+    exit(1);
+  }
+  std::string meshDir(argv[1]);
+  testTri8(lib,meshDir);
+  testItg24k(lib,meshDir);
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

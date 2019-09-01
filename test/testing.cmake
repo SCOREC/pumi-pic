@@ -31,7 +31,7 @@ mpi_test(pseudoPushAndSearch_cube_t2 1
   ${TEST_DATA_DIR}/cube/7k.osh ignored 200 156 0 0 1)
 
 mpi_test(search2d 1 ./search2d
-  ${TEST_DATA_DIR}/plate/tri8_parDiag.osh)
+  ${TEST_DATA_DIR})
 
 mpi_test(pseudoXGCm_scatter 1
   ./pseudoXGCm_scatter --kokkos-threads=1

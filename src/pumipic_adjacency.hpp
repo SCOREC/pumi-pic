@@ -608,7 +608,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           }
         }
         if(!nextEdge) {
-          printf("ptcl %d elm %d src %f %f dest %f %f\n",
+          printf("nextEdge not found ptcl %d elm %d src %f %f dest %f %f\n",
               ptcl, searchElm,
               ptclSeg.P0[0], ptclSeg.P0[1],
               ptclSeg.P1[0], ptclSeg.P1[1]);

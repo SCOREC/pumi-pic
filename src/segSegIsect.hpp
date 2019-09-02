@@ -120,8 +120,19 @@ bool are_close(Real a, Real b,
 /////////////////////////////////////////////////// }
 
 KOKKOS_INLINE_FUNCTION
+bool samePt(const Real a[2], const Real b[2]) {
+  return (are_close(a[0],b[0]) && are_close(a[1],b[1]));
+}
+
+KOKKOS_INLINE_FUNCTION
+bool samePt(Real a[2], Point2D pt) {
+  const Real b[2] = {pt.x, pt.y};
+  return samePt(a,b);
+}
+
+KOKKOS_INLINE_FUNCTION
 bool notEqual(Real a[2], Real b[2]) {
-  return (!are_close(a[0],b[0]) || !are_close(a[1],b[1]));
+  return !samePt(a,b);
 }
 
 #define SMALL_NUM   0.00000001 // anything that avoids division overflow

@@ -102,7 +102,7 @@ Real max2(Real a, Real b) {
  return (a < b) ? (b) : (a);
 }
 
-#define EPSILON 1e-10
+#define EPSILON 1e-8
 KOKKOS_INLINE_FUNCTION
 Real rel_diff_with_floor(
     Real a, Real b, Real floor = EPSILON) {
@@ -133,7 +133,7 @@ bool notEqual(Real a[2], Real b[2]) {
 KOKKOS_INLINE_FUNCTION
 int inSegment(Real P[2], Segment2D S)
 {
-  if (S.P0[0] != S.P1[0]) {    // S is not  vertical
+  if (!are_close(S.P0[0],S.P1[0])) {    // S is not  vertical
     if (S.P0[0] <= P[0] && P[0] <= S.P1[0])
       return 1;
     if (S.P0[0] >= P[0] && P[0] >= S.P1[0])
@@ -156,7 +156,7 @@ int inSegment(Real P[2], Segment2D S)
 //            1=intersect  in unique point I0
 //            2=overlap  in segment from I0 to I1
 KOKKOS_INLINE_FUNCTION
-int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 )
+int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1)
 {
     Vector2D u = sub(S1.P1,S1.P0);
     Vector2D v = sub(S2.P1,S2.P0);
@@ -165,8 +165,10 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
 
     // test if  they are parallel (includes either being a point)
     if ( fabs(D) < SMALL_NUM ) {   // S1 and S2 are parallel
-        if ( !are_close(perp(u,w),0.0) || !are_close(perp(v,w),0.0) )  {
-            return 0;                    // they are NOT collinear
+        const auto puw = perp(u,w);
+        const auto pvw = perp(v,w);
+        if ( !are_close(puw,0.0) || !are_close(pvw,0.0) )  {
+          return 0;                    // they are NOT collinear
         }
         // they are collinear or degenerate
         // check if they are degenerate  points
@@ -216,7 +218,7 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
 
         // they overlap in a valid subsegment
         set(I0, add(mult(v,t0),S2.P0));
-        set(I0, add(mult(v,t1),S2.P0));
+        set(I1, add(mult(v,t1),S2.P0));
         return 2;
     }
 

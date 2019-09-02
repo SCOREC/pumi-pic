@@ -103,6 +103,7 @@ Real max2(Real a, Real b) {
 }
 
 #define EPSILON 1e-8
+#define ALPHA 1e-6
 KOKKOS_INLINE_FUNCTION
 Real rel_diff_with_floor(
     Real a, Real b, Real floor = EPSILON) {
@@ -114,7 +115,7 @@ Real rel_diff_with_floor(
 
 KOKKOS_INLINE_FUNCTION
 bool are_close(Real a, Real b,
-  Real tol = EPSILON, Real floor = EPSILON) {
+  Real tol = ALPHA, Real floor = EPSILON) {
   return rel_diff_with_floor(a, b, floor) <= tol;
 }
 /////////////////////////////////////////////////// }

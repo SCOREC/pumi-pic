@@ -49,12 +49,20 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
 template <class Vec>
 OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON)
 {
-  for(Omega_h::LO i=0; i<a.size(); ++i)
-  {
-    if(a[i] < -tol) // TODO set default the right tolerance
-     return false;
+  assert(a.size()<=3);
+  auto isPos = 1;
+  for(Omega_h::LO i=0; i<a.size(); ++i) {
+    const auto gtez = Omega_h::are_close(a[i],0.0,tol,tol) || a[i] > 0;
+    isPos = isPos && gtez;
   }
-  return true;
+  return isPos;
+}
+
+
+OMEGA_H_DEVICE Omega_h::LO min3(Omega_h::Vector<3> a) {
+  int idx = (a[0] < a[1]) ? 0 : 1;
+  idx = (a[idx] < a[2]) ? idx : 2;
+  return idx;
 }
 
 template <class T> OMEGA_H_DEVICE Omega_h::LO 

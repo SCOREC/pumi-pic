@@ -131,7 +131,8 @@ o::Mesh readMesh(const char* meshFile, o::Library& lib) {
 }
 
 void particleSearch(p::Mesh& picparts,
-    const int parentElm, const double* start, const double* end) {
+    const int parentElm, const double* start, const double* end,
+    const int destElm, const int altDestElm=-1) {
   o::Mesh* mesh = picparts.mesh();
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
 
@@ -144,7 +145,8 @@ void particleSearch(p::Mesh& picparts,
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
     ptcls_per_elem(i) = (i == parentElm);
-    printf("ppe[%d] %d\n", i, ptcls_per_elem(i));
+    if( ptcls_per_elem(i) )
+      printf("ppe[%d] %d\n", i, ptcls_per_elem(i));
   });
 
   const int sigma = INT_MAX; // full sorting
@@ -176,6 +178,7 @@ void particleSearch(p::Mesh& picparts,
   search(picparts,scs);
   auto printPtclElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask) {
+      assert(e == destElm || e == altDestElm);
       printf("pid %d elm %d (x,y) %f %f\n",
           pid, e, x_scs_d(pid, 0), x_scs_d(pid, 1));
     }
@@ -200,33 +203,115 @@ void testTri8(Omega_h::Library& lib, std::string meshDir) {
   for (int i = 0; i <= full_mesh.dim(); ++i)
     assert(picparts.nents(i) == full_mesh.nents(i));
 
-  //Create Picparts with the full mesh
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
 
   if (comm_rank == 0)
     printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(),
            mesh->nfaces(), mesh->nelems());
-
-  { // start at a vertex and go along an adjacent edge
+  { printf("\nstart and end within a triangle - close to top\n");
+    const auto parentElm = 5;
+    const double start[2] = {.60,.80};
+    const double end[2]  = {.60,.99};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("\nstart and end within a triangle - close to right\n");
+    const auto parentElm = 5;
+    const double start[2] = {.60,.80};
+    const double end[2]  = {.940,.950};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("\nstart and end within a triangle - close to left\n");
+    const auto parentElm = 5;
+    const double start[2] = {.60,.80};
+    const double end[2]  = {.510,.91};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("\nstart and end within a triangle - close to right\n");
     const auto parentElm = 0;
-    const double start[2] = {.5,.5};
-    const double end[2]  = {.8,.8};
-    particleSearch(picparts,parentElm,start,end);
+    const double start[2] = {.40,.20};
+    const double end[2]  = {.495,.470};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("\nstart and end within a triangle - close to left\n");
+    const auto parentElm = 0;
+    const double start[2] = {.40,.20};
+    const double end[2]  = {.110,.1};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("\nstart and end within a triangle - close to bottom\n");
+    const auto parentElm = 0;
+    const double start[2] = {.40,.20};
+    const double end[2]  = {.40,.010};
+    particleSearch(picparts,parentElm,start,end,parentElm);
+  }
+  { printf("start within a triangle and go through an edge\n");
+    const auto parentElm = 5;
+    const auto destElm = 1;
+    const double start[2] = {.60,.80};
+    const double end[2]  = {.40,.730};
+    particleSearch(picparts,parentElm,start,end,destElm);
   }
   printf("\n\n");
-  { // start at a vertex and go through a bounded triangle
+  { printf("start at a vertex and go along an adjacent edge\n");
     const auto parentElm = 0;
-    const double start[2] = {.5,.5};
-    const double end[2]  = {.8,0};
-    particleSearch(picparts,parentElm,start,end);
+    const auto destElm = 3;
+    const auto altDestElm = 5;
+    const double start[2] = {.50,.50};
+    const double end[2]  = {.80,.80};
+    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
   }
   printf("\n\n");
-  { // start and stop along the same edge
+  { printf("start at a vertex and go through "
+      "a triangle bound by the vertex\n");
     const auto parentElm = 0;
-    const double start[2] = {.25,.25};
-    const double end[2]  = {.4,.4};
-    particleSearch(picparts,parentElm,start,end);
+    const auto destElm = 7;
+    const double start[2] = {.50,.50};
+    const double end[2]  = {.80,0.0};
+    particleSearch(picparts,parentElm,start,end,destElm);
+  }
+  printf("\n\n");
+  { printf("start and stop along the same edge\n");
+    const auto parentElm = 0;
+    const auto destElm = 0;
+    const auto altDestElm = 2;
+    const double start[2] = {.250,.250};
+    const double end[2]  = {.40,.40};
+    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
+  }
+  printf("\n\n");
+  { printf("start on an edge and go through an edge\n");
+    const auto parentElm = 6;
+    const auto destElm = 3;
+    const double start[2] = {.750,.250};
+    const double end[2]  = {.750,.60};
+    particleSearch(picparts,parentElm,start,end,destElm);
+  }
+  printf("\n\n");
+  { printf("start at a vertex, go along an adjacent edge, "
+      "through a vtx, and into another element\n");
+    const auto parentElm = 5;
+    const auto destElm = 0;
+    const auto altDestElm = 2;
+    const double start[2] = {.80,.80};
+    const double end[2]  = {.40,.40};
+    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
+  }
+  printf("\n\n");
+  { printf("start on an edge and go through a vertex\n");
+    const auto parentElm = 6;
+    const auto destElm = 1;
+    const double start[2] = {.750,.250};
+    const double end[2]  = {.40,.60};
+    particleSearch(picparts,parentElm,start,end,destElm);
+  }
+  printf("\n\n");
+  { printf("start within a triangle and go through a vertex\n");
+    const auto parentElm = 6;
+    const auto destElm = 4;
+    const double start[2] = {.60,.40};
+    const double end[2]  = {.20,.80};
+    particleSearch(picparts,parentElm,start,end,destElm);
   }
 }
 
@@ -252,10 +337,12 @@ void testItg24k(Omega_h::Library& lib, std::string meshDir) {
            mesh->nfaces(), mesh->nelems());
 
   {
-    const auto parentElm = 2554;
-    const double start[2] = {1.514768,0.261045};
-    const double end[2]  = {1.512270,0.257226};
-    particleSearch(picparts,parentElm,start,end);
+    const auto parentElm = 4924;
+    const auto destElm = 5389;
+    const auto altDestElm = 4933;
+    const double start[2] = {1.342651612585819,-0.003728222089789};
+    const double end[2]  = {1.342951942861444, -0.012512984262059};
+    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
   }
 }
 

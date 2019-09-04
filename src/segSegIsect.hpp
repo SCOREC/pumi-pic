@@ -96,9 +96,44 @@ void set(Point2D* a, Vector2D v) {
   (*a).y = v.y;
 }
 
+/////// from Omega_h/src/Omega_h_scalar.hpp /////// {
+KOKKOS_INLINE_FUNCTION
+Real max2(Real a, Real b) {
+ return (a < b) ? (b) : (a);
+}
+
+#define EPSILON 1e-8
+#define ALPHA 1e-6
+KOKKOS_INLINE_FUNCTION
+Real rel_diff_with_floor(
+    Real a, Real b, Real floor = EPSILON) {
+  Real am = std::abs(a);
+  Real bm = std::abs(b);
+  if (am <= floor && bm <= floor) return 0.0;
+  return std::abs(b - a) / max2(am, bm);
+}
+
+KOKKOS_INLINE_FUNCTION
+bool are_close(Real a, Real b,
+  Real tol = ALPHA, Real floor = EPSILON) {
+  return rel_diff_with_floor(a, b, floor) <= tol;
+}
+/////////////////////////////////////////////////// }
+
+KOKKOS_INLINE_FUNCTION
+bool samePt(const Real a[2], const Real b[2]) {
+  return (are_close(a[0],b[0]) && are_close(a[1],b[1]));
+}
+
+KOKKOS_INLINE_FUNCTION
+bool samePt(Real a[2], Point2D pt) {
+  const Real b[2] = {pt.x, pt.y};
+  return samePt(a,b);
+}
+
 KOKKOS_INLINE_FUNCTION
 bool notEqual(Real a[2], Real b[2]) {
-  return (a[0] != b[0] || a[1] != b[1]);
+  return !samePt(a,b);
 }
 
 #define SMALL_NUM   0.00000001 // anything that avoids division overflow
@@ -110,7 +145,7 @@ bool notEqual(Real a[2], Real b[2]) {
 KOKKOS_INLINE_FUNCTION
 int inSegment(Real P[2], Segment2D S)
 {
-  if (S.P0[0] != S.P1[0]) {    // S is not  vertical
+  if (!are_close(S.P0[0],S.P1[0])) {    // S is not  vertical
     if (S.P0[0] <= P[0] && P[0] <= S.P1[0])
       return 1;
     if (S.P0[0] >= P[0] && P[0] >= S.P1[0])
@@ -133,7 +168,7 @@ int inSegment(Real P[2], Segment2D S)
 //            1=intersect  in unique point I0
 //            2=overlap  in segment from I0 to I1
 KOKKOS_INLINE_FUNCTION
-int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 )
+int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1)
 {
     Vector2D u = sub(S1.P1,S1.P0);
     Vector2D v = sub(S2.P1,S2.P0);
@@ -142,26 +177,28 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
 
     // test if  they are parallel (includes either being a point)
     if ( fabs(D) < SMALL_NUM ) {   // S1 and S2 are parallel
-        if (perp(u,w) != 0 || perp(v,w) != 0)  {
-            return 0;                    // they are NOT collinear
+        const auto puw = perp(u,w);
+        const auto pvw = perp(v,w);
+        if ( !are_close(puw,0.0) || !are_close(pvw,0.0) )  {
+          return 0;                    // they are NOT collinear
         }
         // they are collinear or degenerate
         // check if they are degenerate  points
         Real du = dot(u,u);
         Real dv = dot(v,v);
-        if (du==0 && dv==0) {            // both segments are points
+        if (are_close(du,0.0) && are_close(dv,0)) {            // both segments are points
             if (notEqual(S1.P0,S2.P0))         // they are distinct  points
                  return 0;
             set(I0,S1.P0);                 // they are the same point
             return 1;
         }
-        if (du==0) {                     // S1 is a single point
+        if (are_close(du,0.0)) {                     // S1 is a single point
             if  (inSegment(S1.P0, S2) == 0)  // but is not in S2
                  return 0;
             set(I0,S1.P0);                 // they are the same point
             return 1;
         }
-        if (dv==0) {                     // S2 a single point
+        if (are_close(dv,0)) {                     // S2 a single point
             if  (inSegment(S2.P0, S1) == 0)  // but is not in S1
                  return 0;
             set(I0,S2.P0);                 // they are the same point
@@ -170,7 +207,7 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
         // they are collinear segments - get  overlap (or not)
         Real t0, t1;                    // endpoints of S1 in eqn for S2
         Vector2D w2 = sub(S1.P1,S2.P0);
-        if (v.x != 0) {
+        if (!are_close(v.x,0.0)) {
                  t0 = w.x / v.x;
                  t1 = w2.x / v.x;
         }
@@ -186,14 +223,14 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
         }
         t0 = t0<0? 0 : t0;               // clip to min 0
         t1 = t1>1? 1 : t1;               // clip to max 1
-        if (t0 == t1) {                  // intersect is a point
+        if (are_close(t0,t1)) {                  // intersect is a point
             set(I0,add(mult(v,t0),S2.P0));
             return 1;
         }
 
         // they overlap in a valid subsegment
         set(I0, add(mult(v,t0),S2.P0));
-        set(I0, add(mult(v,t1),S2.P0));
+        set(I1, add(mult(v,t1),S2.P0));
         return 2;
     }
 
@@ -204,7 +241,7 @@ int intersect2D_2Segments( Segment2D S1, Segment2D S2, Point2D* I0, Point2D* I1 
         return 0;
 
     // get the intersect parameter for S2
-    float tI = perp(u,w) / D;
+    Real tI = perp(u,w) / D;
     if (tI < 0 || tI > 1)                // no intersect with S2
         return 0;
 

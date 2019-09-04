@@ -15,8 +15,6 @@
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
 
-#include "segSegIsect.hpp"
-
 namespace o = Omega_h;
 namespace ps = particle_structs;
 

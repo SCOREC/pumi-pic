@@ -49,7 +49,6 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real *b,
 template <class Vec>
 OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON)
 {
-  assert(a.size()<=3);
   auto isPos = 1;
   for(Omega_h::LO i=0; i<a.size(); ++i) {
     const auto gtez = Omega_h::are_close(a[i],0.0,tol,tol) || a[i] > 0;

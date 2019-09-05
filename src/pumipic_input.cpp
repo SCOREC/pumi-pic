@@ -44,7 +44,7 @@ namespace pumipic {
         }
         int size;
         in_str>>size;
-        Omega_h::HostWrite<Omega_h::LO> host_owners(size+1);
+        Omega_h::HostWrite<Omega_h::LO> host_owners(size+1, "host_owners");
         int cid, own;
         while(in_str >> cid >> own) 
           host_owners[cid] = own;

@@ -150,7 +150,9 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
       isFaceOnClass[i] = 1;
   });
   o::LO numMarked = o::get_sum(o::LOs(isFaceOnClass));
-  assert(numMarked);
+  if(!numMarked)
+    return 0;
+
   int nppe = numPtcls / numMarked;
   o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
 
@@ -283,7 +285,7 @@ o::Mesh readMesh(char* meshFile, o::Library& lib) {
     return Omega_h::gmsh::read(meshFile, lib.self());
   } else if( ext == "osh" ) {
     std::cout << "reading omegah mesh " << meshFile << "\n";
-    return Omega_h::binary::read(meshFile, lib.self());
+    return Omega_h::binary::read(meshFile, lib.self(), true);
   } else {
     std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
     exit(EXIT_FAILURE);
@@ -304,7 +306,12 @@ int main(int argc, char** argv) {
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
+  auto deviceCount = 0;
+  cudaGetDeviceCount(&deviceCount);
+  assert(deviceCount==1);
   if (comm_rank == 0) {
+    printf("device count per process %d\n", deviceCount);
+    printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
     printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
     printf("Kokkos execution space memory %s name %s\n",
@@ -317,16 +324,32 @@ int main(int argc, char** argv) {
   }
   auto full_mesh = readMesh(argv[1], lib);
 
-  //Create picparts using classification with the full mesh buffered and minimum safe zone
-  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::MINIMUM);
-  p::Mesh picparts(input);
-  o::Mesh* mesh = picparts.mesh();
-  mesh->ask_elem_verts(); //caching adjacency info
-  
-  if (comm_rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
-           mesh->nfaces(), mesh->nelems());
+  MPI_Barrier(MPI_COMM_WORLD);
+ 
+  if(!comm_rank)
+    printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
+        full_mesh.nfaces());
 
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  const auto vtx_to_elm = full_mesh.ask_up(0, 2);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  const auto edge_to_elm = full_mesh.ask_up(1, 2);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+
+  if(!comm_rank)
+    printf("partition file %s\n", argv[2]);
+  //Create picparts using classification with the full mesh buffered and minimum safe zone
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::FULL);
+  MPI_Barrier(MPI_COMM_WORLD);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  fprintf(stderr, "%d 0.1\n", comm_rank);
+  p::Mesh picparts(input);
+  fprintf(stderr, "%d 0.2\n", comm_rank);
+  o::Mesh* mesh = picparts.mesh();
+  fprintf(stderr, "%d 0.3\n", comm_rank);
+  mesh->ask_elem_verts(); //caching adjacency info
+ 
   //Build gyro avg mappings
   const auto rmax = 0.038;
   const auto numRings = 3;
@@ -395,7 +418,6 @@ int main(int argc, char** argv) {
   const auto syncTagName = "ptclToMeshSync";
   mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
-  render(picparts,0, comm_rank);
 
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
@@ -438,11 +460,6 @@ int main(int argc, char** argv) {
   
   //cleanup
   delete scs;
-
-  std::stringstream ss;
-  ss << "pseudoPush" << "_r"<<comm_rank << "_tf";
-  std::string s = ss.str();
-  Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 
   if (!comm_rank)
     fprintf(stderr, "done\n");

@@ -72,16 +72,16 @@ namespace pumipic {
     /*********** Set safe zone and buffer to be entire mesh****************/
     Omega_h::LOs owners = in.partition;
     if (in.ownership_rule == Input::CLASSIFICATION) {
-      Omega_h::Write<Omega_h::LO> owns(in.m.nelems());
+      Omega_h::Write<Omega_h::LO> owns(in.m.nelems(), "owns_w");
       setOwnerByClassification(in.m, in.partition, owns);
       owners = Omega_h::LOs(owns);
     }
-    Omega_h::Write<Omega_h::LO> is_safe(in.m.nelems(),in.safeMethod==Input::FULL);
-    Omega_h::Write<Omega_h::LO> has_part(comm_size,1);
+    Omega_h::Write<Omega_h::LO> is_safe(in.m.nelems(),in.safeMethod==Input::FULL, "is_safe");
+    Omega_h::Write<Omega_h::LO> has_part(comm_size,1, "has_part");
     if ((in.safeMethod != Input::NONE && in.safeMethod != Input::FULL)
         || in.bufferMethod != Input::FULL) {
-      Omega_h::Write<Omega_h::LO> safe(in.m.nelems(), 0);
-      Omega_h::Write<Omega_h::LO> part(comm_size, 0);
+      Omega_h::Write<Omega_h::LO> safe(in.m.nelems(), 0, "safe");
+      Omega_h::Write<Omega_h::LO> part(comm_size, 0, "part");
 
       bfsBufferLayers(in.m, in.bridge_dim, in.safeBFSLayers, in.bufferBFSLayers, safe,
                       owners, part);
@@ -92,7 +92,9 @@ namespace pumipic {
         has_part = part;
     }
 
+    fprintf(stderr, "%d %s 0.1\n", rank, __func__);
     constructPICPart(in.m, owners, has_part, is_safe);
+    fprintf(stderr, "%d %s 0.2\n", rank, __func__);
   }
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,
                               Omega_h::Write<Omega_h::LO> has_part,
@@ -103,29 +105,37 @@ namespace pumipic {
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     int dim = mesh.dim();
 
+    fprintf(stderr, "%d %s mesh.dim() %d\n", rank, __func__, dim);
     /************* Define Ownership of each lower dimension entity ************/
     Omega_h::LOs owner_dim[4];
     for (int i = 0; i < dim; ++i) {
+      fprintf(stderr, "%d %s i %d 0.1\n", rank, __func__, i);
       owner_dim[i] = defineOwners(mesh, i, owner);
+      fprintf(stderr, "%d %s i %d 0.2\n", rank, __func__, i);
       mesh.add_tag(i, "ownership", 1, owner_dim[i]);
+      fprintf(stderr, "%d %s i %d 0.3\n", rank, __func__, i);
     }
+    fprintf(stderr, "%d %s 0.4\n", rank, __func__);
     owner_dim[dim] = owner;
     mesh.add_tag(dim, "ownership", 1, owner_dim[dim]);
-
-    Omega_h::vtk::write_parallel("ownership", &mesh, dim);
-
 
     /************* Globally Number Entities **********/
     Omega_h::GOs ent_gid_per_dim[4];
     Omega_h::LOs rank_lid_per_dim[4];
     Omega_h::LOs rank_offset_nents[4];
     for (int i = 0; i <= dim; ++i) {
+      fprintf(stderr, "%d %s i %d 0.5\n", rank, __func__, i);
       Omega_h::Write<Omega_h::GO> gids(mesh.nents(i), "global_ids");
+      fprintf(stderr, "%d %s i %d 0.6\n", rank, __func__, i);
       rank_offset_nents[i] = createGlobalNumbering(owner_dim[i], comm_size, gids);
+      fprintf(stderr, "%d %s i %d 0.7\n", rank, __func__, i);
       ent_gid_per_dim[i] = Omega_h::GOs(gids);
+      fprintf(stderr, "%d %s i %d 0.8\n", rank, __func__, i);
       rank_lid_per_dim[i] = rankLidNumbering(owner_dim[i], rank_offset_nents[i],
                                              ent_gid_per_dim[i]);
+      fprintf(stderr, "%d %s i %d 0.9\n", rank, __func__, i);
     }
+    fprintf(stderr, "%d %s 1.0\n", rank, __func__);
 
     /***************** Count the number of parts in the picpart ****************/
     num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
@@ -143,6 +153,7 @@ namespace pumipic {
     Omega_h::GO* num_ents = new Omega_h::GO[dim+1];
     for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
+    fprintf(stderr, "%d %s 2.0\n", rank, __func__);
 
     /**************** Create numberings for the entities on the picpart **************/
     Omega_h::LOs ent_ids[4];
@@ -163,15 +174,22 @@ namespace pumipic {
     //************Build a new mesh as the picpart**************
     Omega_h::Library* lib = mesh.library();
     picpart = new Omega_h::Mesh(lib);
+    fprintf(stderr, "%d %s 3.0\n", rank, __func__);
 
     //Gather coordinates
     Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
     gatherCoords(mesh, ent_ids[0], new_coords);
+    fprintf(stderr, "%d %s 4.0\n", rank, __func__);
 
     //Build the mesh
     for (int i = dim; i >= 0; --i)
       buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
     Omega_h::finalize_classification(picpart);
+    fprintf(stderr, "%d %s 5.0\n", rank, __func__);
+    if(!picpart->nelems()) {
+      fprintf(stderr,"%s: empty part on rank %d\n", __func__, rank);
+    }
+    assert(picpart->nelems());
 
     delete [] num_ents;
 
@@ -187,6 +205,7 @@ namespace pumipic {
     Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
     picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
     is_ent_safe = Omega_h::LOs(new_safe);
+    fprintf(stderr, "%d %s 6.0\n", rank, __func__);
 
     /****************Convert gids of each dim to the picpart***********/
     for (int i = 0; i <= dim; ++i) {
@@ -215,28 +234,47 @@ namespace pumipic {
       commptr = lib->world();
       Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
 
+      fprintf(stderr, "%d %s 6.1 dim %d\n", rank, __func__, i);
       setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
+      fprintf(stderr, "%d %s 6.2 dim %d\n", rank, __func__, i);
     }
+    fprintf(stderr, "%d %s 7.0\n", rank, __func__);
   }
 }
 
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
                                 Omega_h::Write<Omega_h::LO> owns) {
+    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+    int self;
+    MPI_Comm_rank(MPI_COMM_WORLD, &self);
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
+    Omega_h::Write<Omega_h::LO> selfcount(1,0,"selfcount");
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       owns[id] = class_owners[c_id];
+      const auto hasElm = (class_owners[c_id] == self);
+      Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
     };
     Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
+    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+    Omega_h::HostWrite<Omega_h::LO> selfcount_h(selfcount);
+    if(!selfcount_h[0]) {
+      fprintf(stderr, "%s rank %d with no owned elements detected\n", __func__, self);
+    }
+    assert(selfcount_h[0]);
   }
   
   //Ownership of lower entity dimensions is determined by the minimum owner of surrounding elements
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::LOs elm_owner) {
-    int comm_size;
+    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+    int comm_size, comm_rank;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    fprintf(stderr, "%d %s dim %d m.dim() %d 0.2\n", comm_rank, __func__, dim, m.dim());
     Omega_h::Adj ent_to_elm = m.ask_up(dim, m.dim());
-    Omega_h::Write<Omega_h::LO> ent_owner(m.nents(dim));
+    fprintf(stderr, "%d %s 0.3\n", comm_rank, __func__);
+    Omega_h::Write<Omega_h::LO> ent_owner(m.nents(dim), "ent_owner");
     auto determineOwner = OMEGA_H_LAMBDA(const Omega_h::LO& ent_id) {
       const auto deg = ent_to_elm.a2ab[ent_id + 1] - ent_to_elm.a2ab[ent_id];
       const auto firstElm = ent_to_elm.a2ab[ent_id];
@@ -250,6 +288,7 @@ namespace {
       ent_owner[ent_id] = min;
     };
     Omega_h::parallel_for(m.nents(dim), determineOwner);
+    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     return ent_owner;
   }
 

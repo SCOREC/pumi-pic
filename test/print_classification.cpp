@@ -48,7 +48,8 @@ int main(int argc, char** argv) {
   Omega_h::LO nclasses = Omega_h::get_sum(Omega_h::LOs(class_checks));
   if (comm_size == -1)
     comm_size = nclasses;
-  Omega_h::LO classes_per_rank = nclasses/comm_size + (nclasses%comm_size > 0);
+  Omega_h::LO classes_per_rank = nclasses/comm_size;
+  Omega_h::LO extra_classes = nclasses%comm_size;
   if (comm_size > nclasses) {
     fprintf(stderr,"[WARNING] Too many ranks for number of parts, reducing comm_size to fit classifications\n");
     comm_size = nclasses;
@@ -57,23 +58,35 @@ int main(int argc, char** argv) {
 
   //Exclusive sum to set part ids per class id (ignoring 0s in array)
   Omega_h::LOs class_ptn = Omega_h::offset_scan(Omega_h::LOs(class_checks));
+  Omega_h::HostRead<Omega_h::LO> class_ptn_h(class_ptn);
 
-  Omega_h::Write<Omega_h::LO> ptn_sizes(comm_size, 0);
-  Omega_h::Write<Omega_h::LO> class_owners(max_class+1, -1);
-  auto gatherClasses = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
-    const Omega_h::LO my_class = class_ptn[id];
-    const Omega_h::LO next_class = class_ptn[id+1];
+  Omega_h::HostRead<Omega_h::LO> class_size_h(class_size);
+
+  Omega_h::HostWrite<Omega_h::LO> ptn_sizes(comm_size);
+  for(int i=0; i<comm_size; i++)
+    ptn_sizes[i] = 0;
+
+  Omega_h::HostWrite<Omega_h::LO> host_class_owners(max_class+1);
+  int outrank = 0;
+  int somecount = 0;
+  for(int id=0; id<max_class+1; id++) {
+    host_class_owners[id] = -1;
+    const Omega_h::LO my_class = class_ptn_h[id];
+    const Omega_h::LO next_class = class_ptn_h[id+1];
     if (my_class != next_class) {
-      const Omega_h::LO rank = my_class / classes_per_rank;
-      class_owners[id] = rank;
-      Kokkos::atomic_fetch_add(&(ptn_sizes[rank]), class_size[id]);
+      somecount++;
+      host_class_owners[id] = outrank;
+      ptn_sizes[outrank] += class_size_h[id];
+      if(somecount >= classes_per_rank + (outrank<extra_classes) ) {
+        outrank++;
+        somecount = 0;
+      }
     }
-  };
-  Omega_h::parallel_for(max_class+1, gatherClasses, "gatherClasses");
+  }
   
   //Get max part
-  Omega_h::LO max_ne = get_max(Omega_h::LOs(ptn_sizes));
-  Omega_h::LO min_ne = get_min(Omega_h::LOs(ptn_sizes));
+  Omega_h::LO max_ne = get_max(Omega_h::LOs(Omega_h::Write<Omega_h::LO>(ptn_sizes)));
+  Omega_h::LO min_ne = get_min(Omega_h::LOs(Omega_h::Write<Omega_h::LO>(ptn_sizes)));
   
   //Print partition stats
   Omega_h::Real avg = ne*1.0/comm_size;
@@ -81,7 +94,6 @@ int main(int argc, char** argv) {
          comm_size, max_ne, min_ne, avg, max_ne/avg);
 
   //Write partition to file
-  Omega_h::HostRead<Omega_h::LO> host_class_owners(class_owners);
   char filename[200];
   sprintf(filename, "%s_%d.cpn",argv[2], comm_size);
   std::ofstream in_str(filename);

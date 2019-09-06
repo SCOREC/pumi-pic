@@ -479,6 +479,7 @@ SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView new_process) {
   Kokkos::Profiling::pushRegion("scs_migrate");
+  Kokkos::Timer timer;
   /********* Send # of particles being sent to each process *********/
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -612,6 +613,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   rebuild(new_element, recv_element, recv_particle);
 
   destroyViews<DataTypes>(recv_particle);
+  if(!comm_rank)
+    fprintf(stderr, "ps particle migration (seconds) %f\n", timer.seconds());
   Kokkos::Profiling::popRegion();
 }
 
@@ -671,11 +674,12 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                               kkLidView new_particle_elements, 
                                               MemberTypeViews<DataTypes> new_particles) {
   Kokkos::Profiling::pushRegion("scs_rebuild");
+  Kokkos::Timer timer;
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
   // if (reshuffle(new_element, new_particle_elements, new_particles))
   //   return;
-
-  printf("Rebuilding\n");
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(int element_id,int particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
@@ -796,6 +800,8 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   int tmp_size = current_size;
   current_size = swap_size;
   swap_size = tmp_size;
+  if(!comm_rank)
+    fprintf(stderr, "ps rebuild (seconds) %f\n", timer.seconds());
   Kokkos::Profiling::popRegion();
 }
 

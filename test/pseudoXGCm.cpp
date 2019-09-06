@@ -137,7 +137,7 @@ void setPtclIds(SCS* scs) {
 }
 
 int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
-    const int mdlFace, const int numPtcls) {
+    const int mdlFace, const int numPtclsPerRank) {
   //Deterministically generate random number of particles on each element with classification less than mdlFace
   int comm_rank = picparts.comm()->rank();
   const auto elm_dim = picparts.dim();
@@ -153,7 +153,7 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
   if(!numMarked)
     return 0;
 
-  int nppe = numPtcls / numMarked;
+  int nppe = numPtclsPerRank / numMarked;
   o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
 
   //Gaussian Random generator with mean = number of particles per element
@@ -165,23 +165,22 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
   int last = -1;
   for (int i = 0; i < mesh->nelems(); ++i) {
     rand_per_elem[i] = 0;
-    if (isFaceOnClass_host[i]) {
+    if (isFaceOnClass_host[i] && total < numPtclsPerRank ) {
       last = i;
       rand_per_elem[i] = round(dist(generator));
       if (rand_per_elem[i] < 0)
         rand_per_elem[i] = 0;
       total += rand_per_elem[i];
       //Stop if we hit the number of particles
-      if (total > numPtcls) {
-        int over = total - numPtcls;
+      if (total > numPtclsPerRank) {
+        int over = total - numPtclsPerRank;
         rand_per_elem[i] -= over;
-        break;
       }
     }
   }
   //If we didn't put all particles in, fill them in the last element we touched
-  if (total < numPtcls) {
-    int under = numPtcls - total;
+  if (total < numPtclsPerRank) {
+    int under = numPtclsPerRank - total;
     rand_per_elem[last] += under;
   }
   o::Write<o::LO> ppe_write(rand_per_elem);
@@ -366,8 +365,16 @@ int main(int argc, char** argv) {
   createGyroRingMappings(mesh, forward_map, backward_map);
   
   /* Particle data */
-  int numPtcls = atoi(argv[3]) / comm_size;
-  const bool output = numPtcls <= 30;
+  const int numPtcls = atoi(argv[3]);
+  const int numPtclsPerRank = atoi(argv[3]) / comm_size;
+  const bool output = numPtclsPerRank <= 30;
+
+  long int totNumReqPtcls = 0;
+  const long int numPtclsPerRank_li = numPtclsPerRank;
+  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  if (!comm_rank)
+    fprintf(stderr, "particles requested %d %ld\n", numPtcls, totNumReqPtcls);
+
   Omega_h::Int ne = mesh->nelems();
 
   
@@ -378,7 +385,7 @@ int main(int argc, char** argv) {
     element_gids(i) = mesh_element_gids[i];
   });
   const int mdlFace = atoi(argv[4]);
-  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
+  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtclsPerRank);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)

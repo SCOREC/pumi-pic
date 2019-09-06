@@ -277,17 +277,21 @@ void setTargetPtclCoords(SCS* scs) {
 }
 
 o::Mesh readMesh(char* meshFile, o::Library& lib) {
+  const auto rank = lib.world()->rank();
   (void)lib;
   std::string fn(meshFile);
   auto ext = fn.substr(fn.find_last_of(".") + 1);
   if( ext == "msh") {
-    std::cout << "reading gmsh mesh " << meshFile << "\n";
+    if(!rank)
+      std::cout << "reading gmsh mesh " << meshFile << "\n";
     return Omega_h::gmsh::read(meshFile, lib.self());
   } else if( ext == "osh" ) {
-    std::cout << "reading omegah mesh " << meshFile << "\n";
+    if(!rank)
+      std::cout << "reading omegah mesh " << meshFile << "\n";
     return Omega_h::binary::read(meshFile, lib.self(), true);
   } else {
-    std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
+    if(!rank)
+      std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
     exit(EXIT_FAILURE);
   }
 }
@@ -335,6 +339,11 @@ int main(int argc, char** argv) {
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+
+  if(!comm_rank)
+    fprintf(stderr, "done\n");
+
+  return 0;
 
   if(!comm_rank)
     printf("partition file %s\n", argv[2]);

@@ -350,11 +350,8 @@ int main(int argc, char** argv) {
   p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::FULL);
   MPI_Barrier(MPI_COMM_WORLD);
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
-  fprintf(stderr, "%d 0.1\n", comm_rank);
   p::Mesh picparts(input);
-  fprintf(stderr, "%d 0.2\n", comm_rank);
   o::Mesh* mesh = picparts.mesh();
-  fprintf(stderr, "%d 0.3\n", comm_rank);
   mesh->ask_elem_verts(); //caching adjacency info
  
   //Build gyro avg mappings

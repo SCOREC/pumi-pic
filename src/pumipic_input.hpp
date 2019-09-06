@@ -28,6 +28,7 @@ namespace pumipic {
     Input(Omega_h::Mesh& mesh, Ownership rule, Omega_h::LOs partition_vector,
           Method bufferMethod, Method safeMethod);
 
+    void printInfo();
 
     //Bridge dim for BFS (defaults to 0)
     int bridge_dim;

@@ -1,6 +1,22 @@
 #include "pumipic_input.hpp"
 #include <fstream>
 #include <stdexcept>
+
+namespace {
+  std::string getMethodString(pumipic::Input::Method m) {
+    if( m == pumipic::Input::FULL )
+      return "FULL";
+    else if( m == pumipic::Input::BFS )
+      return "BFS";
+    else if( m == pumipic::Input::MINIMUM )
+      return "BFS";
+    else if( m == pumipic::Input::NONE )
+      return "NONE";
+    else
+      return "UNKNOWN";
+  }
+}
+
 namespace pumipic {
 
   Input::Input(Omega_h::Mesh& mesh, char* partition_filename, 
@@ -95,5 +111,12 @@ namespace pumipic {
       bufferBFSLayers = 0;
     if (safeMethod == MINIMUM)
       safeBFSLayers = 0;
+  }
+
+  void Input::printInfo() {
+    std::string bname = getMethodString(bufferMethod);
+    std::string sname = getMethodString(safeMethod);
+    printf("pumipic buffer method %s\n", bname.c_str());
+    printf("pumipic safe method %s\n", bname.c_str());
   }
 }

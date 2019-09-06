@@ -440,6 +440,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
+  Kokkos::Timer timer;
 
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -571,6 +572,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       break;
     }
   }
+  if(!rank)
+    fprintf(stderr, "pumipic search_2d (seconds) %f\n", timer.seconds());
   Kokkos::Profiling::popRegion();
   return found;
 }

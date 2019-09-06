@@ -93,8 +93,6 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   
   scs->migrate(scs_elem_ids, scs_process_ids);
 
-  printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
-         , comm_rank, scs->nElems(), scs->nPtcls(), scs->capacity(), scs->numRows());
   ids = scs->get<2>();
   if (output) {
     auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -106,12 +104,13 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
 }
 
 void search(p::Mesh& picparts, SCS* scs, bool output) {
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   o::Mesh* mesh = picparts.mesh();
   assert(scs->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  Kokkos::Timer timer;
   auto x = scs->get<0>();
   auto xtgt = scs->get<1>();
   auto pid = scs->get<2>();
@@ -119,13 +118,9 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
   bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
                                           xpoints_d, maxLoops);
-  fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
-  timer.reset();
   rebuild(picparts, scs, elem_ids, output);
-  fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
-
 }
 
 void setPtclIds(SCS* scs) {

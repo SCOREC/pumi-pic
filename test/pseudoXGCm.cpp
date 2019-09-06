@@ -340,7 +340,7 @@ int main(int argc, char** argv) {
   }
   //Create picparts using classification with the full mesh buffered and minimum safe zone
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
-  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::BFS);
+  p::Input input(full_mesh, argv[2], pumipic::Input::BFS, pumipic::Input::BFS);
   if(!comm_rank)
     input.printInfo();
   MPI_Barrier(MPI_COMM_WORLD);

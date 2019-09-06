@@ -9,7 +9,7 @@ namespace {
     else if( m == pumipic::Input::BFS )
       return "BFS";
     else if( m == pumipic::Input::MINIMUM )
-      return "BFS";
+      return "MINIMUM";
     else if( m == pumipic::Input::NONE )
       return "NONE";
     else
@@ -111,6 +111,20 @@ namespace pumipic {
       bufferBFSLayers = 0;
     if (safeMethod == MINIMUM)
       safeBFSLayers = 0;
+  }
+
+  Input::Method Input::getMethod(std::string s) {
+    const char* cs = s.c_str();
+    if( !strcasecmp(cs,"FULL") )
+      return Input::FULL;
+    else if( !strcasecmp(cs,"BFS") )
+      return Input::BFS;
+    else if( !strcasecmp(cs,"MINIMUM") )
+      return Input::MINIMUM;
+    else if( !strcasecmp(cs,"NONE") )
+      return Input::NONE;
+    else
+      return Input::INVALID;
   }
 
   void Input::printInfo() {

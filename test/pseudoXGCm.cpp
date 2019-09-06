@@ -296,11 +296,12 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 6;
+  const int numargs = 8;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
-      "<max initial model face> <maxIterations>";
+      "<max initial model face> <maxIterations> "
+      "<buffer method=[bfs|full]> <safe method=[bfs|full]>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -337,10 +338,16 @@ int main(int argc, char** argv) {
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
     fprintf(stderr, "partition file %s\n", argv[2]);
+    fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
   }
+
+  const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
+  assert(bufferMethod);
+  const auto safeMethod = pumipic::Input::getMethod(argv[7]);
+  assert(safeMethod);
   //Create picparts using classification with the full mesh buffered and minimum safe zone
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
-  p::Input input(full_mesh, argv[2], pumipic::Input::BFS, pumipic::Input::BFS);
+  p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
   if(!comm_rank)
     input.printInfo();
   MPI_Barrier(MPI_COMM_WORLD);

@@ -388,11 +388,15 @@ int main(int argc, char** argv) {
      printf("ppe[%d] %d\n", i, np);
   });
 
-  const auto maxIter = atoi(argv[5]);
+  long int totNumPtcls = 0;
+  long int actualParticles_li = actualParticles;
+  MPI_Allreduce(&actualParticles_li, &totNumPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  if (!comm_rank)
+    fprintf(stderr, "particles created %ld\n", totNumPtcls);
 
-  if (comm_rank == 0)
-    fprintf(stderr, "number of elements %d number of particles %d "
-        "max number of iterations\n", ne, actualParticles, maxIter);
+  const auto maxIter = atoi(argv[5]);
+  if (!comm_rank)
+    fprintf(stderr, "max iterations: %d\n", maxIter);
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These

@@ -365,15 +365,15 @@ int main(int argc, char** argv) {
   createGyroRingMappings(mesh, forward_map, backward_map);
   
   /* Particle data */
-  const int numPtcls = atoi(argv[3]);
-  const int numPtclsPerRank = atoi(argv[3]) / comm_size;
+  const long int numPtcls = atol(argv[3]);
+  const int numPtclsPerRank = numPtcls / comm_size;
   const bool output = numPtclsPerRank <= 30;
 
   long int totNumReqPtcls = 0;
   const long int numPtclsPerRank_li = numPtclsPerRank;
   MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
   if (!comm_rank)
-    fprintf(stderr, "particles requested %d %ld\n", numPtcls, totNumReqPtcls);
+    fprintf(stderr, "particles requested %ld %ld\n", numPtcls, totNumReqPtcls);
 
   Omega_h::Int ne = mesh->nelems();
 

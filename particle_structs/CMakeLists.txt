@@ -15,14 +15,21 @@ enable_testing()
 include(CTest)
 
 
-option(DEBUG "Turn on for debug output" OFF)
+option(PS_DEBUG "Turn on for debug output" OFF)
+option(PS_OPT "Turn on for debug output" OFF)
 
-if (DEBUG)
+if (PS_DEBUG_PREPROC)
    add_definitions(-DDEBUG)
 endif()
+
 set(debug_flag)
-if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+if (PS_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")
+endif()
+
+set(opt_flag)
+if (PS_ENABLE_OPT)
+  set(opt_flag "-O3")
 endif()
 
 option(IS_TESTING "Build for CTest" OFF)
@@ -45,6 +52,9 @@ if (ENABLE_KOKKOS)
   bob_public_dep(Kokkos)
   # }
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
+message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 include_directories(support)
 include_directories(algorithms)

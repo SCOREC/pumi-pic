@@ -341,9 +341,7 @@ int main(int argc, char** argv) {
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
 
   if(!comm_rank)
-    fprintf(stderr, "done\n");
-
-  return 0;
+    fprintf(stderr, "done mesh topo checks\n");
 
   if(!comm_rank)
     printf("partition file %s\n", argv[2]);

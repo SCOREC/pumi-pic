@@ -339,14 +339,15 @@ int main(int argc, char** argv) {
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
 
-  if(!comm_rank)
+  if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
-
-  if(!comm_rank)
-    printf("partition file %s\n", argv[2]);
+    fprintf(stderr, "partition file %s\n", argv[2]);
+  }
   //Create picparts using classification with the full mesh buffered and minimum safe zone
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
-  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::FULL);
+  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::BFS);
+  if(!comm_rank)
+    input.printInfo();
   MPI_Barrier(MPI_COMM_WORLD);
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Mesh picparts(input);

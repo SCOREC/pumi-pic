@@ -568,6 +568,20 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     ++loops;
 
     if(looplimit && loops >= looplimit) {
+      auto ptclsNotFound = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+        if( mask > 0 && !ptcl_done[pid] ) {
+          auto searchElm = elem_ids[pid];
+          auto ptcl = pid_d(pid);
+          const auto ptclDest = makeVector2(pid, xtgt_scs_d);
+          const auto ptclOrigin = makeVector2(pid, x_scs_d);
+          printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+              rank_d,
+              searchElm, ptcl,
+              ptclOrigin[0], ptclOrigin[1],
+              ptclDest[0], ptclDest[1]);
+        }
+      };
+      scs->parallel_for(ptclsNotFound, "ptclsNotFound");
       fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }

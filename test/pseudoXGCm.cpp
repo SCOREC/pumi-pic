@@ -296,12 +296,13 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 8;
+  const int numargs = 9;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
       "<max initial model face> <maxIterations> "
-      "<buffer method=[bfs|full]> <safe method=[bfs|full]>";
+      "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
+      "<degrees per elliptical push>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -422,6 +423,9 @@ int main(int argc, char** argv) {
   const auto k = .020558260;
   const auto d = 0.6;
   ellipticalPush::setup(scs, h, k, d);
+  const auto degPerPush = atof(argv[8]);
+  if (!comm_rank)
+    fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
 
   if (comm_rank == 0)
     fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
@@ -452,7 +456,7 @@ int main(int argc, char** argv) {
     if (comm_rank == 0)
       fprintf(stderr, "iter %d\n", iter);
     timer.reset();
-    ellipticalPush::push(scs, 1, iter); //one degree per iteration
+    ellipticalPush::push(scs, degPerPush, iter); //one degree per iteration
     MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());

@@ -108,7 +108,7 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   o::Mesh* mesh = picparts.mesh();
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 100;
+  Omega_h::LO maxLoops = 200;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   auto x = scs->get<0>();
@@ -456,7 +456,7 @@ int main(int argc, char** argv) {
     if (comm_rank == 0)
       fprintf(stderr, "iter %d\n", iter);
     timer.reset();
-    ellipticalPush::push(scs, degPerPush, iter); //one degree per iteration
+    ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
     if (comm_rank == 0)
       fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());

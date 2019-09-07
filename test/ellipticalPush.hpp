@@ -34,8 +34,9 @@ namespace ellipticalPush {
     scs->parallel_for(setMajorAxis);
   }
   
-  void push(SCS* scs, const double deg, const int iter) {
+  void push(SCS* scs, Omega_h::Mesh& m, const double deg, const int iter) {
     Kokkos::Profiling::pushRegion("ellipticalPush");
+    auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
     auto x_nm0 = scs->get<1>();
     auto ptcl_id = scs->get<2>();
     auto ptcl_b = scs->get<3>();
@@ -43,8 +44,10 @@ namespace ellipticalPush {
     const auto h_d = h;
     const auto k_d = k;
     const auto d_d = d;
-    auto setPosition = SCS_LAMBDA(const int&, const int& pid, const int& mask) {
+    auto setPosition = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if(mask) {
+        const double distByClass = (double) 1.0 / class_ids[e];
+        const auto degP = deg*distByClass;
         const auto phi = ptcl_phi(pid);
         const auto b = ptcl_b(pid);
         const auto a = b*d_d;

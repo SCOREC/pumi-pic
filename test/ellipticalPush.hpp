@@ -51,7 +51,7 @@ namespace ellipticalPush {
         const auto phi = ptcl_phi(pid);
         const auto b = ptcl_b(pid);
         const auto a = b*d_d;
-        const auto rad = phi+deg*M_PI/180.0;
+        const auto rad = phi+degP*M_PI/180.0;
         const auto x = a*std::cos(rad)+h_d;
         const auto y = b*std::sin(rad)+k_d;
         x_nm0(pid,0) = x;

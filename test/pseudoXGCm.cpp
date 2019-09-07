@@ -342,9 +342,9 @@ int main(int argc, char** argv) {
   }
 
   const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
-  assert(bufferMethod);
   const auto safeMethod = pumipic::Input::getMethod(argv[7]);
-  assert(safeMethod);
+  assert(bufferMethod>=0);
+  assert(safeMethod>=0);
   //Create picparts using classification with the full mesh buffered and minimum safe zone
   OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);

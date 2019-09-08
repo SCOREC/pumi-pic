@@ -442,8 +442,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
   Kokkos::Timer timer;
 
-  int rank;
+  int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+  MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
   const auto rank_d = rank;
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
@@ -586,8 +587,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       break;
     }
   }
-  if(!rank)
-    fprintf(stderr, "pumipic search_2d (seconds) %f\n", timer.seconds());
+  if(!rank || rank == comm_size/2)
+    fprintf(stderr, "%d pumipic search_2d (seconds) %f\n", rank, timer.seconds());
   int maxLoops = 0;
   MPI_Allreduce(&loops, &maxLoops, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
   int minLoops = 0;

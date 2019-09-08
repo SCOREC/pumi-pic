@@ -613,8 +613,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   rebuild(new_element, recv_element, recv_particle);
 
   destroyViews<DataTypes>(recv_particle);
-  if(!comm_rank)
-    fprintf(stderr, "ps particle migration (seconds) %f\n", timer.seconds());
+  if(!comm_rank || comm_rank == comm_size/2)
+    fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
   Kokkos::Profiling::popRegion();
 }
 
@@ -675,8 +675,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                               MemberTypeViews<DataTypes> new_particles) {
   Kokkos::Profiling::pushRegion("scs_rebuild");
   Kokkos::Timer timer;
-  int comm_rank;
+  int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   // if (reshuffle(new_element, new_particle_elements, new_particles))
   //   return;
@@ -800,8 +801,8 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   int tmp_size = current_size;
   current_size = swap_size;
   swap_size = tmp_size;
-  if(!comm_rank)
-    fprintf(stderr, "ps rebuild (seconds) %f\n", timer.seconds());
+  if(!comm_rank || comm_rank == comm_size/2)
+    fprintf(stderr, "%d ps rebuild (seconds) %f\n", comm_rank, timer.seconds());
   Kokkos::Profiling::popRegion();
 }
 

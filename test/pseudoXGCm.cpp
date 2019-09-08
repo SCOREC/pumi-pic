@@ -444,17 +444,17 @@ int main(int argc, char** argv) {
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
   int iter;
-  int np;
-  int scs_np;
+  long int totNp;
+  long int scs_np;
   for(iter=1; iter<=maxIter; iter++) {
     scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-    if(np == 0) {
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    if (comm_rank == 0)
-      fprintf(stderr, "iter %d\n", iter);
+    if (!comm_rank)
+      fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
     timer.reset();
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -465,8 +465,8 @@ int main(int argc, char** argv) {
     if (comm_rank == 0)
       fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
-    if(np == 0) {
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }

@@ -36,6 +36,9 @@ namespace ellipticalPush {
   
   void push(SCS* scs, Omega_h::Mesh& m, const double deg, const int iter) {
     Kokkos::Profiling::pushRegion("ellipticalPush");
+    Kokkos::Timer timer;
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
     auto x_nm0 = scs->get<1>();
     auto ptcl_id = scs->get<2>();
@@ -60,6 +63,8 @@ namespace ellipticalPush {
       }
     };
     scs->parallel_for(setPosition);
+    if(!rank)
+      fprintf(stderr, "elliptical push (seconds) %f\n", timer.seconds());
     Kokkos::Profiling::popRegion();
   }
 }

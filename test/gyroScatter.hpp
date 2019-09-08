@@ -167,6 +167,9 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
 
 void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName) {
   Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
+  Kokkos::Timer timer;
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   const auto gr = gyro_rmax;
   const auto gnr = gyro_num_rings;
   const auto gppr = gyro_points_per_ring;
@@ -218,6 +221,8 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
   };
   o::parallel_for(mesh->nverts(), scatterToMappedVerts, "xgcm_scatterToMappedVerts");
   mesh->set_tag(o::VERT, scatterTagName, o::Reals(scatter_w));
+  if(!rank)
+    fprintf(stderr, "gyro scatter (seconds) %f\n", timer.seconds());
   Kokkos::Profiling::popRegion();
 }
 

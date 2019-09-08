@@ -458,12 +458,8 @@ int main(int argc, char** argv) {
     timer.reset();
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
-    if (comm_rank == 0)
-      fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     timer.reset();
     search(picparts,scs, output);
-    if (comm_rank == 0)
-      fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     if(totNp == 0) {

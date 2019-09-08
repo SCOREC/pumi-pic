@@ -93,8 +93,6 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   
   scs->migrate(scs_elem_ids, scs_process_ids);
 
-  printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
-         , comm_rank, scs->nElems(), scs->nPtcls(), scs->capacity(), scs->numRows());
   ids = scs->get<2>();
   if (output) {
     auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -106,12 +104,13 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
 }
 
 void search(p::Mesh& picparts, SCS* scs, bool output) {
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   o::Mesh* mesh = picparts.mesh();
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 100;
+  Omega_h::LO maxLoops = 200;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  Kokkos::Timer timer;
   auto x = scs->get<0>();
   auto xtgt = scs->get<1>();
   auto pid = scs->get<2>();
@@ -119,13 +118,9 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
   bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
                                           xpoints_d, maxLoops);
-  fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
-  timer.reset();
   rebuild(picparts, scs, elem_ids, output);
-  fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
-
 }
 
 void setPtclIds(SCS* scs) {
@@ -137,7 +132,7 @@ void setPtclIds(SCS* scs) {
 }
 
 int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
-    const int mdlFace, const int numPtcls) {
+    const int mdlFace, const int numPtclsPerRank) {
   //Deterministically generate random number of particles on each element with classification less than mdlFace
   int comm_rank = picparts.comm()->rank();
   const auto elm_dim = picparts.dim();
@@ -150,8 +145,10 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
       isFaceOnClass[i] = 1;
   });
   o::LO numMarked = o::get_sum(o::LOs(isFaceOnClass));
-  assert(numMarked);
-  int nppe = numPtcls / numMarked;
+  if(!numMarked)
+    return 0;
+
+  int nppe = numPtclsPerRank / numMarked;
   o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
 
   //Gaussian Random generator with mean = number of particles per element
@@ -163,23 +160,22 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
   int last = -1;
   for (int i = 0; i < mesh->nelems(); ++i) {
     rand_per_elem[i] = 0;
-    if (isFaceOnClass_host[i]) {
+    if (isFaceOnClass_host[i] && total < numPtclsPerRank ) {
       last = i;
       rand_per_elem[i] = round(dist(generator));
       if (rand_per_elem[i] < 0)
         rand_per_elem[i] = 0;
       total += rand_per_elem[i];
       //Stop if we hit the number of particles
-      if (total > numPtcls) {
-        int over = total - numPtcls;
+      if (total > numPtclsPerRank) {
+        int over = total - numPtclsPerRank;
         rand_per_elem[i] -= over;
-        break;
       }
     }
   }
   //If we didn't put all particles in, fill them in the last element we touched
-  if (total < numPtcls) {
-    int under = numPtcls - total;
+  if (total < numPtclsPerRank) {
+    int under = numPtclsPerRank - total;
     rand_per_elem[last] += under;
   }
   o::Write<o::LO> ppe_write(rand_per_elem);
@@ -275,17 +271,21 @@ void setTargetPtclCoords(SCS* scs) {
 }
 
 o::Mesh readMesh(char* meshFile, o::Library& lib) {
+  const auto rank = lib.world()->rank();
   (void)lib;
   std::string fn(meshFile);
   auto ext = fn.substr(fn.find_last_of(".") + 1);
   if( ext == "msh") {
-    std::cout << "reading gmsh mesh " << meshFile << "\n";
+    if(!rank)
+      std::cout << "reading gmsh mesh " << meshFile << "\n";
     return Omega_h::gmsh::read(meshFile, lib.self());
   } else if( ext == "osh" ) {
-    std::cout << "reading omegah mesh " << meshFile << "\n";
-    return Omega_h::binary::read(meshFile, lib.self());
+    if(!rank)
+      std::cout << "reading omegah mesh " << meshFile << "\n";
+    return Omega_h::binary::read(meshFile, lib.self(), true);
   } else {
-    std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
+    if(!rank)
+      std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
     exit(EXIT_FAILURE);
   }
 }
@@ -296,15 +296,22 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 6;
+  const int numargs = 9;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
-      "<max initial model face> <maxIterations>";
+      "<max initial model face> <maxIterations> "
+      "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
+      "<degrees per elliptical push>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
+  auto deviceCount = 0;
+  cudaGetDeviceCount(&deviceCount);
+  assert(deviceCount==1);
   if (comm_rank == 0) {
+    printf("device count per process %d\n", deviceCount);
+    printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
     printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
     printf("Kokkos execution space memory %s name %s\n",
@@ -317,16 +324,39 @@ int main(int argc, char** argv) {
   }
   auto full_mesh = readMesh(argv[1], lib);
 
+  MPI_Barrier(MPI_COMM_WORLD);
+ 
+  if(!comm_rank)
+    printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
+        full_mesh.nfaces());
+
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  const auto vtx_to_elm = full_mesh.ask_up(0, 2);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  const auto edge_to_elm = full_mesh.ask_up(1, 2);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+
+  if(!comm_rank) {
+    fprintf(stderr, "done mesh topo checks\n");
+    fprintf(stderr, "partition file %s\n", argv[2]);
+    fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
+  }
+
+  const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
+  const auto safeMethod = pumipic::Input::getMethod(argv[7]);
+  assert(bufferMethod>=0);
+  assert(safeMethod>=0);
   //Create picparts using classification with the full mesh buffered and minimum safe zone
-  p::Input input(full_mesh, argv[2], pumipic::Input::FULL, pumipic::Input::MINIMUM);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
+  p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
+  if(!comm_rank)
+    input.printInfo();
+  MPI_Barrier(MPI_COMM_WORLD);
+  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Mesh picparts(input);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
-  
-  if (comm_rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
-           mesh->nfaces(), mesh->nelems());
-
+ 
   //Build gyro avg mappings
   const auto rmax = 0.038;
   const auto numRings = 3;
@@ -339,8 +369,16 @@ int main(int argc, char** argv) {
   createGyroRingMappings(mesh, forward_map, backward_map);
   
   /* Particle data */
-  int numPtcls = atoi(argv[3]) / comm_size;
-  const bool output = numPtcls <= 30;
+  const long int numPtcls = atol(argv[3]);
+  const int numPtclsPerRank = numPtcls / comm_size;
+  const bool output = numPtclsPerRank <= 30;
+
+  long int totNumReqPtcls = 0;
+  const long int numPtclsPerRank_li = numPtclsPerRank;
+  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  if (!comm_rank)
+    fprintf(stderr, "particles requested %ld %ld\n", numPtcls, totNumReqPtcls);
+
   Omega_h::Int ne = mesh->nelems();
 
   
@@ -351,18 +389,22 @@ int main(int argc, char** argv) {
     element_gids(i) = mesh_element_gids[i];
   });
   const int mdlFace = atoi(argv[4]);
-  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtcls);
+  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtclsPerRank);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)
      printf("ppe[%d] %d\n", i, np);
   });
 
-  const auto maxIter = atoi(argv[5]);
+  long int totNumPtcls = 0;
+  long int actualParticles_li = actualParticles;
+  MPI_Allreduce(&actualParticles_li, &totNumPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  if (!comm_rank)
+    fprintf(stderr, "particles created %ld\n", totNumPtcls);
 
-  if (comm_rank == 0)
-    fprintf(stderr, "number of elements %d number of particles %d "
-        "max number of iterations\n", ne, actualParticles, maxIter);
+  const auto maxIter = atoi(argv[5]);
+  if (!comm_rank)
+    fprintf(stderr, "max iterations: %d\n", maxIter);
 
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
@@ -381,6 +423,9 @@ int main(int argc, char** argv) {
   const auto k = .020558260;
   const auto d = 0.6;
   ellipticalPush::setup(scs, h, k, d);
+  const auto degPerPush = atof(argv[8]);
+  if (!comm_rank)
+    fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
 
   if (comm_rank == 0)
     fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
@@ -395,34 +440,29 @@ int main(int argc, char** argv) {
   const auto syncTagName = "ptclToMeshSync";
   mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
-  render(picparts,0, comm_rank);
 
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
   int iter;
-  int np;
-  int scs_np;
+  long int totNp;
+  long int scs_np;
   for(iter=1; iter<=maxIter; iter++) {
     scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-    if(np == 0) {
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    if (comm_rank == 0)
-      fprintf(stderr, "iter %d\n", iter);
+    if (!comm_rank)
+      fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
     timer.reset();
-    ellipticalPush::push(scs, 1, iter); //one degree per iteration
+    ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
-    if (comm_rank == 0)
-      fprintf(stderr, "push and transfer (seconds) %f\n", timer.seconds());
     timer.reset();
     search(picparts,scs, output);
-    if (comm_rank == 0)
-      fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
-    if(np == 0) {
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
@@ -438,11 +478,6 @@ int main(int argc, char** argv) {
   
   //cleanup
   delete scs;
-
-  std::stringstream ss;
-  ss << "pseudoPush" << "_r"<<comm_rank << "_tf";
-  std::string s = ss.str();
-  Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 
   if (!comm_rank)
     fprintf(stderr, "done\n");

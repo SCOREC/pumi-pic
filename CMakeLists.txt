@@ -36,12 +36,6 @@ find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")
 set(MPIRUN_PROCFLAG "-np" CACHE STRING
   "the command line flag to give process count to MPIRUN")
 
-#set debug flag
-set(debug_flag)
-if (${CMAKE_BUILD_TYPE} STREQUAL "DEBUG")
-  set(debug_flag "-g")
-endif()
-
 find_package(Omega_h 9 REQUIRED)
 set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
@@ -52,6 +46,18 @@ set(pumipic_USE_particle_structures_DEFAULT ON)
 message(STATUS "Found particle_structures: ${particle_structures_VERSION}")
 bob_public_dep(particle_structures)
 
+set(debug_flag)
+if (PP_ENABLE_DEBUG_SYMBOLS)
+  set(debug_flag "-g")
+endif()
+
+set(opt_flag)
+if (PP_ENABLE_OPT)
+  set(opt_flag "-O3")
+endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
+message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 #code
 add_subdirectory(src)

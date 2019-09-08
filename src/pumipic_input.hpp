@@ -10,6 +10,7 @@ namespace pumipic {
 
     //Method for creating buffers/safe zone
     enum Method {
+      INVALID = -1,
       FULL, //Buffer entire mesh or safe entire buffer
       BFS, //Buffer/Safe BFS layers out
       MINIMUM, //Buffer/Safe the core part
@@ -28,6 +29,8 @@ namespace pumipic {
     Input(Omega_h::Mesh& mesh, Ownership rule, Omega_h::LOs partition_vector,
           Method bufferMethod, Method safeMethod);
 
+    void printInfo();
+    static Method getMethod(std::string s);
 
     //Bridge dim for BFS (defaults to 0)
     int bridge_dim;

@@ -440,9 +440,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
+  Kokkos::Timer timer;
 
-  int rank;
+  int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+  MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
   const auto rank_d = rank;
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
@@ -567,10 +569,43 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     ++loops;
 
     if(looplimit && loops >= looplimit) {
+      auto ptclsNotFound = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+        if( mask > 0 && !ptcl_done[pid] ) {
+          auto searchElm = elem_ids[pid];
+          auto ptcl = pid_d(pid);
+          const auto ptclDest = makeVector2(pid, xtgt_scs_d);
+          const auto ptclOrigin = makeVector2(pid, x_scs_d);
+          printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+              rank_d,
+              searchElm, ptcl,
+              ptclOrigin[0], ptclOrigin[1],
+              ptclDest[0], ptclDest[1]);
+        }
+      };
+      scs->parallel_for(ptclsNotFound, "ptclsNotFound");
       fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   }
+  if(!rank || rank == comm_size/2)
+    fprintf(stderr, "%d pumipic search_2d (seconds) %f\n", rank, timer.seconds());
+  int maxLoops = 0;
+  MPI_Allreduce(&loops, &maxLoops, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  int minLoops = 0;
+  MPI_Allreduce(&loops, &minLoops, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+  long int totLoops = 0;
+  long int loops_li = loops;
+  MPI_Allreduce(&loops_li, &totLoops, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  int ranksWithPtcls = 0;
+  const int hasPtcls = (scsCapacity > 0);
+  MPI_Allreduce(&hasPtcls, &ranksWithPtcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const double avgLoops = (double) totLoops / ranksWithPtcls;
+  if(maxLoops == loops)
+    fprintf(stderr, "pumipic search_2d maxLoops %d on rank %d\n", maxLoops, rank);
+  if(minLoops == loops)
+    fprintf(stderr, "pumipic search_2d minLoops %d on rank %d\n", minLoops, rank);
+  if(!rank)
+    fprintf(stderr, "pumipic search_2d totLoops %ld ranksWithPtcls %d average loops %f\n", totLoops, ranksWithPtcls, avgLoops);
   Kokkos::Profiling::popRegion();
   return found;
 }

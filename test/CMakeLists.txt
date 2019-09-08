@@ -16,6 +16,7 @@ make_test(input_construct test_input_construct.cpp)
 make_test(search2d search2d.cpp)
 make_test(pseudoXGCm pseudoXGCm.cpp)
 make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
+make_test(loadSerialMesh loadSerialMesh.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

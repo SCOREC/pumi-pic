@@ -1,6 +1,22 @@
 #include "pumipic_input.hpp"
 #include <fstream>
 #include <stdexcept>
+
+namespace {
+  std::string getMethodString(pumipic::Input::Method m) {
+    if( m == pumipic::Input::FULL )
+      return "FULL";
+    else if( m == pumipic::Input::BFS )
+      return "BFS";
+    else if( m == pumipic::Input::MINIMUM )
+      return "MINIMUM";
+    else if( m == pumipic::Input::NONE )
+      return "NONE";
+    else
+      return "UNKNOWN";
+  }
+}
+
 namespace pumipic {
 
   Input::Input(Omega_h::Mesh& mesh, char* partition_filename, 
@@ -44,7 +60,7 @@ namespace pumipic {
         }
         int size;
         in_str>>size;
-        Omega_h::HostWrite<Omega_h::LO> host_owners(size+1);
+        Omega_h::HostWrite<Omega_h::LO> host_owners(size+1, "host_owners");
         int cid, own;
         while(in_str >> cid >> own) 
           host_owners[cid] = own;
@@ -95,5 +111,26 @@ namespace pumipic {
       bufferBFSLayers = 0;
     if (safeMethod == MINIMUM)
       safeBFSLayers = 0;
+  }
+
+  Input::Method Input::getMethod(std::string s) {
+    const char* cs = s.c_str();
+    if( !strcasecmp(cs,"FULL") )
+      return Input::FULL;
+    else if( !strcasecmp(cs,"BFS") )
+      return Input::BFS;
+    else if( !strcasecmp(cs,"MINIMUM") )
+      return Input::MINIMUM;
+    else if( !strcasecmp(cs,"NONE") )
+      return Input::NONE;
+    else
+      return Input::INVALID;
+  }
+
+  void Input::printInfo() {
+    std::string bname = getMethodString(bufferMethod);
+    std::string sname = getMethodString(safeMethod);
+    printf("pumipic buffer method %s\n", bname.c_str());
+    printf("pumipic safe method %s\n", bname.c_str());
   }
 }

@@ -587,8 +587,10 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       break;
     }
   }
-  if(!rank || rank == comm_size/2)
+  if(!rank || rank == comm_size/2) {
     fprintf(stderr, "%d pumipic search_2d (seconds) %f\n", rank, timer.seconds());
+    fprintf(stderr, "%d pumipic search_2d loops %d\n", rank, loops);
+  }
   int maxLoops = 0;
   MPI_Allreduce(&loops, &maxLoops, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
   int minLoops = 0;

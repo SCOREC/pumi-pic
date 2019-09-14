@@ -110,11 +110,10 @@ void storePiscesData(SCS* scs, o::Mesh& mesh, o::Write<o::LO>& data_d,
   scs->parallel_for(lamb, "storePiscesData");
 }
 
-void neutralBorisMove(SCS* scs,  const o::Real dTime, bool debug=false) {
+void neutralBorisMove(SCS* scs,  const o::Real dTime) {
   auto vel_scs = scs->get<PTCL_VEL>();
   auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto pos_scs = scs->get<PTCL_POS>();
-  auto pid_scs = scs->get<PTCL_ID>();
   auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
       auto vel = p::makeVector3(pid, vel_scs);
@@ -125,14 +124,115 @@ void neutralBorisMove(SCS* scs,  const o::Real dTime, bool debug=false) {
       tgt_scs(pid, 2) = pos[2] + vel[2] * dTime;
       vel_scs(pid, 0) = vel[0];
       vel_scs(pid, 1) = vel[1];
-      vel_scs(pid, 2) = vel[2];    
-      if(debug)  
-        printf("id %d pos %g %g %g vel %g %g %g %g %g %g\n", pid_scs(pid), pos[0], pos[1], pos[2],
-          vel[0], vel[1], vel[2], tgt_scs(pid, 0),tgt_scs(pid, 1), tgt_scs(pid, 2));
+      vel_scs(pid, 2) = vel[2];      
     }// mask
   };
   scs->parallel_for(boris, "neutralBorisMove");
 } 
+
+void neutralBorisMove_float(SCS* scs,  const o::Real dTime, bool debug = false) {
+  auto vel_scs = scs->get<PTCL_VEL>();
+  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+    if(mask >0) {
+      auto vel = p::makeVector3(pid, vel_scs);
+      auto pos = p::makeVector3(pid, pos_scs);
+      // Next position and velocity
+      float val[3], v2[3];
+      for(int i=0; i<3; ++i) {
+        val[i] = float(pos[i]) + float(vel[i]) * float(dTime);
+        v2[i] = float(vel[i]);
+        if(debug)
+          printf(" %f", val[i]);
+      }
+      if(debug)
+        printf("\n");
+
+      for(int i=0; i<3; ++i) {      
+        tgt_scs(pid, i) = val[i];
+        vel_scs(pid, i) = v2[i];
+      }
+    
+    }// mask
+  };
+  scs->parallel_for(boris, "neutralBorisMove");
+} 
+
+void printPtclHostData(o::HostWrite<o::Real>& dh, int num, int dof,
+  const char* name, int iter=-1) { 
+  double pos[3], vel[3];
+  for(int i=0; i<num; ++i) {
+    for(int j=0; j<3; ++j) {
+      pos[j] = dh[i*dof+j];
+      vel[j] = dh[i*dof+3+j];
+    }
+    int id = static_cast<int>(dh[i*dof + 6]);
+    int it = static_cast<int>(dh[i*dof + 7]);
+    printf("%s %d pos %g %g %g iter %d vel %g %g %g updateiter %d\n",
+      name, id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2], it);
+  }
+} 
+
+
+void updateStepData(SCS* scs, int iter, int numPtcls, 
+  o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, int dof=8) {
+  // size is not scs->nPtcls, since id: 0 to numPtcls
+  auto vel_scs = scs->get<PTCL_VEL>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto pid_scs = scs->get<PTCL_ID>();
+  auto step = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+    if(mask >0) {
+      auto id = pid_scs(pid);
+      auto vel = p::makeVector3(pid, vel_scs);
+      auto pos = p::makeVector3(pid, pos_scs);
+      // NOTE: particle id from 0 to numPtcls; only if indices are used as ids.
+      // If pid is used as id's, then range will be > numPtcls => out of memory. 
+      for(int i=0; i<3; ++i) {
+        data[id*dof+i] = pos[i];
+        data[id*dof+3+i] = vel[i];
+      }
+      data[id*dof + 6] = id;
+      data[id*dof + 7] = iter;
+      
+      for(int i=0; i<8; ++i)
+        ptclsDataAll[id*dof+i] = data[id*dof+i];
+
+      //NOTE: many of these prints go missing
+      //printf("ptclHistory %d zInd -1 detId -1 pos %g %g %g iter %d vel %g %g %g\n",
+      // id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2]);
+    }// mask
+  };
+  scs->parallel_for(step, "updateStepData");
+}
+
+void printStepData(SCS* scs, int iter, int numPtcls, o::Write<o::Real>& ptclsDataAll,
+   o::Write<o::Real>& data, int dof=8, bool accum = false) {
+
+  printf("total_ptcls %d\n", scs->nPtcls());
+  if(iter ==0) {
+    updateStepData(scs, iter, numPtcls, ptclsDataAll, data, dof);
+  }
+
+  if(accum) {
+    o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
+    printPtclHostData(ptclAllHost, numPtcls, dof, "ptclHistory_all", iter);
+  } else {
+    o::HostWrite<o::Real> dh(data);
+    o::HostWrite<o::Real> dp(scs->nPtcls() * dof);
+    for(int ip=0, n=0; ip< numPtcls; ++ip) {
+      //only ptcls from scs->nptcls have valid ids
+      int id = static_cast<int>(dh[ip*dof+6]);
+      if(id < 0)
+        continue;
+      for(int i=0; i<8; ++i) {
+        dp[n*dof+i] = dh[id*dof+i];
+      }
+      ++n;
+    }
+    printPtclHostData(dp, scs->nPtcls(), dof, "ptclHistory", iter);
+  }
+}
 
 void search(SCS* scs, o::Mesh& mesh, int iter, o::Write<o::LO>& data_d, 
   o::Write<o::Real>& xpoints_d, bool debug=false ) {
@@ -187,19 +287,13 @@ int main(int argc, char** argv) {
   if(argc < 2)
   {
     std::cout << "Usage: " << argv[0] 
-      << " <mesh><ptcls_file>[<nPtcls><nIter><timeStep>]\n";
+      << " <mesh><ptcls_file>[<nPtcls><nIter> <histInterval> <timeStep>]\n";
     exit(1);
   }
+
   auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
-
-
-  Omega_h::vtk::write_parallel("mesh_vtk", &mesh, mesh.dim());
-
-
   std::string ptclSource = argv[2];
-  printf(" Mesh file %s\n", argv[1]);
-  printf(" Particle Source file %s\n", argv[2]);
   bool piscesRun = true;
   bool debug = false;
   bool chargedTracking = false; //false for neutral tracking
@@ -210,15 +304,18 @@ int main(int argc, char** argv) {
   if(piscesRun)
     markDetectorCylinder(mesh, true);
 
-  int numPtcls = 0;
+  int numPtcls = 100000;
   double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
-  int NUM_ITERATIONS = 10000; //higher beads needs >10K
+  int NUM_ITERATIONS = 100000; //higher beads needs >10K
+  int histInterval = 0;
   if(argc > 3)
     numPtcls = atoi(argv[3]);
   if(argc > 4)
     NUM_ITERATIONS = atoi(argv[4]);
   if(argc > 5)
-    dTime = atof(argv[5]);
+    histInterval = atoi(argv[5]);
+  if(argc > 6)
+    dTime = atof(argv[6]);
 
   GitrmParticles gp(mesh, dTime);
   //current extruded mesh has Y, Z switched
@@ -237,6 +334,8 @@ int main(int argc, char** argv) {
   o::Write<o::LO>data_d(numGrid, 0);
 
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
+  int dofStepData = 8;
+  o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
 
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
@@ -246,10 +345,23 @@ int main(int argc, char** argv) {
       fprintf(stderr, "Total iterations = %d\n", iter);
       break;
     }
-    fprintf(stderr, "=================iter %d===============\n", iter);
-    neutralBorisMove(scs, dTime, debug);
+    if(iter%100 ==0)
+      fprintf(stderr, "=================iter %d===============\n", iter);
+
+    o::Write<o::Real> data(numPtcls*dofStepData, -1);
+    if(iter==0 && histInterval >0)
+      printStepData(scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+
+    //neutralBorisMove(scs, dTime);
+    neutralBorisMove_float(scs, dTime);
+
     search(scs, mesh, iter, data_d, xpoints_d, debug);
-    
+
+    if(histInterval >0) {
+      updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
+      if((iter+1)%histInterval == 0)
+      printStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData, true); //accum
+    }
     if(iter%100 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
   }

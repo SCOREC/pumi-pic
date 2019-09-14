@@ -144,9 +144,9 @@ int main(int argc, char** argv) {
   ptclSource  = argv[4];
   ionizeRecombFile = argv[5];
   printf(" Mesh file %s\n", argv[1]);
-  printf(" Particle Source file %s\n", ptclSource);
-  printf(" Profile file %s\n", profFile);
-  printf(" IonizeRecomb File %s\n", ionizeRecombFile);
+  printf(" Particle Source file %s\n", ptclSource.c_str());
+  printf(" Profile file %s\n", profFile.c_str());
+  printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
   auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
 

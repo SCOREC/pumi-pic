@@ -84,8 +84,7 @@ void GitrmParticles::initImpurityPtclsInADir(o::LO numPtcls,
 
 
 void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName, 
-  o::LO numP, o::LO maxLoops, bool printSource) {
-  o::LO numPtcls = numP;
+  o::LO& numPtcls, o::LO maxLoops, bool printSource) {
   std::cout << "Loading particle initial data from file: " << fName << " \n";
   o::HostWrite<o::Real> readInData;
   // TODO piscesLowFlux/updated/input/particleSource.cfg has r,z,angles, CDF, cylSymm=1
@@ -302,8 +301,8 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
       vel[1] = data[ip*dof+4];
       vel[2] = data[ip*dof+5];
 
-    printf("ip %d pos %g %g %g vel %g %g %g\n", ip, pos[0], pos[1], pos[2], 
-        vel[0], vel[1], vel[2]);
+      //printf("ip %d pos %g %g %g vel %g %g %g\n", ip, pos[0], pos[1], pos[2], 
+      //  vel[0], vel[1], vel[2]);
       p::find_barycentric_tet(M, pos, bcc);
       OMEGA_H_CHECK(p::all_positive(bcc, 0));
       for(int i=0; i<3; i++) {
@@ -350,12 +349,12 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls) {
   o::LO verbose = 1;
   std::ifstream ifs(fName);
-  if (!ifs.is_open()) //good() ?
+  if (!ifs.good()) //good() 
     Omega_h_fail("Error opening PtclInitFile file %s \n", fName.c_str());
-  
+
   // can't set in ps, since field names in ps used below not from array
   constexpr int nComp = PTCL_READIN_DATA_SIZE_PER_PTCL;
-  OMEGA_H_CHECK(ps.nComp == nComp);
+  OMEGA_H_CHECK(nComp == ps.nComp);
   bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
   std::string fieldNames[nComp];
   bool expectEqual = false;
@@ -429,7 +428,8 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
       // stored in a single data array of 6+1 components.
       for(int iComp = compBeg; iComp<compEnd; ++iComp) {
         parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
-          dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls);
+          dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls, 
+          false, true);
 
         if(!foundComp[iComp] && dataLine[iComp]) {
           foundComp[iComp] = true;
@@ -453,10 +453,13 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
       }
       OMEGA_H_CHECK(validMaxInd >= 0);
       if(ip < validMaxInd) {
+        printf("Removed indices: ");
         for(int j=0; j<nComp; ++j)
           data[ip*nComp+j] = data[validMaxInd*nComp+j];
+        printf(" %d", ip);
         --validMaxInd;
       }
+      printf("\n");
     } // invalid entry
     OMEGA_H_CHECK(validMaxInd >= 0);
     // clean up
@@ -469,6 +472,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
   } //if any invalid
 
   OMEGA_H_CHECK(dataInit && foundNP);
+  /*
   for(int i=0; i<nComp; ++i) {
     if(foundComp[i]==false)
       printf("Not Found data component %d \n", i);
@@ -476,6 +480,7 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     // in which case this check should be disabled
     OMEGA_H_CHECK(foundComp[i]==true);
   }
+  */
   if(ifs.is_open()) {
     ifs.close();
   }

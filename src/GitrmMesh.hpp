@@ -446,6 +446,9 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
   if(nComp>2)
     compNames[2] = fs.comp3;
 
+  //NOTE data is assumed as real
+  o::HostWrite<o::Real>* gridData;
+
   std::string line, s1, s2, s3;
   while(std::getline(ifs, line)) {
     bool semi = (line.find(';') != std::string::npos);
@@ -498,17 +501,18 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
 
       dataInit = true;
     }
-
+     
     if(dataInit) {
-      parseFileFieldData(ss, s1, fs.comp1, semi, *fs.data, indData[0], 
-        dLine[0], nans1, eq, 0, nComp, 0, debug>1);
-      if(nComp>1)
-        parseFileFieldData(ss, s1, fs.comp2, semi, *fs.data, indData[1], 
-          dLine[1], nans1, eq, 1, nComp, 0, debug>1);
-      if(nComp>2)
-        parseFileFieldData(ss, s1, fs.comp3, semi, *fs.data, indData[2], 
-          dLine[2], nans1, eq, 2, nComp, 0, debug>1);
-
+      for(int i=0; i<nComp && i<3; ++i)
+        parseFileFieldData(ss, s1, compNames[i], semi, *fs.data, indData[i], 
+          dLine[i], nans1, eq, i, nComp, 0, debug>1);
+      
+      for(int i=0; i<nGridsRead && i<3; ++i) {
+        gridData = fs.grid1; // NOTE: Real data pointer
+        parseFileFieldData(ss, s1, gridNames[i], semi, *gridData, indGrid[i], 
+          gLine[i], nans2, eq, 0, 1, 0, debug>1);
+      }
+      /*
       if(nGridsRead>0)
         parseFileFieldData(ss, s1, fs.grid1str, semi, *fs.grid1, indGrid[0], 
          gLine[0], nans2, eq, 0, 1, 0, debug>1);
@@ -520,7 +524,7 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
       if(nGridsRead>2)
         parseFileFieldData(ss, s1, fs.grid3str, semi, *fs.grid3, indGrid[2], 
          gLine[2], nans2, eq, 0, 1, 0, debug>1);
-
+      */
       for(int i=0; i<nComp; ++i)
         if(!foundData[i] && dLine[i]) {
           foundData[i] = true;
@@ -561,7 +565,7 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
     fs.gr3Max = (*fs.grid3)[fs.nGrid3-1];
   }
   
-  
+ // TODO fix this by passing flags into the function
  // for(int i=0; i<nComp; ++i){
     // if ; on first line, dataLine is reset before setting foundData
     //OMEGA_H_CHECK(foundData[i]);

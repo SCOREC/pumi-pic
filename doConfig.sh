@@ -8,6 +8,7 @@ export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$ps
 
 cmake  -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
       -DCMAKE_CXX_COMPILER=mpicxx \
+       -DCMAKE_BUILD_TYPE=DEBUG \
       -DIS_TESTING=ON \
       -DTEST_DATA_DIR=$src/pumipic-data \
       $src

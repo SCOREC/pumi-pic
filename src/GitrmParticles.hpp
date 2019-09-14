@@ -48,7 +48,7 @@ public:
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
-    o::LO numPtcls=0, o::LO maxLoops=100, bool print=false);
+    o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
   void processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls);
   void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
@@ -192,7 +192,7 @@ inline void printGridData(o::Write<T> &data_d) {
       Kokkos::atomic_fetch_add(&total[0], num);
   });
   o::HostRead<T> tot(total);
-  printf("total in device %d \n", tot[0]);
+  printf("total collected %d \n", tot[0]);
   o::HostRead<T> data(data_d);
   printf("index total  \n");  
   for(int i=0; i<data.size(); ++i)

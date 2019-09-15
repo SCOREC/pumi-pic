@@ -82,7 +82,6 @@ void GitrmParticles::initImpurityPtclsInADir(o::LO numPtcls,
   setImpurityPtclInitRndDistribution(elemAndFace);
 }
 
-
 void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName, 
   o::LO& numPtcls, o::LO maxLoops, bool printSource) {
   std::cout << "Loading particle initial data from file: " << fName << " \n";
@@ -111,7 +110,8 @@ void GitrmParticles::initImpurityPtclsFromFile(const std::string& fName,
   convertInitPtclElemIdsToCSR(numPtclsInElems, ptclIdPtrsOfElem, 
     ptclIdsInElem, elemIdOfPtcls, numPtcls);
   setImpurityPtclInitData(numPtcls, readInData_r, ptclIdPtrsOfElem, 
-    ptclIdsInElem, elemIdOfPtcls, maxLoops);
+    ptclIdsInElem, elemIdOfPtcls);
+  initPtclChargeIoniRecombData();
 
   if(printSource)
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
@@ -260,22 +260,16 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
 // show up from other threads in the launch group.
 void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
    const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsInElem, 
-   const o::LOs& elemIdOfPtcls, int maxLoops) {
+   const o::LOs& elemIdOfPtcls) {
   //o::LO debug =1;
-  MESHDATA(mesh);
-
+  const auto coords = mesh.coords(); 
+  const auto mesh2verts = mesh.ask_elem_verts(); 
   auto size = data.size();
   auto dof = PTCL_READIN_DATA_SIZE_PER_PTCL;
   auto next_scs_d = scs->get<PTCL_NEXT_POS>();
   auto pos_scs_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
   auto pid_scs = scs->get<PTCL_ID>();
-  auto charge_scs = scs->get<PTCL_CHARGE>();
-  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
-  auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
-  auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
-  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
-
   o::Write<o::LO> nextPtclInd(mesh.nelems(), 0);
   
   //TODO testing
@@ -310,8 +304,23 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
         vel_d(pid, i) = vel[i];
         next_scs_d(pid,i) = 0;
       }
-
       pid_scs(pid) = ip; //pid; //TODO check if index is ok
+    }
+  };
+  scs->parallel_for(lambda);
+  o::HostRead<o::LO>tot(total);
+  printf("TOTALptcls set in scs  %d\n", tot[0]);
+}
+
+void GitrmParticles::initPtclChargeIoniRecombData() {
+  auto charge_scs = scs->get<PTCL_CHARGE>();
+  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
+  auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
+  auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
+  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
+
+  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+    if(mask > 0) {
       charge_scs(pid) = 0;
       first_ionizeZ_scs(pid) = 0;
       prev_ionize_scs(pid) = 0;
@@ -320,10 +329,7 @@ void GitrmParticles::setImpurityPtclInitData(o::LO numPtcls, const o::Reals& dat
     }
   };
   scs->parallel_for(lambda);
-  o::HostRead<o::LO>tot(total);
-  printf("TOTALptcls set in scs  %d\n", tot[0]);
 }
-
 
 void GitrmParticles::printPtclSource(o::Reals& data, int nPtcls, int dof) {
   o::HostRead<o::Real>dh(data);
@@ -481,9 +487,9 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     OMEGA_H_CHECK(foundComp[i]==true);
   }
   */
-  if(ifs.is_open()) {
-    ifs.close();
-  }
+  //if(ifs.is_open()) {
+  //  ifs.close();
+  //}
 }
 
 

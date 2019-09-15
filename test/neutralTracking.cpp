@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
       << " <mesh><ptcls_file>[<nPtcls><nIter> <histInterval> <timeStep>]\n";
     exit(1);
   }
-
+ 
   auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
   printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
   std::string ptclSource = argv[2];

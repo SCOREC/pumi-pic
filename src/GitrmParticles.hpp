@@ -49,13 +49,14 @@ public:
   void setInitialTargetCoords(o::Real dTime);
   void initImpurityPtclsFromFile(const std::string& fName, 
     o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
+  void initPtclChargeIoniRecombData();
   void processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls);
   void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
     o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
   void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
     const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
-    const o::LOs& elemIds, int maxLoops=100);
+    const o::LOs& elemIds);
   void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
     const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,

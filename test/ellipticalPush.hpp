@@ -24,9 +24,8 @@ namespace ellipticalPush {
         const auto w = x_nm1(pid,0);
         const auto z = x_nm1(pid,1);
         const auto v = std::sqrt(std::pow(w-h_d,2) + std::pow(z-k_d,2));
-        const auto phi = atan2(z-k_d,w-h_d);
-        const auto b = std::sqrt(std::pow(v*cos(phi),2)/(d_d*d_d) +
-                                std::pow(v*sin(phi),2));
+        const auto phi = atan2(d_d*(z-k_d),w-h_d);
+        const auto b = (z - k_d)/sin(phi);
         ptcl_phi(pid) = phi;
         ptcl_b(pid) = b;
       }

@@ -131,6 +131,6 @@ namespace pumipic {
     std::string bname = getMethodString(bufferMethod);
     std::string sname = getMethodString(safeMethod);
     printf("pumipic buffer method %s\n", bname.c_str());
-    printf("pumipic safe method %s\n", bname.c_str());
+    printf("pumipic safe method %s\n", sname.c_str());
   }
 }

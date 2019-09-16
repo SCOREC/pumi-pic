@@ -24,12 +24,12 @@ void markDetectorCylinder(o::Mesh& mesh, bool renderPiscesCylCells) {
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);
   auto numFaceIds = faceIds.size();
-  const auto side_is_exposed = o::mark_exposed_sides(&mesh);
+  auto side_is_exposed = o::mark_exposed_sides(&mesh);
   auto face_class_ids = mesh.get_array<o::ClassId>(2, "class_id");
   o::Write<o::LO> faceTagIds(mesh.nfaces(), -1);
   o::Write<o::LO> elemTagIds(mesh.nelems(), 0);
-  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
-  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
     for(auto id=0; id<numFaceIds; ++id) {
       if(faceIds[id] == face_class_ids[i] && side_is_exposed[i]) {

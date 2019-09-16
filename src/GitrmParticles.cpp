@@ -51,7 +51,7 @@ void GitrmParticles::defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 128;//1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, Kokkos::AUTO); //32);
   printf("Constructing Particles\n");
   //Create the particle structure
   scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,

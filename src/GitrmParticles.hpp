@@ -9,6 +9,7 @@
 #include <Distribute.h>
 #include <Kokkos_Core.hpp>
 #include "pumipic_library.hpp"
+#include "pumipic_mesh.hpp"
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -34,29 +35,29 @@ struct PtclInitStruct;
 
 class GitrmParticles {
 public:
-  GitrmParticles(o::Mesh &m, double dT);
+  GitrmParticles(o::Mesh& m, double dT);
   ~GitrmParticles();
   GitrmParticles(GitrmParticles const&) = delete;
   void operator=(GitrmParticles const&) = delete;
 
-  void defineParticles(int numPtcls, o::LOs& ptclsInElem, int elId=-1);
+  void defineParticles(p::Mesh& picparts, int numPtcls, o::LOs& ptclsInElem, 
+    int elId=-1);
   void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
-  void setImpurityPtclInitRndDistribution(o::Write<o::LO> &);
-  void initImpurityPtclsInADir(o::LO numPtcls,o::Real theta, 
+  void setPtclInitRndDistribution(o::Write<o::LO> &);
+  void initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls,o::Real theta, 
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
   void setInitialTargetCoords(o::Real dTime);
-  void initImpurityPtclsFromFile(const std::string& fName, 
+  void initPtclsFromFile(p::Mesh& picparts, const std::string& fName, 
     o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
   void initPtclChargeIoniRecombData();
   void processPtclInitFile(const std::string &fName,
     o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls);
-  void findElemIdsOfPtclFileCoords(o::LO numPtcls, const o::Reals& data_r,
-    o::Write<o::LO>& elemIds, o::Write<o::LO>& ptclsInElem, int maxLoops=100);
-  void setImpurityPtclInitData(o::LO numPtcls, const o::Reals& data, 
-    const o::LOs& ptclIdPtrsOfElem, const o::LOs& ptclIdsOfElem, 
-    const o::LOs& elemIds);
+  void setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem,
+    const o::LOs& ptclIdsInElem,  const o::LOs& elemIdOfPtcls, 
+    const o::LO numPtcls, const o::LO nel);
+  void setPtclInitData(const o::Reals& data);
   void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
     const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
@@ -66,7 +67,7 @@ public:
 
   o::Real timeStep;
   SCS* scs;
-  o::Mesh &mesh;
+  o::Mesh& mesh;
 
   // particle dist to bdry
   o::Reals closestPoints;
@@ -96,8 +97,8 @@ struct PtclInitStruct {
 
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
-inline void storePiscesData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter, 
-    o::Write<o::LO> &data_d, bool debug=true) {
+inline void storePiscesData(GitrmParticles& gp, 
+    o::Write<o::LO> &data_d, o::LO iter, bool debug=true) {
   // test TODO move test part to separate unit test
   double radMax = 0.05; //m 0.0446+0.005
   double zMin = 0; //m height min
@@ -105,13 +106,21 @@ inline void storePiscesData(o::Mesh& mesh, GitrmParticles& gp, o::LO iter,
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
   SCS* scs = gp.scs;
+  o::Mesh& mesh = gp.mesh;
   auto pisces_ids = mesh.get_array<o::LO>(o::FACE, "piscesTiRod_ind");
   auto pid_scs = scs->get<PTCL_ID>();
+  //based on ptcl id or scs pid ?
   const auto& xpoints = gp.collisionPoints;
   const auto& xpointFids = gp.collisionPointFaceIds;
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(debug)
+      printf("storing: pid %d \n", pid);
+    // Don't use pid_scs(pid) here, since data made for scsCapacity
     auto fid = xpointFids[pid];
+    if(debug)
+      printf("\t : fid %d \n", fid);
+
     if(mask >0 && fid>=0) {
       // test
       o::Vector<3> xpt;
@@ -200,7 +209,80 @@ inline void printGridData(o::Write<T> &data_d) {
       printf("%d %d\n", i, data[i]);
 }
 
+inline void printPtclHostData(o::HostWrite<o::Real>& dh, int num, int dof,
+  const char* name, int iter=-1) { 
+  double pos[3], vel[3];
+  for(int i=0; i<num; ++i) {
+    for(int j=0; j<3; ++j) {
+      pos[j] = dh[i*dof+j];
+      vel[j] = dh[i*dof+3+j];
+    }
+    int id = static_cast<int>(dh[i*dof + 6]);
+    int it = static_cast<int>(dh[i*dof + 7]);
+    printf("%s %d pos %g %g %g iter %d vel %g %g %g updateiter %d\n",
+      name, id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2], it);
+  }
+} 
 
+inline void updateStepData(SCS* scs, int iter, int numPtcls, 
+  o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, int dof=8) {
+  // size is not scs->nPtcls, since id: 0 to numPtcls
+  auto vel_scs = scs->get<PTCL_VEL>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto pid_scs = scs->get<PTCL_ID>();
+  auto step = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+    if(mask >0) {
+      auto id = pid_scs(pid);
+      auto vel = p::makeVector3(pid, vel_scs);
+      auto pos = p::makeVector3(pid, pos_scs);
+      // NOTE: particle id from 0 to numPtcls; only if indices are used as ids.
+      // If pid is used as id's, then range will be > numPtcls => out of memory. 
+      for(int i=0; i<3; ++i) {
+        data[id*dof+i] = pos[i];
+        data[id*dof+3+i] = vel[i];
+      }
+      data[id*dof + 6] = id;
+      data[id*dof + 7] = iter;
+      
+      for(int i=0; i<8; ++i)
+        ptclsDataAll[id*dof+i] = data[id*dof+i];
+
+      //NOTE: many of these prints go missing
+      //printf("ptclHistory %d zInd -1 detId -1 pos %g %g %g iter %d vel %g %g %g\n",
+      // id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2]);
+    }// mask
+  };
+  scs->parallel_for(step, "updateStepData");
+}
+
+inline void printStepData(SCS* scs, int iter, int numPtcls, 
+  o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
+  int dof=8, bool accum = false) {
+
+  printf("total_ptcls %d\n", scs->nPtcls());
+  if(iter ==0) {
+    updateStepData(scs, iter, numPtcls, ptclsDataAll, data, dof);
+  }
+
+  if(accum) {
+    o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
+    printPtclHostData(ptclAllHost, numPtcls, dof, "ptclHistory_all", iter);
+  } else {
+    o::HostWrite<o::Real> dh(data);
+    o::HostWrite<o::Real> dp(scs->nPtcls() * dof);
+    for(int ip=0, n=0; ip< numPtcls; ++ip) {
+      //only ptcls from scs->nptcls have valid ids
+      int id = static_cast<int>(dh[ip*dof+6]);
+      if(id < 0)
+        continue;
+      for(int i=0; i<8; ++i) {
+        dp[n*dof+i] = dh[id*dof+i];
+      }
+      ++n;
+    }
+    printPtclHostData(dp, scs->nPtcls(), dof, "ptclHistory", iter);
+  }
+}
 /** @brief Calculate distance of particles to domain boundary 
  * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
  */
@@ -209,7 +291,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   //o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
   //const o::LO fsize, const o::LO fskip, bool debug = false) {
   auto* scs = gp.scs;
-  o::Mesh &mesh = gm.mesh;  
+  o::Mesh& mesh = gm.mesh;  
   const auto nel = mesh.nelems();
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts(); 

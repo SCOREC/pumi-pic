@@ -26,7 +26,7 @@
 
 namespace o = Omega_h;
 
-namespace pumipic{
+namespace pumipic {
 
 /*
 NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
@@ -74,7 +74,6 @@ OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b,
   return true;
 }
 
-
 OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b, 
   Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
@@ -94,14 +93,20 @@ inline o::Vector<N> makeVectorHost(const Omega_h::Real(&a)[N], int beg=0) {
   return v;
 }
 
-
-OMEGA_H_DEVICE bool all_positive(const Omega_h::Vector<4>& a, 
-  Omega_h::Real tol=EPSILON) {
+template <class Vec>
+OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON) {
+  auto isPos = 1;
   for(Omega_h::LO i=0; i<a.size(); ++i) {
-    if(a[i] < -tol)
-     return false;
+    const auto gtez = Omega_h::are_close(a[i],0.0,tol,tol) || a[i] > 0;
+    isPos = isPos && gtez;
   }
-  return true;
+  return isPos;
+}
+
+OMEGA_H_DEVICE Omega_h::LO min3(Omega_h::Vector<3> a) {
+  int idx = (a[0] < a[1]) ? 0 : 1;
+  idx = (a[idx] < a[2]) ? idx : 2;
+  return idx;
 }
 
 template <class T> OMEGA_H_DEVICE  
@@ -138,7 +143,6 @@ OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
 OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
-
 
 OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
  const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
@@ -302,7 +306,7 @@ OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid,
 }
 
 //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
-OMEGA_H_DEVICE o::LO getfmap(int i) {
+OMEGA_H_DEVICE o::LO getFaceMap(int i) {
   assert(i>=0 && i<8);
   const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
   return fmap[i];
@@ -331,12 +335,12 @@ OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
     ++find;
   }
   if(findex <0 || findex >3) {
-    printf("find_face_normal:getfmap:: faceid not found");
+    printf("find_face_normal:getFaceMap:: faceid not found");
     OMEGA_H_CHECK(false);
   }
   bool inverse = true;
-  o::LO matInd1 = getfmap(findex*2);
-  o::LO matInd2 = getfmap(findex*2+1);
+  o::LO matInd1 = getFaceMap(findex*2);
+  o::LO matInd2 = getFaceMap(findex*2+1);
   if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
     inverse = false;
 

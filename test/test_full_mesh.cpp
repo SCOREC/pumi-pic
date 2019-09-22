@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     }
   }
 
-    char vtk_name[100];
+  char vtk_name[100];
   sprintf(vtk_name, "picpart%d", rank);
   Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
 

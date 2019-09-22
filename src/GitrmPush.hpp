@@ -238,9 +238,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   scs->parallel_for(boris);
 }
 
-
-inline void neutralBorisMove(particle_structs::SellCSigma<Particle>* scs, 
-  const o::Real dTime) {
+inline void neutralBorisMove(SCS* scs,  const o::Real dTime) {
   auto vel_scs = scs->get<PTCL_VEL>();
   auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto pos_scs = scs->get<PTCL_POS>();
@@ -257,6 +255,36 @@ inline void neutralBorisMove(particle_structs::SellCSigma<Particle>* scs,
       vel_scs(pid, 2) = vel[2];      
     }// mask
   };
-  scs->parallel_for(boris);
+  scs->parallel_for(boris, "neutralBorisMove");
 } 
+
+inline void neutralBorisMove_float(SCS* scs,  const o::Real dTime, bool debug = false) {
+  auto vel_scs = scs->get<PTCL_VEL>();
+  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
+  auto pos_scs = scs->get<PTCL_POS>();
+  auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+    if(mask >0) {
+      auto vel = p::makeVector3(pid, vel_scs);
+      auto pos = p::makeVector3(pid, pos_scs);
+      // Next position and velocity
+      float val[3], v2[3];
+      for(int i=0; i<3; ++i) {
+        val[i] = float(pos[i]) + float(vel[i]) * float(dTime);
+        v2[i] = float(vel[i]);
+        if(debug)
+          printf(" %f", val[i]);
+      }
+      if(debug)
+        printf("\n");
+
+      for(int i=0; i<3; ++i) {      
+        tgt_scs(pid, i) = val[i];
+        vel_scs(pid, i) = v2[i];
+      }
+    
+    }// mask
+  };
+  scs->parallel_for(boris, "neutralBorisMove");
+} 
+
 #endif //define

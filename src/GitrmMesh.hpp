@@ -53,15 +53,15 @@ enum {INTERIOR=1, EXPOSED=2};
   const auto dual_elems= mesh.ask_dual().a2ab; \
   const auto face_verts = mesh.ask_verts_of(2); \
   const auto down_r2f = mesh.ask_down(3, 2).ab2b; \
+  const auto down_r2fs = mesh.ask_down(3, 2).ab2b; \
   const auto side_is_exposed = mark_exposed_sides(&mesh);
-
 
 struct FieldStruct2d;
 struct FieldStruct3;
 class GitrmMesh {
 public:
   //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
-  GitrmMesh(o::Mesh &);
+  GitrmMesh(o::Mesh& m);
   //TODO delete tags ?
   ~GitrmMesh(){};
 
@@ -89,9 +89,7 @@ public:
   void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
   void test_preProcessDistToBdry();
 
-
-  //o::Mesh *mesh;
-  o::Mesh &mesh;
+  o::Mesh& mesh;
   o::LO numNearBdryElems = 0;
   o::LO numAddedBdryFaces = 0;
 
@@ -142,8 +140,7 @@ public:
   void load1DFieldOnVtxFromFile(const std::string &, FieldStruct3 &, 
     o::Reals&, o::Reals&, o::Real shift=0, int debug=0);
   
-  void markDetectorCylinder(bool render=false);
-
+  void markPiscesCylinder(bool render=false);
   void test_interpolateFields(bool debug=false);
   void printDensityTempProfile(double rmax=0.2, int gridsR=20, 
     double zmax=0.5, int gridsZ=10);
@@ -275,7 +272,7 @@ struct FieldStruct3 {
  OMEGA_H_DEVICE void addFaceToBdryData(o::Write<o::Real> &data, 
   o::Write<o::LO> &ids, o::LO fnums, o::LO size, o::LO dof, o::LO fi,
   o::LO fid, o::LO elem, const o::Matrix<3, 3> &face) {
-   OMEGA_H_CHECK(fi < fnums);
+   assert(fi < fnums);
    for(o::LO i=0; i<size; ++i) {
      for(o::LO j=0; j<3; j++) {
        data[elem*fnums*size + fi*size + i*dof + j] = face[i][j];
@@ -343,6 +340,7 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
       << " ind: " << ind << " iComp: " << iComp << "\n";
   }
 }
+
 
 /* file format required:  
   fieldName = num1 num2 ... ;  //for each component, any number of lines 

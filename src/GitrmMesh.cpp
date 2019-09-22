@@ -13,7 +13,7 @@ namespace p = pumipic;
 //o::Mesh* GitrmMesh::mesh = nullptr;
 //bool GitrmMesh::hasMesh = false;
 
-GitrmMesh::GitrmMesh(o::Mesh &m): 
+GitrmMesh::GitrmMesh(o::Mesh& m): 
   mesh(m) {
 }
 
@@ -272,7 +272,7 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 }
 
 
-//NOTE: Importance of mesh size in GITRm over all boundary faces:
+//NOTE: Importance of mesh.size in GITRm over all boundary faces:
 // mesh of size set comp.to GITR: 573742 (GITR) vs 506832 (GITRm)
 // mesh of large face dim: 573742 (GITR) vs 361253 (GITRm)
 // El temperature is different at center of face, compared to GITR
@@ -335,7 +335,7 @@ void GitrmMesh::initBoundaryFaces() {
       }
       /*
       auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
-      auto surfNorm = p::find_face_normal(fid, elmId, coords, mesh2verts, 
+      auto surfNorm = p::find_face_normal(fid, elmId, coords, mesh.verts, 
           face_verts, down_r2fs);
       */
       //TODO verify
@@ -472,7 +472,7 @@ void GitrmMesh::convert2ReadOnlyCSR() {
     if(beg == end){
       return;
     }
-    OMEGA_H_CHECK((end - beg) == numBdryFaceIds[elem]);
+    assert((end - beg) == numBdryFaceIds[elem]);
 
     // Source position calculated using pre-assigned fixed number of faces
     // per element. Here face number (outer loop) is used to get absolute position.
@@ -637,8 +637,8 @@ void GitrmMesh::preProcessDistToBdry() {
     o::LO tot = existing;
 
     o::LO inFids[4] = {-1, -1, -1, -1};
-    // One purpose of small functions that use mesh data is to pre-use 
-    // mesh data as far as possible, i.e. minimize using mesh data 
+    // One purpose of small functions that use mesh.data is to pre-use 
+    // mesh.data as far as possible, i.e. minimize using mesh.data 
     // alongside unavoidable large-data in a loop.
     o::LO nIn = p::get_face_type_ids_of_elem(elem, down_r2f, 
                   side_is_exposed, inFids, INTERIOR);
@@ -764,7 +764,7 @@ void GitrmMesh::preProcessDistToBdry() {
 }
 
 
-void GitrmMesh::markDetectorCylinder(bool renderPiscesCylCells) {
+void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
   o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);

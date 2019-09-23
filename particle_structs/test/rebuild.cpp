@@ -23,23 +23,25 @@ bool resortElementsTest();
 bool reshuffleTests();
 
 int main(int argc, char* argv[]) {
+  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
   
   bool passed = true;
-  // if (!shuffleParticlesTests()) {
-  //   passed = false;
-  //   printf("[ERROR] shuffleParticlesTests() failed\n");
-  // }
-  // if (!resortElementsTest()) {
-  //   passed = false;
-  //   printf("[ERROR] resortElementsTest() failed\n");
-  // }
+  if (!shuffleParticlesTests()) {
+    passed = false;
+    printf("[ERROR] shuffleParticlesTests() failed\n");
+  }
+  if (!resortElementsTest()) {
+    passed = false;
+    printf("[ERROR] resortElementsTest() failed\n");
+  }
   if (!reshuffleTests()) {
     passed = false;
     printf("[ERROR] shuffleParticlesTests() failed\n");
   }
 
   Kokkos::finalize();
+  MPI_Finalize();
   if (passed)
     printf("All tests passed\n");
   return 0;

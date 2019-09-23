@@ -39,7 +39,7 @@ namespace pumipic
 OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
   const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc) {
   //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
-  OMEGA_H_CHECK(iface<4 && iface>=0);
+  OMEGA_H_CHECK((iface<4) && (iface>=0));
   abc[0] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 0)];
   abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
   abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];

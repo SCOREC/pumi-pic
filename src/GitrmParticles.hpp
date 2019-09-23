@@ -304,7 +304,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   o::LO fsize = SIZE_PER_FACE;
   o::LO fskip = FSKIP;
   //fskip is 2, since 1st 2 are not part of face vertices
-  OMEGA_H_CHECK(fsize > 0 && nel >0);
+  OMEGA_H_CHECK((fsize > 0) && (nel >0));
   auto pos_d = scs->template get<PTCL_NEXT_POS>();
 
   auto distRun = SCS_LAMBDA(const int &elem, const int &pid,

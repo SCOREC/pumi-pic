@@ -67,7 +67,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   PtclInitStruct psin("ptcl_init_data", "nP", "x", "y", "z", "vx", "vy", "vz");
   processPtclInitFile(fName, readInData, psin, numPtcls);
   psin.nP = numPtcls;
-  OMEGA_H_CHECK(numPtcls > 0 && mesh.nelems() >0);
+  OMEGA_H_CHECK((numPtcls > 0) && (mesh.nelems() >0));
   
   o::LOs elemIdOfPtcls;
   o::LOs numPtclsInElems;
@@ -232,20 +232,24 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
 void GitrmParticles::setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem,
   const o::LOs& ptclIdsInElem,  const o::LOs& elemIdOfPtcls, 
   const o::LO numPtcls, const o::LO nel) {
-  int debug = 0;
+  int debug = 1;
   o::Write<o::LO> nextPtclInd(nel, 0);
   auto pid_scs = scs->get<PTCL_ID>();
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
       auto nextInd = Kokkos::atomic_fetch_add(&(nextPtclInd[elem]), 1);
       auto ind = ptclIdPtrsOfElem[elem] + nextInd;
-      OMEGA_H_CHECK(ind >= 0 && ind < ptclIdPtrsOfElem[elem+1]); // ok ?
+      auto limit = ptclIdPtrsOfElem[elem+1];
+      //Error 
+      OMEGA_H_CHECK(ind >= 0);
+      OMEGA_H_CHECK((ind < limit));
       auto ip = ptclIdsInElem[ind]; //ip 0..numPtcls
-      if(debug)
-        printf("elem %d pid %d ind %d nextInd %d indlim %d ip %d e_of_p %d\n", 
+      if(debug && (ind < 0 || ind>= limit || ip<0 || ip>= numPtcls || elemIdOfPtcls[ip] != elem))
+        printf("**** elem %d pid %d ind %d nextInd %d indlim %d ip %d e_of_p %d\n", 
           elem, pid, ind, nextInd, ptclIdPtrsOfElem[elem+1], ip, elemIdOfPtcls[ip]);
-      // TODO FIXME OMEGA_H_CHECK crashes here
-      OMEGA_H_CHECK(ip >= 0 && ip < numPtcls && elemIdOfPtcls[ip] == elem);
+      OMEGA_H_CHECK((ip >= 0));
+      OMEGA_H_CHECK((ip < numPtcls));
+      OMEGA_H_CHECK((elemIdOfPtcls[ip] == elem));
       assert(ip >= 0 && ip < numPtcls && elemIdOfPtcls[ip] == elem);
       pid_scs(pid) = ip;
     }
@@ -710,6 +714,6 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
   o::HostRead<o::LO> elemId_fh(elemAndFace);
   initEl = elemId_fh[1];
   printf(" ELEM_final %d xpt: %.3f %.3f %.3f\n\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
-  OMEGA_H_CHECK(initEl>=0 && elemId_fh[0]>=0);
+  OMEGA_H_CHECK((initEl>=0) && (elemId_fh[0]>=0));
 
 }

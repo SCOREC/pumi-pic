@@ -200,7 +200,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
          //xyz 0.013715 -0.0183798 7.45029e-06 //result
          //vel 291.384 726.638 1290.06 // result, but its input is also used
       }
-      OMEGA_H_CHECK(amu >0 && dTime>0);
+      OMEGA_H_CHECK((amu >0) && (dTime>0));
       o::Real bFieldMag = p::osh_mag(bField);
       o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dTime*0.5;
       o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));

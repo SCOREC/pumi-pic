@@ -129,7 +129,7 @@ class SellCSigma {
   void printFormat(const char* prefix = "") const;
 
   //Do not call these functions:
-  void constructChunks(PairView<ExecSpace> ptcls, int& nchunks,
+  void constructChunks(PairView<ExecSpace> ptcls, lid_t& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element,
                        kkLidView& element_row);
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
@@ -181,7 +181,7 @@ private:
   //Pointers to the start of each SCS for each data type
   MemberTypeViews<DataTypes> scs_data;
   MemberTypeViews<DataTypes> scs_data_swap;
-  int current_size, swap_size;
+  std::size_t current_size, swap_size;
   void destroy();
 
 };
@@ -189,7 +189,7 @@ private:
 template <typename ExecSpace> 
 void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems, 
                Kokkos::View<lid_t*,typename ExecSpace::device_type> ptcls_per_elem, 
-               int sigma){
+               lid_t sigma){
   //Make temporary copy of the particle counts for sorting
   Kokkos::resize(ptcl_pairs, num_elems);
   //PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
@@ -198,7 +198,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     ptcl_pairs(i).second = i;
   });
   if (sigma > 1) {
-    int i;
+    lid_t i;
 #ifdef SORT_ON_DEVICE
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       Kokkos::sort(ptcl_pairs, i, i + sigma);
@@ -229,11 +229,11 @@ struct MaxChunkWidths {
 
   lid_t C;
 
-  MaxChunkWidths(const PairView<ExecSpace>& widths_, const int C_, int nchunks) :
+  MaxChunkWidths(const PairView<ExecSpace>& widths_, const lid_t C_, lid_t nchunks) :
     value_count(nchunks), widths(widths_), C(C_) {}
 
   KOKKOS_INLINE_FUNCTION void operator()(const size_type i, value_type mx) const {
-    const int index = i / C;
+    const lid_t index = i / C;
     if (widths(i).first > mx[index]) {
       mx[index] = widths(i).first;
     }
@@ -254,7 +254,7 @@ struct MaxChunkWidths {
 };
 
 template<class DataTypes, typename ExecSpace> 
-void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls, int& nchunks, 
+void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls, lid_t& nchunks, 
                                                        kkLidView& chunk_widths,
                                                        kkLidView& row_element,
                                                        kkLidView& element_row) {
@@ -263,25 +263,25 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
   Kokkos::resize(row_element, nchunks * C_);
   Kokkos::resize(element_row, nchunks * C_);
 
-  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t element = ptcls(i).second;
     row_element(i) = element;
     element_row(element) = i;
     
   });
   Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, nchunks * C_),
-                       KOKKOS_LAMBDA(const int& i) {
+                       KOKKOS_LAMBDA(const lid_t& i) {
     row_element(i) = i;
     element_row(i) = i;
   });
 
   typedef Kokkos::TeamPolicy<ExecSpace> team_policy;
   const team_policy policy(nchunks, C_);
-  int C_local = C_;
-  int num_elems_local = num_elems;
+  lid_t C_local = C_;
+  lid_t num_elems_local = num_elems;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const typename team_policy::member_type& thread) {
-    const int chunk_id = thread.league_rank();
-    const int row_num = chunk_id * C_local + thread.team_rank();
+    const lid_t chunk_id = thread.league_rank();
+    const lid_t row_num = chunk_id * C_local + thread.team_rank();
     lid_t width = 0;
     if (row_num < num_elems_local) {
       width = ptcls(row_num).first;
@@ -295,12 +295,12 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(kkGidView elmGid,kkGidView& elm2Gid, 
                                                            GID_Mapping& elmGid2Lid) {
   Kokkos::resize(elm2Gid, numRows());
-  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
     const gid_t gid = elmGid(i);
     elm2Gid(i) = gid;
     elmGid2Lid.insert(gid, i);
   });
-  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, numRows()), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, numRows()), KOKKOS_LAMBDA(const lid_t& i) {
     elm2Gid(i) = -1;
   });
 }
@@ -310,8 +310,8 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
                                                         kkLidView chunk_widths, kkLidView& offs,
                                                         kkLidView& s2c, lid_t& cap) {
   kkLidView slices_per_chunk("slices_per_chunk", nChunks);
-  const int V_local = V_;
-  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const int& i) {
+  const lid_t V_local = V_;
+  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
     const lid_t width = chunk_widths(i);
     const lid_t val1 = width / V_local;
     const lid_t val2 = width % V_local;
@@ -319,7 +319,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
     slices_per_chunk(i) = val1 + val3;
   });
   kkLidView offset_nslices("offset_nslices",nChunks+1);
-  Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const int& i, int& cur, const bool& final) {
+  Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
     cur += slices_per_chunk(i);
     if (final)
       offset_nslices(i+1) += cur;
@@ -329,12 +329,12 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   Kokkos::resize(offs,nSlices + 1);
   Kokkos::resize(s2c, nSlices);
   kkLidView slice_size("slice_size", nSlices);
-  const int nat_size = V_*C_;
-  const int C_local = C_;
-  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const int& i) {
-    const int start = offset_nslices(i);
-    const int end = offset_nslices(i+1);
-    for (int j = start; j < end; ++j) {
+  const lid_t nat_size = V_*C_;
+  const lid_t C_local = C_;
+  Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
+    const lid_t start = offset_nslices(i);
+    const lid_t end = offset_nslices(i+1);
+    for (lid_t j = start; j < end; ++j) {
       s2c(j) = i;
       const lid_t rem = chunk_widths(i) % V_local;
       const lid_t val = rem + (rem==0)*V_local;
@@ -343,7 +343,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
       slice_size(j) += (is_last) * (val) * C_local;
     }
   });
-  Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const int& i, lid_t& cur, const bool final) {
+  Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
     cur += slice_size(i);
     if (final) {
       const lid_t index = i+1;
@@ -358,30 +358,30 @@ void SellCSigma<DataTypes, ExecSpace>::setupParticleMask(kkLidView mask, PairVie
   auto offsets_cpy = offsets;
   auto slice_to_chunk_cpy = slice_to_chunk;
   kkLidView chunk_starts("chunk_starts", num_chunks);
-  Kokkos::parallel_for(num_slices-1, KOKKOS_LAMBDA(const int& i) {
-    const int my_chunk = slice_to_chunk_cpy(i);
-    const int next_chunk = slice_to_chunk_cpy(i+1);
+  Kokkos::parallel_for(num_slices-1, KOKKOS_LAMBDA(const lid_t& i) {
+    const lid_t my_chunk = slice_to_chunk_cpy(i);
+    const lid_t next_chunk = slice_to_chunk_cpy(i+1);
     if (my_chunk != next_chunk) {
       chunk_starts(next_chunk) = offsets_cpy(i+1);
     }
   });
   //Fill the SCS
-  const int league_size = num_chunks;
-  const int team_size = C_;
-  const int ne = num_elems;
+  const lid_t league_size = num_chunks;
+  const lid_t team_size = C_;
+  const lid_t ne = num_elems;
   typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
   const team_policy policy(league_size, team_size);
   auto row_to_element_cpy = row_to_element;
   Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
-    const int chunk = thread.league_rank();
-    const int chunk_row = thread.team_rank();
-    const int rowLen = chunk_widths(chunk);
-    const int start = chunk_starts(chunk) + chunk_row;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (int& j) {
-      const int row = chunk * team_size + chunk_row;
-      const int element_id = row_to_element_cpy(row);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) {
-        const int particle_id = start+(p*team_size);
+    const lid_t chunk = thread.league_rank();
+    const lid_t chunk_row = thread.team_rank();
+    const lid_t rowLen = chunk_widths(chunk);
+    const lid_t start = chunk_starts(chunk) + chunk_row;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (lid_t& j) {
+      const lid_t row = chunk * team_size + chunk_row;
+      const lid_t element_id = row_to_element_cpy(row);
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
+        const lid_t particle_id = start+(p*team_size);
         if (element_id < ne)
           mask(particle_id) =  p < ptcls(row).first;
       });
@@ -393,23 +393,23 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::initSCSData(kkLidView chunk_widths,
                                                    kkLidView particle_elements,
                                                    MemberTypeViews<DataTypes> particle_info) {
-  int given_particles = particle_elements.size();
+  lid_t given_particles = particle_elements.size();
   kkLidView element_to_row_local = element_to_row;
   //Setup starting point for each row
-  int C_local = C_;    
+  lid_t C_local = C_;    
   kkLidView row_index("row_index", numRows());
-  Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const int& i, int& sum, const bool& final) {
+  Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& sum, const bool& final) {
       if (final) {
-        for (int j = 0; j < C_local; ++j)
+        for (lid_t j = 0; j < C_local; ++j)
           row_index(i*C_local+j) = sum + j;
       }
       sum += chunk_widths(i) * C_local;
     });
   //Determine index for each particle
   kkLidView particle_indices("new_particle_scs_indices", given_particles);
-  Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const int& i) {
-      int new_elem = particle_elements(i);
-      int new_row = element_to_row_local(new_elem);
+  Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
+      lid_t new_elem = particle_elements(i);
+      lid_t new_row = element_to_row_local(new_elem);
       particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
     });
   
@@ -460,7 +460,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
     setupParticleMask(particle_mask, ptcls, chunk_widths);
 
   //If particle info is provided then enter the information
-  int given_particles = particle_elements.size();
+  lid_t given_particles = particle_elements.size();
   if (given_particles > 0 && particle_info != NULL) {
     initSCSData(chunk_widths, particle_elements, particle_info);
   }
@@ -487,19 +487,19 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
   kkLidView num_send_particles("num_send_particles", comm_size);
-  auto count_sending_particles = SCS_LAMBDA(int element_id, int particle_id, bool mask) {
-    const int process = new_process(particle_id);
+  auto count_sending_particles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
+    const lid_t process = new_process(particle_id);
     Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask * (process != comm_rank));
   };
   parallel_for(count_sending_particles);
   kkLidView num_recv_particles("num_recv_particles", comm_size);
   PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, MPI_COMM_WORLD);
 
-  int num_sending_to = 0, num_receiving_from = 0;
-  Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
+  lid_t num_sending_to = 0, num_receiving_from = 0;
+  Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
       lsum += (num_send_particles(i) > 0);
   }, num_sending_to);
-  Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const int& i, int& lsum ) {
+  Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
       lsum += (num_recv_particles(i) > 0);
   }, num_receiving_from);
   
@@ -508,14 +508,14 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   kkLidView offset_send_particles("offset_send_particles", comm_size+1);
   kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
   kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
-  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
+  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
     num += num_send_particles(i);
     if (final) {
       offset_send_particles(i+1) += num;
       offset_send_particles_temp(i+1) += num;
     }
   });
-  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const int& i, int& num, const bool& final) {
+  Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
     num += num_recv_particles(i);
     if (final)
       offset_recv_particles(i+1) += num;
@@ -524,19 +524,19 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 
   //Create arrays for particles being sent
-  int np_send = offset_send_particles_host(comm_size);
+  lid_t np_send = offset_send_particles_host(comm_size);
   kkLidView send_element("send_element", np_send);
   MemberTypeViews<DataTypes> send_particle;
   //Allocate views for each data type into send_particle[type]
   CreateViews<DataTypes>(send_particle, np_send);
   kkLidView send_index("send_particle_index", capacity());
   auto element_to_gid_local = element_to_gid;
-  auto gatherParticlesToSend = SCS_LAMBDA(int element_id, int particle_id, int mask) {
-    const int process = new_process(particle_id);
+  auto gatherParticlesToSend = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
+    const lid_t process = new_process(particle_id);
     if (mask && process != comm_rank) {
       send_index(particle_id) =
         Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process)),1);
-      const int index = send_index(particle_id);
+      const lid_t index = send_index(particle_id);
       send_element(index) = element_to_gid_local(new_element(particle_id));
     }
   };
@@ -547,27 +547,27 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
                                                                    send_index);
   
   //Create arrays for particles being received
-  int np_recv = offset_recv_particles_host(comm_size);
+  lid_t np_recv = offset_recv_particles_host(comm_size);
   kkLidView recv_element("recv_element", np_recv);
   MemberTypeViews<DataTypes> recv_particle;
   //Allocate views for each data type into recv_particle[type]
   CreateViews<DataTypes>(recv_particle, np_recv);
 
   //Get pointers to the data for MPI calls
-  int send_num = 0, recv_num = 0;
-  int num_sends = num_sending_to * (num_types + 1);
-  int num_recvs = num_receiving_from * (num_types + 1);
+  lid_t send_num = 0, recv_num = 0;
+  lid_t num_sends = num_sending_to * (num_types + 1);
+  lid_t num_recvs = num_receiving_from * (num_types + 1);
   MPI_Request* send_requests = new MPI_Request[num_sends];
   MPI_Request* recv_requests = new MPI_Request[num_recvs];
   //Send the particles to each neighbor
-  for (int i = 0; i < comm_size; ++i) {
+  for (lid_t i = 0; i < comm_size; ++i) {
     if (i == comm_rank)
       continue;
     
     //Sending
-    int num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
+    lid_t num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
     if (num_send > 0) {
-      int start_index = offset_send_particles_host(i);
+      lid_t start_index = offset_send_particles_host(i);
       PS_Comm_Isend(send_element, start_index, num_send, i, 0, MPI_COMM_WORLD, 
                     send_requests +send_num);
       send_num++;
@@ -576,9 +576,9 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
       send_num+=num_types;
     }
     //Receiving
-    int num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
+    lid_t num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
     if (num_recv > 0) {
-      int start_index = offset_recv_particles_host(i);
+      lid_t start_index = offset_recv_particles_host(i);
       PS_Comm_Irecv(recv_element, start_index, num_recv, i, 0, MPI_COMM_WORLD, 
                     recv_requests + recv_num);
       recv_num++;
@@ -595,14 +595,14 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
 
   /********** Convert the received element from element gid to element lid *********/
   auto element_gid_to_lid_local = element_gid_to_lid;
-  Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const lid_t& i) {
     const gid_t gid = recv_element(i);
-    const int index = element_gid_to_lid_local.find(gid);
+    const lid_t index = element_gid_to_lid_local.find(gid);
     recv_element(i) = element_gid_to_lid_local.value_at(index);
   });
   
   /********** Set particles that went sent to non existent on this process *********/
-  auto removeSentParticles = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+  auto removeSentParticles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
     const bool notSent = new_process(particle_id) != comm_rank;
     const lid_t elm = new_element(particle_id);
     Kokkos::atomic_fetch_add(&new_element(particle_id), -1 * (elm + 1) * notSent);
@@ -627,7 +627,7 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   kkLidView new_particles_per_row("new_particles_per_row", numRows());
   kkLidView num_holes_per_row("num_holes_per_row", numRows());
   kkLidView element_to_row_local = element_to_row;
-  auto countNewParticles = SCS_LAMBDA(int element_id,int particle_id, bool mask){
+  auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
 
     const lid_t row = element_to_row_local(element_id);
@@ -640,7 +640,7 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   };
   parallel_for(countNewParticles, "countNewParticles");
   // Add new particles to counts
-  Kokkos::parallel_for("reshuffle_count", new_particle_elements.size(), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for("reshuffle_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t new_elem = new_particle_elements(i);
       const lid_t new_row = element_to_row_local(new_elem);
       Kokkos::atomic_fetch_add(&(new_particles_per_row(new_row)), 1);
@@ -648,7 +648,7 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
 
   //Check if the particles will fit in current structure
   kkLidView fail("fail",1);
-  Kokkos::parallel_for(numRows(), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for(numRows(), KOKKOS_LAMBDA(const lid_t& i) {
       if( new_particles_per_row(i) > num_holes_per_row(i))
         fail(0) = 1;
   });
@@ -682,19 +682,19 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   // if (reshuffle(new_element, new_particle_elements, new_particles))
   //   return;
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
-  auto countNewParticles = SCS_LAMBDA(int element_id,int particle_id, bool mask){
+  auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
     if (new_elem != -1)
       Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), mask);
   };
   parallel_for(countNewParticles, "countNewParticles");
   // Add new particles to counts
-  Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const int& i) {
+  Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
     const lid_t new_elem = new_particle_elements(i);
     Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), 1);
   });
   lid_t activePtcls;
-  Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const int& i, lid_t& sum) {
+  Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
     sum+= new_particles_per_elem(i);
   }, activePtcls);
   //If there are no particles left, then destroy the structure
@@ -704,7 +704,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     capacity_ = 0;
     return;
   }
-  int new_num_ptcls = activePtcls;
+  lid_t new_num_ptcls = activePtcls;
   
   //Perform sorting
   PairView<ExecSpace> ptcls;
@@ -712,13 +712,13 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
-  int new_nchunks;
+  lid_t new_nchunks;
   kkLidView new_row_to_element;
   kkLidView new_element_to_row;
   constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
 
-  int new_num_slices;
-  int new_capacity;
+  lid_t new_num_slices;
+  lid_t new_capacity;
   kkLidView new_offsets;
   kkLidView new_slice_to_chunk;
   //Create offsets into each chunk/vertical slice
@@ -726,7 +726,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                    new_capacity);
 
   //Allocate the SCS
-  int new_cap = getLastValue<lid_t>(new_offsets);
+  lid_t new_cap = getLastValue<lid_t>(new_offsets);
   kkLidView new_particle_mask("new_particle_mask", new_cap);
   if (swap_size < new_cap) {
     destroyViews<DataTypes>(scs_data_swap);
@@ -738,22 +738,22 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   /* //Fill the SCS */
   kkLidView interior_slice_of_chunk("interior_slice_of_chunk", new_num_slices);
   Kokkos::parallel_for("set_interior_slice_of_chunk", Kokkos::RangePolicy<>(1,new_num_slices),
-    KOKKOS_LAMBDA(const int& i) {
-      const int my_chunk = new_slice_to_chunk(i);
-      const int prev_chunk = new_slice_to_chunk(i-1);
+    KOKKOS_LAMBDA(const lid_t& i) {
+      const lid_t my_chunk = new_slice_to_chunk(i);
+      const lid_t prev_chunk = new_slice_to_chunk(i-1);
       interior_slice_of_chunk(i) = my_chunk == prev_chunk;
   });
   lid_t C_local = C_;
   kkLidView element_index("element_index", new_nchunks * C_);
-  Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const int& i) {
-      const int chunk = new_slice_to_chunk(i);
-      for (int e = 0; e < C_local; ++e) {
+  Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const lid_t& i) {
+      const lid_t chunk = new_slice_to_chunk(i);
+      for (lid_t e = 0; e < C_local; ++e) {
         Kokkos::atomic_fetch_add(&element_index(chunk*C_local + e),
                                  (new_offsets(i) + e) * !interior_slice_of_chunk(i));
       }
   });
   kkLidView new_indices("new_scs_index", capacity());
-  auto copySCS = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto copySCS = SCS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
     const lid_t new_elem = new_element(ptcl_id);
     //TODO remove conditional
     if (mask && new_elem != -1) {
@@ -768,14 +768,14 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   CopySCSToSCS<SellCSigma<DataTypes, ExecSpace>, DataTypes>(this, scs_data_swap, scs_data,
                                                             new_element, new_indices);
   //Add new particles
-  int num_new_ptcls = new_particle_elements.size(); 
+  lid_t num_new_ptcls = new_particle_elements.size(); 
   kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);
 
-  Kokkos::parallel_for("set_new_particle", num_new_ptcls, KOKKOS_LAMBDA(const int& i) {
-    int new_elem = new_particle_elements(i);
-    int new_row = new_element_to_row(new_elem);
+  Kokkos::parallel_for("set_new_particle", num_new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
+    lid_t new_elem = new_particle_elements(i);
+    lid_t new_row = new_element_to_row(new_elem);
     new_particle_indices(i) = Kokkos::atomic_fetch_add(&element_index(new_row), C_local);
-    int new_index = new_particle_indices(i);
+    lid_t new_index = new_particle_indices(i);
     new_particle_mask(new_index) = 1;
   });
   
@@ -798,7 +798,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   MemberTypeViews<DataTypes> tmp = scs_data;
   scs_data = scs_data_swap;
   scs_data_swap = tmp;
-  int tmp_size = current_size;
+  std::size_t tmp_size = current_size;
   current_size = swap_size;
   swap_size = tmp_size;
   if(!comm_rank || comm_rank == comm_size/2)
@@ -820,16 +820,16 @@ void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {
   cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C_, sigma, V_);
   cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
   cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
-  int last_chunk = -1;
-  for (int i = 0; i < num_slices; ++i) {
-    int chunk = slice_to_chunk_host(i);
+  lid_t last_chunk = -1;
+  for (lid_t i = 0; i < num_slices; ++i) {
+    lid_t chunk = slice_to_chunk_host(i);
     if (chunk != last_chunk) {
       last_chunk = chunk;
       cur += sprintf(cur,"  Chunk %d. Elements", chunk);
       if (element_to_gid_host.size() > 0)
         cur += sprintf(cur,"(GID)");
       cur += sprintf(cur,":");
-      for (int row = chunk*C_; row < (chunk+1)*C_; ++row) {
+      for (lid_t row = chunk*C_; row < (chunk+1)*C_; ++row) {
         lid_t elem = row_to_element_host(row);
         cur += sprintf(cur," %d", elem);
         if (element_to_gid_host.size() > 0) {
@@ -839,7 +839,7 @@ void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {
       cur += sprintf(cur,"\n");
     }
     cur += sprintf(cur,"    Slice %d", i);
-    for (int j = offsets_host(i); j < offsets_host(i+1); ++j) {
+    for (lid_t j = offsets_host(i); j < offsets_host(i+1); ++j) {
       if ((j - offsets_host(i)) % C_ == 0)
         cur += sprintf(cur," |");
       cur += sprintf(cur," %d", particle_mask_host(j));
@@ -859,8 +859,8 @@ void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn, std::strin
 #else
   fn_d = &fn;
 #endif
-  const int league_size = num_slices;
-  const int team_size = C_;
+  const lid_t league_size = num_slices;
+  const lid_t team_size = C_;
   typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
   const team_policy policy(league_size, team_size);
   auto offsets_cpy = offsets;
@@ -868,16 +868,16 @@ void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn, std::strin
   auto row_to_element_cpy = row_to_element;
   auto particle_mask_cpy = particle_mask;
   Kokkos::parallel_for(name, policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
-    const int slice = thread.league_rank();
-    const int slice_row = thread.team_rank();
-    const int rowLen = (offsets_cpy(slice+1)-offsets_cpy(slice))/team_size;
-    const int start = offsets_cpy(slice) + slice_row;
-    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (int& j) {
-      const int row = slice_to_chunk_cpy(slice) * team_size + slice_row;
-      const int element_id = row_to_element_cpy(row);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (int& p) {
-        const int particle_id = start+(p*team_size);
-        const int mask = particle_mask_cpy[particle_id];
+    const lid_t slice = thread.league_rank();
+    const lid_t slice_row = thread.team_rank();
+    const lid_t rowLen = (offsets_cpy(slice+1)-offsets_cpy(slice))/team_size;
+    const lid_t start = offsets_cpy(slice) + slice_row;
+    Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (lid_t& j) {
+      const lid_t row = slice_to_chunk_cpy(slice) * team_size + slice_row;
+      const lid_t element_id = row_to_element_cpy(row);
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
+        const lid_t particle_id = start+(p*team_size);
+        const lid_t mask = particle_mask_cpy[particle_id];
         (*fn_d)(element_id, particle_id, mask);
       });
     });

@@ -11,6 +11,8 @@
 #include "GitrmParticles.hpp"
 #include "GitrmPush.hpp"
 
+#define HISTORY 0
+
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -63,7 +65,7 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
       
       auto detId = pisces_ids[fid];
       if(detId >=0) {
-        //if(debug)
+        if(debug)
           printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
             pid_scs(pid), zInd, detId, x, y, z, iter);
         Kokkos::atomic_fetch_add(&(data_d[detId]), 1);
@@ -72,6 +74,7 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
   };
   scs->parallel_for(lamb, "storePiscesData");
 }
+
 
 void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   updatePtclPositions(scs);
@@ -122,9 +125,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  //o::Write<o::Real>xpoints_d(3*scsCapacity, 0, "xpoints");
   o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
-  //o::fill(xface_ids, -1);
 
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
@@ -136,7 +137,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("storePiscesData");
-  //Replace these to be that in gp
+  //Replace these with that in gp
   //auto elm_ids = o::LOs(elem_ids);
   //o::Reals collisionPoints = o::Reals(xpoints_d);
   //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
@@ -298,21 +299,29 @@ int main(int argc, char** argv) {
     if(comm_rank == 0 && iter%100 ==0)
       fprintf(stderr, "=================iter %d===============\n", iter);
    //TODO not ready for MPI
+    #if HISTORY > 0
     o::Write<o::Real> data(numPtcls*dofStepData, -1);
     if(iter==0 && histInterval >0)
       printStepData(scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+    #endif
     if(debug)
       fprintf(stderr, "Boris move\n");
- 
+
+    Kokkos::Profiling::pushRegion("neutralBorisMove");
     //neutralBorisMove(scs, dTime);
     neutralBorisMove_float(scs, dTime);
+    Kokkos::Profiling::popRegion();
+
     MPI_Barrier(MPI_COMM_WORLD);
+    
     search(picparts, scs, gp, iter, data_d, xpoints_d, debug);
+    #if HISTORY > 0
     if(histInterval >0) {
       updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
       if((iter+1)%histInterval == 0)
       printStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData, true); //accum
     }
+    #endif
     if(comm_rank == 0 && iter%100 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
     scs_np = scs->nPtcls();

@@ -50,7 +50,7 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = INT_MAX; // full sorting
+  const int sigma = 1; // INT_MAX; // full sorting
   const int V = 128;//1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   printf("Constructing Particles\n");
@@ -212,13 +212,15 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
     auto el = elemIdOfPtcls[id];
     auto old = Kokkos::atomic_fetch_add(&(ptclsFilledInElem[el]), 1);
     //TODO FIXME invalid device function error with OMEGA_H_CHECK in lambda
-    //OMEGA_H_CHECK(old < numPtclsInElems[el]); 
-    assert(old < numPtclsInElems[el]);
+    auto nLimit = numPtclsInElems[el];
+    OMEGA_H_CHECK(old < nLimit); 
+    //assert(old < nLimit);
     //elemId is sequential from 0 .. nel
     auto beg = ptclIdPtrsOfElem[el];
     auto pos = beg + old;
+    auto idLimit = ptclIdPtrsOfElem[el+1];
     //FIXME same error as above here
-    assert(pos < ptclIdPtrsOfElem[el+1]);
+    OMEGA_H_CHECK(pos < idLimit);
     auto prev = Kokkos::atomic_exchange(&(ptclIdsInElem_w[pos]), id);
     if(debug)
       printf("id:el %d %d old %d beg %d pos %d previd %d maxPtcls %d \n",
@@ -242,15 +244,15 @@ void GitrmParticles::setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem
       auto limit = ptclIdPtrsOfElem[elem+1];
       //Error 
       OMEGA_H_CHECK(ind >= 0);
-      OMEGA_H_CHECK((ind < limit));
+      OMEGA_H_CHECK(ind < limit);
       auto ip = ptclIdsInElem[ind]; //ip 0..numPtcls
       if(debug && (ind < 0 || ind>= limit || ip<0 || ip>= numPtcls || elemIdOfPtcls[ip] != elem))
         printf("**** elem %d pid %d ind %d nextInd %d indlim %d ip %d e_of_p %d\n", 
           elem, pid, ind, nextInd, ptclIdPtrsOfElem[elem+1], ip, elemIdOfPtcls[ip]);
-      OMEGA_H_CHECK((ip >= 0));
-      OMEGA_H_CHECK((ip < numPtcls));
-      OMEGA_H_CHECK((elemIdOfPtcls[ip] == elem));
-      assert(ip >= 0 && ip < numPtcls && elemIdOfPtcls[ip] == elem);
+      OMEGA_H_CHECK(ip >= 0);
+      OMEGA_H_CHECK(ip < numPtcls);
+      OMEGA_H_CHECK(elemIdOfPtcls[ip] == elem);
+      //assert(ip >= 0 && ip < numPtcls && elemIdOfPtcls[ip] == elem);
       pid_scs(pid) = ip;
     }
   };

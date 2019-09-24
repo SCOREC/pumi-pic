@@ -103,7 +103,8 @@ OMEGA_H_DEVICE void barycentric_tri(
 OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
      const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc, 
      bool debug=false) {
-  for(Omega_h::LO i=0; i<4; ++i) bcc[i] = -1;
+  for(Omega_h::LO i=0; i<4; ++i) 
+    bcc[i] = -1;
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
@@ -121,6 +122,7 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
   Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
   Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
+  // use o::tet_volume_from_basis()
   if(debug)
     print_few_vectors(abc);
   Omega_h::Real inv_vol = 0.0;
@@ -132,7 +134,6 @@ OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   //bcc[0] for face0 corresp to its opp vtx, so on.
   for(int i=0; i<4; ++i)
     bcc[i] = inv_vol * vals[i]; 
-  bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
 
   return 1; //success
 }
@@ -474,7 +475,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
   Kokkos::Profiling::popRegion();
-  printf("return from  search_mesh \n");
   return found;
 }
 

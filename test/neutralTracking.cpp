@@ -120,7 +120,8 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   o::Write<o::LO>& data_d, o::Write<o::Real>& xpoints_d, bool debug=false ) {
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
-  printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
+  if(debug)
+    printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
   assert(scs->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 100;
   const auto scsCapacity = scs->capacity();
@@ -130,8 +131,6 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
-  if(debug)
-    printf("search_mesh\n");
   bool isFound = p::search_mesh<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
     elem_ids, xpoints_d, xface_ids, maxLoops, debug);
   assert(isFound);
@@ -141,16 +140,12 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   //auto elm_ids = o::LOs(elem_ids);
   //o::Reals collisionPoints = o::Reals(xpoints_d);
   //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
-  if(debug)
-    printf("stroing Pisces data \n");
-  //output particle positions, for converting to vtk
+
   storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, debug);
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
   Kokkos::Profiling::pushRegion("rebuild");
-  if(debug)
-    printf("rebuiling \n");
   rebuild(picparts, scs, elem_ids, debug);
 
   Kokkos::Profiling::popRegion();
@@ -304,8 +299,6 @@ int main(int argc, char** argv) {
     if(iter==0 && histInterval >0)
       printStepData(scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
     #endif
-    if(debug)
-      fprintf(stderr, "Boris move\n");
 
     Kokkos::Profiling::pushRegion("neutralBorisMove");
     //neutralBorisMove(scs, dTime);

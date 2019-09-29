@@ -339,7 +339,7 @@ void GitrmMesh::initBoundaryFaces() {
           face_verts, down_r2fs);
       */
       //TODO verify
-      auto surfNorm = p::find_dbry_face_normal(fid,coords,face_verts);
+      auto surfNorm = p::find_bdry_face_normal(fid,coords,face_verts);
       o::Real magB = o::norm(B);
       o::Real magSurfNorm = o::norm(surfNorm);
       o::Real angleBS = p::osh_dot(B, surfNorm);

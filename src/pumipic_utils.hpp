@@ -10,7 +10,7 @@
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
 #include "Omega_h_adj.hpp"
-//#include "Omega_h_array.hpp"
+#include "Omega_h_array.hpp"
 #include "Omega_h_array_ops.hpp"
 #include "Omega_h_element.hpp"
 #include "Omega_h_scalar.hpp" //divide
@@ -45,7 +45,7 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
 }
 
 // TODO use o::are_close() 
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
+OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON) {
   auto max = (std::abs(a) < std::abs(b)) ? b : a;
   max = (max>0 || max<0) ? max:1;
@@ -53,7 +53,7 @@ OMEGA_H_INLINE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
 }
 
 template<int N>
-OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b, 
+OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b, 
   Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
     if(!almost_equal(a[i],b, tol)) {
@@ -64,7 +64,7 @@ OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b,
 }
 
 template<int N>
-OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b, 
+OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b, 
   Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
     if(!almost_equal(a[i],b[i], tol)) {
@@ -74,7 +74,7 @@ OMEGA_H_INLINE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b,
   return true;
 }
 
-OMEGA_H_INLINE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b, 
+OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b, 
   Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
     if(!almost_equal(a[i],b, tol)) {
@@ -123,10 +123,10 @@ Omega_h::LO min_index(const T a, Omega_h::LO n) {
 }
 
 template <class T> OMEGA_H_DEVICE  
-Omega_h::LO max_index(const T a, Omega_h::LO n) {
+Omega_h::LO max_index(const T a, Omega_h::LO n, int beg=0) {
   Omega_h::LO ind=0;
   Omega_h::Real max = a[0];
-  for(Omega_h::LO i=0; i<n-1; ++i) {
+  for(Omega_h::LO i=beg; i < (beg+n-1); ++i) {
     if(max < a[i+1]) {
       max = a[i+1];
       ind = i+1;
@@ -135,16 +135,16 @@ Omega_h::LO max_index(const T a, Omega_h::LO n) {
   return ind;
 }
 
-OMEGA_H_INLINE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
+OMEGA_H_DEVICE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
   const Omega_h::Vector<3> &b) {
   return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
 }
 
-OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
+OMEGA_H_DEVICE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
   return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
-OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
+OMEGA_H_DEVICE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
  const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
     if(std::abs(a[i]-b[i]) > tol) {
@@ -154,7 +154,7 @@ OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b
   return true;
 }
 
-OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
+OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
      const Omega_h::Vector<DIM> &vb) {
   for(Omega_h::LO i=0; i<DIM; ++i) {
     if((va.data()[i] < 0 && vb.data()[i] > 0) ||
@@ -166,13 +166,13 @@ OMEGA_H_INLINE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
 }
 
 template< int N>
-OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, N> &M) {
+OMEGA_H_DEVICE void print_matrix(const Omega_h::Matrix<3, N> &M) {
   for(int i=0; i<N; ++i)
   printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
 template< int N>
-OMEGA_H_INLINE void print_few_vectors(const o::Few<o::Vector<3>, N> &M) {
+OMEGA_H_DEVICE void print_few_vectors(const o::Few<o::Vector<3>, N> &M) {
   for(int i=0; i<N; ++i)
   printf("%d: %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
@@ -186,7 +186,7 @@ inline void print_array(const double* a, int n=3, std::string name=" ") {
 }
 
 template< int N>
-OMEGA_H_INLINE void print_osh_vector(const Omega_h::Vector<N> &v,
+OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<N> &v,
  const char* name) {
   if(N==3)
     printf("%s %g %g %g\n",  name, v[0], v[1], v[2]);
@@ -312,22 +312,29 @@ OMEGA_H_DEVICE o::LO getFaceMap(int i) {
   return fmap[i];
 }
 
+OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v, 
+  const o::Few<o::LO, 4>& tetv2v) {
+  o::LO matInd1 = getFaceMap(fi*2);
+  o::LO matInd2 = getFaceMap(fi*2+1);
+  bool flip = true;
+  if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
+    flip = false;
+  return flip;       
+}
+
 //face normal can point to either way
 OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
   const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
-  const o::LOs &down_r2fs) {
+  const o::LOs &elem2faces) {
 
   const auto fv2v = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, fv2v);
   const auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-  //TODO check if face is flipped
 
-  const auto beg_face = elmId *4;
-  const auto end_face = beg_face +4;
   o::LO findex = -1;
   o::LO find = 0;
-  for(auto iface = beg_face; iface < end_face; ++iface) {
-    const auto face_id = down_r2fs[iface];
+  for(auto iface = elmId *4; iface < elmId *4 +4; ++iface) {
+    const auto face_id = elem2faces[iface];
     if(fid == face_id) {
       findex = find;
       break;
@@ -338,23 +345,17 @@ OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
     printf("find_face_normal:getFaceMap:: faceid not found");
     OMEGA_H_CHECK(false);
   }
-  bool inverse = true;
-  o::LO matInd1 = getFaceMap(findex*2);
-  o::LO matInd2 = getFaceMap(findex*2+1);
-  if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
-    inverse = false;
-
   o::Vector<3> a = abc[0];
   o::Vector<3> b = abc[1];
   o::Vector<3> c = abc[2];
   o::Vector<3> fnorm = o::cross(b - a, c - a);
-  if(inverse)
+  if(isFaceFlipped(findex, fv2v, tetv2v))
     fnorm = -1*fnorm;
   return o::normalize(fnorm);
 }
 
-// TODO boundary face normal points always outwards, no need to check
-OMEGA_H_DEVICE o::Vector<3> find_dbry_face_normal(const o::LO fid, 
+// TODO boundary face normal points always outwards
+OMEGA_H_DEVICE o::Vector<3> find_bdry_face_normal(const o::LO fid, 
   const o::Reals &coords, const o::LOs &face_verts) {
 
   const auto fv2v = o::gather_verts<3>(face_verts, fid);
@@ -377,14 +378,15 @@ OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
 }
 
 
-OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, const o::Vector<3> v2) {
+OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
+  const o::Vector<3> v2) {
   o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
   return std::acos(cos);
 }
 
 
-OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, const o::LOs &mesh2verts, 
-  const o::Reals &coords) {
+OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
+  const o::LOs &mesh2verts,  const o::Reals &coords) {
   o::Vector<3> pos;
   auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
   auto M = o::gather_vectors<4, 3>(coords, tetv2v);
@@ -394,7 +396,8 @@ OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, const o::LOs &mesh
   return pos;
 }
 
-OMEGA_H_DEVICE void cartesianToSpeherical(const o::Real &x, const o::Real &y, 
+//TODO modify for cylindrical symmetry 
+OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
   const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
   r = std::sqrt(x*x + y*y + z*z);
   OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));

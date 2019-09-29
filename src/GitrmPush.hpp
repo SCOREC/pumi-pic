@@ -262,10 +262,14 @@ inline void neutralBorisMove_float(SCS* scs,  const o::Real dTime, bool debug = 
   auto vel_scs = scs->get<PTCL_VEL>();
   auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto pos_scs = scs->get<PTCL_POS>();
+auto pid_scs = scs->get<PTCL_ID>();
   auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
       auto vel = p::makeVector3(pid, vel_scs);
       auto pos = p::makeVector3(pid, pos_scs);
+//auto ptcl = pid_scs(pid);
+//if(ptcl==6222 || ptcl==6647) printf("BORIS: p %d e %d  pos %.15f %.15f %.15f\n", ptcl,elem, pos[0],pos[1],pos[2]);
+
       // Next position and velocity
       float val[3], v2[3];
       for(int i=0; i<3; ++i) {

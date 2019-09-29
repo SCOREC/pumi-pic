@@ -24,7 +24,6 @@ void printTimerResolution() {
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
 }
 
-
 void updatePtclPositions(SCS* scs) {
   auto x_scs_d = scs->get<0>();
   auto xtgt_scs_d = scs->get<1>();
@@ -123,15 +122,15 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   if(debug)
     printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 100;
+  Omega_h::LO maxLoops = 20;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
-
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
-  bool isFound = p::search_mesh<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
+
+  bool isFound = p::search_mesh_3d<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
     elem_ids, xpoints_d, xface_ids, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
@@ -140,14 +139,12 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   //auto elm_ids = o::LOs(elem_ids);
   //o::Reals collisionPoints = o::Reals(xpoints_d);
   //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
-
   storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, debug);
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
   Kokkos::Profiling::pushRegion("rebuild");
   rebuild(picparts, scs, elem_ids, debug);
-
   Kokkos::Profiling::popRegion();
 }
 
@@ -291,7 +288,7 @@ int main(int argc, char** argv) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    if(comm_rank == 0 && iter%100 ==0)
+    if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "=================iter %d===============\n", iter);
    //TODO not ready for MPI
     #if HISTORY > 0
@@ -315,7 +312,7 @@ int main(int argc, char** argv) {
       printStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData, true); //accum
     }
     #endif
-    if(comm_rank == 0 && iter%100 ==0)
+    if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  

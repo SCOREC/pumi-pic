@@ -214,7 +214,6 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
     //TODO FIXME invalid device function error with OMEGA_H_CHECK in lambda
     auto nLimit = numPtclsInElems[el];
     OMEGA_H_CHECK(old < nLimit); 
-    //assert(old < nLimit);
     //elemId is sequential from 0 .. nel
     auto beg = ptclIdPtrsOfElem[el];
     auto pos = beg + old;
@@ -242,17 +241,16 @@ void GitrmParticles::setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem
       auto nextInd = Kokkos::atomic_fetch_add(&(nextPtclInd[elem]), 1);
       auto ind = ptclIdPtrsOfElem[elem] + nextInd;
       auto limit = ptclIdPtrsOfElem[elem+1];
-      //Error 
+      //Set checks separately to avoid possible Error 
       OMEGA_H_CHECK(ind >= 0);
       OMEGA_H_CHECK(ind < limit);
-      auto ip = ptclIdsInElem[ind]; //ip 0..numPtcls
+      const auto ip = ptclIdsInElem[ind]; //ip 0..numPtcls
       if(debug && (ind < 0 || ind>= limit || ip<0 || ip>= numPtcls || elemIdOfPtcls[ip] != elem))
         printf("**** elem %d pid %d ind %d nextInd %d indlim %d ip %d e_of_p %d\n", 
           elem, pid, ind, nextInd, ptclIdPtrsOfElem[elem+1], ip, elemIdOfPtcls[ip]);
       OMEGA_H_CHECK(ip >= 0);
       OMEGA_H_CHECK(ip < numPtcls);
       OMEGA_H_CHECK(elemIdOfPtcls[ip] == elem);
-      //assert(ip >= 0 && ip < numPtcls && elemIdOfPtcls[ip] == elem);
       pid_scs(pid) = ip;
     }
   };

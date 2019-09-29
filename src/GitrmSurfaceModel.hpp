@@ -281,7 +281,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
             vSampled[0] = V0*sin(aInterpVal*3.1415/180)*cos(2.0*3.1415*r10);
             vSampled[1] = V0*sin(aInterpVal*3.1415/180)*sin(2.0*3.1415*r10);
             vSampled[2] = V0*cos(aInterpVal*3.1415/180);
-            auto surfNorm = p::find_dbry_face_normal(fid,coords,face_verts);
+            auto surfNorm = p::find_bdry_face_normal(fid,coords,face_verts);
             auto surfPar = vtx1 - vtx2; // bdry face vtx
             auto Y = o::cross(surfNorm, surfPar);
             auto vSampled = vSampled[0] * surfPar + vSampled[1]*Y + vSampled[2]*surfNorm;

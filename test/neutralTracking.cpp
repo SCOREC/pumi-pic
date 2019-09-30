@@ -122,7 +122,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   if(debug)
     printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 20;
+  Omega_h::LO maxLoops = 10;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
@@ -288,7 +288,7 @@ int main(int argc, char** argv) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    if(comm_rank == 0 && iter%1000 ==0)
+    if(comm_rank == 0 && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
    //TODO not ready for MPI
     #if HISTORY > 0

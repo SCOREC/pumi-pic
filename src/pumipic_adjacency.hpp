@@ -340,7 +340,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   };
   scs->parallel_for(checkParent, "pumipic_checkParent");
 
-  o::Write<o::LO> detected(scsCapacity, -1);
+  // if needed, use ptcl_done with 1= intersected; 2=done
+  o::Write<o::LO> intersected(scsCapacity, -1);
   Kokkos::Profiling::popRegion();
 
   bool found = false;
@@ -405,13 +406,13 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           xface_d[pid] = face_ids[ind_exp];
           elem_ids_next[pid] = -1;
           ptcl_done[pid] = 1; 
-          detected[pid] = 1;
+          intersected[pid] = 1;
         }
 
         //interior
         if(adj_id >= 0) {
           elem_ids_next[pid] = dual_elems[adj_id];
-          detected[pid] = 1;
+          intersected[pid] = 1;
         }
       }
     };
@@ -419,7 +420,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
 
     // no ptcls expected here !
     auto processUndetected = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if( mask > 0 && !ptcl_done[pid] && detected[pid] < 0) {
+      if( mask > 0 && !ptcl_done[pid] && intersected[pid] < 0) {
         const auto ptcl = pid_d(pid);
         const auto searchElm = elem_ids[pid];
         OMEGA_H_CHECK(searchElm >= 0);
@@ -555,7 +556,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             OMEGA_H_CHECK(false);
           }
         }
-        bool detected = false;
+        bool intersected = false;
         find_barycentric_tet(M, dest, bcc);
         // TODO tolerance
         if(all_positive(bcc, tol)) {
@@ -590,35 +591,35 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             bool flip = true;
             if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
               flip = false;
-            detected = line_triangle_intx_simple(face, orig, dest, xpoint, 
+            intersected = line_triangle_intx_simple(face, orig, dest, xpoint, 
               dproj[findex], flip, tol);
             for(o::LO i=0; i<3; ++i)
               xpoints[findex*3+i] = xpoint[i];
 
             if(debug) {
-              printf("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d detected %d"
-              " findex %d\n", ptcl, elmId, face_id, flip, exposed, detected, findex);
+              printf("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
+              " findex %d\n", ptcl, elmId, face_id, flip, exposed, intersected, findex);
               for(int i=0; i<3; ++i)
                printf("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
                 ptcl, i, face[i][0], face[i][1], face[i][2]);
               printf("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
                 ptcl, orig[0], orig[1], orig[2], dest[0],dest[1],dest[2]);
             }
-            if(detected && exposed) {
+            if(intersected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
                 xpoints_d[pid*3+i] = xpoint[i];
               xface_d[pid] = face_id;
               elem_ids_next[pid] = -1;
               if(debug)
-                printf("\t ptcl %d e %d faceid %d detected and exposed, next parent "
+                printf("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
                   "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               break;
-            } else if(detected && !exposed) {
+            } else if(intersected && !exposed) {
               auto adj_elem  = dual_elems[dual_elem_id];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
-                printf("\t ptcl %d e %d faceid %d detected and !exposed, next parent "
+                printf("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
                       "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               }
               break;
@@ -628,7 +629,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             // save next element based on the smallest BCC,
             if(!exposed) {
               if(debug)
-                printf("\t ptcl %d e %d faceid %d findex %d !detected and !exposed\n",
+                printf("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
                 ptcl, elmId, face_id, findex);
               o::LO min_ind = min_index(bcc, 4);
               if(findex == min_ind) {
@@ -639,8 +640,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             ++findex;
           } //for iface
 
-          if(!detected) {
-            printf("\t ptcl %d e %d not detected; using max dproj\n", ptcl, elmId);
+          if(!intersected) {
+            printf("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
             o::LO max_ind = max_index(dproj, 4);
             if(dproj[max_ind]>=0) {
               auto fid = xface_ids[max_ind];

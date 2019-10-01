@@ -306,11 +306,7 @@ int main(int argc, char** argv) {
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
-  auto deviceCount = 0;
-  cudaGetDeviceCount(&deviceCount);
-  assert(deviceCount==1);
   if (comm_rank == 0) {
-    printf("device count per process %d\n", deviceCount);
     printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
     printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
@@ -330,11 +326,8 @@ int main(int argc, char** argv) {
     printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
         full_mesh.nfaces());
 
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto vtx_to_elm = full_mesh.ask_up(0, 2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
 
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
@@ -347,12 +340,10 @@ int main(int argc, char** argv) {
   assert(bufferMethod>=0);
   assert(safeMethod>=0);
   //Create picparts using classification with the full mesh buffered and minimum safe zone
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
   if(!comm_rank)
     input.printInfo();
   MPI_Barrier(MPI_COMM_WORLD);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Mesh picparts(input);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info

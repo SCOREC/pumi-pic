@@ -307,7 +307,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   const auto scsCapacity = scs->capacity();
   Kokkos::Profiling::popRegion();
 
-  // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
+  // ptcl_done[i] = 2 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity,-1, "elem_ids_next");
@@ -318,7 +318,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       auto ptcl = pid_d(pid);
     } else {
       elem_ids[pid] = -1;
-      ptcl_done[pid] = 1;
+      ptcl_done[pid] = 2;
     }
   };
   scs->parallel_for(fill, "searchMesh_fill_elem_ids");
@@ -340,8 +340,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   };
   scs->parallel_for(checkParent, "pumipic_checkParent");
 
-  // if needed, use ptcl_done with 1= intersected; 2=done
-  o::Write<o::LO> intersected(scsCapacity, -1);
   Kokkos::Profiling::popRegion();
 
   bool found = false;
@@ -360,14 +358,15 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
 
         find_barycentric_tet(tetCoords, dest, bcc);
         const auto isDestInParentElm = all_positive(bcc, tol);
-        ptcl_done[pid] = isDestInParentElm;
+        auto done = (isDestInParentElm >0) ? 2:0;
+        ptcl_done[pid] = done; //isDestInParentElm;
         elem_ids_next[pid] = searchElm; //if ptcl not done, this will be reset below
       }
     };
     scs->parallel_for(checkCurrentElm, "pumipic_checkCurrentElm");
 
     auto findIntersection = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if( mask > 0 && !ptcl_done[pid] ) {
+      if( mask > 0 && ptcl_done[pid]<2 ) {
         const auto searchElm = elem_ids[pid];
         const auto ptcl = pid_d(pid);
         OMEGA_H_CHECK(searchElm >= 0);
@@ -405,22 +404,22 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
             xpoints_d[pid*3+i] = xpts[i];
           xface_d[pid] = face_ids[ind_exp];
           elem_ids_next[pid] = -1;
-          ptcl_done[pid] = 1; 
-          intersected[pid] = 1;
+          ptcl_done[pid] = 2; 
         }
 
         //interior
         if(adj_id >= 0) {
           elem_ids_next[pid] = dual_elems[adj_id];
-          intersected[pid] = 1;
+          ptcl_done[pid] = 1; // reset below to 0/non-zero
         }
       }
     };
     scs->parallel_for(findIntersection, "pumipic_findIntersection");
 
-    // no ptcls expected here !
     auto processUndetected = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if( mask > 0 && !ptcl_done[pid] && intersected[pid] < 0) {
+      auto done = ptcl_done[pid];
+      ptcl_done[pid] = (done <2) ? 0: 2;
+      if( mask > 0 && done < 1) {
         const auto ptcl = pid_d(pid);
         const auto searchElm = elem_ids[pid];
         OMEGA_H_CHECK(searchElm >= 0);
@@ -450,7 +449,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           for(o::LO i=0; i<3; ++i)
             xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
           xface_d[pid] = face_id;
-          ptcl_done[pid] = 1;        
+          ptcl_done[pid] = 2;        
         } else {
           elem_ids_next[pid] = dual_elems[face_id];
         }

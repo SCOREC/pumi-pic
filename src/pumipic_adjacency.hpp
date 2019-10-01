@@ -316,8 +316,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
       auto ptcl = pid_d(pid);
-      if (debug)
-        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -336,11 +334,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       auto bcc = o::zero_vector<4>();
       //make sure particle origin is in initial element
       find_barycentric_tet(tetCoords, orig, bcc);
-      if(!all_positive(bcc, tol)) {
-        printf("ERROR: PtclInitCheck_failed: ptcl %d e %d orig %.10f %.10f %.10f\n", 
-          ptcl, searchElm, orig[0], orig[1], orig[2]);
+      if(!all_positive(bcc, tol))
         OMEGA_H_CHECK(false);
-      }
     }
   };
   scs->parallel_for(checkParent, "pumipic_checkParent");
@@ -352,8 +347,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   int loops = 0;
   
   while(!found) {
-    if(debug)
-      printf("------------loop %d\n", loops);
     auto checkCurrentElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         const auto searchElm = elem_ids[pid];
@@ -368,9 +361,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
         const auto isDestInParentElm = all_positive(bcc, tol);
         ptcl_done[pid] = isDestInParentElm;
         elem_ids_next[pid] = searchElm; //if ptcl not done, this will be reset below
-        if(debug)
-          printf("checkCurrentElm: ptcl %d e %d done %d bcc %.10f %.10f %.10f %.10f\n", 
-            ptcl, searchElm, ptcl_done[pid], bcc[0], bcc[1], bcc[2], bcc[3]);
       }
     };
     scs->parallel_for(checkCurrentElm, "pumipic_checkCurrentElm");
@@ -423,14 +413,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           elem_ids_next[pid] = dual_elems[adj_id];
           detected[pid] = 1;
         }
-
-        if(debug) {
-          auto nextel = (adj_id >=0) ? dual_elems[adj_id] : -1;
-          printf("findIntersection: detected %d ptcl %d e %d intxFaceExp %d "
-                "intxAdjElem %d orig %.10f %.10f %.10f dest %.10f %.10f %.10f \n", 
-            detected[pid], ptcl, searchElm, ind_exp, nextel, orig[0], 
-            orig[1], orig[2], dest[0], dest[1], dest[2]);
-        }
       }
     };
     scs->parallel_for(findIntersection, "pumipic_findIntersection");
@@ -450,7 +432,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
         for(int fi=0; fi<4; ++fi) {
           const auto face_id = face_ids[fi];
           auto xpoint = o::zero_vector<3>();
-          const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
           const auto fv2v = o::gather_verts<3>(face_verts, face_id);
           const auto face = gatherVectors3x3(coords, fv2v);
           const auto flip = isFaceFlipped(fi, fv2v, tetv2v);
@@ -468,15 +449,9 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           for(o::LO i=0; i<3; ++i)
             xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
           xface_d[pid] = face_id;
-          ptcl_done[pid] = 1;
-          if(debug)
-            printf("Rest:exposed: ptcl %d elem_ids_next %d max_proj_elem %d e %d\n", 
-              pid_d(pid), elem_ids_next[pid], dual_elems[face_id], searchElm);          
+          ptcl_done[pid] = 1;        
         } else {
           elem_ids_next[pid] = dual_elems[face_id];
-          if(debug)
-            printf("Rest: esle: ptcl %d elem_ids_next %d max_proj_elem %d e %d\n", 
-              pid_d(pid), elem_ids_next[pid], dual_elems[face_id], searchElm);
         }
       }
     };
@@ -501,11 +476,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           auto ptcl = pid_d(pid);
           const auto ptclDest = makeVector3(pid, xtgt_scs_d);
           const auto ptclOrigin = makeVector3(pid, x_scs_d);
-          printf("rank %d elm %d ptcl %d notFound %.15f %.15f %.15f to %.15f %.15f %.15f\n",
-              rank_d,
-              searchElm, ptcl,
-              ptclOrigin[0], ptclOrigin[1],
-              ptclDest[0], ptclDest[1]);
         }
       };
       scs->parallel_for(ptclsNotFound, "ptclsNotFound");

@@ -224,7 +224,6 @@ namespace pumipic {
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
                                 Omega_h::Write<Omega_h::LO> owns) {
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     int self;
     MPI_Comm_rank(MPI_COMM_WORLD, &self);
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
@@ -236,7 +235,6 @@ namespace {
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
     };
     Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     Omega_h::HostWrite<Omega_h::LO> selfcount_h(selfcount);
     if(!selfcount_h[0]) {
       fprintf(stderr, "%s rank %d with no owned elements detected\n", __func__, self);
@@ -246,7 +244,6 @@ namespace {
   
   //Ownership of lower entity dimensions is determined by the minimum owner of surrounding elements
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::LOs elm_owner) {
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     int comm_size, comm_rank;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
@@ -265,7 +262,6 @@ namespace {
       ent_owner[ent_id] = min;
     };
     Omega_h::parallel_for(m.nents(dim), determineOwner);
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     return ent_owner;
   }
 

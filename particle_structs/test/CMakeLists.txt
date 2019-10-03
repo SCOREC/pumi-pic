@@ -5,6 +5,8 @@ endfunction(make_test)
 
 make_test(typeTest typeTest.cpp)
 
+make_test(sortTest sortTest.cpp)
+
 make_test(buildSCSTest buildSCSTest.cpp)
 
 make_test(initParticles initParticles.cpp)

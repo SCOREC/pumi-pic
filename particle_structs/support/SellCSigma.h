@@ -707,10 +707,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   lid_t new_num_ptcls = activePtcls;
   
   //Perform sorting
-  //Kokkos::Profiling::pushRegion("Sorting");
+  Kokkos::Profiling::pushRegion("Sorting");
   PairView<ExecSpace> ptcls;
   sigmaSort<ExecSpace>(ptcls,num_elems,new_particles_per_elem, sigma);
-  //Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::popRegion();
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;

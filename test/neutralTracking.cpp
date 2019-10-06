@@ -252,6 +252,11 @@ int main(int argc, char** argv) {
   if(argc > 6)
     dTime = atof(argv[6]);
 
+  std::ofstream ofsHistory;
+  if(histInterval > 0)
+    ofsHistory.open("history.txt");
+  
+
   bool debug = false;
   
   GitrmParticles gp(*mesh, dTime);
@@ -294,7 +299,7 @@ int main(int argc, char** argv) {
     #if HISTORY > 0
     o::Write<o::Real> data(numPtcls*dofStepData, -1);
     if(iter==0 && histInterval >0)
-      printStepData(scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+      printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
     #endif
 
     Kokkos::Profiling::pushRegion("neutralBorisMove");
@@ -309,7 +314,8 @@ int main(int argc, char** argv) {
     if(histInterval >0) {
       updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
       if((iter+1)%histInterval == 0)
-      printStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData, true); //accum
+        printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
+        dofStepData, true); //last accum
     }
     #endif
     if(comm_rank == 0 && iter%1000 ==0)

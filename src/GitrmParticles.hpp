@@ -209,8 +209,8 @@ inline void printGridData(o::Write<T> &data_d) {
       printf("%d %d\n", i, data[i]);
 }
 
-inline void printPtclHostData(o::HostWrite<o::Real>& dh, int num, int dof,
-  const char* name, int iter=-1) { 
+inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHistory, 
+  int num, int dof, const char* name, int iter=-1) { 
   double pos[3], vel[3];
   for(int i=0; i<num; ++i) {
     for(int j=0; j<3; ++j) {
@@ -219,8 +219,10 @@ inline void printPtclHostData(o::HostWrite<o::Real>& dh, int num, int dof,
     }
     int id = static_cast<int>(dh[i*dof + 6]);
     int it = static_cast<int>(dh[i*dof + 7]);
-    printf("%s %d pos %g %g %g iter %d vel %g %g %g updateiter %d\n",
-      name, id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2], it);
+    ofsHistory << name << " " << id+1 << " iter " << iter 
+      << " pos " << pos[0] << " " << pos[1] << " " << pos[2]
+      << " vel " << vel[0] << " " << vel[1] << " " << vel[2] 
+      << " updateiter " << it << "\n";
   }
 } 
 
@@ -255,18 +257,19 @@ inline void updateStepData(SCS* scs, int iter, int numPtcls,
   scs->parallel_for(step, "updateStepData");
 }
 
-inline void printStepData(SCS* scs, int iter, int numPtcls, 
-  o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
+inline void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter, 
+  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
   int dof=8, bool accum = false) {
 
-  printf("total_ptcls %d\n", scs->nPtcls());
+  // printf("total_ptcls %d\n", scs->nPtcls());
   if(iter ==0) {
     updateStepData(scs, iter, numPtcls, ptclsDataAll, data, dof);
   }
 
   if(accum) {
     o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
-    printPtclHostData(ptclAllHost, numPtcls, dof, "ptclHistory_all", iter);
+    printPtclHostData(ptclAllHost, ofsHistory, numPtcls, dof, 
+      "ptclHistory_accum", iter);
   } else {
     o::HostWrite<o::Real> dh(data);
     o::HostWrite<o::Real> dp(scs->nPtcls() * dof);
@@ -280,7 +283,7 @@ inline void printStepData(SCS* scs, int iter, int numPtcls,
       }
       ++n;
     }
-    printPtclHostData(dp, scs->nPtcls(), dof, "ptclHistory", iter);
+    printPtclHostData(dp, ofsHistory, scs->nPtcls(), dof, "ptclHistory", iter);
   }
 }
 /** @brief Calculate distance of particles to domain boundary 

@@ -478,9 +478,6 @@ void GitrmParticles::processPtclInitFile(const std::string &fName,
     OMEGA_H_CHECK(foundComp[i]==true);
   }
   */
-  //if(ifs.is_open()) {
-  //  ifs.close();
-  //}
 }
 
 void GitrmParticles::initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls, 

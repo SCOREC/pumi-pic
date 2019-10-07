@@ -205,7 +205,7 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
   });
   if (sigma > 1) {
     lid_t i;
-#ifdef SORT_ON_DEVICE
+#ifdef SCS_USE_CUDA
     thrust::device_ptr<MyPair> ptcl_pairs_d(ptcl_pairs.data());
     for (i = 0; i < num_elems - sigma; i+=sigma) {
       thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + i + sigma);

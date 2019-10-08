@@ -67,7 +67,7 @@ bool shuffleParticlesTests() {
   delete [] ids;
 
   scs->printFormat();
-
+  scs->printMetrics();
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   auto values = scs->get<0>();
@@ -83,7 +83,7 @@ bool shuffleParticlesTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-
+  scs->printMetrics();
   values = scs->get<0>();
 
   SCS::kkLidView fail("fail",1);
@@ -115,7 +115,7 @@ bool shuffleParticlesTests() {
   };
   scs->parallel_for(printParticles);
   scs->printFormat();
-  
+  scs->printMetrics();
   delete scs;
   delete scs2;
   return true;
@@ -143,7 +143,7 @@ bool resortElementsTest() {
   delete [] gids;
 
   scs->printFormat();
-
+  scs->printMetrics();
   auto values = scs->get<0>();
 
   SCS::kkLidView new_element("new_element", scs->capacity());
@@ -161,7 +161,7 @@ bool resortElementsTest() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-
+  scs->printMetrics();
   values = scs->get<0>();
   SCS::kkLidView fail("", 1);
   auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
@@ -203,7 +203,7 @@ bool reshuffleTests() {
   delete [] ids;
 
   scs->printFormat();
-
+  scs->printMetrics();
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   //Shuffle
@@ -215,7 +215,7 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-
+  scs->printMetrics();
   //Shuffle
   auto sendToChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = 2;
@@ -225,7 +225,7 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-
+  scs->printMetrics();
   //Needs Rebuild
   auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = 4;
@@ -235,6 +235,6 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-
+  scs->printMetrics();
   return true;
 }

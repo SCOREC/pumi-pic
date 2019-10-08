@@ -134,6 +134,9 @@ class SellCSigma {
   //Prints the format of the SCS labeled by prefix
   void printFormat(const char* prefix = "") const;
 
+  //Prints metrics of the SCS
+  void printMetrics() const;
+  
   //Do not call these functions:
   void constructChunks(PairView<ExecSpace> ptcls, lid_t& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element,
@@ -190,6 +193,8 @@ private:
   std::size_t current_size, swap_size;
   void destroy();
 
+  //Metric Info
+  lid_t num_empty_elements;
 };
 
 template <typename ExecSpace> 
@@ -269,19 +274,21 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
   Kokkos::resize(chunk_widths, nchunks);
   Kokkos::resize(row_element, nchunks * C_);
   Kokkos::resize(element_row, nchunks * C_);
-
+  kkLidView empty("empty_elems", 1);
   Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-      const lid_t element = ptcls(i).second;
+    const lid_t element = ptcls(i).second;
     row_element(i) = element;
     element_row(element) = i;
-    
+    Kokkos::atomic_fetch_add(&empty[0], ptcls(i).first == 0);
   });
   Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, nchunks * C_),
                        KOKKOS_LAMBDA(const lid_t& i) {
     row_element(i) = i;
     element_row(i) = i;
+    Kokkos::atomic_fetch_add(&empty[0], 1);
   });
 
+  num_empty_elements = getLastValue<lid_t>(empty);
   typedef Kokkos::TeamPolicy<ExecSpace> team_policy;
   const team_policy policy(nchunks, C_);
   lid_t C_local = C_;
@@ -872,6 +879,61 @@ void SellCSigma<DataTypes,ExecSpace>::printFormat(const char* prefix) const {
   printf("%s", message);
 }
 
+template <class DataTypes, typename ExecSpace>
+void SellCSigma<DataTypes, ExecSpace>::printMetrics() const {
+
+  //Gather metrics
+  kkLidView padded_cells("padded_cells", 1);
+  kkLidView padded_slices("padded_slices", 1);
+  const lid_t league_size = num_slices;
+  const lid_t team_size = C_;
+  typedef Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> team_policy;
+  const team_policy policy(league_size, team_size);
+  auto offsets_cpy = offsets;
+  auto slice_to_chunk_cpy = slice_to_chunk;
+  auto row_to_element_cpy = row_to_element;
+  auto particle_mask_cpy = particle_mask;
+  Kokkos::parallel_for("GatherMetrics", policy, KOKKOS_LAMBDA(const team_policy::member_type& thread) {
+    const lid_t slice = thread.league_rank();
+    const lid_t slice_row = thread.team_rank();
+    const lid_t rowLen = (offsets_cpy(slice+1)-offsets_cpy(slice))/team_size;
+    const lid_t start = offsets_cpy(slice) + slice_row;
+    const lid_t row = slice_to_chunk_cpy(slice) * team_size + slice_row;
+    const lid_t element_id = row_to_element_cpy(row);
+    lid_t np = 0;
+    for (lid_t p = 0; p < rowLen; ++p) {
+      const lid_t particle_id = start+(p*team_size);
+      const lid_t mask = particle_mask_cpy[particle_id];
+      np += !mask;
+    }
+    Kokkos::atomic_fetch_add(&padded_cells[0],np);
+    thread.team_reduce(Kokkos::Sum<lid_t, ExecSpace>(np));
+    if (slice_row == 0)
+      Kokkos::atomic_fetch_add(&padded_slices[0], np > 0);
+  });
+  
+  lid_t num_padded = getLastValue<lid_t>(padded_cells);
+  lid_t num_padded_slices = getLastValue<lid_t>(padded_slices);
+  
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  char buffer[1000];
+  char* ptr = buffer;
+  //Header
+  ptr += sprintf(ptr, "Metrics %d\n", comm_rank);
+  //Padded Cells
+  ptr += sprintf(ptr, "Padded Cells <Tot %> %d %.3f\n", num_padded,
+                 num_padded * 100.0 / particle_mask.size());
+  //Padded Slices
+  ptr += sprintf(ptr, "Padded Slices <Tot %> %d %.3f\n", num_padded_slices,
+                 num_padded_slices * 100.0 / num_slices);
+  //Empty Elements
+  ptr += sprintf(ptr, "Empty Rows <Tot %> %d %.3f\n", num_empty_elements,
+                 num_empty_elements * 100.0 / numRows());
+
+  printf("%s\n",buffer);
+}
+  
 template <class DataTypes, typename ExecSpace>
 template <typename FunctionType>
 void SellCSigma<DataTypes, ExecSpace>::parallel_for(FunctionType& fn, std::string name) {

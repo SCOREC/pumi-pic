@@ -86,6 +86,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
     }
   };
   gyro_scs->parallel_for(createGyroMapping);
+  delete gyro_scs;
   return o::LOs(gyro_avg_map);
 }
 

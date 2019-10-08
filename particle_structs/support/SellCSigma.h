@@ -493,6 +493,13 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
+  if (comm_size == 1) {
+    rebuild(new_element);
+    if(!comm_rank || comm_rank == comm_size/2)
+      fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
+    Kokkos::Profiling::popRegion();
+    return;
+  }
   kkLidView num_send_particles("num_send_particles", comm_size);
   auto count_sending_particles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
     const lid_t process = new_process(particle_id);
@@ -509,7 +516,14 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
       lsum += (num_recv_particles(i) > 0);
   }, num_receiving_from);
-  
+
+  if (num_sending_to == 0 && num_receiving_from == 0) {
+    rebuild(new_element);
+    if(!comm_rank || comm_rank == comm_size/2)
+      fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
+    Kokkos::Profiling::popRegion();
+    return;
+  }
   /********** Send particle information to new processes **********/
   //Perform an ex-sum on num_send_particles & num_recv_particles
   kkLidView offset_send_particles("offset_send_particles", comm_size+1);

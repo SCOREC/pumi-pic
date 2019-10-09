@@ -441,16 +441,25 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
                                              MemberTypeViews<DataTypes> particle_info) :
   policy(p), element_gid_to_lid(ne) {
   
+  int comm_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
   C_ = policy.team_size();
   sigma = sig;
   V_ = v;
   num_elems = ne;
   num_ptcls = np;
-  
-  printf("Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
+
+  if(!comm_rank)
+    fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   PairView<ExecSpace> ptcls;
+  Kokkos::Timer timer;
   sigmaSort<ExecSpace>(ptcls, num_elems,ptcls_per_elem, sigma);
+  if(comm_rank == 0 || comm_rank == comm_size/2)
+    fprintf(stderr,"%d SCS sorting time (seconds) %f\n", comm_rank, timer.seconds());
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;

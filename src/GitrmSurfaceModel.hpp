@@ -54,7 +54,7 @@ inline o::Real erosion(const o::LO indx, const Omega_h::Write<Omega_h::Real> &vx
     auto vel = p::makeVector3(pid, vel_scs);
     o::Real stopPower = stoppingPower(vel, targetM, targetZ, screenLength);
     o::Real E0 = 0.5*amu*1.6737236e-27* p::osh_mag(vel)*1/1.60217662e-19; //TODO
-    o::Real term = std::pow((E0/Eth - 1),mu);
+    o::Real term = pow((E0/Eth - 1),mu);
     o::Real Y0 = q*stopPower*term/(lambda + term);
     erosion_scs(pid) = Y0;
   };

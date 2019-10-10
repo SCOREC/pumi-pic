@@ -42,6 +42,7 @@ public:
 
   void defineParticles(p::Mesh& picparts, int numPtcls, o::LOs& ptclsInElem, 
     int elId=-1);
+  void initPtclCollisionData(int scsCapacity); 
   void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
@@ -72,9 +73,10 @@ public:
   // particle dist to bdry
   o::Reals closestPoints;
   o::LOs closestBdryFaceIds;
-  // wall collision
-  o::Reals collisionPoints;
-  o::LOs collisionPointFaceIds;
+  
+  // wall collision. NOTE: only access per valid SCS pid_d, which is reset upon re-build
+  o::Write<o::Real> collisionPoints;
+  o::Write<o::LO> collisionPointFaceIds;
 };
 
 
@@ -97,7 +99,7 @@ struct PtclInitStruct {
 
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
-inline void storePiscesData(GitrmParticles& gp, 
+inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp, 
     o::Write<o::LO> &data_d, o::LO iter, bool debug=true) {
   // test TODO move test part to separate unit test
   double radMax = 0.05; //m 0.0446+0.005
@@ -106,8 +108,7 @@ inline void storePiscesData(GitrmParticles& gp,
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
   SCS* scs = gp.scs;
-  o::Mesh& mesh = gp.mesh;
-  auto pisces_ids = mesh.get_array<o::LO>(o::FACE, "piscesTiRod_ind");
+  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesTiRod_ind");
   auto pid_scs = scs->get<PTCL_ID>();
   //based on ptcl id or scs pid ?
   const auto& xpoints = gp.collisionPoints;
@@ -123,11 +124,11 @@ inline void storePiscesData(GitrmParticles& gp,
 
     if(mask >0 && fid>=0) {
       // test
-      o::Vector<3> xpt;
+      auto xpt = o::zero_vector<3>();
       for(o::LO i=0; i<3; ++i)
         xpt[i] = xpoints[pid*3+i];
       auto x = xpt[0], y = xpt[1], z = xpt[2];
-      o::Real rad = std::sqrt(x*x + y*y);
+      o::Real rad = sqrt(x*x + y*y);
       o::LO zInd = -1;
       if(rad < radMax && z <= zMax && z >= zMin)
         zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
@@ -158,7 +159,7 @@ inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d
       auto x = tgt_scs(pid, 0);
       auto y = tgt_scs(pid, 1);
       auto z = tgt_scs(pid, 2);
-      auto rad = std::sqrt(x*x + y*y);
+      auto rad = sqrt(x*x + y*y);
       int ind = -1;
       if(rad < radMax && radMin >= radMin && z <= zMax && z >= zMin)
         if(gridsR >1) //prefer radial

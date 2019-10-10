@@ -47,9 +47,9 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
 // TODO use o::are_close() 
 OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON) {
-  auto max = (std::abs(a) < std::abs(b)) ? b : a;
+  auto max = (abs(a) < abs(b)) ? b : a;
   max = (max>0 || max<0) ? max:1;
-  return std::abs(a-b)/max <= tol;
+  return abs(a-b)/max <= tol;
 }
 
 template<int N>
@@ -141,13 +141,13 @@ OMEGA_H_DEVICE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
 }
 
 OMEGA_H_DEVICE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
-  return std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
 OMEGA_H_DEVICE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
  const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
-    if(std::abs(a[i]-b[i]) > tol) {
+    if(abs(a[i]-b[i]) > tol) {
       return false;
     }
   }
@@ -223,7 +223,11 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
   o::Real fx_z2 = 0; 
   o::Real dim1 = pos[0];
   o::Real z = pos[2]; 
-
+  if(debug)
+    printf(" interp2D pos: %g %g %g : dx %g gridx0 %g " 
+      "nx %d nz %d fxz %g \n",
+      dim1, pos[1], pos[2],  dx, gridx0, nx, nz, fxz);
+  
   if(cylSymm) {
       dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
   }
@@ -381,7 +385,7 @@ OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
 OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
   const o::Vector<3> v2) {
   o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
-  return std::acos(cos);
+  return acos(cos);
 }
 
 
@@ -399,10 +403,10 @@ OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem,
 //TODO modify for cylindrical symmetry 
 OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
   const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
-  r = std::sqrt(x*x + y*y + z*z);
+  r = sqrt(x*x + y*y + z*z);
   OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));
-  theta = std::atan(y/x);
-  phi = std::acos(z/r);
+  theta = atan(y/x);
+  phi = acos(z/r);
 }
 
 } //namespace

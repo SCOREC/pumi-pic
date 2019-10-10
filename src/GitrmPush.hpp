@@ -76,7 +76,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
           Emag = pot*(fd/(2.0 * debyeLength)* exp(-md/(2.0 * debyeLength))+ 
                   (1.0 - fd)/(larmorRadius)* exp(-md/larmorRadius));
         }
-        if(std::isnan(Emag))
+        if(isnan(Emag))
           Emag = 0;
         if(p::almost_equal(md, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
           Emag = 0.0;
@@ -142,7 +142,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     bFieldConst = p::makeVectorHost(CONSTANT_BFIELD);
   auto eFieldConst = p::makeVectorHost(CONSTANT_EFIELD);
 
-  const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));
+  //const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));  // TODO FIXME replace this for non-pisces run
   // Only if used 2D field read from file
   auto shiftB = gm.mesh2Bfield2Dshift;
   o::Real bxz[] = {gm.bGridX0, gm.bGridZ0, gm.bGridDx, gm.bGridDz};
@@ -177,7 +177,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         auto bcc = o::zero_vector<4>();
         p::findBCCoordsInTet(coords, mesh2verts, pos, elem, bcc);
         // BField is 3 component array
-        p::interpolate3dFieldTet(mesh2verts, BField, elem, bcc, bField);  
+       // p::interpolate3dFieldTet(mesh2verts, BField, elem, bcc, bField);  
       } else if(use2dInputFields) { //TODO for testing
         auto pos = o::zero_vector<3>();
         //cylindrical symmetry, height (z) is same.

@@ -37,7 +37,7 @@ namespace pumipic {
     /*********** Set safe zone and buffer to be entire mesh****************/
     Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 1);
     Omega_h::Write<Omega_h::LO> has_part(comm_size, 1);
-
+    is_full_mesh = true;
     constructPICPart(mesh, owner, has_part, is_safe);
   }
 
@@ -52,7 +52,7 @@ namespace pumipic {
         fprintf(stderr, "Ghost layers must be >= safe layers");
       throw 1;
     }
-    
+    is_full_mesh = false;
     // **********Determine safe zone and ghost region**************** //
     Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
     Omega_h::Write<Omega_h::LO> has_part(comm_size);

@@ -66,7 +66,7 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file,
         printf("vtx %d j %d tag_d[%d]= %g\n", iv, j, 3*iv+j, tag_d[3*iv+j]);
     }
   };
-  o::parallel_for(mesh.nverts(), fill, "Fill E/B Tag");
+  o::parallel_for(mesh.nverts(), fill, "Fill B Tag");
   o::Reals tag(tag_d);
   mesh.set_tag(o::VERT, tagName, tag);
   if(debug)
@@ -100,7 +100,7 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
 
   o::LO verbose = 1;
   if(verbose >0)
-    std::cout << "Loading "<< fs.name << " from " << file << " on bdry\n";
+    std::cout << "Loading "<< fs.name << " from " << file << " on bdry faces\n";
 
   //o::HostWrite<o::Real> readInData;
  // processFieldFile(file, readInData, fs, 1); // 1= nComp
@@ -133,6 +133,8 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
       tag_d[fid] = 0;
       return;
     }
+printf("fill:: %f %f %f %f %d %d\n", rMin, zMin, dr, dz, nR, nZ);
+
     // TODO storing fields at centroid may not be best for long tets.
     auto pos = p::find_face_centroid(fid, coords, face_verts);
     //cylindrical symmetry. Height (z) is same.
@@ -141,15 +143,16 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file,
     // meaningless to include non-zero y coord of target plane.
     pos[0] = rad + shift; 
     pos[1] = 0;
+printf("fill2:: %f %f %f %f %d %d %f %f %f\n", rMin, zMin, dr, dz, nR, nZ, pos[0], pos[1], pos[2]);
     //Cylindrical symmetry = false, since already projected onto y=0 plane
     o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
-      nR, nZ, pos, false);
+      nR, nZ, pos, false, 1, 0, true);
     tag_d[fid] = val; 
 
     if(verbose > 4 && fid<10)
       printf(" tag_d[%d]= %.5f\n", fid, val);
   };
-  o::parallel_for(mesh.nfaces(), fill, "Fill face Tag");
+  o::parallel_for(mesh.nfaces(), fill, "Fill_face_tag");
   o::Reals tag(tag_d);
   mesh.set_tag(o::FACE, tagName, tag);
 }

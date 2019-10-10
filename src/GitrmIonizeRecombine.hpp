@@ -77,7 +77,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
 // TODO split 
 // dt is timestep
 inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir, 
-  const GitrmParticles& gp, const GitrmMesh& gm, o::LOs& elm_ids, 
+  const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
   bool debug = false) {
   auto& mesh = gm.mesh;
   auto use2DRatesData = gir.useReadInRatesData;
@@ -211,7 +211,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
 
 
 inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir, 
-   const GitrmParticles& gp, const GitrmMesh& gm, o::LOs& elm_ids, 
+   const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
    bool debug = false) {
   auto& mesh = gm.mesh;
   auto& densIon_d = gm.densIon_d;

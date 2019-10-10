@@ -246,11 +246,15 @@ void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
   };
   Omega_h::parallel_for(mesh->nverts(), setSyncArray);
   
+  Kokkos::Timer reducetimer;
   picparts.reduceCommArray(0, p::Mesh::Op::SUM_OP, sync_array);
+  const auto rtime = reducetimer.seconds();
 
   mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
-  if(!rank || rank == comm_size/2)
+  if(!rank || rank == comm_size/2) {
     fprintf(stderr, "%d gyro sync (seconds) %f\n", rank, timer.seconds());
+    fprintf(stderr, "%d gyro sync reduction (seconds) %f and size %d\n", rank, rtime, sync_array.size());
+  }
   Kokkos::Profiling::popRegion();
 }
 #endif

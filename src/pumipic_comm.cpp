@@ -16,7 +16,7 @@ namespace pumipic {
     int comm_size;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-    int nents = picpart->nents(edim); 
+    int nents = picpart->nents(edim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
     Omega_h::Write<Omega_h::LO> comm_arr_index(nents,0);
 

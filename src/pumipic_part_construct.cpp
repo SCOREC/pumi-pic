@@ -92,6 +92,11 @@ namespace pumipic {
         has_part = part;
     }
 
+    if (in.bufferMethod == Input::FULL)
+      is_full_mesh = true;
+    else
+      is_full_mesh = false;
+
     constructPICPart(in.m, owners, has_part, is_safe);
   }
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,

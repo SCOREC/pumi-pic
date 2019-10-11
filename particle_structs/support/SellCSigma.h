@@ -27,7 +27,25 @@
 #include <thrust/device_ptr.h>
 #endif
 
+namespace {
+  static bool ps_prebarrier_enabled = false;
+};
+
 namespace particle_structs {
+
+void enable_prebarrier() {
+  ps_prebarrier_enabled = true;
+}
+
+double prebarrier() {
+  if(ps_prebarrier_enabled) {
+    Kokkos::Timer timer;
+    MPI_Barrier(MPI_COMM_WORLD);
+    return timer.seconds();
+  } else {
+    return 0.0;
+  }
+}
 
 template <typename ExecSpace> 
 using PairView=Kokkos::View<MyPair*, typename ExecSpace::device_type>;
@@ -501,6 +519,7 @@ SellCSigma<DataTypes, ExecSpace>::~SellCSigma() {
 
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView new_process) {
+  const auto btime = prebarrier();
   Kokkos::Profiling::pushRegion("scs_migrate");
   Kokkos::Timer timer;
   /********* Send # of particles being sent to each process *********/
@@ -651,7 +670,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
 
   destroyViews<DataTypes>(recv_particle);
   if(!comm_rank || comm_rank == comm_size/2)
-    fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
+    fprintf(stderr, "%d ps particle migration (seconds) %f\n",
+        comm_rank, timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }
 
@@ -710,6 +730,7 @@ template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element, 
                                               kkLidView new_particle_elements, 
                                               MemberTypeViews<DataTypes> new_particles) {
+  const auto btime = prebarrier();
   Kokkos::Profiling::pushRegion("scs_rebuild");
   Kokkos::Timer timer;
   int comm_rank, comm_size;
@@ -841,7 +862,8 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   current_size = swap_size;
   swap_size = tmp_size;
   if(!comm_rank || comm_rank == comm_size/2)
-    fprintf(stderr, "%d ps rebuild (seconds) %f\n", comm_rank, timer.seconds());
+    fprintf(stderr, "%d ps rebuild (seconds) %f\n",
+        comm_rank, timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }
 

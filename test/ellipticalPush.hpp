@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdio>
 #include "pseudoXGCmTypes.hpp"
+#include "pumipic_profiling.hpp"
 
 namespace ellipticalPush {
   double h; //x coordinate of center
@@ -34,6 +35,7 @@ namespace ellipticalPush {
   }
   
   void push(SCS* scs, Omega_h::Mesh& m, const double deg, const int iter) {
+    const auto btime = pumipic_prebarrier();
     Kokkos::Profiling::pushRegion("ellipticalPush");
     Kokkos::Timer timer;
     int rank, comm_size;
@@ -65,7 +67,8 @@ namespace ellipticalPush {
     };
     scs->parallel_for(setPosition);
     if(!rank || rank == comm_size/2)
-      fprintf(stderr, "%d elliptical push (seconds) %f\n", rank, timer.seconds());
+      fprintf(stderr, "%d elliptical push (seconds) %f pre-barrier (seconds) %f\n",
+          rank, timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 }

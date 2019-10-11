@@ -1,7 +1,9 @@
 #include <Omega_h_mesh.hpp>
 #include <SCS_Macros.h>
+#include <SellCSigma.h>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
+#include "pumipic_profiling.hpp"
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
 #include <fstream>
@@ -296,13 +298,14 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 9;
+  const int numargs = 10;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
       "<max initial model face> <maxIterations> "
       "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
-      "<degrees per elliptical push>";
+      "<degrees per elliptical push>"
+      "<enable prebarrier>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -432,6 +435,13 @@ int main(int argc, char** argv) {
   mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
 
+  const auto enable_prebarrier = atoi(argv[9]);
+  if(enable_prebarrier) {
+    if(!comm_rank)
+      fprintf(stderr, "pre-barrier enabled\n");
+    particle_structs::enable_prebarrier();
+    pumipic_enable_prebarrier();
+  }
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
   int iter;

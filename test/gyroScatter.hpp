@@ -167,10 +167,8 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
 }
 
 void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName) {
+  const auto btime = pumipic_prebarrier();
   Kokkos::Timer timer;
-  MPI_Barrier(MPI_COMM_WORLD);
-  const auto btime = timer.seconds();
-  timer.reset();
   Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -234,16 +232,9 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
 
 void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
               const std::string& bkwdTagName, const std::string& syncTagName) {
+  const auto btime = pumipic_prebarrier();
   Kokkos::Timer timer;
-  //Work imbalance on rank 0 results in rank 0
-  // arriving late to the allreduce which causes the other ranks
-  // to wait.  This may or may not happen in a real XGC run.  We
-  // just want to know how fast sync is so we will barrier before
-  // the reduction/sync.
-  MPI_Barrier(MPI_COMM_WORLD);
-  const auto btime = timer.seconds();
   Kokkos::Profiling::pushRegion("xgcm_gyroSync");
-  timer.reset();
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);

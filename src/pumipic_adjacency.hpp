@@ -14,6 +14,7 @@
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
+#include "pumipic_profiling.hpp"
 
 namespace o = Omega_h;
 namespace ps = particle_structs;
@@ -439,6 +440,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
                  o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
+  const auto btime = pumipic_prebarrier();
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
   Kokkos::Timer timer;
 
@@ -588,7 +590,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     }
   }
   if(!rank || rank == comm_size/2) {
-    fprintf(stderr, "%d pumipic search_2d (seconds) %f\n", rank, timer.seconds());
+    fprintf(stderr, "%d pumipic search_2d (seconds) %f pre-barrier (seconds) %f\n",
+        rank, timer.seconds(), btime);
     fprintf(stderr, "%d pumipic search_2d loops %d\n", rank, loops);
   }
   int maxLoops = 0;

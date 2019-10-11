@@ -230,8 +230,16 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
 
 void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
               const std::string& bkwdTagName, const std::string& syncTagName) {
-  Kokkos::Profiling::pushRegion("xgcm_gyroSync");
   Kokkos::Timer timer;
+  //The extra ptcl search iterations on rank 0 results in rank 0
+  // arriving late to the allreduce which causes the other ranks
+  // to wait.  This may or may not happen in a real XGC run.  We
+  // just want to know how fast sync is so we will barrier before
+  // the reduction/sync.
+  MPI_Barrier(MPI_COMM_WORLD);
+  const auto btime = timer.seconds();
+  Kokkos::Profiling::pushRegion("xgcm_gyroSync");
+  timer.reset();
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
@@ -252,8 +260,8 @@ void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
 
   mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
   if(!rank || rank == comm_size/2) {
-    fprintf(stderr, "%d gyro sync (seconds) %f\n", rank, timer.seconds());
-    fprintf(stderr, "%d gyro sync reduction (seconds) %f and size %d\n", rank, rtime, sync_array.size());
+    fprintf(stderr, "%d gyro sync times (sec): sync %f pre-barrier %f reduction %f\n",
+        rank, timer.seconds(), btime, rtime);
   }
   Kokkos::Profiling::popRegion();
 }

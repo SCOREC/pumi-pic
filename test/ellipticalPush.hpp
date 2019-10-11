@@ -49,7 +49,8 @@ namespace ellipticalPush {
     const auto d_d = d;
     auto setPosition = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if(mask) {
-        const double distByClass = (double) 1.0 / class_ids[e];
+        const double centerFactor = class_ids[e] == 1 ? 0.01 : 1.0;
+        const double distByClass = centerFactor * (double) 1.0 / class_ids[e];
         const auto degP = deg*distByClass;
         const auto phi = ptcl_phi(pid);
         const auto b = ptcl_b(pid);

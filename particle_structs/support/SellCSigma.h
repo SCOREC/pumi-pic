@@ -670,7 +670,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
 
   destroyViews<DataTypes>(recv_particle);
   if(!comm_rank || comm_rank == comm_size/2)
-    fprintf(stderr, "%d ps particle migration (seconds) %f\n",
+    fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier (seconds) %f\n",
         comm_rank, timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }
@@ -862,7 +862,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   current_size = swap_size;
   swap_size = tmp_size;
   if(!comm_rank || comm_rank == comm_size/2)
-    fprintf(stderr, "%d ps rebuild (seconds) %f\n",
+    fprintf(stderr, "%d ps rebuild (seconds) %f pre-barrier (seconds) %f\n",
         comm_rank, timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }

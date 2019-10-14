@@ -1,12 +1,22 @@
-#include "GitrmMesh.hpp"
-#include "GitrmPush.hpp"
+#include <vector>
+#include <fstream>
+#include <iostream>
+#include "Omega_h_file.hpp"
+#include <Kokkos_Core.hpp>
+#include <Omega_h_mesh.hpp>
+
+#include "pumipic_mesh.hpp"
+#include "pumipic_adjacency.hpp"
+
 #include "GitrmParticles.hpp"
+#include "GitrmPush.hpp"
+#include "GitrmMesh.hpp"  //?
 #include "GitrmIonizeRecombine.hpp"
 //#include "GitrmSurfaceModel.hpp"
-#include "Omega_h_file.hpp"
+#include "Omega_h_file.hpp"  //?
 
-namespace o = Omega_h;
-namespace p = pumipic;
+#define HISTORY 0
+
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -29,76 +39,76 @@ void updatePtclPositions(SCS* scs) {
     xtgt_scs_d(pid,1) = 0;
     xtgt_scs_d(pid,2) = 0;
   };
-  scs->parallel_for(updatePtclPos);
+  scs->parallel_for(updatePtclPos, "updatePtclPos");
 }
 
-
-void rebuild(SCS* scs, o::LOs elem_ids) {
-  //fprintf(stderr, "rebuilding..\n");
+void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, 
+    const bool output=false) {
   updatePtclPositions(scs);
   const int scs_capacity = scs->capacity();
-  auto pid_d =  scs->get<2>();
-  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0 ) {//&& elem_ids[pid] >= 0) 
-      //printf(">> Particle remains %d \n", pid);
-      printf("rebuild:elem_ids[%d] %d ptcl %d\n", pid, elem_ids[pid], pid_d(pid));
+  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
+  SCS::kkLidView scs_process_ids("scs_process_ids", scs_capacity);
+  Omega_h::LOs is_safe = picparts.safeTag();
+  Omega_h::LOs elm_owners = picparts.entOwners(picparts.dim());
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if (mask) {
+      int new_elem = elem_ids[pid];
+      scs_elem_ids(pid) = new_elem;
+      scs_process_ids(pid) = comm_rank;
+      if (new_elem != -1 && is_safe[new_elem] == 0) {
+        scs_process_ids(pid) = elm_owners[new_elem];
+      }
     }
   };
- // scs->parallel_for(printElmIds);
-
-  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
-
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    (void)e;
-    scs_elem_ids(pid) = elem_ids[pid];
-  };
   scs->parallel_for(lamb);
-  
-  scs->rebuild(scs_elem_ids);
+  scs->migrate(scs_elem_ids, scs_process_ids);
 }
 
-void search(GitrmParticles& gp, GitrmMesh& gm, int iter, o::Write<o::LO>& data_d,
-  GitrmIonizeRecombine& gir, bool debug=false) {
-  auto& mesh = gm.mesh;
+void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
+    GitrmIonizeRecombine& gir, int iter, o::Write<o::LO>& data_d, 
+    bool debug=false) {
+  //auto& picparts = gm.picparts;
+  o::Mesh* mesh = picparts.mesh();
+  Kokkos::Profiling::pushRegion("gitrm_search");
   SCS* scs = gp.scs;
-  assert(scs->nElems() == mesh.nelems());
-  Omega_h::LO maxLoops = 100;
+  assert(scs->nElems() == mesh->nelems());
+  Omega_h::LO maxLoops = 20;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  o::Write<o::Real>xpoints_d(3*scsCapacity, 0, "xpoints");
-  o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
+
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
 
-  bool isFound = p::search_mesh<Particle>(mesh, scs, x_scs, xtgt_scs, pid_scs, 
-    elem_ids, xpoints_d, xface_ids, maxLoops);
+  bool isFound = p::search_mesh_3d<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
+    elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, debug);
   assert(isFound);
-
-  gp.collisionPoints = o::Reals(xpoints_d);
-  gp.collisionPointFaceIds = o::LOs(xface_ids);
-  auto elm_ids = o::LOs(elem_ids);
-  // skipped for neutral particle tracking 
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("updateGitrmData");
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(scs, gir, gp, gm, elm_ids, debug);
-    gitrm_recombine(scs, gir, gp, gm, elm_ids, debug);
+    gitrm_ionize(scs, gir, gp, gm, elem_ids, debug);
+    gitrm_recombine(scs, gir, gp, gm, elem_ids, debug);
   }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
-  //elem_ids to be used in rebuild
   //fprintf(stderr, "Applying surface Model..\n");
   //applySurfaceModel(mesh, scs, elem_ids);
 
-  //output particle positions, for converting to vtk
-  storePiscesData(mesh, gp, iter, data_d, true);
+  storePiscesData(mesh, gp, data_d, iter, true);
+  Kokkos::Profiling::popRegion();
+  Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
-  rebuild(scs, elem_ids);
+  rebuild(picparts, scs, elem_ids, debug);
+  Kokkos::Profiling::popRegion();
 }
 
-void profileAndInterpolateTest(GitrmMesh& gm, bool debug=false) {
+void profileAndInterpolateTest(GitrmMesh& gm, bool debug=false, bool inter=false) {
   gm.printDensityTempProfile(0.05, 20, 0.7, 2);
-  //gm.test_interpolateFields(true);
+  if(inter)
+    gm.test_interpolateFields(true);
 }
 
 
@@ -129,49 +139,37 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
-  printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
-  printf("Kokkos execution space memory %s name %s\n",
-      typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
-      typeid (Kokkos::DefaultExecutionSpace).name());
-  printf("Kokkos host execution space %s name %s\n",
-      typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
-      typeid (Kokkos::DefaultHostExecutionSpace).name());
-  printTimerResolution();
-  // TODO use paramter file
-  if(argc < 7)
+  if(argc < 5)
   {
-    std::cout << "Usage: " << argv[0] 
-      << " <mesh><Bfile><prof_file><ptcls_file><rate_file>"
-      << "[<nPtcls><nIter><timeStep>]\n";
+    if(comm_rank == 0)
+      std::cout << "Usage: " << argv[0] 
+        << " <mesh> <owners_file> <ptcls_file>  <Bfile> <prof_file> <rate_file> "
+        << " [<nPtcls><nIter> <histInterval> ]\n";
     exit(1);
   }
 
-  std::string bFile="", profFile="", ptclSource="", ionizeRecombFile="";
-  bool piscesRun = true;
-  bool debug = false;
-  bool chargedTracking = false; //false for neutral tracking
-  
-  if(!chargedTracking)
-    printf("WARNING: neutral particle tracking is ON \n");
+  auto deviceCount = 0;
+  cudaGetDeviceCount(&deviceCount);
+  //TODO 
+  assert(deviceCount==1);
+  assert(comm_size==1);
 
-  bool storePtclsGrids = false;
-  o::Real shiftB = 0; //pisces=0; otherwise 1.6955; 
-  if(piscesRun)
-    shiftB = 0; //1.6955;
-
-  bFile = argv[2];
-  profFile = argv[3];
-  ptclSource  = argv[4];
-  ionizeRecombFile = argv[5];
-  printf(" Mesh file %s\n", argv[1]);
-  printf(" Particle Source file %s\n", ptclSource.c_str());
-  printf(" Profile file %s\n", profFile.c_str());
-  printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
-  auto mesh = Omega_h::read_mesh_file(argv[1], lib.self());
-  printf("Number of elements %d verts %d\n", mesh.nelems(), mesh.nverts());
-
+  if(comm_rank == 0) {
+    printf("device count per process %d\n", deviceCount);
+    printf("world ranks %d\n", comm_size);
+    printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
+    printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
+    printf("Kokkos execution space memory %s name %s\n",
+        typeid (Kokkos::DefaultExecutionSpace::memory_space).name(),
+        typeid (Kokkos::DefaultExecutionSpace).name());
+    printf("Kokkos host execution space %s name %s\n",
+        typeid (Kokkos::DefaultHostExecutionSpace::memory_space).name(),
+        typeid (Kokkos::DefaultHostExecutionSpace).name());
+    printTimerResolution();
+  }
   auto full_mesh = readMesh(argv[1], lib);
+  MPI_Barrier(MPI_COMM_WORLD);
+
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   if (comm_size > 1) {
     std::ifstream in_str(argv[2]); //TODO update 
@@ -189,20 +187,64 @@ int main(int argc, char** argv) {
     for (int i = 0; i < full_mesh.nelems(); ++i)
       host_owners[i] = 0;
   Omega_h::Write<Omega_h::LO> owner(host_owners);
+
   //Create Picparts with the full mesh
   p::Mesh picparts(full_mesh, owner);
   o::Mesh* mesh = picparts.mesh();
+  mesh->ask_elem_verts(); //caching adjacency info
+ 
+  if (comm_rank == 0)
+    printf("Mesh loaded with verts %d edges %d faces %d elements %d\n", 
+      mesh->nverts(), mesh->nedges(), mesh->nfaces(), mesh->nelems());
 
-  GitrmMesh gm(mesh);
+  std::string bFile="", profFile="", ptclSource="", ionizeRecombFile="";
 
+  ptclSource  = argv[3];
+  bFile = argv[4];
+  profFile = argv[5];
+  ionizeRecombFile = argv[6];
+  printf(" Mesh file %s\n", argv[1]);
+  printf(" Particle Source file %s\n", ptclSource.c_str());
+  printf(" Profile file %s\n", profFile.c_str());
+  printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
+
+  int numPtcls = 0, histInterval = 0;
+  double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
+  int NUM_ITERATIONS = 10000; //higher beads needs >10K
+  
+  if(argc > 6)
+    numPtcls = atoi(argv[7]);
+  if(argc > 7)
+    NUM_ITERATIONS = atoi(argv[8]);
+  if(argc > 8)
+    histInterval = atoi(argv[9]);
+  
+  std::ofstream ofsHistory;
+  if(histInterval > 0)
+    ofsHistory.open("history.txt");
+
+  bool piscesRun = true;
+  bool debug = false;
+  bool chargedTracking = true; //false for neutral tracking
+  
+  if(!chargedTracking)
+    printf("WARNING: neutral particle tracking is ON \n");
+
+  o::Real shiftB = 0; //pisces=0; otherwise 1.6955; 
   if(piscesRun)
-    gm.markDetectorCylinder(true);
+    shiftB = 0; //1.6955;
 
-  printf("Initializing Fields and Boundary data\n");
-  OMEGA_H_CHECK(!bFile.empty());
-  gm.initBField(bFile, shiftB);
-
-  std::cout << "done E,B \n";
+  // TODO use picparts 
+  GitrmMesh gm(*mesh);
+  if(piscesRun)
+    gm.markPiscesCylinder(true);
+  //current extruded mesh has Y, Z switched
+  // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
+  if(!piscesRun) {
+    printf("Initializing Fields and Boundary data\n");
+    OMEGA_H_CHECK(!bFile.empty());
+    gm.initBField(bFile, shiftB); 
+  }
 
   printf("Adding Tags And Loadin Data %s\n", profFile.c_str());
   OMEGA_H_CHECK(!profFile.empty());
@@ -216,24 +258,15 @@ int main(int argc, char** argv) {
   printf("Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
-  int numPtcls = 0;
-  double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
-  int NUM_ITERATIONS = 10000; //higher beads needs >10K
-  if(argc > 6)
-    numPtcls = atoi(argv[6]);
-  if(argc > 7)
-    NUM_ITERATIONS = atoi(argv[7]);
-  if(argc > 8)
-    dTime = atof(argv[8]);
 
-  GitrmParticles gp(mesh, dTime);
+  GitrmParticles gp(*mesh, dTime);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   printf("Initializing Particles\n");
 
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
 
-  auto &scs = gp.scs;
+  auto* scs = gp.scs;
 
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
@@ -241,64 +274,75 @@ int main(int argc, char** argv) {
   o::LO numGrid = 14;
   o::Write<o::LO>data_d(numGrid, 0);
 
-  o::LO ptclGrids = 20;
-  o::Write<o::GO>ptclDataR(ptclGrids, 0);
-  o::Write<o::GO>ptclDataZ(ptclGrids, 0);
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
-
-  mesh.add_tag(o::VERT, "avg_density", 1, o::Reals(mesh.nverts(), 0));
-  Omega_h::vtk::write_parallel("meshvtk", &mesh, mesh.dim());
+  if(debug)
+    Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
+  
+  int dofStepData = 8;
+  o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
 
   fprintf(stderr, "\n*********Main Loop**********\n");
-
-  auto start_main = std::chrono::system_clock::now(); 
-  Kokkos::Timer timer;
+  auto end_init = std::chrono::system_clock::now();
+  int np;
+  int scs_np;
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
-    if(scs->nPtcls() == 0) {
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-      fprintf(stderr, "Total iterations = %d\n", iter);
       break;
     }
-    fprintf(stderr, "=================iter %d===============\n", iter);
-
+    if(comm_rank == 0 && (debug || iter%1000 ==0))
+      fprintf(stderr, "=================iter %d===============\n", iter);
+   //TODO not ready for MPI
+    #if HISTORY > 0
+    o::Write<o::Real> data(numPtcls*dofStepData, -1);
+    if(iter==0 && histInterval >0)
+      printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+    #endif
+    Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {    
       gitrm_findDistanceToBdry(gp, gm);
-      gitrm_calculateE(gp, mesh, debug);
+      gitrm_calculateE(gp, *mesh, debug);
       gitrm_borisMove(scs, gm, dTime);
     }
     else
       neutralBorisMove(scs,dTime);
+    Kokkos::Profiling::popRegion();
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    search(gp, gm, iter, data_d, gir, debug);
-
-    if(storePtclsGrids) {
-      storePtclDataInGridsRZ(scs, iter, ptclDataR, ptclGrids, 1);
-      storePtclDataInGridsRZ(scs, iter, ptclDataZ, 1, ptclGrids);
+    search(picparts, gp, gm, gir, iter, data_d, debug);
+    
+    #if HISTORY > 0
+    if(histInterval >0) {
+      updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
+      if((iter+1)%histInterval == 0)
+        printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
+        dofStepData, true); //last accum
     }
-    if(iter%100 ==0)
+    #endif
+    if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
-    if(scs->nPtcls() == 0) {
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
+    if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
-      fprintf(stderr, "Total iterations = %d\n", iter+1);
       break;
     }
   }
   auto end_sim = std::chrono::system_clock::now();
-  std::chrono::duration<double> dur_sec = end_sim - start_main;
-  std::cout << "Main duration " << dur_sec.count()/60 << " min.\n";
-  std::chrono::duration<double> dur_sec2 = start_main - start_sim;
-  std::cout << "Pre-procesing duration " << dur_sec2.count()/60 << " min.\n";
-  std::cout << "Profiles in R direction \n";
-  if(storePtclsGrids) {
-    printGridData(ptclDataR);
-    std::cout << "Profiles in Z direction \n";
-    printGridData(ptclDataZ);
+  std::chrono::duration<double> dur_init = end_init - start_sim;
+  std::cout << "Initialization duration " << dur_init.count()/60 << " min.\n";
+  std::chrono::duration<double> dur_steps = end_sim - end_init;
+  std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
+  if(piscesRun) {
     std::cout << "Pisces detections \n";
     printGridData(data_d);
   }
   fprintf(stderr, "done\n");
-
   return 0;
 }
+
+
 
 

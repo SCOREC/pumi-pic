@@ -1,11 +1,13 @@
 #ifndef GITRM_MESH_HPP
 #define GITRM_MESH_HPP
+
 #include <vector>
 #include <cfloat>
 #include <set>
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
+#include <netcdf>
 #include "pumipic_adjacency.hpp"
 #include "Omega_h_mesh.hpp"
 
@@ -64,7 +66,6 @@ public:
   GitrmMesh(o::Mesh& m);
   //TODO delete tags ?
   ~GitrmMesh(){};
-
 
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
@@ -146,6 +147,9 @@ public:
     double zmax=0.5, int gridsZ=10);
   void compareInterpolate2d3d(const o::Reals& data3d, const o::Reals& data2d,
     double x0, double z0, double dx, double dz, int nx, int nz, bool debug=false);
+
+
+  std::string profileNcFile = "profile.nc";
 
   // Used in boundary init and if 2D field is used for particles
   o::Real bGridX0 = 0;
@@ -341,6 +345,19 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
   }
 }
 
+
+inline int verifyNetcdfFile(std::string& ncFileName, int nc_err = 2) {
+  try {
+    netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
+    auto dataNc = ncFile.getVar("data");
+    if (dataNc.isNull())
+      return nc_err;
+  } catch (netCDF::exceptions::NcException &e) {
+    std::cout << e.what() << std::endl;
+    return nc_err;
+  }
+  return 0;
+} 
 
 /* file format required:  
   fieldName = num1 num2 ... ;  //for each component, any number of lines 

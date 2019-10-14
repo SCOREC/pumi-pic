@@ -497,7 +497,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   o::Real tol = 1.0e-10;
   
   Kokkos::Profiling::pushRegion("pumipic_search");
-
+  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_Init");
+  
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
@@ -524,7 +525,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   };
 
   scs->parallel_for(fill, "searchMesh_fill_elem_ids");
-
+  Kokkos::Profiling::popRegion(); 
   bool found = false;
   int loops = 0;
   while(!found) {

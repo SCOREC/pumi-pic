@@ -57,7 +57,7 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
       for(o::LO i=0; i<3; ++i)
         xpt[i] = xpoints[pid*3+i];
       auto x = xpt[0], y = xpt[1], z = xpt[2];
-      o::Real rad = std::sqrt(x*x + y*y);
+      o::Real rad = sqrt(x*x + y*y);
       o::LO zInd = -1;
       if(rad < radMax && z <= zMax && z >= zMin)
         zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
@@ -135,10 +135,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("storePiscesData");
-  //Replace these with that in gp
-  //auto elm_ids = o::LOs(elem_ids);
-  //o::Reals collisionPoints = o::Reals(xpoints_d);
-  //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
+
   storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, debug);
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();

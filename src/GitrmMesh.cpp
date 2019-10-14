@@ -17,6 +17,20 @@ GitrmMesh::GitrmMesh(o::Mesh& m):
   mesh(m) {
 }
 
+/*
+bool readProfileNcFile(std::string& ncFileName, o::HostWrite<o::Real> data) {
+  verifyNetcdfFile(ncFileName);
+  netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
+
+
+  auto dataNc = dataFile.getVar("data");
+    dataNc.getVar(data);
+
+ data
+  return 0; //=false 
+} 
+*/
+
 void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, 
   FieldStruct3& fs, o::Reals& readInData_d, o::Real shift) {
   o::LO debug = 1;

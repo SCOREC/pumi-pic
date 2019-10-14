@@ -50,7 +50,7 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = 1; // INT_MAX; // full sorting
+  const int sigma = INT_MAX; // full sorting
   const int V = 128;//1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   printf("Constructing Particles\n");
@@ -78,7 +78,8 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
 
   printf("Constructing SCS particles\n");
   defineParticles(picparts, numPtcls, numPtclsInElems, -1);
-
+  
+  initPtclCollisionData(scs->capacity());
   //note:rebuild to get mask if elem_ids changed
   printf("Setting ImpurityPtcl InitCoords \n");
   o::LOs ptclIdPtrsOfElem;
@@ -102,6 +103,12 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   if(printSource)
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
 }
+
+void GitrmParticles::initPtclCollisionData(int scsCapacity) {
+  collisionPoints = o::Write<o::Real>(5*scsCapacity, 0, "xpoints");
+  collisionPointFaceIds = o::Write<o::LO>(2*scsCapacity, -1);
+}
+
 
 // Find elemId of any particle, and start with that elem to search 
 // elem of all particles. Get #particles in each element,

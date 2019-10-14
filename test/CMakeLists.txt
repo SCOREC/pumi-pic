@@ -18,6 +18,7 @@ endfunction(make_test)
 #make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
 #make_test(loadSerialMesh loadSerialMesh.cpp)
 
+make_test(borisMove borisMove.cpp)
 make_test(neutralTracking neutralTracking.cpp)
 include(testing.cmake)
 

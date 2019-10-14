@@ -2,14 +2,15 @@
 #define GITRM_PARTICLES_HPP
 
 #include "GitrmMesh.hpp"
+#include <netcdf>
+#include <Kokkos_Core.hpp>
 #include "pumipic_kktypes.hpp"
+#include "pumipic_library.hpp"
+#include "pumipic_mesh.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
 #include <Distribute.h>
-#include <Kokkos_Core.hpp>
-#include "pumipic_library.hpp"
-#include "pumipic_mesh.hpp"
 
 using particle_structs::fp_t;
 using particle_structs::lid_t;
@@ -77,6 +78,8 @@ public:
   // wall collision. NOTE: only access per valid SCS pid_d, which is reset upon re-build
   o::Write<o::Real> collisionPoints;
   o::Write<o::LO> collisionPointFaceIds;
+
+  std::string ptclHistoryOutFile = "ptclHistory.nc";
 };
 
 

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <utility>
 #include <string>
-
+#include <netcdf>
 #include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
@@ -227,7 +227,7 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
     printf(" interp2D pos: %g %g %g : dx %g gridx0 %g " 
       "nx %d nz %d fxz %g \n",
       dim1, pos[1], pos[2],  dx, gridx0, nx, nz, fxz);
-  
+
   if(cylSymm) {
       dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
   }
@@ -381,13 +381,11 @@ OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
   return f2r_elem[ind];
 }
 
-
 OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
   const o::Vector<3> v2) {
   o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
   return acos(cos);
 }
-
 
 OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
   const o::LOs &mesh2verts,  const o::Reals &coords) {
@@ -408,6 +406,19 @@ OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y,
   theta = atan(y/x);
   phi = acos(z/r);
 }
+
+inline int verifyNetcdfFile(std::string& ncFileName, int nc_err = 2) {
+  try {
+    netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
+    auto dataNc = ncFile.getVar("data");
+    if (dataNc.isNull())
+      return nc_err;
+  } catch (netCDF::exceptions::NcException &e) {
+    std::cout << e.what() << std::endl;
+    return nc_err;
+  }
+  return 0;
+} 
 
 } //namespace
 #endif

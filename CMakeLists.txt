@@ -36,11 +36,8 @@ find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")
 set(MPIRUN_PROCFLAG "-np" CACHE STRING
   "the command line flag to give process count to MPIRUN")
 
-find_package(NetCDF 4.6.0 REQUIRED COMPONENTS CXX)
-include_directories(${NETCDF_INCLUDE_DIRS})
+find_package(NetCDF 4.0.0 REQUIRED COMPONENTS CXX)
 set(pumipic_USE_NetCDF_DEFAULT ON)
-message(STATUS "Found NetCDF ? ${NETCDF_FOUND} : ${NETCDF_VERSION}")
-message(STATUS "NetCDF libs: ${NETCDF_LIBRARIES}")
 bob_public_dep(NetCDF)
 
 find_package(Omega_h 9 REQUIRED)
@@ -64,7 +61,6 @@ if (PP_ENABLE_OPT)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
-message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 #code
 add_subdirectory(src)

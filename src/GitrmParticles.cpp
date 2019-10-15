@@ -50,7 +50,7 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
   //'sigma', 'V', and the 'policy' control the layout of the SCS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
-  const int sigma = 1; // INT_MAX; // full sorting
+  const int sigma = INT_MAX; // full sorting
   const int V = 128;//1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   printf("Constructing Particles\n");

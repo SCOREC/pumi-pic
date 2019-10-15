@@ -141,6 +141,7 @@ public:
     o::Reals&, o::Reals&, o::Real shift=0, int debug=0);
   
   void markPiscesCylinder(bool render=false);
+  void markPiscesCylinderResult(o::Write<o::LO>& data_d);
   void test_interpolateFields(bool debug=false);
   void printDensityTempProfile(double rmax=0.2, int gridsR=20, 
     double zmax=0.5, int gridsZ=10);

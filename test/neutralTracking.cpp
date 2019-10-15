@@ -139,7 +139,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   //auto elm_ids = o::LOs(elem_ids);
   //o::Reals collisionPoints = o::Reals(xpoints_d);
   //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
-  storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, debug);
+  storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, true);
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
@@ -280,7 +280,6 @@ int main(int argc, char** argv) {
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
   int dofStepData = 8;
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
-
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int iter;
@@ -332,10 +331,13 @@ int main(int argc, char** argv) {
   std::cout << "Initialization duration " << dur_init.count()/60 << " min.\n";
   std::chrono::duration<double> dur_steps = end_sim - end_init;
   std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
+  
   if(piscesRun) {
     std::cout << "Pisces detections \n";
     printGridData(data_d);
+    gm.markPiscesCylinderResult(data_d);
   }
+  Omega_h::vtk::write_parallel("pisces_mesh_vtk", mesh, picparts.dim());  
   fprintf(stderr, "done\n");
   return 0;
 }

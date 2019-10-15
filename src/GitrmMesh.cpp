@@ -780,13 +780,47 @@ void GitrmMesh::preProcessDistToBdry() {
   convert2ReadOnlyCSR();
 }
 
+void GitrmMesh::markPiscesCylinderResult(o::Write<o::LO>& beadVals_d) {
+  o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
+    525, 511, 497, 483, 469, 455, 154};
+  o::LOs faceIds(fIds_h);
+  auto numFaceIds = faceIds.size();
+  OMEGA_H_CHECK(numFaceIds == beadVals_d.size());
+  const auto sideIsExposed = o::mark_exposed_sides(&mesh);
+  auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
+  o::Write<o::LO> edgeTagIds(mesh.nedges(), -1);
+  o::Write<o::LO> faceTagIds(mesh.nfaces(), -1);
+  o::Write<o::LO> elemTagAsCounts(mesh.nelems(), 0);
+  const auto f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  const auto face2edges = mesh.ask_down(o::FACE, o::EDGE);
+  const auto faceEdges = face2edges.ab2b;
+  o::parallel_for(faceClassIds.size(), OMEGA_H_LAMBDA(const int i) {
+    for(auto id=0; id<numFaceIds; ++id) {
+      if(faceIds[id] == faceClassIds[i] && sideIsExposed[i]) {
+        faceTagIds[i] = id;
+        auto elmId = p::elem_of_bdry_face(i, f2rPtr, f2rElem);
+        elemTagAsCounts[elmId] = beadVals_d[id];
+        const auto edges = o::gather_down<3>(faceEdges, elmId);
+        for(int ie=0; ie<3; ++ie) {
+          auto eid = edges[ie];
+          edgeTagIds[eid] = beadVals_d[id];
+        }
+      }
+    }
+  });
+  mesh.add_tag<o::LO>(o::EDGE, "piscesTiRodCounts_edge", 1, o::LOs(edgeTagIds));
+  mesh.add_tag<o::LO>(o::REGION, "Pisces_Bead_Counts", 1, o::LOs(elemTagAsCounts));
+}
 
+//get fIds_h by opening mesh/model in Simmodeler
 void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
   o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
     525, 511, 497, 483, 469, 455, 154};
   o::LOs faceIds(fIds_h);
   auto numFaceIds = faceIds.size();
   const auto side_is_exposed = o::mark_exposed_sides(&mesh);
+  // array of all faces, but only classification ids are valid
   auto face_class_ids = mesh.get_array<o::ClassId>(2, "class_id");
   o::Write<o::LO> faceTagIds(mesh.nfaces(), -1);
   o::Write<o::LO> elemTagIds(mesh.nelems(), 0);
@@ -805,7 +839,7 @@ void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
   });
 
   mesh.add_tag<o::LO>(o::FACE, "piscesTiRod_ind", 1, o::LOs(faceTagIds));
-  mesh.add_tag<o::LO>(o::REGION, "piscesTiRodId", 1, o::LOs(elemTagIds));
+  mesh.add_tag<o::LO>(o::REGION, "piscesTiRodRegIndex", 1, o::LOs(elemTagIds));
 }
 
 

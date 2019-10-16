@@ -5,8 +5,10 @@
 #include <pumipic_mesh.hpp>
 #include <Kokkos_Core.hpp>
 
+
 bool minOwnership(pumipic::Mesh& picparts, int dim);
 bool sumEntities(pumipic::Mesh& picparts, int dim);
+bool fullBufferTest(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner, int dim);
 
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -26,7 +28,7 @@ int main(int argc, char** argv) {
   if (rank == 0)
     printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(), 
            mesh.nfaces(), mesh.nelems());
-
+  
   //********* Load the partition vector ***********//
   Omega_h::HostWrite<Omega_h::LO> host_owners(ne);
   std::ifstream in_str(argv[2]);
@@ -43,13 +45,20 @@ int main(int argc, char** argv) {
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 
+  for (int i = 0; i <= mesh.dim(); ++i) {
+    if (!fullBufferTest(mesh, owner, i))
+      printf("fullBufferTest on dimension %d failed on rank %d\n", i, rank);
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  
   //********* Construct the PIC parts *********//
   pumipic::Mesh picparts(mesh, owner, 1, 0);
 
-  // for (int i = 0; i <= picparts.dim(); ++i) {
-  //   if (!minOwnership(picparts, i))
-  //     printf("minOwnership on dimension %d failed on rank %d\n", i, rank);
-  // }
+  for (int i = 0; i <= picparts.dim(); ++i) {
+    if (!minOwnership(picparts, i))
+      printf("minOwnership on dimension %d failed on rank %d\n", i, rank);
+  }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -60,7 +69,6 @@ int main(int argc, char** argv) {
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  return 0;
   Omega_h::Write<Omega_h::Real> max_comm = picparts.createCommArray(0, 1, 0.0);
   auto setLIDVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
     max_comm[vtx_id] = vtx_id;
@@ -165,5 +173,32 @@ bool sumEntities(pumipic::Mesh& picparts, int dim) {
   if (fail_host[0]) {
     return false;
   }
+  return true;
+}
+
+bool fullBufferTest(Omega_h::Mesh& mesh, Omega_h::Write<Omega_h::LO> owner, int dim) {
+  pumipic::Input input(mesh, pumipic::Input::PARTITION, owner, pumipic::Input::FULL,
+                       pumipic::Input::FULL);
+
+  pumipic::Mesh picparts(input);
+
+  Omega_h::Write<Omega_h::LO> comm_arr = picparts.createCommArray(dim, 1, 1);
+
+  picparts.reduceCommArray(dim, pumipic::Mesh::SUM_OP, comm_arr);
+
+  int comm_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  Omega_h::Write<Omega_h::LO> fail(1, 0);
+  auto checkCommArr = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
+    if (comm_arr[id] != comm_size)
+      fail[0] = 1;
+  };
+  Omega_h::parallel_for(picparts.mesh()->nents(dim), checkCommArr);
+
+  Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
+  if (fail_host[0]) {
+    return false;
+  }
+
   return true;
 }

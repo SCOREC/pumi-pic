@@ -82,6 +82,8 @@ namespace pumipic {
     Omega_h::CommPtr commptr;
     Omega_h::Mesh* picpart;
 
+    bool is_full_mesh;
+
     //*********************PICpart information**********************/
     //Number of core parts that are buffered (doesn't include self)
     int num_cores[4];

@@ -37,7 +37,7 @@ namespace pumipic {
     /*********** Set safe zone and buffer to be entire mesh****************/
     Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 1);
     Omega_h::Write<Omega_h::LO> has_part(comm_size, 1);
-
+    is_full_mesh = true;
     constructPICPart(mesh, owner, has_part, is_safe);
   }
 
@@ -52,7 +52,7 @@ namespace pumipic {
         fprintf(stderr, "Ghost layers must be >= safe layers");
       throw 1;
     }
-    
+    is_full_mesh = false;
     // **********Determine safe zone and ghost region**************** //
     Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
     Omega_h::Write<Omega_h::LO> has_part(comm_size);
@@ -91,6 +91,11 @@ namespace pumipic {
       if (in.bufferMethod == Input::BFS || in.bufferMethod == Input::MINIMUM)
         has_part = part;
     }
+
+    if (in.bufferMethod == Input::FULL)
+      is_full_mesh = true;
+    else
+      is_full_mesh = false;
 
     constructPICPart(in.m, owners, has_part, is_safe);
   }
@@ -224,7 +229,6 @@ namespace pumipic {
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners,
                                 Omega_h::Write<Omega_h::LO> owns) {
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     int self;
     MPI_Comm_rank(MPI_COMM_WORLD, &self);
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
@@ -236,7 +240,6 @@ namespace {
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
     };
     Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     Omega_h::HostWrite<Omega_h::LO> selfcount_h(selfcount);
     if(!selfcount_h[0]) {
       fprintf(stderr, "%s rank %d with no owned elements detected\n", __func__, self);
@@ -246,7 +249,6 @@ namespace {
   
   //Ownership of lower entity dimensions is determined by the minimum owner of surrounding elements
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::LOs elm_owner) {
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     int comm_size, comm_rank;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
@@ -265,7 +267,6 @@ namespace {
       ent_owner[ent_id] = min;
     };
     Omega_h::parallel_for(m.nents(dim), determineOwner);
-    OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
     return ent_owner;
   }
 

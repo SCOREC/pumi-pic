@@ -231,6 +231,23 @@ namespace pumipic {
       return;
     }
 
+    //If full mesh then perform an allreduce on the array
+    if (isFullMesh()) {
+      Omega_h::HostWrite<T> array_host(comm_array);
+      MPI_Op mpi_op;
+      if (op == SUM_OP)
+        mpi_op = MPI_SUM;
+      else if (op == MAX_OP)
+        mpi_op = MPI_MAX;
+      else if (op == MIN_OP)
+        mpi_op = MPI_MIN;
+      MPI_Allreduce(MPI_IN_PLACE, array_host.data(), array_host.size(),
+                    MpiTraits<T>::datatype(), mpi_op, commptr->get_impl());
+      comm_array = Omega_h::Write<T>(array_host);
+      return;
+    }
+
+    
     //Shift comm_array indexing to bulk communication ordering
     Omega_h::Read<Omega_h::LO> arr_index = commArrayIndex(edim);
     Omega_h::Write<T> array(length, 0);

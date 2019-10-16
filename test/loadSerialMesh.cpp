@@ -23,11 +23,7 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  auto deviceCount = 0;
-  cudaGetDeviceCount(&deviceCount);
-  assert(deviceCount==1);
   if (!rank) {
-    printf("device count per process %d\n", deviceCount);
     printf("world ranks %d\n", size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
     printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
@@ -45,11 +41,8 @@ int main(int argc, char** argv) {
   auto mesh = Omega_h::binary::read(argv[1], lib.self(), strict);
   if(!rank)
     fprintf(stderr, "mesh tri %d\n", mesh.nelems());
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto vtx_to_elm = mesh.ask_up(0,2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto edge_to_elm = mesh.ask_up(1,2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   MPI_Barrier(MPI_COMM_WORLD);
   if(!rank)
     fprintf(stderr, "done\n");

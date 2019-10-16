@@ -86,6 +86,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
     }
   };
   gyro_scs->parallel_for(createGyroMapping);
+  delete gyro_scs;
   return o::LOs(gyro_avg_map);
 }
 
@@ -166,8 +167,9 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
 }
 
 void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName) {
-  Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
+  const auto btime = pumipic_prebarrier();
   Kokkos::Timer timer;
+  Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
@@ -223,14 +225,16 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
   o::parallel_for(mesh->nverts(), scatterToMappedVerts, "xgcm_scatterToMappedVerts");
   mesh->set_tag(o::VERT, scatterTagName, o::Reals(scatter_w));
   if(!rank || rank == comm_size/2)
-    fprintf(stderr, "%d gyro scatter (seconds) %f\n", rank, timer.seconds());
+    fprintf(stderr, "%d gyro scatter (seconds) %f pre-barrier (seconds) %f\n",
+        rank, timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }
 
 void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
               const std::string& bkwdTagName, const std::string& syncTagName) {
-  Kokkos::Profiling::pushRegion("xgcm_gyroSync");
+  const auto btime = pumipic_prebarrier();
   Kokkos::Timer timer;
+  Kokkos::Profiling::pushRegion("xgcm_gyroSync");
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
@@ -245,11 +249,15 @@ void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
   };
   Omega_h::parallel_for(mesh->nverts(), setSyncArray);
   
+  Kokkos::Timer reducetimer;
   picparts.reduceCommArray(0, p::Mesh::Op::SUM_OP, sync_array);
+  const auto rtime = reducetimer.seconds();
 
   mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
-  if(!rank || rank == comm_size/2)
-    fprintf(stderr, "%d gyro sync (seconds) %f\n", rank, timer.seconds());
+  if(!rank || rank == comm_size/2) {
+    fprintf(stderr, "%d gyro sync times (sec): sync %f pre-barrier %f reduction %f\n",
+        rank, timer.seconds(), btime, rtime);
+  }
   Kokkos::Profiling::popRegion();
 }
 #endif

@@ -23,12 +23,9 @@ T getLastValue(Kokkos::View<T*, ExecSpace> view) {
   const int size = view.size();
   if (size == 0)
     return 0;
-  Kokkos::View<T*, ExecSpace> lastValue("",1);
-  Kokkos::parallel_for(1,KOKKOS_LAMBDA(const int& i) {
-      lastValue(0) = view(size-1);
-    });
-  typename Kokkos::View<T*, ExecSpace>::HostMirror host_view = deviceToHost(lastValue);
-  return host_view(0);
+  T lastVal;
+  Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
+  return lastVal;
 }
 
 template <class T, typename ExecSpace> struct CopyViewToView {

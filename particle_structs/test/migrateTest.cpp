@@ -17,6 +17,8 @@ using particle_structs::distribute_elements;
 typedef MemberTypes<int, double[3]> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef SellCSigma<Type, exe_space> SCS;
+
+bool sendToOne(int ne, int np);
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
@@ -110,10 +112,86 @@ int main(int argc, char* argv[]) {
     }
     delete scs;
   }
+
+  if (!sendToOne(100, 100000)) {
+    printf("SendToOne failed on rank %d\n", comm_rank);
+  }
   Kokkos::finalize();
   MPI_Barrier(MPI_COMM_WORLD);
   MPI_Finalize();
   if (comm_rank == 0)
     printf("All tests passed\n");
   return 0;
+}
+
+bool sendToOne(int ne, int np) {
+  int comm_rank;
+  int comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+  particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
+  for (int i = 0; i < ne; ++i)
+    gids[i] = i;
+  
+  int* ptcls_per_elem = new int[ne];
+  std::vector<int>* ids = new std::vector<int>[ne];
+  distribute_particles(ne, np, 2, ptcls_per_elem, ids);
+  delete [] ids;
+
+
+  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+  SCS::kkGidView element_gids_v("element_gids_v", ne);
+  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
+  particle_structs::hostToDevice(element_gids_v, gids);
+  delete [] ptcls_per_elem;
+  delete [] gids;
+  Kokkos::TeamPolicy<exe_space> po(4, 4);
+  int sigma = ne;
+  int V = 100;
+  SCS* scs = new SCS(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v);
+  
+  typedef SCS::kkLidView kkLidView;
+  kkLidView new_element("new_element", scs->capacity());
+  kkLidView new_process("new_process", scs->capacity());
+
+  auto int_slice = scs->get<0>();
+  auto double_slice = scs->get<1>();
+
+  auto setValues = SCS_LAMBDA(int elem_id, int ptcl_id, int mask) {
+    int_slice(ptcl_id) = comm_rank;
+    double_slice(ptcl_id,0) = comm_rank * 5;
+    if (ptcl_id < np/100)
+      new_process[ptcl_id] = 0;
+    else
+      new_process[ptcl_id] = comm_rank;
+    new_element[ptcl_id] = elem_id;
+  };
+  scs->parallel_for(setValues);
+
+  scs->migrate(new_element, new_process);
+
+  int nPtcls = scs->nPtcls();
+  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np/100)
+    return false;
+  else if (comm_rank != 0 && nPtcls != np*99/100)
+    return false;
+    
+  int_slice = scs->get<0>();
+  double_slice = scs->get<1>();
+  kkLidView fail("fail", 1);
+  auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+    if (mask) {
+      int rank = int_slice(ptcl_id);
+      double val = double_slice(ptcl_id, 0);
+      if (fabs(rank*5 - val) > .0005) {
+        printf("%d Value fails on ptcl %d (%d %.2f)", comm_rank, ptcl_id, rank*5, val);
+        fail(0) = 1;
+      }
+    }
+  };
+  scs->parallel_for(checkValues);
+  MPI_Barrier(MPI_COMM_WORLD);
+  int f = particle_structs::getLastValue(fail);
+  return f == 0;
 }

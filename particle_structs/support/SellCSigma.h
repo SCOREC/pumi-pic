@@ -628,11 +628,8 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
       recv_num+=num_types;
     }
   }
-  PS_Comm_Waitall<ExecSpace>(num_sends, send_requests, MPI_STATUSES_IGNORE);
   PS_Comm_Waitall<ExecSpace>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
-  delete [] send_requests;
   delete [] recv_requests;
-  destroyViews<DataTypes>(send_particle);
 
   /********** Convert the received element from element gid to element lid *********/
   auto element_gid_to_lid_local = element_gid_to_lid;
@@ -646,7 +643,7 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   auto removeSentParticles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
     const bool sent = new_process(particle_id) != comm_rank;
     const lid_t elm = new_element(particle_id);
-    //Subtract its value + 1 to get to -1 if it was sent, 0 otherwise
+    //Subtract (its value + 1) to get to -1 if it was sent, 0 otherwise
     new_element(particle_id) -= (elm + 1) * sent;
   };
   parallel_for(removeSentParticles);
@@ -654,6 +651,10 @@ void SellCSigma<DataTypes, ExecSpace>::migrate(kkLidView new_element, kkLidView 
   /********** Combine and shift particles to their new destination **********/
   rebuild(new_element, recv_element, recv_particle);
 
+  //Cleanup
+  PS_Comm_Waitall<ExecSpace>(num_sends, send_requests, MPI_STATUSES_IGNORE);
+  delete [] send_requests;
+  destroyViews<DataTypes>(send_particle);
   destroyViews<DataTypes>(recv_particle);
   if(!comm_rank || comm_rank == comm_size/2)
     fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier (seconds) %f\n",

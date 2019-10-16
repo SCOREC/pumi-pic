@@ -116,7 +116,8 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
 }
 
 void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter, 
-  o::Write<o::LO>& data_d, o::Write<o::Real>& xpoints_d, bool debug=false ) {
+  o::Write<o::LO>& data_d, o::Write<o::Real>& xpoints_d, 
+  o::Write<o::LO>&xface_ids, bool debug=false ) {
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   if(debug)
@@ -125,12 +126,12 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   Omega_h::LO maxLoops = 10;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
+  //o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
 
-  bool isFound = p::search_mesh_3d<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
+  bool isFound = p::search_mesh<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
     elem_ids, xpoints_d, xface_ids, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
@@ -272,7 +273,7 @@ int main(int argc, char** argv) {
   const auto scsCapacity = scs->capacity();
   //TODO fix this extra storage 
   o::Write<o::Real>xpoints_d(5*scsCapacity, 0, "xpoints");
-  //o::Write<o::LO>xface_ids((int)(1.5*scsCapacity), -1, "xface_ids"); //crash
+  o::Write<o::LO>xface_ids((int)(2*scsCapacity), -1, "xface_ids"); //crash
 
   o::LO numGrid = 14;
   o::Write<o::LO>data_d(numGrid, 0);
@@ -308,7 +309,7 @@ int main(int argc, char** argv) {
 
     MPI_Barrier(MPI_COMM_WORLD);
     
-    search(picparts, scs, gp, iter, data_d, xpoints_d, debug);
+    search(picparts, scs, gp, iter, data_d, xpoints_d, xface_ids, debug);
     #if HISTORY > 0
     if(histInterval >0) {
       updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 

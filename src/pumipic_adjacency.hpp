@@ -307,10 +307,13 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   const auto scsCapacity = scs->capacity();
   Kokkos::Profiling::popRegion();
 
+  Kokkos::Profiling::pushRegion("pumpipic_ptcl-done_elem_ids");
   // ptcl_done[i] = 2 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity,-1, "elem_ids_next");
+  Kokkos::Profiling::popRegion();
+
   auto fill = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
@@ -484,6 +487,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     }
   } //while
   Kokkos::Profiling::popRegion(); //whole
+  fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
   return found;   
 }
 
@@ -497,7 +501,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   o::Real tol = 1.0e-10;
   
   Kokkos::Profiling::pushRegion("pumipic_search");
-
+  Kokkos::Profiling::pushRegion("pumipic_search_Init");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
@@ -508,9 +512,10 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   const auto scsCapacity = scs->capacity();
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
-  o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
+  o::Write<o::LO> ptcl_done(scsCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(scsCapacity,-1);
+  o::Write<o::LO> elem_ids_next(scsCapacity);//,-1);
+  //o::Write<o::LO> elem_ids(scsCapacity,-1);
   auto fill = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
@@ -524,6 +529,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   };
 
   scs->parallel_for(fill, "searchMesh_fill_elem_ids");
+  Kokkos::Profiling::popRegion();
 
   bool found = false;
   int loops = 0;
@@ -688,6 +694,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       break;
     }
   } //while
+
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
   Kokkos::Profiling::popRegion();

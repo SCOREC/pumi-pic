@@ -19,6 +19,7 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef SellCSigma<Type,exe_space> SCS;
 
 int main(int argc, char* argv[]) {
+  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
   int f = 0;
   int ne = 5;
@@ -66,6 +67,7 @@ int main(int argc, char* argv[]) {
 
   }
   Kokkos::finalize();
+  MPI_Finalize();
   if (!f)
     printf("All tests passed\n");
   return f;

@@ -13,7 +13,7 @@ using particle_structs::distribute_elements;
 using particle_structs::distribute_particles;
 
 int main(int argc, char** argv) {
-
+  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc,argv);
   typedef MemberTypes<int> Type1;
   typedef MemberTypes<int,double[2]> Type2;
@@ -67,6 +67,7 @@ int main(int argc, char** argv) {
   }
 
   Kokkos::finalize();
+  MPI_Finalize();
   printf("All tests passed\n");
   return 0;
 }

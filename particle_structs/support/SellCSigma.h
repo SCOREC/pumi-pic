@@ -344,6 +344,9 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
 
   nSlices = getLastValue<lid_t>(offset_nslices);
   Kokkos::resize(offs,nSlices + 1);
+  Kokkos::parallel_for(offs.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    offs(i) = 0;
+  });
   Kokkos::resize(s2c, nSlices);
   kkLidView slice_size("slice_size", nSlices);
   const lid_t nat_size = V_*C_;

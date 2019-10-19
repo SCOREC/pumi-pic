@@ -14,6 +14,7 @@ set(SOURCES
   pumipic_comm.cpp
   pumipic_mesh.cpp
   pumipic_library.cpp
+  pumipic_profiling.cpp
   GitrmMesh.cpp
   GitrmParticles.cpp
   GitrmIonizeRecombine.cpp

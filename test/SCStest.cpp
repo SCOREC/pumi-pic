@@ -3,6 +3,7 @@
 #include <fstream>
 #include "Omega_h_file.hpp"
 #include <Omega_h_mesh.hpp>
+#include "Omega_h_for.hpp"
 #include "pumipic_kktypes.hpp"
 #include <psTypes.h>
 #include <SellCSigma.h>
@@ -22,7 +23,27 @@ namespace o = Omega_h;
 namespace p = pumipic;
 typedef MemberTypes < Vector3d, Vector3d, int> Particle;
 typedef SellCSigma<Particle> SCS;
-   
+
+o::Mesh readMesh(char* meshFile, o::Library& lib) {
+  const auto rank = lib.world()->rank();
+  (void)lib;
+  std::string fn(meshFile);
+  auto ext = fn.substr(fn.find_last_of(".") + 1);
+  if( ext == "msh") {
+    if(!rank)
+    std::cout << "reading gmsh mesh " << meshFile << "\n";
+    return Omega_h::gmsh::read(meshFile, lib.self());
+  } else if( ext == "osh" ) {
+    if(!rank)
+      std::cout << "reading omegah mesh " << meshFile << "\n";
+    return Omega_h::binary::read(meshFile, lib.self(), true);
+  } else {
+    if(!rank)
+      std::cout << "error: unrecognized mesh extension \'" << ext << "\'\n";
+    exit(EXIT_FAILURE);
+  }
+}
+
 int main(int argc, char** argv) {
   auto start_sim = std::chrono::system_clock::now(); 
   pumipic::Library pic_lib(&argc, &argv);

@@ -19,6 +19,7 @@ endfunction(make_test)
 #make_test(loadSerialMesh loadSerialMesh.cpp)
 
 make_test(neutralTracking neutralTracking.cpp)
+make_test(SCStest SCStest.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

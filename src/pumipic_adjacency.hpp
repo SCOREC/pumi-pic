@@ -461,8 +461,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
-  // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(scsCapacity,-1);
   // store the last crossed edge
   o::Write<o::LO> lastEdge(scsCapacity,-1);
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -516,7 +514,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
         auto isDestInParentElm = all_positive(faceBcc);
         ptcl_done[pid] = isDestInParentElm;
-        elem_ids_next[pid] = elem_ids[pid];
         const int idx = min3(faceBcc);
         lastEdge[pid] = edges[idx];
       }
@@ -531,7 +528,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
-        elem_ids_next[pid] = -1; //leaves domain if exposed
+        elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
       }
     };
     scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
@@ -552,17 +549,12 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         assert(faceA != faceB);
         assert(faceA == searchElm || faceB == searchElm);
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
-        elem_ids_next[pid] = nextElm;
+        elem_ids[pid] = nextElm;
       }
     };
     scs->parallel_for(setNextElm, "pumipic_setNextElm");
 
     found = true;
-    auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
-      elem_ids[i] = elem_ids_next[i];
-    };
-    o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
-
     o::LOs ptcl_done_r(ptcl_done);
     auto minFlag = o::get_min(ptcl_done_r);
     if(minFlag == 0)

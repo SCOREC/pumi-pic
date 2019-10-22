@@ -12,6 +12,31 @@
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
+void getMemImbalance(int hasptcls) {
+#ifdef SCS_USE_CUDA
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  size_t free, total;
+  cudaMemGetInfo(&free, &total);
+  const long used=total-free;
+  long maxused=0;
+  long totused=0;
+  int rankswithptcls=0;
+  MPI_Allreduce(&used, &maxused, 1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&used, &totused, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&hasptcls, &rankswithptcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const double avg=static_cast<double>(totused)/rankswithptcls;
+  const double imb=maxused/avg;
+  if(!comm_rank) {
+    printf("ranks with particles %d memory usage imbalance %f\n",
+        rankswithptcls, imb);
+  }
+  if( used == maxused ) {
+    printf("%d peak mem usage %ld, avg usage %f\n", comm_rank, maxused, avg);
+  }
+#endif
+}
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
@@ -453,6 +478,7 @@ int main(int argc, char** argv) {
     }
     if (!comm_rank)
       fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
+    getMemImbalance(scs_np!=0);
     timer.reset();
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);

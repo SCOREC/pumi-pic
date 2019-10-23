@@ -331,6 +331,7 @@ int main(int argc, char** argv) {
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
+  getMemImbalance(1);
   if (comm_rank == 0) {
     printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
@@ -470,6 +471,8 @@ int main(int argc, char** argv) {
   long int totNp;
   long int scs_np;
   for(iter=1; iter<=maxIter; iter++) {
+    if(comm_rank == comm_size/2)
+      scs->printMetrics();
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     if(totNp == 0) {

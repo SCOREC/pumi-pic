@@ -38,17 +38,17 @@ mpi_test(pseudoXGCm_scatter 1
   ${TEST_DATA_DIR}/plate/tri8_parDiag.osh)
 mpi_test(pseudoXGCm_24kElms 1
   ./pseudoXGCm --kokkos-threads=1
-  ${TEST_DATA_DIR}/xgc/itg24k.osh ignored 
-  1000 5 100 full bfs 0.5)
+  ${TEST_DATA_DIR}/xgc/24k.osh ignored
+  1000 5 100 full bfs 0.5 0)
 mpi_test(pseudoXGCm_24kElms_4 4
   ./pseudoXGCm --kokkos-threads=1
-  ${TEST_DATA_DIR}/xgc/itg24k.osh ${TEST_DATA_DIR}/xgc/itg24k.cpn
-  1000 2 100 full bfs 0.5)
+  ${TEST_DATA_DIR}/xgc/24k.osh ${TEST_DATA_DIR}/xgc/24k_4.cpn
+  1000 2 100 full bfs 0.5 0)
 
 mpi_test(pseudoXGCm_126kElms 1
   ./pseudoXGCm --kokkos-threads=1
-  ${TEST_DATA_DIR}/xgc/itg126k.osh ignored
-  10000 141 10 full bfs 0.5)
+  ${TEST_DATA_DIR}/xgc/120k.osh ignored
+  10000 141 10 full bfs 0.5 0)
 
 
 #MPI+X testing

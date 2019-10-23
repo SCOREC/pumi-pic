@@ -116,10 +116,7 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   auto x = scs->get<0>();
   auto xtgt = scs->get<1>();
   auto pid = scs->get<2>();
-  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
-  o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
-  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
-                                          xpoints_d, maxLoops);
+  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids, maxLoops);
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(picparts, scs, elem_ids, output);

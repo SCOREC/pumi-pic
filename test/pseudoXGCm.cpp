@@ -471,7 +471,7 @@ int main(int argc, char** argv) {
   long int totNp;
   long int scs_np;
   for(iter=1; iter<=maxIter; iter++) {
-    if(comm_rank == comm_size/2)
+    if(!comm_rank || (comm_rank == comm_size/2))
       scs->printMetrics();
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);

@@ -2,7 +2,8 @@
 
 namespace pumipic {
   Mesh::~Mesh() {
-    delete picpart;
+    if (!isFullMesh())
+      delete picpart;
   }
 
   bool Mesh::isFullMesh() const {

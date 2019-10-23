@@ -162,6 +162,23 @@ namespace pumipic {
       ent_ids[i] = numbering;
     }
 
+    //If full mesh buffer then we don't need to make new mesh for the picparts
+    if (isFullMesh()) {
+      //Set picpart to point to the mesh
+      picpart = &mesh;
+      is_ent_safe = Omega_h::LOs(is_safe);
+      Omega_h::Library* lib = mesh.library();
+      commptr = lib->world();
+      //Save all tags on full mesh
+      for (int i = 0; i <= dim; ++i) {
+        global_ids_per_dim[i] = ent_gid_per_dim[i];
+        rank_lids_per_dim[i] = rank_lid_per_dim[i];
+        ent_owner_per_dim[i] = owner_dim[i];
+        //We dont need to setup communication arrays because an allreduce is used
+      }
+      return;
+    }
+    
     //************Build a new mesh as the picpart**************
     Omega_h::Library* lib = mesh.library();
     picpart = new Omega_h::Mesh(lib);
@@ -220,7 +237,6 @@ namespace pumipic {
       //**************** Build communication information ********************//
       commptr = lib->world();
       Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
-
       setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
     }
   }

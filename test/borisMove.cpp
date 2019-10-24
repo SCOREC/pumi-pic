@@ -10,12 +10,10 @@
 
 #include "GitrmParticles.hpp"
 #include "GitrmPush.hpp"
-#include "GitrmMesh.hpp"  //?
 #include "GitrmIonizeRecombine.hpp"
 //#include "GitrmSurfaceModel.hpp"
-#include "Omega_h_file.hpp"  //?
 
-#define HISTORY 0
+#define HISTORY 1
 
 
 void printTiming(const char* name, double t) {
@@ -139,14 +137,17 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  if(argc < 5)
+  if(argc < 6)
   {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
-        << " <mesh> <owners_file> <ptcls_file>  <Bfile> <prof_file> <rate_file> "
+        << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file>"
         << " [<nPtcls><nIter> <histInterval> ]\n";
     exit(1);
   }
+  bool piscesRun = true; // add as argument later
+  bool chargedTracking = true; //false for neutral tracking
+  bool debug = false;
 
   auto deviceCount = 0;
   cudaGetDeviceCount(&deviceCount);
@@ -172,7 +173,7 @@ int main(int argc, char** argv) {
 
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   if (comm_size > 1) {
-    std::ifstream in_str(argv[2]); //TODO update 
+    std::ifstream in_str(argv[2]);
     if (!in_str) {
       if (!comm_rank)
         fprintf(stderr,"Cannot open file %s\n", argv[2]);
@@ -196,77 +197,72 @@ int main(int argc, char** argv) {
   if (comm_rank == 0)
     printf("Mesh loaded with verts %d edges %d faces %d elements %d\n", 
       mesh->nverts(), mesh->nedges(), mesh->nfaces(), mesh->nelems());
+  std::string ptclSource = argv[3];
+  std::string profFile = argv[4];
+  std::string ionizeRecombFile = argv[5];
+  std::string bFile=""; //TODO
 
-  std::string bFile="", profFile="", ptclSource="", ionizeRecombFile="";
-
-  ptclSource  = argv[3];
-  bFile = argv[4];
-  profFile = argv[5];
-  ionizeRecombFile = argv[6];
-  printf(" Mesh file %s\n", argv[1]);
-  printf(" Particle Source file %s\n", ptclSource.c_str());
-  printf(" Profile file %s\n", profFile.c_str());
-  printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
-
-  int numPtcls = 0, histInterval = 0;
+  if (!comm_rank) {
+    if(!chargedTracking)
+      printf("WARNING: neutral particle tracking is ON \n");
+    printf(" Mesh file %s\n", argv[1]);
+    printf(" Particle Source file %s\n", ptclSource.c_str());
+    printf(" Profile file %s\n", profFile.c_str());
+    printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
+  }
+  int numPtcls = 100;
+  int histInterval = 0;
   double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
-  int NUM_ITERATIONS = 10000; //higher beads needs >10K
+  int NUM_ITERATIONS = 10; //higher beads needs >10K
   
   if(argc > 6)
-    numPtcls = atoi(argv[7]);
+    numPtcls = atoi(argv[6]);
   if(argc > 7)
-    NUM_ITERATIONS = atoi(argv[8]);
-  if(argc > 8)
-    histInterval = atoi(argv[9]);
-  
+    NUM_ITERATIONS = atoi(argv[7]);
+  if(argc > 8) {
+    histInterval = atoi(argv[8]);
+    if(histInterval >NUM_ITERATIONS)
+      histInterval = NUM_ITERATIONS;
+  }
+  //TODO delete after testing
   std::ofstream ofsHistory;
   if(histInterval > 0)
     ofsHistory.open("history.txt");
 
-  bool piscesRun = true;
-  bool debug = false;
-  bool chargedTracking = true; //false for neutral tracking
-  
-  if(!chargedTracking)
-    printf("WARNING: neutral particle tracking is ON \n");
-
-  o::Real shiftB = 0; //pisces=0; otherwise 1.6955; 
-  if(piscesRun)
-    shiftB = 0; //1.6955;
-
+  GitrmParticles gp(*mesh, dTime);
   // TODO use picparts 
   GitrmMesh gm(*mesh);
   if(piscesRun)
     gm.markPiscesCylinder(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
+  if(!comm_rank)
+    printf("Initializing Particles\n");
+  gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
+  auto* scs = gp.scs;
+  const auto scsCapacity = scs->capacity();
+  //TODO fix this extra storage 
+  o::Write<o::Real>xpoints_d(5*scsCapacity, 0, "xpoints");
+  //o::Write<o::LO>xface_ids((int)(1.5*scsCapacity), -1, "xface_ids"); //crash
+
   if(!piscesRun) {
-    printf("Initializing Fields and Boundary data\n");
-    OMEGA_H_CHECK(!bFile.empty());
+    std::string bFile = "get_from_argv";
+    double shiftB = 0; // non-pisces= 1.6955
     gm.initBField(bFile, shiftB); 
   }
 
-  printf("Adding Tags And Loadin Data %s\n", profFile.c_str());
+  printf("Adding Tags And Loading Profile Data %s\n", profFile.c_str());
   OMEGA_H_CHECK(!profFile.empty());
-  gm.addTagAndLoadData(profFile, profFile);
+  gm.addTagAndLoadProfileData(profFile, profFile);
 
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile, chargedTracking);
 
   printf("Initializing Boundary faces\n");
-  gm.initBoundaryFaces();
+  gm.initBoundaryFaces(false);
   printf("Preprocessing Distance to boundary \n");
   // Add bdry faces to elements within 1mm
   gm.preProcessDistToBdry();
-
-  GitrmParticles gp(*mesh, dTime);
-  //current extruded mesh has Y, Z switched
-  // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
-  printf("Initializing Particles\n");
-
-  gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
-
-  auto* scs = gp.scs;
 
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
@@ -275,12 +271,22 @@ int main(int argc, char** argv) {
   o::Write<o::LO>data_d(numGrid, 0);
 
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
-  if(debug)
-    Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
-  
-  int dofStepData = 8;
-  o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
 
+  int nTHistory = 0;
+  int dofStepData = 1; //TODO see if 0 OK for no-history
+  if(histInterval >0) {
+    nTHistory = 1 + (int)NUM_ITERATIONS/histInterval;
+    if(NUM_ITERATIONS % histInterval)
+      ++nTHistory;
+    printf("nHistory %d histInterval %d\n", nTHistory, histInterval);
+    dofStepData = 6;
+  }
+  o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData); // TODO delete
+  o::Write<o::Real> ptclHitoryData(numPtcls*dofStepData*nTHistory);
+  int iHistStep = 0;
+  if(histInterval >0)
+    updatePtclStepData(scs, ptclHitoryData, numPtcls, dofStepData, iHistStep);
+  
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int np;
@@ -294,14 +300,13 @@ int main(int argc, char** argv) {
     }
     if(comm_rank == 0 && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
-   //TODO not ready for MPI
-    #if HISTORY > 0
-    o::Write<o::Real> data(numPtcls*dofStepData, -1);
-    if(iter==0 && histInterval >0)
-      printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
-    #endif
+    //#if HISTORY > 0
+    //o::Write<o::Real> data(numPtcls*dofStepData, -1);
+    //if(iter==0 && histInterval >0)
+    //  printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+    //#endif
     Kokkos::Profiling::pushRegion("BorisMove");
-    if(gir.chargedPtclTracking) {    
+    if(gir.chargedPtclTracking) {
       gitrm_findDistanceToBdry(gp, gm);
       gitrm_calculateE(gp, *mesh, debug);
       gitrm_borisMove(scs, gm, dTime);
@@ -315,10 +320,15 @@ int main(int argc, char** argv) {
     
     #if HISTORY > 0
     if(histInterval >0) {
-      updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
-      if((iter+1)%histInterval == 0)
-        printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
-        dofStepData, true); //last accum
+      //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data);
+      // move-over if. 0th step(above) kept; last step available at the end.
+      if(iter % histInterval == 0)
+        ++iHistStep;        
+      updatePtclStepData(scs, ptclHitoryData, numPtcls, dofStepData, iHistStep);
+      
+      //if((iter+1)%histInterval == 0)
+      //  printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
+      //  dofStepData, true); //last accum
     }
     #endif
     if(comm_rank == 0 && iter%1000 ==0)
@@ -338,7 +348,16 @@ int main(int argc, char** argv) {
   if(piscesRun) {
     std::cout << "Pisces detections \n";
     printGridData(data_d);
+    gm.markPiscesCylinderResult(data_d);
   }
+  if(histInterval >0) {
+    printf("writing out history file \n");
+    writePtclStepHistoryNcFile(ptclHitoryData, numPtcls, dofStepData, 
+      nTHistory, "history.nc");
+  }
+
+  Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
+
   fprintf(stderr, "done\n");
   return 0;
 }

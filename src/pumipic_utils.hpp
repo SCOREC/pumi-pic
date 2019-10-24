@@ -5,7 +5,6 @@
 #include <cmath>
 #include <utility>
 #include <string>
-#include <netcdf>
 #include "Omega_h_for.hpp"
 #include "Omega_h_file.hpp"  //gmsh
 #include "Omega_h_tag.hpp"
@@ -30,7 +29,7 @@ namespace pumipic {
 
 /*
 NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
-device operator, unless for HostWrite, HostRead
+device operator, except for HostWrite, HostRead
 The above is true for all functions using device-only stuff.
 It is safe to define OMEGA_H_DEVICE for functions, unless these are not
 used for host only (openmp) compilation.
@@ -406,19 +405,6 @@ OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y,
   theta = atan(y/x);
   phi = acos(z/r);
 }
-
-inline int verifyNetcdfFile(std::string& ncFileName, int nc_err = 2) {
-  try {
-    netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
-    auto dataNc = ncFile.getVar("data");
-    if (dataNc.isNull())
-      return nc_err;
-  } catch (netCDF::exceptions::NcException &e) {
-    std::cout << e.what() << std::endl;
-    return nc_err;
-  }
-  return 0;
-} 
 
 } //namespace
 #endif

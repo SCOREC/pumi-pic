@@ -11,7 +11,7 @@
 #include "GitrmParticles.hpp"
 #include "GitrmPush.hpp"
 
-#define HISTORY 0
+#define HISTORY 1
 
 
 void printTiming(const char* name, double t) {
@@ -122,7 +122,7 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   if(debug)
     printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 10;
+  Omega_h::LO maxLoops = 20;
   const auto scsCapacity = scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity,-1);
   o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
@@ -135,11 +135,8 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("storePiscesData");
-  //Replace these with that in gp
-  //auto elm_ids = o::LOs(elem_ids);
-  //o::Reals collisionPoints = o::Reals(xpoints_d);
-  //o::LOs collisionPointFaceIds = o::LOs(xface_ids);
   storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, true);
+
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
@@ -176,13 +173,18 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  if(argc < 2)
+  if(argc < 4)
   {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
-        << " <mesh><ptcls_file>[<nPtcls><nIter> <histInterval> <timeStep>]\n";
+        << " <mesh> <owners_file> <ptcls_file> "
+        "[<nPtcls> <nIter> <histInterval> <timeStep>]\n";
     exit(1);
   }
+  bool piscesRun = true; // add as argument later
+  bool chargedTracking = true; //false for neutral tracking
+  bool debug = false;
+
   auto deviceCount = 0;
   cudaGetDeviceCount(&deviceCount);
   //TODO 
@@ -207,7 +209,7 @@ int main(int argc, char** argv) {
 
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   if (comm_size > 1) {
-    std::ifstream in_str(argv[2]); //TODO update 
+    std::ifstream in_str(argv[2]);
     if (!in_str) {
       if (!comm_rank)
         fprintf(stderr,"Cannot open file %s\n", argv[2]);
@@ -231,41 +233,42 @@ int main(int argc, char** argv) {
   if (comm_rank == 0)
     printf("Mesh loaded with verts %d edges %d faces %d elements %d\n", 
       mesh->nverts(), mesh->nedges(), mesh->nfaces(), mesh->nelems());
-  //TODO FIXME argv[2] is used in mutliple places !
-  std::string ptclSource = argv[2];
-  bool piscesRun = true;
-  bool chargedTracking = false; //false for neutral tracking
 
-  if(!chargedTracking)
+  std::string ptclSource = argv[3];
+  if(!comm_rank)
+    printf(" Particle Source file %s\n", ptclSource.c_str());
+  if(!comm_rank && !chargedTracking)
     printf("WARNING: neutral particle tracking is ON \n");
 
-  int numPtcls = 100000;
-  double dTime = 5e-9; //pisces:5e-9 niter 100,000
-  int NUM_ITERATIONS = 100000; //higher beads needs >10K
+  int numPtcls = 100;
+  double dTime = 5e-9; //pisces:5e-9 iter 100,000
+  int NUM_ITERATIONS = 10; //higher beads needs >10K
   int histInterval = 0;
-  if(argc > 3)
-    numPtcls = atoi(argv[3]);
   if(argc > 4)
-    NUM_ITERATIONS = atoi(argv[4]);
+    numPtcls = atoi(argv[4]);
   if(argc > 5)
-    histInterval = atoi(argv[5]);
-  if(argc > 6)
-    dTime = atof(argv[6]);
+    NUM_ITERATIONS = atoi(argv[5]);
+  if(argc > 6) {
+    histInterval = atoi(argv[6]);
+    if(histInterval >0)
+      histInterval = NUM_ITERATIONS;
+  }
+  if(argc > 7)
+    dTime = atof(argv[7]);
 
+  //TODO delete after testing
   std::ofstream ofsHistory;
   if(histInterval > 0)
     ofsHistory.open("history.txt");
   
-
-  bool debug = false;
-  
   GitrmParticles gp(*mesh, dTime);
+  // TODO use picparts 
   GitrmMesh gm(*mesh);
   if(piscesRun)
     gm.markPiscesCylinder(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
-  if(debug)
+  if(!comm_rank)
     printf("Initializing Particles\n");
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
   auto* scs = gp.scs;
@@ -278,8 +281,20 @@ int main(int argc, char** argv) {
   o::Write<o::LO>data_d(numGrid, 0);
 
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
-  int dofStepData = 8;
+  int nTHistory = 0;
+  int dofStepData = 1;
+  if(histInterval >0) {
+    nTHistory = 1 + (int)NUM_ITERATIONS/histInterval;
+    if(NUM_ITERATIONS%histInterval > 0)
+      ++nTHistory;
+    dofStepData = 6;
+  }
+
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
+  o::Write<o::Real> ptclsHitoryData(numPtcls*dofStepData*nTHistory);
+  int iHistStep = 0;
+  
+  updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int iter;
@@ -295,11 +310,11 @@ int main(int argc, char** argv) {
     if(comm_rank == 0 && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
    //TODO not ready for MPI
-    #if HISTORY > 0
-    o::Write<o::Real> data(numPtcls*dofStepData, -1);
-    if(iter==0 && histInterval >0)
-      printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
-    #endif
+    //#if HISTORY > 0
+    //o::Write<o::Real> data(numPtcls*dofStepData, -1);
+    //if(iter==0 && histInterval >0)
+    //  printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+    //#endif
 
     Kokkos::Profiling::pushRegion("neutralBorisMove");
     //neutralBorisMove(scs, dTime);
@@ -311,10 +326,13 @@ int main(int argc, char** argv) {
     search(picparts, scs, gp, iter, data_d, xpoints_d, debug);
     #if HISTORY > 0
     if(histInterval >0) {
-      updateStepData(scs, iter+1, numPtcls, ptclsDataAll, data, dofStepData); 
-      if((iter+1)%histInterval == 0)
-        printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
-        dofStepData, true); //last accum
+      //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data); 
+      if(iter % histInterval == 0)
+        ++iHistStep;  
+      updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
+      //if((iter+1)%histInterval == 0)
+        //printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
+       // dofStepData, true); //last accum
     }
     #endif
     if(comm_rank == 0 && iter%1000 ==0)
@@ -337,7 +355,11 @@ int main(int argc, char** argv) {
     printGridData(data_d);
     gm.markPiscesCylinderResult(data_d);
   }
-  Omega_h::vtk::write_parallel("pisces_mesh_vtk", mesh, picparts.dim());  
+  if(histInterval >0)
+    writePtclStepHistoryNcFile(ptclsHitoryData, numPtcls, dofStepData, 
+      nTHistory, "history.nc");
+  
+  Omega_h::vtk::write_parallel("mesh_vtk", mesh, picparts.dim());  
   fprintf(stderr, "done\n");
   return 0;
 }

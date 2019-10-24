@@ -3,6 +3,7 @@
 #include <vector>
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
+#include "GitrmInputOutput.hpp"
 #include "Omega_h_reduce.hpp"
 //#include "Omega_h_atomics.hpp"  //No such file
 
@@ -17,45 +18,28 @@ GitrmMesh::GitrmMesh(o::Mesh& m):
   mesh(m) {
 }
 
-/*
-bool readProfileNcFile(std::string& ncFileName, o::HostWrite<o::Real> data) {
-  verifyNetcdfFile(ncFileName);
-  netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
-
-
-  auto dataNc = dataFile.getVar("data");
-    dataNc.getVar(data);
-
- data
-  return 0; //=false 
-} 
-*/
-
-void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file, 
-  FieldStruct3& fs, o::Reals& readInData_d, o::Real shift) {
+void GitrmMesh::load3DFieldOnVtxFromFile(const std::string tagName, const std::string &file,
+  Field3StructInput& fs, o::Reals& readInData_d, const o::Real shift) {
   o::LO debug = 1;
-  std::cout<< "Loading " << fs.name << " from " << file << " on vtx\n" ;
-  processFieldFileFS3(file, fs, debug);
-  std::string tagName = fs.name;
-  o::Real rMin = fs.gr1Min;
-  o::Real rMax = fs.gr1Max;
-  o::Real zMin = fs.gr2Min;
-  o::Real zMax = fs.gr2Max;
-  int nR = fs.nGrid1;
-  int nZ = fs.nGrid2;
-  OMEGA_H_CHECK(nR >0 && nZ >0);
-  o::Real dr = (rMax - rMin)/nR;
-  o::Real dz = (zMax - zMin)/nZ;
+  std::cout<< "Loading " << tagName << " from " << file << " on vtx\n" ;
+  //processFieldFileFS3(file, fs, debug);
+  readInputDataNcFileFS3(file, fs);
+  int nR = fs.getNumGrids(0);
+  int nZ = fs.getNumGrids(1);
+  o::Real rMin = fs.getGridMin(0);
+  o::Real zMin = fs.getGridMin(1);
+  o::Real dr = fs.getGridDelta(0);
+  o::Real dz = fs.getGridDelta(1);
   if(debug){
-    printf(" %s dr%.5f , dz%.5f , rMax%.5f , rMin%.5f , zMax%.5f, zMin%.5f \n",
-        tagName.c_str(), dr, dz, rMax, rMin,zMax , zMin);
-    printf("data size %d \n", fs.data->size());
+    printf(" %s dr%.5f , dz%.5f , rMin%.5f , zMin%.5f \n",
+        tagName.c_str(), dr, dz, rMin, zMin);
+    printf("data size %d \n", fs.data.size());
   }
 
   // Interpolate at vertices and Set tag
   o::Write<o::Real> tag_d(3*mesh.nverts());
   const auto coords = mesh.coords(); //Reals
-  readInData_d = o::Reals(*fs.data);
+  readInData_d = o::Reals(fs.data);
   auto fill = OMEGA_H_LAMBDA(o::LO iv) {
     o::Vector<3> fv = o::zero_vector<3>();
     o::Vector<3> pos= o::zero_vector<3>();
@@ -89,66 +73,59 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string &file,
 
 // TODO Remove Tags after use ?
 // TODO pass parameters in a compact form, libconfig ?
-void GitrmMesh::initBField(const std::string &bFile, o::Real shiftB) {
+void GitrmMesh::initBField(const std::string &bFile, const o::Real shiftB) {
   mesh2Bfield2Dshift = shiftB;
   mesh.add_tag<o::Real>(o::VERT, "BField", 3);
   // set bt=0. Pisces BField is perpendicular to W target base plate.
-  FieldStruct3 fb("BField", "br", "bt", "bz", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 3,2, 2);
-  load3DFieldOnVtxFromFile(bFile, fb, Bfield_2d, mesh2Bfield2Dshift); 
+  Field3StructInput fb({"br", "bt", "bz"}, {"gridR", "gridZ"}, {"nR", "nZ"});
+  load3DFieldOnVtxFromFile("BField", bFile, fb, Bfield_2d, mesh2Bfield2Dshift); 
   
-  bGridX0 = fb.gr1Min;
-  bGridZ0 = fb.gr2Min;
-  bGridNx = fb.nGrid1;
-  bGridNz = fb.nGrid2;
-  bGridDx = (fb.gr1Max - fb.gr1Min)/fb.nGrid1;
-  bGridDz = (fb.gr2Max - fb.gr2Min)/fb.nGrid2;
+  bGridX0 = fb.getGridMin(0);
+  bGridZ0 = fb.getGridMin(1);
+  bGridNx = fb.getNumGrids(0);
+  bGridNz = fb.getNumGrids(1);
+  bGridDx = fb.getGridDelta(0);
+  bGridDz = fb.getGridDelta(1);
 }
 
 
-void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string &file, 
-  FieldStruct3& fs, o::Real shift, int debug) {
+void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string tagName, 
+  const std::string &file, Field3StructInput& fs, const o::Real shift, int debug) {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
 
-  o::LO verbose = 1;
+  o::LO verbose = 4;
   if(verbose >0)
-    std::cout << "Loading "<< fs.name << " from " << file << " on bdry faces\n";
+    std::cout << "Loading "<< tagName << " from " << file << " on bdry faces\n";
 
-  //o::HostWrite<o::Real> readInData;
- // processFieldFile(file, readInData, fs, 1); // 1= nComp
-  processFieldFileFS3(file, fs, debug);
+  readInputDataNcFileFS3(file, fs);
+  int nR = fs.getNumGrids(0);
+  int nZ = fs.getNumGrids(1);
+  o::Real rMin = fs.getGridMin(0);
+  o::Real zMin = fs.getGridMin(1);
+  o::Real dr = fs.getGridDelta(0);
+  o::Real dz = fs.getGridDelta(1);
 
-  std::string tagName = fs.name;
-  o::Real rMin = fs.gr1Min;
-  o::Real rMax = fs.gr1Max;
-  o::Real zMin = fs.gr2Min;
-  o::Real zMax = fs.gr2Max;
-  int nR = fs.nGrid1;
-  int nZ = fs.nGrid2;
-  OMEGA_H_CHECK(nR >0 && nZ >0);
-  o::Real dr = (rMax - rMin)/nR;
-  o::Real dz = (zMax - zMin)/nZ;
-  if(verbose >3){
-    printf(" dr%.5f , dz%.5f , rMax%.5f , rMin%.5f , zMax%.5f, zMin%.5f \n",
-        dr, dz, rMax, rMin,zMax , zMin);
-  }
+  if(verbose >3)
+    printf("nR %d nZ %d dr %g, dz %g, rMin %g, zMin %g \n", nR, nZ, dr, dz, rMin, zMin);
   //Interpolate at vertices and Set tag
-  //auto tag =  o::Write<o::Real>(mesh.nverts()*3, 0);
   o::Write<o::Real> tag_d(mesh.nfaces());
+  const auto readInData_d = o::Reals(fs.data);
 
-  const auto readInData_d = o::Reals(*fs.data);
-
+  if(debug) {
+    printf("%s file %s\n", tagName.c_str(), file.c_str());
+    for(int i =0; i<100 ; i+=5) {
+      printf("%d:%g ", i, fs.data[i] );
+    }
+    printf("\n");
+  }
   auto fill = OMEGA_H_LAMBDA(o::LO fid) {
-
     //TODO check if faceids are sequential numbers
     if(!side_is_exposed[fid]) {
       tag_d[fid] = 0;
       return;
     }
-printf("fill:: %f %f %f %f %d %d\n", rMin, zMin, dr, dz, nR, nZ);
-
     // TODO storing fields at centroid may not be best for long tets.
     auto pos = p::find_face_centroid(fid, coords, face_verts);
     //cylindrical symmetry. Height (z) is same.
@@ -157,10 +134,11 @@ printf("fill:: %f %f %f %f %d %d\n", rMin, zMin, dr, dz, nR, nZ);
     // meaningless to include non-zero y coord of target plane.
     pos[0] = rad + shift; 
     pos[1] = 0;
-printf("fill2:: %f %f %f %f %d %d %f %f %f\n", rMin, zMin, dr, dz, nR, nZ, pos[0], pos[1], pos[2]);
+    if(debug)
+      printf("fill2:: %f %f %f %f %d %d %f %f %f\n", rMin, zMin, dr, dz, nR, nZ, pos[0], pos[1], pos[2]);
     //Cylindrical symmetry = false, since already projected onto y=0 plane
     o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
-      nR, nZ, pos, false, 1, 0, true);
+      nR, nZ, pos, false, 1, 0, debug);
     tag_d[fid] = val; 
 
     if(verbose > 4 && fid<10)
@@ -171,37 +149,33 @@ printf("fill2:: %f %f %f %f %d %d %f %f %f\n", rMin, zMin, dr, dz, nR, nZ, pos[0
   mesh.set_tag(o::FACE, tagName, tag);
 }
  
-void GitrmMesh::load1DFieldOnVtxFromFile(const std::string& file, 
-  FieldStruct3& fs, o::Reals& readInData_d, o::Reals& tagData, 
-  o::Real shift, int debug) {
-  std::cout<< "Loading " << fs.name << " from " << file << " on vtx\n" ;
-  processFieldFileFS3(file, fs, debug);
-  std::string tagName = fs.name;
-  o::Real rMin = fs.gr1Min;
-  o::Real rMax = fs.gr1Max;
-  o::Real zMin = fs.gr2Min;
-  o::Real zMax = fs.gr2Max;
-  int nR = fs.nGrid1;
-  int nZ = fs.nGrid2;
-  OMEGA_H_CHECK(nR >0 && nZ >0);
-  o::Real dr = (rMax - rMin)/nR;
-  o::Real dz = (zMax - zMin)/nZ;
+void GitrmMesh::load1DFieldOnVtxFromFile(const std::string tagName, 
+  const std::string& file, Field3StructInput& fs, o::Reals& readInData_d, 
+  o::Reals& tagData, const o::Real shift, int debug) {
+  std::cout<< "Loading " << tagName << " from " << file << " on vtx\n" ;
+  //processFieldFileFS3(file, fs, debug);
+  readInputDataNcFileFS3(file, fs);
+  int nR = fs.getNumGrids(0);
+  int nZ = fs.getNumGrids(1);
+  o::Real rMin = fs.getGridMin(0);
+  o::Real zMin = fs.getGridMin(1);
+  o::Real dr = fs.getGridDelta(0);
+  o::Real dz = fs.getGridDelta(1);
 
   // data allocation not available here ?
   if(debug){
-    auto nd = fs.data->size();
-    printf(" %s dr %.5f, dz %.5f, rMax %.5f, rMin %.5f, zMax %.5f,"
-      " zMin %.5f datSize %d\n",
-        tagName.c_str(), dr, dz, rMax, rMin,zMax , zMin, nd);
+    auto nd = fs.data.size();
+    printf(" %s dr %.5f, dz %.5f, rMin %.5f, zMin %.5f datSize %d\n",
+        tagName.c_str(), dr, dz, rMin,zMin, nd);
     for(int j=0; j<nd; j+=nd/20)
-      printf("data[%d]:%g ", j, (*fs.data)[j]);
+      printf("data[%d]:%g ", j, fs.data[j]);
     printf("\n");
   }
   // Interpolate at vertices and Set tag
   o::Write<o::Real> tag_d(mesh.nverts());
 
   const auto coords = mesh.coords(); //Reals
-  readInData_d = o::Reals(*fs.data);
+  readInData_d = o::Reals(fs.data);
 
   auto fill = OMEGA_H_LAMBDA(o::LO iv) {
     o::Vector<3> pos = o::zero_vector<3>();
@@ -234,8 +208,8 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string& file,
   mesh.set_tag(o::VERT, tagName, tagData);
 }
 
-void GitrmMesh::addTagAndLoadData(const std::string &profileFile, 
-  const std::string &profileFileDensity) {
+void GitrmMesh::addTagAndLoadProfileData(const std::string &profileFile, 
+  const std::string &profileDensityFile) {
   mesh.add_tag<o::Real>(o::FACE, "ElDensity", 1);
   mesh.add_tag<o::Real>(o::FACE, "IonDensity", 1); //=ni 
   mesh.add_tag<o::Real>(o::FACE, "IonTemp", 1);
@@ -244,48 +218,40 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
   mesh.add_tag<o::Real>(o::VERT, "ElDensityVtx", 1);
   mesh.add_tag<o::Real>(o::VERT, "IonTempVtx", 1);
   mesh.add_tag<o::Real>(o::VERT, "ElTempVtx", 1);
+  Field3StructInput fd({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"}); 
+  loadScalarFieldOnBdryFaceFromFile("IonDensity", profileDensityFile, fd); 
 
-  FieldStruct3 fd("IonDensity", "ni", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);  
-  loadScalarFieldOnBdryFaceFromFile(profileFileDensity, fd); 
+  Field3StructInput fdv({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"});   
+  load1DFieldOnVtxFromFile("IonDensityVtx", profileDensityFile, fdv, 
+    densIon_d, densIonVtx_d, 0, 1);
+  densIonX0 = fdv.getGridMin(0);
+  densIonZ0 = fdv.getGridMin(1);
+  densIonNx = fdv.getNumGrids(0);
+  densIonNz = fdv.getNumGrids(1);
+  densIonDx = fdv.getGridDelta(0);
+  densIonDz = fdv.getGridDelta(1);
 
-  FieldStruct3 fdv("IonDensityVtx", "ni", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);   
-  load1DFieldOnVtxFromFile(profileFileDensity, fdv, densIon_d, densIonVtx_d, 0, 1);
-  densIonX0 = fdv.gr1Min;
-  densIonZ0 = fdv.gr2Min;
-  densIonNx = fdv.nGrid1;
-  densIonNz = fdv.nGrid2;
-  densIonDx = (fdv.gr1Max - fdv.gr1Min)/fdv.nGrid1;
-  densIonDz = (fdv.gr2Max - fdv.gr2Min)/fdv.nGrid2;
+  Field3StructInput fne({"ne"}, {"gridR", "gridZ"}, {"nR", "nZ"});  
+  loadScalarFieldOnBdryFaceFromFile("ElDensity", profileFile, fne); 
+  Field3StructInput fnev({"ne"}, {"gridR", "gridZ"}, {"nR", "nZ"});  
+  load1DFieldOnVtxFromFile("ElDensityVtx", profileFile, fnev, densEl_d, densElVtx_d);
+  Field3StructInput fti({"ti"}, {"gridR", "gridZ"}, {"nR", "nZ"}); 
+  loadScalarFieldOnBdryFaceFromFile("IonTemp", profileFile, fti); 
+  Field3StructInput ftiv({"ti"}, {"gridR", "gridZ"}, {"nR", "nZ"});
+  load1DFieldOnVtxFromFile("IonTempVtx", profileFile, ftiv, temIon_d, tempIonVtx_d);
 
-  FieldStruct3 fne("ElDensity", "ne", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);  
-  loadScalarFieldOnBdryFaceFromFile(profileFile, fne); 
-  FieldStruct3 fnev("ElDensityVtx", "ne", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);  
-  load1DFieldOnVtxFromFile(profileFile, fnev, densEl_d, densElVtx_d);
-  FieldStruct3 fti("IonTemp", "ti", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2); 
-  loadScalarFieldOnBdryFaceFromFile(profileFile, fti); 
-  FieldStruct3 ftiv("IonTempVtx", "ti", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);
-  load1DFieldOnVtxFromFile(profileFile, ftiv, temIon_d, tempIonVtx_d);
-
-  tempIonX0 = ftiv.gr1Min;
-  tempIonZ0 = ftiv.gr2Min;
-  tempIonNx = ftiv.nGrid1;
-  tempIonNz = ftiv.nGrid2;
-  tempIonDx = (ftiv.gr1Max - ftiv.gr1Min)/ftiv.nGrid1;
-  tempIonDz = (ftiv.gr2Max - ftiv.gr2Min)/ftiv.nGrid2;
+  tempIonX0 = ftiv.getGridMin(0);
+  tempIonZ0 = ftiv.getGridMin(1);
+  tempIonNx = ftiv.getNumGrids(0);
+  tempIonNz = ftiv.getNumGrids(1);
+  tempIonDx = ftiv.getGridDelta(0);
+  tempIonDz = ftiv.getGridDelta(1);
 
   // electron Temperature
-  FieldStruct3 fte("ElTemp", "te", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);
-  loadScalarFieldOnBdryFaceFromFile(profileFile, fte); 
-  FieldStruct3 ftev("ElTempVtx", "te", "", "", "gridR", "gridZ", "", 
-    "nR", "nZ", "", 1, 2, 2);
-  load1DFieldOnVtxFromFile(profileFile, ftev, temEl_d, tempElVtx_d);
+  Field3StructInput fte({"te"}, {"gridR", "gridZ"}, {"nR", "nZ"});
+  loadScalarFieldOnBdryFaceFromFile("ElTemp", profileFile, fte); 
+  Field3StructInput ftev({"te"}, {"gridR", "gridZ"}, {"nR", "nZ"});
+  load1DFieldOnVtxFromFile("ElTempVtx", profileFile, ftev, temEl_d, tempElVtx_d);
 }
 
 
@@ -297,8 +263,7 @@ void GitrmMesh::addTagAndLoadData(const std::string &profileFile,
 // using biased surface, TEl decides DLength and CLDist.
 
 //TODO spli this function
-void GitrmMesh::initBoundaryFaces() {
-  o::LO verbose = 1;
+void GitrmMesh::initBoundaryFaces(bool debug) {
   auto fieldCenter = mesh2Efield2Dshift;
 
   const auto coords = mesh.coords();
@@ -308,11 +273,14 @@ void GitrmMesh::initBoundaryFaces() {
   const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
+  auto useConstantBField = USE_CONSTANT_BFIELD;
+  o::Real BField_const[] = {CONSTANT_BFIELD[0], CONSTANT_BFIELD[1], CONSTANT_BFIELD[2]};
 
   o::Real bxz[4] = {bGridX0, bGridZ0, bGridDx, bGridDz};
   o::LO bnz[2] = {bGridNx, bGridNz};
   const auto &Bfield_2dm = Bfield_2d;
-
+  if(debug)
+    printf("bxz: %g %g %g %g\n",  bxz[0], bxz[1], bxz[2], bxz[3]);
   const auto density = mesh.get_array<o::Real>(o::FACE, "IonDensity"); //=ni
   const auto ne = mesh.get_array<o::Real>(o::FACE, "ElDensity");
   const auto te = mesh.get_array<o::Real>(o::FACE, "ElTemp");
@@ -344,11 +312,16 @@ void GitrmMesh::initBoundaryFaces() {
 
       // TODO angle is between surface normal and magnetic field at center of face
       // If  face is long, BField is not accurate. Calculate at closest point ?
-      p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0], bnz[1], 
-           pos, B, false);
-      if(verbose > 3 ) { //&& fid%1000==0){
-        printf(" fid:%d::  %.5f %.5f %.5f tel:%.4f B:%g %g %g\n", fid, pos[0], pos[1], pos[2], te[fid],
-            B[0], B[1], B[2]);
+      if(debug)//&& fid%1000==0)
+        printf(" fid:%d::  %.5f %.5f %.5f \n", fid, pos[0], pos[1], pos[2]);
+      if(useConstantBField) {
+        B[0] = BField_const[0];
+        B[1] = BField_const[1];
+        B[2] = BField_const[2];
+      } else {
+        assert(!p::almost_equal(bxz,0));
+        p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0],
+          bnz[1], pos, B, false);
       }
       /*
       auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
@@ -366,7 +339,7 @@ void GitrmMesh::initBoundaryFaces() {
       }
       angle_d[fid] = theta*180.0/o::PI;
       
-      if(verbose >3) {
+      if(debug) {
         printf("fid:%d surfNorm:%g %g %g angleBS=%g theta=%g angle=%g\n", fid, surfNorm[0], 
           surfNorm[1], surfNorm[2],angleBS,theta,angle_d[fid]);
       }
@@ -405,7 +378,7 @@ void GitrmMesh::initBoundaryFaces() {
       }
       potential_d[fid] = pot;
 
-      if(verbose >4)// || p::almost_equal(angle_d[fid],0))
+      if(debug)// || p::almost_equal(angle_d[fid],0))
         printf("angle[%d] %.5f\n", fid, angle_d[fid]);
     }
   };

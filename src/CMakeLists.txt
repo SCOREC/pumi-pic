@@ -6,6 +6,7 @@ set(HEADERS
   pumipic_mesh.hpp
   pumipic_library.hpp
   pumipic_input.hpp
+  GitrmInputOutput.hpp
 )
 
 set(SOURCES
@@ -17,13 +18,17 @@ set(SOURCES
   GitrmMesh.cpp
   GitrmParticles.cpp
   GitrmIonizeRecombine.cpp
+  GitrmInputOutput.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(pumipic particle_structures::particleStructs Omega_h::omega_h NetCDF::NetCDF)
+target_link_libraries(pumipic particle_structures::particleStructs)
+
+target_link_libraries(pumipic Omega_h::omega_h NetCDF::NetCDF)
+
 pumipic_export_lib(pumipic "${HEADERS}")
 
 bob_end_subdir()

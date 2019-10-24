@@ -32,7 +32,7 @@ enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
   PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, PTCL_PREV_RECOMBINE};
 
 typedef SellCSigma<Particle> SCS;
-struct PtclInitStruct;
+struct PtclSourceStruct;
 
 class GitrmParticles {
 public:
@@ -55,17 +55,18 @@ public:
     o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
   void initPtclChargeIoniRecombData();
   void processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclInitStruct &ps, o::LO& numPtcls);
+    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls);
   void setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem,
     const o::LOs& ptclIdsInElem,  const o::LOs& elemIdOfPtcls, 
     const o::LO numPtcls, const o::LO nel);
-  void setPtclInitData(const o::Reals& data);
-  void findElemIdsOfPtclFileCoordsByAdjSearch(o::LO numPtcls, 
-    const o::Reals& data_r, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems);
+  void setPtclInitData(const o::Reals& data, int nPtclsRead);
+  void findElemIdsOfPtclFileCoordsByAdjSearch(const o::Reals& data, 
+    o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems, o::LO numPtcls, 
+    o::LO numPtclsRead);
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
     o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
     o::LO numPtcls);
-  void printPtclSource(o::Reals& data, int nPtcls=0, int dof=6);
+  void printPtclSource(o::Reals& data, int nPtcls, int nPtclsRead);
 
   o::Real timeStep;
   SCS* scs;
@@ -78,13 +79,20 @@ public:
   // wall collision. NOTE: only access per valid SCS pid_d, which is reset upon re-build
   o::Write<o::Real> collisionPoints;
   o::Write<o::LO> collisionPointFaceIds;
-
-  std::string ptclHistoryOutFile = "ptclHistory.nc";
 };
 
+void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData,
+  int iter, int dof, int histStep=1); //o::Write<o::Real>& data, 
 
-struct PtclInitStruct {
-  PtclInitStruct(std::string n, std::string np, std::string x, std::string y,
+void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
+  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data,
+  int dof=8, bool accum = false);
+
+void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
+  int dof, int nTHistory, std::string outNcFileName);
+
+struct PtclSourceStruct {
+  PtclSourceStruct(std::string n, std::string np, std::string x, std::string y,
     std::string z,std::string vx, std::string vy, std::string vz):
     name(n), nPname(np), xName(x), yName(y), zName(z), 
     vxName(vx), vyName(vy), vzName(vz) {}
@@ -118,12 +126,8 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
   const auto& xpointFids = gp.collisionPointFaceIds;
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(debug)
-      printf("storing: pid %d \n", pid);
     // Don't use pid_scs(pid) here, since data made for scsCapacity
     auto fid = xpointFids[pid];
-    if(debug)
-      printf("\t : fid %d \n", fid);
 
     if(mask >0 && fid>=0) {
       // test
@@ -138,7 +142,7 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
       
       auto detId = pisces_ids[fid];
       if(detId > -1) { //TODO
-        if(debug)
+        //if(debug)
           printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
             pid_scs(pid), zInd, detId, x, y, z, iter);
         Kokkos::atomic_fetch_add(&data_d[detId], 1);
@@ -230,66 +234,6 @@ inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHisto
   }
 } 
 
-inline void updateStepData(SCS* scs, int iter, int numPtcls, 
-  o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, int dof=8) {
-  // size is not scs->nPtcls, since id: 0 to numPtcls
-  auto vel_scs = scs->get<PTCL_VEL>();
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto step = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
-    if(mask >0) {
-      auto id = pid_scs(pid);
-      auto vel = p::makeVector3(pid, vel_scs);
-      auto pos = p::makeVector3(pid, pos_scs);
-      // NOTE: particle id from 0 to numPtcls; only if indices are used as ids.
-      // If pid is used as id's, then range will be > numPtcls => out of memory. 
-      for(int i=0; i<3; ++i) {
-        data[id*dof+i] = pos[i];
-        data[id*dof+3+i] = vel[i];
-      }
-      data[id*dof + 6] = id;
-      data[id*dof + 7] = iter;
-      
-      for(int i=0; i<8; ++i)
-        ptclsDataAll[id*dof+i] = data[id*dof+i];
-
-      //NOTE: many of these prints go missing
-      //printf("ptclHistory %d zInd -1 detId -1 pos %g %g %g iter %d vel %g %g %g\n",
-      // id+1, pos[0], pos[1], pos[2], iter, vel[0], vel[1], vel[2]);
-    }// mask
-  };
-  scs->parallel_for(step, "updateStepData");
-}
-
-inline void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter, 
-  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
-  int dof=8, bool accum = false) {
-
-  // printf("total_ptcls %d\n", scs->nPtcls());
-  if(iter ==0) {
-    updateStepData(scs, iter, numPtcls, ptclsDataAll, data, dof);
-  }
-
-  if(accum) {
-    o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
-    printPtclHostData(ptclAllHost, ofsHistory, numPtcls, dof, 
-      "ptclHistory_accum", iter);
-  } else {
-    o::HostWrite<o::Real> dh(data);
-    o::HostWrite<o::Real> dp(scs->nPtcls() * dof);
-    for(int ip=0, n=0; ip< numPtcls; ++ip) {
-      //only ptcls from scs->nptcls have valid ids
-      int id = static_cast<int>(dh[ip*dof+6]);
-      if(id < 0)
-        continue;
-      for(int i=0; i<8; ++i) {
-        dp[n*dof+i] = dh[id*dof+i];
-      }
-      ++n;
-    }
-    printPtclHostData(dp, ofsHistory, scs->nPtcls(), dof, "ptclHistory", iter);
-  }
-}
 /** @brief Calculate distance of particles to domain boundary 
  * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
  */

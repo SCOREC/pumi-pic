@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <netcdf>
 #include "pumipic_adjacency.hpp"
+#include "GitrmInputOutput.hpp"
 #include "Omega_h_mesh.hpp"
 
 namespace o = Omega_h;
@@ -124,22 +125,22 @@ public:
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
-  void initBField(const std::string &, o::Real shiftB=0);
+  void initBField(const std::string &, const o::Real shiftB=0);
   void parseGridLimits(std::stringstream &, std::string, std::string, bool, 
     bool &, bool &, double &, double &);
   void processFieldFile(const std::string &, o::HostWrite<o::Real> &, 
     FieldStruct2d &, int);
-  void load3DFieldOnVtxFromFile(const std::string &, FieldStruct3&, 
-    o::Reals&, o::Real shift=0 );
+  void load3DFieldOnVtxFromFile(const std::string, const std::string &,
+    Field3StructInput&, o::Reals&, const o::Real shift=0 );
 
   //TODO delete tags after use/ in destructor
-  void addTagAndLoadData(const std::string &, const std::string &);
-  void initBoundaryFaces();
+  void addTagAndLoadProfileData(const std::string &, const std::string &);
+  void initBoundaryFaces(bool debug=false);
 
-  void loadScalarFieldOnBdryFaceFromFile(const std::string &, FieldStruct3 &, 
-    o::Real shift=0, int debug=0);
-  void load1DFieldOnVtxFromFile(const std::string &, FieldStruct3 &, 
-    o::Reals&, o::Reals&, o::Real shift=0, int debug=0);
+  void loadScalarFieldOnBdryFaceFromFile(const std::string, const std::string &, 
+    Field3StructInput &, const o::Real shift=0, int debug=0);
+  void load1DFieldOnVtxFromFile(const std::string, const std::string &, 
+    Field3StructInput &, o::Reals&, o::Reals&, const o::Real shift=0, int debug=0);
   
   void markPiscesCylinder(bool render=false);
   void markPiscesCylinderResult(o::Write<o::LO>& data_d);
@@ -347,18 +348,6 @@ inline void storeData(o::HostWrite<o::Real>& data, std::string sd, int& ind,
 }
 
 
-inline int verifyNetcdfFile(std::string& ncFileName, int nc_err = 2) {
-  try {
-    netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
-    auto dataNc = ncFile.getVar("data");
-    if (dataNc.isNull())
-      return nc_err;
-  } catch (netCDF::exceptions::NcException &e) {
-    std::cout << e.what() << std::endl;
-    return nc_err;
-  }
-  return 0;
-} 
 
 /* file format required:  
   fieldName = num1 num2 ... ;  //for each component, any number of lines 
@@ -586,9 +575,6 @@ inline void processFieldFileFS3(const std::string& fName, FieldStruct3& fs,
     // if ; on first line, dataLine is reset before setting foundData
     //OMEGA_H_CHECK(foundData[i]);
  // }
-  if(ifs.is_open()) {
-    ifs.close();
-  }
   if(nans1.size() > 0 || nans2.size() > 0) 
     std::cout << "ERROR: NaN in ADAS file/grid\n";
 }

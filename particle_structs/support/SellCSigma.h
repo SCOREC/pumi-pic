@@ -937,8 +937,12 @@ void SellCSigma<DataTypes, ExecSpace>::printMetrics() const {
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   char buffer[1000];
   char* ptr = buffer;
+  
   //Header
-  ptr += sprintf(ptr, "Metrics %d\n", comm_rank);
+  ptr += sprintf(ptr, "Metrics %d, C %d, V %d, sigma %d\n", comm_rank, C_, V_, sigma);
+  //Sizes
+  ptr += sprintf(ptr, "Nelems %d, Nchunks %d, Nslices %d, Nptcls %d, Capacity %d, Allocation %d\n",
+                 nElems(), num_chunks, num_slices, nPtcls(), capacity(), current_size + swap_size);
   //Padded Cells
   ptr += sprintf(ptr, "Padded Cells <Tot %> %d %.3f\n", num_padded,
                  num_padded * 100.0 / particle_mask.size());

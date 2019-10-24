@@ -1,7 +1,9 @@
 #include <Omega_h_mesh.hpp>
 #include <SCS_Macros.h>
+#include <SellCSigma.h>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
+#include "pumipic_profiling.hpp"
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
 #include <fstream>
@@ -296,21 +298,18 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 9;
+  const int numargs = 10;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
       "<max initial model face> <maxIterations> "
       "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
-      "<degrees per elliptical push>";
+      "<degrees per elliptical push>"
+      "<enable prebarrier>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
-  auto deviceCount = 0;
-  cudaGetDeviceCount(&deviceCount);
-  assert(deviceCount==1);
   if (comm_rank == 0) {
-    printf("device count per process %d\n", deviceCount);
     printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
     printf("omega_h floating point value size (bits): %zu\n", sizeof(Omega_h::Real));
@@ -330,11 +329,8 @@ int main(int argc, char** argv) {
     printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
         full_mesh.nfaces());
 
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto vtx_to_elm = full_mesh.ask_up(0, 2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
 
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
@@ -347,12 +343,10 @@ int main(int argc, char** argv) {
   assert(bufferMethod>=0);
   assert(safeMethod>=0);
   //Create picparts using classification with the full mesh buffered and minimum safe zone
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
   if(!comm_rank)
     input.printInfo();
   MPI_Barrier(MPI_COMM_WORLD);
-  OMEGA_H_CHECK(cudaSuccess == cudaDeviceSynchronize());
   p::Mesh picparts(input);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
@@ -441,6 +435,13 @@ int main(int argc, char** argv) {
   mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
 
+  const auto enable_prebarrier = atoi(argv[9]);
+  if(enable_prebarrier) {
+    if(!comm_rank)
+      fprintf(stderr, "pre-barrier enabled\n");
+    particle_structs::enable_prebarrier();
+    pumipic_enable_prebarrier();
+  }
   Kokkos::Timer timer;
   Kokkos::Timer fullTimer;
   int iter;

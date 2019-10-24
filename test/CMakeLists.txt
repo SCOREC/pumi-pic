@@ -20,6 +20,7 @@ endfunction(make_test)
 
 make_test(borisMove borisMove.cpp)
 make_test(neutralTracking neutralTracking.cpp)
+make_test(SCStest SCStest.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

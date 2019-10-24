@@ -6,6 +6,6 @@ namespace pumipic {
   }
 
   bool Mesh::isFullMesh() const {
-    return num_cores[picpart->dim()] == picpart->comm()->size();
+    return is_full_mesh;
   }
 }

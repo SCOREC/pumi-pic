@@ -39,16 +39,16 @@ mpi_test(pseudoXGCm_scatter 1
 mpi_test(pseudoXGCm_24kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg24k.osh ignored 
-  1000 5 100)
+  1000 5 100 full bfs 0.5)
 mpi_test(pseudoXGCm_24kElms_4 4
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg24k.osh ${TEST_DATA_DIR}/xgc/itg24k.cpn
-  1000 2 100)
+  1000 2 100 full bfs 0.5)
 
 mpi_test(pseudoXGCm_126kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/itg126k.osh ignored
-  10000 141 10)
+  10000 141 10 full bfs 0.5)
 
 #MPI+X testing
 mpi_test(print_partition_cube_2 2 ./print_partition ${TEST_DATA_DIR}/cube.msh testing_cube)

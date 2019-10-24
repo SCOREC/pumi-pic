@@ -158,6 +158,8 @@ private:
   PolicyType policy;
   //Chunk size
   lid_t C_;
+  //Max Chunk size from policy
+  lid_t C_max;
   //Vertical slice size
   lid_t V_;
   //Sorting chunk size
@@ -200,6 +202,19 @@ private:
   lid_t num_empty_elements;
 };
 
+template<typename ExecSpace>
+int chooseChunkHeight(int maxC,
+                      Kokkos::View<lid_t*, typename ExecSpace::device_type> ptcls_per_elem) {
+  lid_t num_elems_with_ptcls = 0;
+  Kokkos::parallel_reduce("count_elems", ptcls_per_elem.size(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
+    sum += ptcls_per_elem(i) > 0;
+    }, num_elems_with_ptcls);
+  if (num_elems_with_ptcls == 0)
+    return 1;
+  if (num_elems_with_ptcls < maxC)
+    return num_elems_with_ptcls;
+  return maxC;
+}
 template <typename ExecSpace> 
 void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems, 
                Kokkos::View<lid_t*,typename ExecSpace::device_type> ptcls_per_elem, 
@@ -452,7 +467,9 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
-  C_ = policy.team_size();
+  C_max = policy.team_size();
+  C_ = chooseChunkHeight<ExecSpace>(C_max, ptcls_per_elem);
+  
   sigma = sig;
   V_ = v;
   num_elems = ne;
@@ -753,7 +770,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
     return;
   }
   lid_t new_num_ptcls = activePtcls;
-  
+
+  int new_C = chooseChunkHeight<ExecSpace>(C_max, new_particles_per_elem);
+  int old_C = C_;
+  C_ = new_C;
   //Perform sorting
   Kokkos::Profiling::pushRegion("Sorting");
   PairView<ExecSpace> ptcls;
@@ -794,7 +814,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
       interior_slice_of_chunk(i) = my_chunk == prev_chunk;
   });
   lid_t C_local = C_;
-  kkLidView element_index("element_index", new_nchunks * C_);
+  kkLidView element_index("element_index", new_nchunks * C_local);
   Kokkos::parallel_for("set_element_index", new_num_slices, KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t chunk = new_slice_to_chunk(i);
       for (lid_t e = 0; e < C_local; ++e) {
@@ -802,13 +822,14 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                  (new_offsets(i) + e) * !interior_slice_of_chunk(i));
       }
   });
+  C_ = old_C;
   kkLidView new_indices("new_scs_index", capacity());
   auto copySCS = SCS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
     const lid_t new_elem = new_element(ptcl_id);
     //TODO remove conditional
     if (mask && new_elem != -1) {
       const lid_t new_row = new_element_to_row(new_elem);
-      new_indices(ptcl_id) = Kokkos::atomic_fetch_add(&element_index(new_row), C_local);
+      new_indices(ptcl_id) = Kokkos::atomic_fetch_add(&element_index(new_row), new_C);
       const lid_t new_index = new_indices(ptcl_id);
       new_particle_mask(new_index) = 1;
     }
@@ -824,7 +845,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   Kokkos::parallel_for("set_new_particle", num_new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
     lid_t new_elem = new_particle_elements(i);
     lid_t new_row = new_element_to_row(new_elem);
-    new_particle_indices(i) = Kokkos::atomic_fetch_add(&element_index(new_row), C_local);
+    new_particle_indices(i) = Kokkos::atomic_fetch_add(&element_index(new_row), new_C);
     lid_t new_index = new_particle_indices(i);
     new_particle_mask(new_index) = 1;
   });
@@ -836,6 +857,7 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
                                                                        new_particle_indices);
 
   //set scs to point to new values
+  C_ = new_C;
   num_ptcls = new_num_ptcls;
   num_chunks = new_nchunks;
   num_slices = new_num_slices;

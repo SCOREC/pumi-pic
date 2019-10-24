@@ -38,6 +38,29 @@ void getMemImbalance(int hasptcls) {
 #endif
 }
 
+void getPtclImbalance(lid_t ptclCnt) {
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  long ptcls=ptclCnt;
+  long max=0;
+  long tot=0;
+  int hasptcls = (ptclCnt > 0);
+  int rankswithptcls=0;
+  MPI_Allreduce(&ptcls, &max, 1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&ptcls, &tot, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&hasptcls, &rankswithptcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const double avg=static_cast<double>(tot)/rankswithptcls;
+  const double imb=max/avg;
+  if(!comm_rank) {
+    printf("ranks with particles %d particle imbalance %f\n",
+        rankswithptcls, imb);
+  }
+  if( ptcls == max ) {
+    printf("%d peak particle count %ld, avg usage %f\n", comm_rank, max, avg);
+  }
+}
+
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
   ss << "pseudoPush_r" << comm_rank<<"_t"<<iter;
@@ -482,6 +505,7 @@ int main(int argc, char** argv) {
     if (!comm_rank)
       fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
     getMemImbalance(scs_np!=0);
+    getPtclImbalance(scs_np);
     timer.reset();
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);

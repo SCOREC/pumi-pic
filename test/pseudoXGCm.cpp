@@ -12,6 +12,31 @@
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
+void getMemImbalance(int hasptcls) {
+#ifdef SCS_USE_CUDA
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  size_t free, total;
+  cudaMemGetInfo(&free, &total);
+  const long used=total-free;
+  long maxused=0;
+  long totused=0;
+  int rankswithptcls=0;
+  MPI_Allreduce(&used, &maxused, 1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&used, &totused, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&hasptcls, &rankswithptcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const double avg=static_cast<double>(totused)/rankswithptcls;
+  const double imb=maxused/avg;
+  if(!comm_rank) {
+    printf("ranks with particles %d memory usage imbalance %f\n",
+        rankswithptcls, imb);
+  }
+  if( used == maxused ) {
+    printf("%d peak mem usage %ld, avg usage %f\n", comm_rank, maxused, avg);
+  }
+#endif
+}
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
@@ -116,10 +141,7 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   auto x = scs->get<0>();
   auto xtgt = scs->get<1>();
   auto pid = scs->get<2>();
-  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
-  o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
-  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
-                                          xpoints_d, maxLoops);
+  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids, maxLoops);
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(picparts, scs, elem_ids, output);
@@ -309,6 +331,7 @@ int main(int argc, char** argv) {
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
+  getMemImbalance(1);
   if (comm_rank == 0) {
     printf("world ranks %d\n", comm_size);
     printf("particle_structs floating point value size (bits): %zu\n", sizeof(fp_t));
@@ -448,6 +471,8 @@ int main(int argc, char** argv) {
   long int totNp;
   long int scs_np;
   for(iter=1; iter<=maxIter; iter++) {
+    if(!comm_rank || (comm_rank == comm_size/2))
+      scs->printMetrics();
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     if(totNp == 0) {
@@ -456,6 +481,7 @@ int main(int argc, char** argv) {
     }
     if (!comm_rank)
       fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
+    getMemImbalance(scs_np!=0);
     timer.reset();
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);

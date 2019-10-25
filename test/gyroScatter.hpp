@@ -64,9 +64,8 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   int maxLoops = 100;
   int scsCapacity = gyro_scs->capacity();
   o::Write<o::LO> elem_ids(scsCapacity, -1);
-  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
   bool isFound = p::search_mesh_2d<Point>(*mesh, gyro_scs, start, end, pids,
-                                          elem_ids, xpoints_d, maxLoops);
+                                          elem_ids, maxLoops);
   assert(isFound);
 
   const auto numElms = mesh->nelems();

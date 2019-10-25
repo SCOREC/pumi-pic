@@ -48,7 +48,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   };
   o::parallel_for(num_points, countPointsInElement, "countPointsInElement");
   
-  const int sigma = INT_MAX;
+  const int sigma = 1;
   const int V = 64;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   SCSpt::kkGidView empty_gids("empty_gids", 0);

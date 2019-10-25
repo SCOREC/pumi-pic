@@ -25,6 +25,8 @@ void printGyroConfig() {
 
 o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
                                o::Reals projected_points, o::LOs starting_element) {
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   o::LO num_points = starting_element.size();
 
   //Create SCS for the projected points to perform adjacency search on
@@ -54,8 +56,9 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
                                                       mesh->nelems(), num_points,
                                                       ptcls_per_elem, empty_gids,
                                                       point_element, point_info);
-  printf("created scs for gyro mapping with %d points and %d elms\n",
-      num_points, mesh->nelems());
+  if(!rank)
+    printf("created scs for gyro mapping with %d points and %d elms\n",
+        num_points, mesh->nelems());
 
   //Adjacency search
   auto start = gyro_scs->get<0>();

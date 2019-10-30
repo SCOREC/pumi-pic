@@ -405,8 +405,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
         //wall collision
         if(ind_exp >= 0) {
           for(o::LO i=0; i<3; ++i)
-            xpoints_d[pid*3+i] = xpts[i];
-          xface_d[pid] = face_ids[ind_exp];
+            xpoints_d[ptcl*3+i] = xpts[i];
+          xface_d[ptcl] = face_ids[ind_exp];
           elem_ids_next[pid] = -1;
           ptcl_done[pid] = 2; 
         }
@@ -451,8 +451,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
         if(exposed) {
           elem_ids_next[pid] = -1;
           for(o::LO i=0; i<3; ++i)
-            xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
-          xface_d[pid] = face_id;
+            xpoints_d[ptcl*3+i] = xpoints[max_ind*3+i];            
+          xface_d[ptcl] = face_id;
           ptcl_done[pid] = 2;        
         } else {
           elem_ids_next[pid] = dual_elems[face_id];
@@ -516,7 +516,6 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
   o::Write<o::LO> ptcl_done(scsCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(scsCapacity);//,-1);
-  //o::Write<o::LO> elem_ids(scsCapacity,-1);
   auto fill = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
@@ -544,9 +543,10 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = elem_ids[pid];
         OMEGA_H_CHECK(elmId >= 0);
-        auto ptcl = pid_d(pid);
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
+        if(debug)
+          printf("pid %d in element %d\n", pid, elmId);
         auto dest = makeVector3(pid, xtgt_scs_d);
         auto orig = makeVector3(pid, x_scs_d);
         o::Vector<4> bcc;
@@ -555,20 +555,22 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, tol)) {
             printf("Warning: Particle not in this element at loops=0"
-              "\tptcl %d elem %d\n", ptcl, elmId);
+              "\tpid %d elem %d\n", pid, elmId);
             print_osh_vector(orig, "orig");
             print_osh_vector(dest, "dest");
             print_osh_vector(bcc, "bcc");
             OMEGA_H_CHECK(false);
           }
         }
+        
+        auto ptcl = pid_d(pid);
         bool intersected = false;
         find_barycentric_tet(M, dest, bcc);
         // TODO tolerance
         if(all_positive(bcc, tol)) {
           if(debug)
             printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
-          elem_ids_next[pid] = elmId; //elem_ids[pid];
+          elem_ids_next[pid] = elmId;
           ptcl_done[pid] = 1;
         } else {
           if(debug)
@@ -614,8 +616,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
             if(intersected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
-                xpoints_d[pid*3+i] = xpoint[i];
-              xface_d[pid] = face_id;
+                xpoints_d[ptcl*3+i] = xpoint[i];
+              xface_d[ptcl] = face_id;
               elem_ids_next[pid] = -1;
               if(debug)
                 printf("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
@@ -654,8 +656,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
               if(exposed_faces[max_ind]) {
                 elem_ids_next[pid] = -1;
                 for(o::LO i=0; i<3; ++i)
-                  xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
-                xface_d[pid] = fid;
+                  xpoints_d[ptcl*3+i] = xpoints[max_ind*3+i];            
+                xface_d[ptcl] = fid;
                 ptcl_done[pid] = 1;
               } else { //if(min_bcc_elem >= 0) {
                 elem_ids_next[pid] = dual_elems[fid]; //min_bcc_elem;
@@ -695,7 +697,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       break;
     }
   } //while
-
+  
   if(debug)
     fprintf(stderr, "\t: loops %d\n", loops);
   Kokkos::Profiling::popRegion();

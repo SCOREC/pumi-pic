@@ -96,6 +96,13 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   auto dxTemp = gm.tempIonDx;
   auto dzTemp = gm.tempIonDz;
 
+  auto compareWithGitr = COMPARE_WITH_GITR;
+  //#ifdef COMPARE_WITH_GITR
+  const auto& gitrPtclStepData = gp.gitrPtclStepData;
+  const auto gitrDataDof = static_cast<int>(GitrCompareDataEnum::dof);
+  const auto gitrDataIndRndIoni = static_cast<int>(GitrCompareDataEnum::ioniInd);
+  //#endif
+
   auto& xfaces_d = gp.collisionPointFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.ionizeTempGridMin;
@@ -182,13 +189,16 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
       //TODO check rate !=0
       //OMEGA_H_CHECK(!p::almost_equal(rate,0));
 			o::Real rateIon = 1/(rate*nlocal);
-      OMEGA_H_CHECK(!std::isnan(rateIon));
+      OMEGA_H_CHECK(!isnan(rateIon));
 			if(p::almost_equal(tlocal,0) || p::almost_equal(nlocal, 0))
 				rateIon = 1.0e12;
 
     	o::Real P1 = 1.0 - exp(-dt/rateIon);
       auto randn = rands[pid];
-      auto xfid = xfaces_d[pid];
+      if(compareWithGitr)
+       randn = gitrPtclStepData[ptcl*gitrDataDof+gitrDataIndRndIoni];
+
+      auto xfid = xfaces_d[ptcl];
       auto first_iz = first_ionizeZ_scs(pid);
     	if(xfid < 0) {
 		    if(randn <= P1)
@@ -202,7 +212,8 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
 	      first_ionizeT_scs(pid) = fit + dt;
       }
       if(debug)
-        printf("ionizable %d ptcl%d charge %d randn %g P1 %g rateIon %g rateInterp %g dt %g\n",
+        printf("ionizable %d ptcl%d charge %d randn %g P1 %g rateIon %g "
+          "rateInterp %g dt %g\n",
           xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, rate, dt);
 	  } //mask 
 	};
@@ -228,6 +239,13 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   auto nzTemp = gm.tempIonNz;
   auto dxTemp = gm.tempIonDx;
   auto dzTemp = gm.tempIonDz;
+
+  auto compareWithGitr = COMPARE_WITH_GITR;
+  //#ifdef COMPARE_WITH_GITR
+  const auto& gitrPtclStepData = gp.gitrPtclStepData;
+  const auto gitrDataDof = static_cast<int>(GitrCompareDataEnum::dof);
+  const auto gitrDataIndRndRecomb = static_cast<int>(GitrCompareDataEnum::recombInd);
+  //#endif
 
   auto use2DRatesData = gir.useReadInRatesData;
   auto& xfaces_d = gp.collisionPointFaceIds;
@@ -318,7 +336,10 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
       }
 
       auto randn = rands[pid];
-      auto xfid = xfaces_d[pid];
+      if(compareWithGitr)
+       randn = gitrPtclStepData[ptcl*gitrDataDof+gitrDataIndRndRecomb];
+
+      auto xfid = xfaces_d[ptcl];
       auto first_iz = first_ionizeZ_scs(pid);
       if(xfid < 0 && randn <= P1) {
         charge_scs(pid) = charge-1;

@@ -109,7 +109,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
     //mask is set for origin element, not for detected/exiting element
     if(mask >0 && elem_ids[pid]==-1) {
       auto elemId = e;
-      auto fid = xfaces[pid];
+      auto fid = xfaces[ptcl];
 
       if(fid >= 0) {
         OMEGA_H_CHECK(side_is_exposed[fid]);
@@ -129,7 +129,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         auto vel = p::makeVector3(pid, vel_scs );
         o::Vector<3> xpt;
         for(o::LO i=0; i<3; ++i)
-          xpt[i] = xpoints[pid*3+i];
+          xpt[i] = xpoints[ptcl*3+i];
         auto pos = p::makeVector3(pid, tgt_scs);
 
         o::Real dEdist = 0;
@@ -189,7 +189,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         if(totalYR > 0) {
           if(r7 > sputtProb) { //reflect
             //resetting hitface
-            xfaces[pid] = -1;
+            xfaces[ptcl] = -1;
             // for next push
             elem_ids[pid] = elemId;
 

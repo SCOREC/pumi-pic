@@ -301,19 +301,19 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
     //TODO if faceId's are not sequential, create a (bdry) faceIds array 
     if(side_is_exposed[fid]) {
       o::Vector<3> B = o::zero_vector<3>();
-      auto pos = p::find_face_centroid(fid, coords, face_verts);
+      auto fcent = p::find_face_centroid(fid, coords, face_verts);
       //cylindrical symmetry, height (z) is same.
-      auto rad = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+      auto rad = sqrt(fcent[0]*fcent[0] + fcent[1]*fcent[1]);
       // projecting point to y=0 plane, since 2D data is on const-y plane.
       // meaningless to include non-zero y coord of target plane.
-      pos[0] = rad + fieldCenter; // D3D 1.6955m. TODO check unit
-      pos[1] = 0;
+      fcent[0] = rad + fieldCenter; // D3D 1.6955m. TODO check unit
+      fcent[1] = 0;
       //Cylindrical symmetry = false, since already projected onto y=0 plane
 
       // TODO angle is between surface normal and magnetic field at center of face
       // If  face is long, BField is not accurate. Calculate at closest point ?
       if(debug)//&& fid%1000==0)
-        printf(" fid:%d::  %.5f %.5f %.5f \n", fid, pos[0], pos[1], pos[2]);
+        printf(" fid:%d::  %.5f %.5f %.5f \n", fid, fcent[0], fcent[1], fcent[2]);
       if(useConstantBField) {
         B[0] = BField_const[0];
         B[1] = BField_const[1];
@@ -321,7 +321,7 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
       } else {
         assert(!p::almost_equal(bxz,0));
         p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0],
-          bnz[1], pos, B, false);
+          bnz[1], fcent, B, false);
       }
       /*
       auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);

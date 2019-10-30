@@ -10,21 +10,26 @@
 #include "GitrmInputOutput.hpp"
 
 double Field3StructInput::getGridDelta(int ind) {
-  assert(ind < MAX_SIZE && ind >=0 && nGridVec[ind] > 0);
+  assert(ind < MAX_SIZE && ind >=0);
+  assert(nGridVec.size() > ind && nGridVec[ind] > 0);
   return (getGridMax(ind) - getGridMin(ind))/(o::Real)nGridVec[ind];
 }
 
 int Field3StructInput::getNumGrids(int ind) {
+  assert(ind < MAX_SIZE && ind >=0);
+  assert(nGridVec.size() > ind);
   return nGridVec[ind];
 }
 
 double Field3StructInput::getGridMin(int ind) {
-  assert(ind >=0 && ind < 3);
+  assert(ind >=0 && ind < MAX_SIZE);
+  assert(MAX_SIZE ==3);
   return (ind>0) ? ((ind>1)? (grid3[0]): grid2[0]) : grid1[0];
 }
 
 double Field3StructInput::getGridMax(int ind) {
   assert(ind >=0 && ind < 3);
+  assert(MAX_SIZE == 3);
   double max;
   if(ind==0)
     max = grid1[grid1.size()-1];
@@ -84,28 +89,44 @@ int readParticleSourceNcFile(std::string ncFileName,
         ++nans;
       }
     if(nans)
-      printf("\n*******WARNING replaced NaN %d places *******\n\n", nans);
+      printf("\n*******WARNING replaced %d NaNs in ptclSrc *******\n\n", nans);
   }
   return 0;
 }
 
-//Reads upto 3 components, 3 gridNames (optional), and  3 grids(optional).
-// maxNum is max of nGrid1str in Field3InputStruct
+//Reads from 0 to 3 grids having gridNames; .
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs, int maxNum) {
+  Field3StructInput& fs) {
+  int maxNPtcls = 0;
+  int numPtclsRead = 0;
+  return readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead);
+}
+
+// maxNPtcls updated if > that in file. TODO read only maxNPtcls
+int readInputDataNcFileFS3(const std::string& ncFileName,
+  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, std::string nPstr) {
   int ncSizePerComp = 1;
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     for(int i=0; i< fs.nGridNames.size(); ++i) {
       netCDF::NcDim ncGridName(ncf.getDim(fs.nGridNames[i]));
-      fs.nGridVec.push_back(ncGridName.getSize());
+      auto size = ncGridName.getSize();
+      fs.nGridVec.push_back(size);
+      if(fs.nGridNames[i] == nPstr) {
+        if(size < maxNPtcls)
+          maxNPtcls = size;
+        //else if(size > maxNPtcls)
+        //  numPtclsRead = maxNPtcls; //TODO enable it below
+        numPtclsRead = size;
+      }
+
       std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " << fs.nGridVec[i] << "\n";
       ncSizePerComp *= fs.nGridVec[i];
     }    
     std::cout << " ncSizePerComp: " << ncSizePerComp << " nComp " << fs.nComp << "\n";
 
     fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
-    for(int i=0; i<fs.nGridRead; ++i) {
+    for(int i=0; i<fs.nGridRead && i<fs.gridNames.size(); ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.gridNames[i].c_str()));
       if(i==0) {
         fs.grid1 = o::HostWrite<o::Real>(fs.nGridVec[0]);
@@ -121,7 +142,7 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       }
       std::cout << i << " "  << fs.gridNames[i] <<  " " << fs.grid1[1] << " \n";
     }
-
+    // TODO use maxNPtcls and numPtclsRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
       std::cout << "getVar " << fs.compNames[i] << "\n";
@@ -134,6 +155,17 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     std::cout << e.what() << std::endl;
     return 1;
   }
+
+  // replace NaNs
+  int nans = 0;
+  for(int i=0; i<fs.data.size(); ++i)
+    if(std::isnan(fs.data[i])) {
+      fs.data[i] = 0;
+      ++nans;
+    }
+  if(nans)
+    printf("\n*******WARNING replaced %d NaNs in data ******\n\n", nans);
+
   return 0;
 }
 

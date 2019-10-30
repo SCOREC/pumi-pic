@@ -199,6 +199,16 @@ OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<N> &v,
   }
 }
 
+OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(int id, int elem, 
+    o::Vector<3>& orig, o::Vector<3>& dest, o::Matrix<3, 4>& M) {
+  printf("PATH ptcl %d e: %d orig: %g %g %g dest: %g %g %g "
+        "Tet: %g %g %g  %g %g %g  %g %g %g  %g %g %g \n", 
+    id, elem, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2], 
+    M[0][0], M[0][1], M[0][2], M[1][0], M[1][1], M[1][2],
+    M[2][0], M[2][1], M[2][2], M[3][0], M[3][1], M[3][2]);
+}
+
+
 /** @brief To interpolate field ONE component at atime from 
  *    nComp-component(dof) 2D data
  *  @warning This function is only for regular structured grid of data.

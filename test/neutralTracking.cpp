@@ -11,8 +11,6 @@
 #include "GitrmParticles.hpp"
 #include "GitrmPush.hpp"
 
-#define HISTORY 1
-
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -50,24 +48,28 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
   auto pid_scs = scs->get<PTCL_ID>();
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto fid = xface_ids[pid];
-    if(mask >0 && fid>=0) {
-      // test
-      o::Vector<3> xpt;
-      for(o::LO i=0; i<3; ++i)
-        xpt[i] = xpoints[pid*3+i];
-      auto x = xpt[0], y = xpt[1], z = xpt[2];
-      o::Real rad = sqrt(x*x + y*y);
-      o::LO zInd = -1;
-      if(rad < radMax && z <= zMax && z >= zMin)
-        zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
-      
-      auto detId = pisces_ids[fid];
-      if(detId >=0) {
-        if(debug)
-          printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
-            pid_scs(pid), zInd, detId, x, y, z, iter);
-        Kokkos::atomic_fetch_add(&(data_d[detId]), 1);
+    if(mask >0) {
+      auto ptcl = pid_scs(pid);
+      auto fid = xface_ids[ptcl];
+      if(fid>=0) {
+        xface_ids[ptcl] = -1;
+        // test
+        o::Vector<3> xpt;
+        for(o::LO i=0; i<3; ++i)
+          xpt[i] = xpoints[ptcl*3+i];
+        auto x = xpt[0], y = xpt[1], z = xpt[2];
+        o::Real rad = sqrt(x*x + y*y);
+        o::LO zInd = -1;
+        if(rad < radMax && z <= zMax && z >= zMin)
+          zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
+        
+        auto detId = pisces_ids[fid];
+        if(detId >=0) {
+          if(debug)
+            printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
+              pid_scs(pid), zInd, detId, x, y, z, iter);
+          Kokkos::atomic_fetch_add(&(data_d[detId]), 1);
+        }
       }
     }
   };
@@ -125,8 +127,8 @@ void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter,
   assert(scs->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 20;
   const auto scsCapacity = scs->capacity();
+  assert(scsCapacity >0);
   o::Write<o::LO> elem_ids(scsCapacity,-1);
-  //o::Write<o::LO>xface_ids(scsCapacity, -1, "xface_ids");
   auto x_scs = scs->get<0>();
   auto xtgt_scs = scs->get<1>();
   auto pid_scs = scs->get<2>();
@@ -183,7 +185,7 @@ int main(int argc, char** argv) {
     exit(1);
   }
   bool piscesRun = true; // add as argument later
-  bool chargedTracking = true; //false for neutral tracking
+  bool chargedTracking = false; //false for neutral tracking
   bool debug = false;
 
   auto deviceCount = 0;
@@ -251,16 +253,16 @@ int main(int argc, char** argv) {
     NUM_ITERATIONS = atoi(argv[5]);
   if(argc > 6) {
     histInterval = atoi(argv[6]);
-    if(histInterval >0)
+    if(histInterval > NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
   if(argc > 7)
     dTime = atof(argv[7]);
 
   //TODO delete after testing
-  std::ofstream ofsHistory;
-  if(histInterval > 0)
-    ofsHistory.open("history.txt");
+  //std::ofstream ofsHistory;
+  //if(histInterval > 0)
+  //  ofsHistory.open("history.txt");
   
   GitrmParticles gp(*mesh, dTime);
   // TODO use picparts 
@@ -270,32 +272,36 @@ int main(int argc, char** argv) {
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   if(!comm_rank)
-    printf("Initializing Particles\n");
+    printf("Initializing %d Particles\n", numPtcls);
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
   auto* scs = gp.scs;
-  const auto scsCapacity = scs->capacity();
-  //TODO fix this extra storage 
-  o::Write<o::Real>xpoints_d(5*scsCapacity, 0, "xpoints");
-  o::Write<o::LO>xface_ids((int)(2*scsCapacity), -1, "xface_ids"); //crash
+
+  o::Write<o::Real>xpoints_d(3*numPtcls, 0, "xpoints");
+  o::Write<o::LO>xface_ids(numPtcls, -1, "xface_ids");
 
   o::LO numGrid = 14;
   o::Write<o::LO>data_d(numGrid, 0);
 
-  printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
-  int nTHistory = 0;
+  int nTHistory = 1;
   int dofStepData = 1;
   if(histInterval >0) {
-    nTHistory = 1 + (int)NUM_ITERATIONS/histInterval;
+    printf("nT_history %d %d %d interval %d \n", nTHistory, NUM_ITERATIONS, NUM_ITERATIONS/histInterval, histInterval);
+    nTHistory += (int)NUM_ITERATIONS/histInterval;
     if(NUM_ITERATIONS%histInterval > 0)
       ++nTHistory;
     dofStepData = 6;
   }
 
+  printf("\ndTime %g NUM_ITERATIONS %d nT_history %d\n", 
+      dTime, NUM_ITERATIONS, nTHistory);
+  assert(numPtcls*dofStepData*nTHistory > 0);
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
   o::Write<o::Real> ptclsHitoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
-  
-  updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
+ 
+  if(histInterval >0)
+    updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
+ 
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int iter;
@@ -325,7 +331,6 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
     
     search(picparts, scs, gp, iter, data_d, xpoints_d, xface_ids, debug);
-    #if HISTORY > 0
     if(histInterval >0) {
       //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data); 
       if(iter % histInterval == 0)
@@ -335,7 +340,6 @@ int main(int argc, char** argv) {
         //printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
        // dofStepData, true); //last accum
     }
-    #endif
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
     scs_np = scs->nPtcls();

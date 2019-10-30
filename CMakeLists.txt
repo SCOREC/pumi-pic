@@ -15,6 +15,8 @@ set(CMAKE_MODULE_PATH
    ${CMAKE_MODULE_PATH} 
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}")
+
 #Settings options for testing
 enable_testing()
 include(CTest)

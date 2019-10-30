@@ -43,30 +43,41 @@ public:
 
   void defineParticles(p::Mesh& picparts, int numPtcls, o::LOs& ptclsInElem, 
     int elId=-1);
-  void initPtclCollisionData(int scsCapacity); 
+  
+  void initPtclCollisionData(int numPtcls); 
+  
   void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
+  
   void setPtclInitRndDistribution(o::Write<o::LO> &);
+  
   void initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls,o::Real theta, 
     o::Real phi, o::Real r, o::LO maxLoops = 100, o::Real outer=2);
+  
   void setInitialTargetCoords(o::Real dTime);
+  
   void initPtclsFromFile(p::Mesh& picparts, const std::string& fName, 
     o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
+  
   void initPtclChargeIoniRecombData();
-  void processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls);
+  
   void setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem,
     const o::LOs& ptclIdsInElem,  const o::LOs& elemIdOfPtcls, 
     const o::LO numPtcls, const o::LO nel);
+  
   void setPtclInitData(const o::Reals& data, int nPtclsRead);
+  
   void findElemIdsOfPtclFileCoordsByAdjSearch(const o::Reals& data, 
     o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems, o::LO numPtcls, 
     o::LO numPtclsRead);
+  
   void convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
     o::LOs& ptclIdPtrsOfElem, o::LOs& ptclIdsOfElem, o::LOs& elemIds,
     o::LO numPtcls);
-  void printPtclSource(o::Reals& data, int nPtcls, int nPtclsRead);
+  
+  int readGITRPtclStepDataNcFile(const std::string& ncFileName, 
+  int& maxNPtcls, int& numPtclsRead);
 
   o::Real timeStep;
   SCS* scs;
@@ -76,13 +87,18 @@ public:
   o::Reals closestPoints;
   o::LOs closestBdryFaceIds;
   
-  // wall collision. NOTE: only access per valid SCS pid_d, which is reset upon re-build
+  // wall collision; changed to per ptcl from per pid
   o::Write<o::Real> collisionPoints;
   o::Write<o::LO> collisionPointFaceIds;
+  o::Reals gitrPtclStepData;
 };
+
+enum class GitrCompareDataEnum: int {d2bdryInd, ioniInd, recombInd, dof};
 
 void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData,
   int iter, int dof, int histStep=1); //o::Write<o::Real>& data, 
+
+void printPtclSource(o::Reals& data, int nPtcls, int nPtclsRead);
 
 void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
   int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data,
@@ -90,6 +106,9 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
 
 void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
   int dof, int nTHistory, std::string outNcFileName);
+
+void processPtclInitTextFile(const std::string &fName,
+    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls);
 
 struct PtclSourceStruct {
   PtclSourceStruct(std::string n, std::string np, std::string x, std::string y,
@@ -111,7 +130,7 @@ struct PtclSourceStruct {
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp, 
-    o::Write<o::LO> &data_d, o::LO iter, bool debug=true) {
+    o::Write<o::LO> &data_d, o::LO iter, bool resetFids=true, bool debug=true) {
   // test TODO move test part to separate unit test
   double radMax = 0.05; //m 0.0446+0.005
   double zMin = 0; //m height min
@@ -123,29 +142,31 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
   auto pid_scs = scs->get<PTCL_ID>();
   //based on ptcl id or scs pid ?
   const auto& xpoints = gp.collisionPoints;
-  const auto& xpointFids = gp.collisionPointFaceIds;
+  auto& xpointFids = gp.collisionPointFaceIds;
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    // Don't use pid_scs(pid) here, since data made for scsCapacity
-    auto fid = xpointFids[pid];
-
-    if(mask >0 && fid>=0) {
-      // test
-      auto xpt = o::zero_vector<3>();
-      for(o::LO i=0; i<3; ++i)
-        xpt[i] = xpoints[pid*3+i];
-      auto x = xpt[0], y = xpt[1], z = xpt[2];
-      o::Real rad = sqrt(x*x + y*y);
-      o::LO zInd = -1;
-      if(rad < radMax && z <= zMax && z >= zMin)
-        zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
-      
-      auto detId = pisces_ids[fid];
-      if(detId > -1) { //TODO
-        //if(debug)
-          printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
-            pid_scs(pid), zInd, detId, x, y, z, iter);
-        Kokkos::atomic_fetch_add(&data_d[detId], 1);
+    if(mask >0) {
+      auto ptcl = pid_scs(pid);
+      auto fid = xpointFids[ptcl];
+      if(fid>=0) {
+        xpointFids[ptcl] = -1;
+        // test
+        auto xpt = o::zero_vector<3>();
+        for(o::LO i=0; i<3; ++i)
+          xpt[i] = xpoints[ptcl*3+i]; //ptcl = 0..numPtcls
+        auto x = xpt[0], y = xpt[1], z = xpt[2];
+        o::Real rad = sqrt(x*x + y*y);
+        o::LO zInd = -1;
+        if(rad < radMax && z <= zMax && z >= zMin)
+          zInd = (z > htBead1) ? (1+(o::LO)((z-htBead1)/dz)) : 0;
+        
+        auto detId = pisces_ids[fid];
+        if(detId > -1) { //TODO
+          if(debug)
+            printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
+              pid_scs(pid), zInd, detId, x, y, z, iter);
+          Kokkos::atomic_fetch_add(&data_d[detId], 1);
+        }
       }
     }
   };

@@ -13,8 +13,6 @@
 #include "GitrmIonizeRecombine.hpp"
 //#include "GitrmSurfaceModel.hpp"
 
-#define HISTORY 1
-
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -74,6 +72,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   assert(scs->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 20;
   const auto scsCapacity = scs->capacity();
+  assert(scsCapacity > 0);
   o::Write<o::LO> elem_ids(scsCapacity,-1);
 
   auto x_scs = scs->get<0>();
@@ -94,8 +93,8 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //fprintf(stderr, "Applying surface Model..\n");
   //applySurfaceModel(mesh, scs, elem_ids);
-
-  storePiscesData(mesh, gp, data_d, iter, true);
+  bool resetFids = true;
+  storePiscesData(mesh, gp, data_d, iter, resetFids, true);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
@@ -142,7 +141,7 @@ int main(int argc, char** argv) {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
         << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file>"
-        << " [<nPtcls><nIter> <histInterval> ]\n";
+        << " [<nPtcls><nIter> <histInterval> <gitrDataFileName> ]\n";
     exit(1);
   }
   bool piscesRun = true; // add as argument later
@@ -224,10 +223,9 @@ int main(int argc, char** argv) {
     if(histInterval >NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
-  //TODO delete after testing
-  std::ofstream ofsHistory;
-  if(histInterval > 0)
-    ofsHistory.open("history.txt");
+  std::string gitrDataFileName = "";
+  if(argc > 9)
+    gitrDataFileName = argv[9];
 
   GitrmParticles gp(*mesh, dTime);
   // TODO use picparts 
@@ -239,11 +237,16 @@ int main(int argc, char** argv) {
   if(!comm_rank)
     printf("Initializing Particles\n");
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
+
+  int compare_with_gitr = 0;
+  int testNumPtcls = 10;
+  int testNumPtclsRead = 0;
+  if(compare_with_gitr) {
+    assert(COMPARE_WITH_GITR == 1);
+    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testNumPtclsRead);
+  }
   auto* scs = gp.scs;
   const auto scsCapacity = scs->capacity();
-  //TODO fix this extra storage 
-  o::Write<o::Real>xpoints_d(5*scsCapacity, 0, "xpoints");
-  //o::Write<o::LO>xface_ids((int)(1.5*scsCapacity), -1, "xface_ids"); //crash
 
   if(!piscesRun) {
     std::string bFile = "get_from_argv";
@@ -272,15 +275,17 @@ int main(int argc, char** argv) {
 
   printf("\ndTime %g NUM_ITERATIONS %d\n", dTime, NUM_ITERATIONS);
 
-  int nTHistory = 0;
+  int nTHistory = 1;
   int dofStepData = 1; //TODO see if 0 OK for no-history
   if(histInterval >0) {
-    nTHistory = 1 + (int)NUM_ITERATIONS/histInterval;
+    nTHistory += (int)NUM_ITERATIONS/histInterval;
     if(NUM_ITERATIONS % histInterval)
       ++nTHistory;
     printf("nHistory %d histInterval %d\n", nTHistory, histInterval);
     dofStepData = 6;
   }
+  //always assert size>0 for device data init
+  assert(numPtcls*dofStepData*nTHistory >0);
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData); // TODO delete
   o::Write<o::Real> ptclHitoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
@@ -300,11 +305,6 @@ int main(int argc, char** argv) {
     }
     if(comm_rank == 0 && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
-    //#if HISTORY > 0
-    //o::Write<o::Real> data(numPtcls*dofStepData, -1);
-    //if(iter==0 && histInterval >0)
-    //  printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
-    //#endif
     Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {
       gitrm_findDistanceToBdry(gp, gm);
@@ -318,19 +318,12 @@ int main(int argc, char** argv) {
 
     search(picparts, gp, gm, gir, iter, data_d, debug);
     
-    #if HISTORY > 0
     if(histInterval >0) {
-      //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data);
       // move-over if. 0th step(above) kept; last step available at the end.
       if(iter % histInterval == 0)
         ++iHistStep;        
       updatePtclStepData(scs, ptclHitoryData, numPtcls, dofStepData, iHistStep);
-      
-      //if((iter+1)%histInterval == 0)
-      //  printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
-      //  dofStepData, true); //last accum
     }
-    #endif
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
     scs_np = scs->nPtcls();

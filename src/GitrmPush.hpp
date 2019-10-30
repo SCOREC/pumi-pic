@@ -16,16 +16,25 @@
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
 inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false) {
-  auto biasedSurface = BIASED_SURFACE;
-  auto angles = mesh.get_array<o::Real>(o::FACE, "angleBdryBfield");
-  auto potentials = mesh.get_array<o::Real>(o::FACE, "potential");
-  auto debyeLengths = mesh.get_array<o::Real>(o::FACE, "DebyeLength");
-  auto larmorRadii = mesh.get_array<o::Real>(o::FACE, "LarmorRadius");
-  auto childLangmuirDists = mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist");
+  auto compareWithGitr = COMPARE_WITH_GITR;
+
+  //#ifdef COMPARE_WITH_GITR
+  const auto& gitrPtclStepData = gp.gitrPtclStepData;
+  const auto gitrDataDof = static_cast<int>(GitrCompareDataEnum::dof);
+  const auto gitrDataIndD2B = static_cast<int>(GitrCompareDataEnum::d2bdryInd);
+  //#endif
+
+  const auto biasedSurface = BIASED_SURFACE;
+  const auto angles = mesh.get_array<o::Real>(o::FACE, "angleBdryBfield");
+  const auto potentials = mesh.get_array<o::Real>(o::FACE, "potential");
+  const auto debyeLengths = mesh.get_array<o::Real>(o::FACE, "DebyeLength");
+  const auto larmorRadii = mesh.get_array<o::Real>(o::FACE, "LarmorRadius");
+  const auto childLangmuirDists = mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist");
   auto* scs = gp.scs;
   auto pos_scs = scs->get<PTCL_POS>();
   auto efield_scs  = scs->get<PTCL_EFIELD>();
   auto pid_scs = scs->get<PTCL_ID>();
+  //TODO replace pid based data by ptcl based
   //NOTE arrays is based on pid, which is reset upon each rebuild
   const auto& closestPoints =  gp.closestPoints;
   const auto& faceIds = gp.closestBdryFaceIds;
@@ -53,7 +62,10 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
           closest[i] = closestPoints[pid*3+i];
         auto distVector = closest - pos;
         auto dirUnitVector = o::normalize(distVector);
-        auto md = p::osh_mag(distVector);
+        auto d2bdry = p::osh_mag(distVector);
+
+        if(compareWithGitr)
+          d2bdry = gitrPtclStepData[ptcl*gitrDataDof+gitrDataIndD2B];
         o::Real Emag = 0;
         /*
         // Calculate angle at closest point, instead of using it for centroid of a long tet
@@ -61,24 +73,24 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         */
         if(debug){
           printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%g pot:%g"
-           " Deb:%g Larm:%g CLD:%g \n", ptcl, md, faceId, angle, 
+           " Deb:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
            pot, debyeLength, larmorRadius, childLangmuirDist);
           printf("ptcl %d pos %g %g %g closest %g %g %g distVec %g %g %g \n", 
             ptcl, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2],
             distVector[0], distVector[1], distVector[2]);
         }
         if(biasedSurface) {
-          Emag = pot/(2.0*childLangmuirDist)* exp(-md/(2.0*childLangmuirDist));
+          Emag = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
         } else { 
           o::Real fd = 0.98992 + 5.1220E-03 * angle - 7.0040E-04 * pow(angle,2.0) +
                        3.3591E-05 * pow(angle,3.0) - 8.2917E-07 * pow(angle,4.0) +
                        9.5856E-09 * pow(angle,5.0) - 4.2682E-11 * pow(angle,6.0);
-          Emag = pot*(fd/(2.0 * debyeLength)* exp(-md/(2.0 * debyeLength))+ 
-                  (1.0 - fd)/(larmorRadius)* exp(-md/larmorRadius));
+          Emag = pot*(fd/(2.0 * debyeLength)* exp(-d2bdry/(2.0 * debyeLength))+ 
+                  (1.0 - fd)/(larmorRadius)* exp(-d2bdry/larmorRadius));
         }
         if(isnan(Emag))
           Emag = 0;
-        if(p::almost_equal(md, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
+        if(p::almost_equal(d2bdry, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
           Emag = 0.0;
           dirUnitVector = o::zero_vector<3>();
         }
@@ -90,7 +102,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         if(debug)
           printf("ptcl %d efield %g %g %g :d2bdry %g Emag %g "
             "pot %g CLD %g dir %g %g %g \n", 
-            ptcl, exd[0], exd[1], exd[2], md, Emag, pot, childLangmuirDist, 
+            ptcl, exd[0], exd[1], exd[2], d2bdry, Emag, pot, childLangmuirDist, 
             dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
         // 1st 2 particles used have same position in GITR and GITRm, since it is from file
         // Only difference is in input CLDist.
@@ -127,8 +139,8 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   const GitrmMesh &gm, const o::Real dTime, bool debug=false,
   bool testExample=false) {
   o::Mesh &mesh = gm.mesh;  
-  const auto coords = mesh.coords();
-  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto& coords = mesh.coords();
+  const auto& mesh2verts = mesh.ask_elem_verts();
   auto amu = PTCL_AMU;
   // Only 3D field from mesh tags
   auto use3dField = USE3D_BFIELD;
@@ -262,14 +274,11 @@ inline void neutralBorisMove_float(SCS* scs,  const o::Real dTime, bool debug = 
   auto vel_scs = scs->get<PTCL_VEL>();
   auto tgt_scs = scs->get<PTCL_NEXT_POS>();
   auto pos_scs = scs->get<PTCL_POS>();
-auto pid_scs = scs->get<PTCL_ID>();
+  auto pid_scs = scs->get<PTCL_ID>();
   auto boris = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
       auto vel = p::makeVector3(pid, vel_scs);
       auto pos = p::makeVector3(pid, pos_scs);
-//auto ptcl = pid_scs(pid);
-//if(ptcl==6222 || ptcl==6647) printf("BORIS: p %d e %d  pos %.15f %.15f %.15f\n", ptcl,elem, pos[0],pos[1],pos[2]);
-
       // Next position and velocity
       float val[3], v2[3];
       for(int i=0; i<3; ++i) {

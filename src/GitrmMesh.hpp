@@ -21,25 +21,26 @@ namespace p = pumipic;
 
 // D3D 0.8 to 2.45 m radial 
 
-constexpr o::LO USE3D_BFIELD = 0; //TOD
-constexpr o::LO USE2D_INPUTFIELDS = 0;
+constexpr int COMPARE_WITH_GITR = 0;
+constexpr int USE3D_BFIELD = 0; //TODO
+constexpr int USE2D_INPUTFIELDS = 0;
 // GITR only constant EField is used.
-constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
-constexpr o::LO USECYLSYMM = 0; // TODO
-constexpr o::LO PISCESRUN  = 1;
-constexpr o::Real BACKGROUND_AMU = 4.0; //TODO for pisces
+constexpr int USE_CONSTANT_BFIELD = 1; //used for pisces
+constexpr int USECYLSYMM = 0; // TODO
+constexpr int PISCESRUN  = 1;
+constexpr double BACKGROUND_AMU = 4.0; //TODO for pisces
 //TODO if multiple species ?
-constexpr o::Real PTCL_AMU=184.0; //W
+constexpr double PTCL_AMU=184.0; //W
 
-constexpr o::LO BACKGROUND_Z = 1;
+constexpr int BACKGROUND_Z = 1;
 
-constexpr o::Real DEPTH_DIST2_BDRY = 0.001; // 1mm
-constexpr o::LO BDRYFACE_SIZE = 30; //TODO
-constexpr o::LO BFS_DATA_SIZE = 100;
-constexpr o::Real BIAS_POTENTIAL = 250.0;
-constexpr o::LO BIASED_SURFACE = 1;
-constexpr o::Real CONSTANT_EFIELD[] = {0, 0, 0};
-constexpr o::Real CONSTANT_BFIELD[] = {0,0,-0.08};
+constexpr double DEPTH_DIST2_BDRY = 0.001; // 1mm
+constexpr int BDRYFACE_SIZE = 30; //TODO
+constexpr int BFS_DATA_SIZE = 100;
+constexpr double BIAS_POTENTIAL = 250.0;
+constexpr int BIASED_SURFACE = 1;
+constexpr double CONSTANT_EFIELD[] = {0, 0, 0};
+constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals
 enum { SIZE_PER_FACE = 11, FSKIP=2 };

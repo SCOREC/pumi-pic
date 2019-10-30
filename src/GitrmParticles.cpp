@@ -67,10 +67,11 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   o::HostWrite<o::Real> readInData_h;
   // TODO piscesLowFlux/updated/input/particleSource.cfg has r,z,angles, CDF, cylSymm=1
   //  PtclSourceStruct pst("ptcl_init_data", "nP", "x", "y", "z", "vx", "vy", "vz");
-  //  processPtclInitFile(fName, readInData_h, pst, numPtcls);
+  //  processPtclInitTextFile(fName, readInData_h, pst, numPtcls);
   int numPtclsRead;
   auto stat = readParticleSourceNcFile(fName, readInData_h, numPtcls, 
     numPtclsRead, true);
+
   OMEGA_H_CHECK((!stat) && (numPtclsRead > 0));  
   OMEGA_H_CHECK((numPtcls > 0) && (mesh.nelems() >0));
   o::Reals readInData_r(readInData_h);
@@ -83,7 +84,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   printf("Constructing SCS particles\n");
   defineParticles(picparts, numPtcls, numPtclsInElems, -1);
   
-  initPtclCollisionData(scs->capacity());
+  initPtclCollisionData(numPtcls);
   //note:rebuild to get mask if elem_ids changed
   printf("Setting ImpurityPtcl InitCoords \n");
   o::LOs ptclIdPtrsOfElem;
@@ -108,9 +109,9 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
 }
 
-void GitrmParticles::initPtclCollisionData(int scsCapacity) {
-  collisionPoints = o::Write<o::Real>(5*scsCapacity, 0, "xpoints");
-  collisionPointFaceIds = o::Write<o::LO>(2*scsCapacity, -1);
+void GitrmParticles::initPtclCollisionData(int numPtcls) {
+  collisionPoints = o::Write<o::Real>(3*numPtcls, 0, "xpoints");
+  collisionPointFaceIds = o::Write<o::LO>(numPtcls, -1);
 }
 
 
@@ -332,163 +333,6 @@ void GitrmParticles::initPtclChargeIoniRecombData() {
     }
   };
   scs->parallel_for(lambda);
-}
-
-
-void GitrmParticles::printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
-  o::HostRead<o::Real>dh(data);
-  printf("ParticleSourcePositions: nptcl= %d\n", nPtcls);
-  for(int ip=0; ip<nPtcls; ++ip) {
-    printf("PtclSource-pos-vel ");
-    for(int j=0; j<3; ++j)
-      printf("%g ", dh[j*numPtclsRead+ip]);
-    for(int j=3; j<6; ++j)
-      printf("%g ", dh[j*numPtclsRead+ip]);
-    printf("\n");
-  }
-  printf("\n");
-}
-
-/* Depend on netcdf format, and semicolon at the end of fields
-   fieldName = num1 num2 ... ;  //for each component, any number of lines 
-   NOTE: stored in a single data array of 6 components.
-*/
-void GitrmParticles::processPtclInitFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls) {
-  o::LO verbose = 1;
-  std::ifstream ifs(fName);
-  if (!ifs.good()) //good() 
-    Omega_h_fail("Error opening PtclInitFile file %s \n", fName.c_str());
-
-  // can't set in ps, since field names in ps used below not from array
-  constexpr int nComp = PTCL_READIN_DATA_SIZE_PER_PTCL;
-  OMEGA_H_CHECK(nComp == ps.nComp);
-  bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
-  std::string fieldNames[nComp];
-  bool expectEqual = false;
-  int ind[nComp];
-  std::set<int> nans;
-  for(int i = 0; i < nComp; ++i) {
-    ind[i] = 0;
-    foundComp[i] = dataLine[i] = false;
-  }
-
-  fieldNames[0] = ps.xName;
-  fieldNames[1] = ps.yName;
-  fieldNames[2] = ps.zName;
-  fieldNames[3] = ps.vxName;
-  fieldNames[4] = ps.vyName;
-  fieldNames[5] = ps.vzName;      
-  foundNP = dataInit = false;
-  std::string line, s1, s2, s3;
-  while(std::getline(ifs, line)) {
-    if(verbose >4)
-      std::cout << "Processing  line " << line << '\n';
-    // depend on semicolon to mark the end of fields, otherwise
-    // data of unused fields added to the previous valid field.
-    bool semi = (line.find(';') != std::string::npos);
-    std::replace (line.begin(), line.end(), ',' , ' ');
-    std::replace (line.begin(), line.end(), ';' , ' ');
-    std::stringstream ss(line);
-    // first string or number of EACH LINE is got here
-    ss >> s1;
-    if(verbose >4)
-      std::cout << "str s1:" << s1 << "\n";
-    
-    // Skip blank line
-    if(s1.find_first_not_of(' ') == std::string::npos) {
-      s1 = "";
-      if(!semi)
-       continue;
-    }
-    if(s1 == ps.nPname) {
-      ss >> s2 >> s3;
-      OMEGA_H_CHECK(s2 == "=");
-      ps.nP = std::stoi(s3);
-      if(numPtcls <= 0)
-        numPtcls = ps.nP;
-      else if(numPtcls < ps.nP)
-        ps.nP = numPtcls;
-      else if(numPtcls > ps.nP) {
-        numPtcls = ps.nP;
-        printf("Warning: numPtcls %d reset to %d, max. in file.\n", numPtcls,ps.nP);
-      }
-      foundNP = true;
-      if(verbose >0)
-          std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
-    }
-    if(!dataInit && foundNP) {
-      data = o::HostWrite<o::Real>(nComp*ps.nP);
-      dataInit = true;
-    }
-    int compBeg = 0, compEnd = nComp;
-    // if ; ends data of each parameters, otherwise comment this block
-    // to search for each parameter for every data line
-    for(int iComp = 0; iComp<nComp; ++iComp) {
-      if(dataInit && dataLine[iComp]) {
-        compBeg = iComp;
-        compEnd = compBeg + 1;
-      }
-    }
-    // NOTE: NaN is replaced with 0 to preserve sequential index of particle
-    //TODO change it in storeData()
-    if(dataInit) {
-      // stored in a single data array of 6+1 components.
-      for(int iComp = compBeg; iComp<compEnd; ++iComp) {
-        parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
-          dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls, 
-          false, true);
-
-        if(!foundComp[iComp] && dataLine[iComp]) {
-          foundComp[iComp] = true;
-          if(verbose >1)
-            printf("Found data Component %d\n", iComp);
-        }
-      }
-    }
-    s1 = s2 = s3 = "";
-  } //while
-
-  // remove invalid particles
-  if(nans.size() > 0) {
-    int validMaxInd = numPtcls-1;
-    for(const int& ip:nans) {
-      while(true) {
-        if(nans.find(validMaxInd) != nans.end())
-          --validMaxInd;
-        else
-          break;
-      }
-      OMEGA_H_CHECK(validMaxInd >= 0);
-      if(ip < validMaxInd) {
-        printf("Removed indices: ");
-        for(int j=0; j<nComp; ++j)
-          data[ip*nComp+j] = data[validMaxInd*nComp+j];
-        printf(" %d", ip);
-        --validMaxInd;
-      }
-      printf("\n");
-    } // invalid entry
-    OMEGA_H_CHECK(validMaxInd >= 0);
-    // clean up
-    int filled = numPtcls;
-    for(int ip=validMaxInd+1; ip<filled; ++ip)
-      for(int j=0; j<nComp; ++j)
-        data[ip*nComp+j] = 0;
-    numPtcls = validMaxInd+1;
-    printf("Warning: updated numPtcls %d \n", numPtcls);
-  } //if any invalid
-
-  OMEGA_H_CHECK(dataInit && foundNP);
-  /*
-  for(int i=0; i<nComp; ++i) {
-    if(foundComp[i]==false)
-      printf("Not Found data component %d \n", i);
-    //TODO if only single line of data, the flag is reset instantly
-    // in which case this check should be disabled
-    OMEGA_H_CHECK(foundComp[i]==true);
-  }
-  */
 }
 
 void GitrmParticles::initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls, 
@@ -723,9 +567,38 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
   initEl = elemId_fh[1];
   printf(" ELEM_final %d xpt: %.3f %.3f %.3f\n\n", elemId_fh[1], xpt_h[0], xpt_h[1], xpt_h[2]);
   OMEGA_H_CHECK((initEl>=0) && (elemId_fh[0]>=0));
-
 }
 
+// Read GITR particle step data of all time steps; eg: rand numbers.
+int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName, 
+  int& maxNPtcls, int& numPtclsRead) {
+  
+  assert(COMPARE_WITH_GITR == 1);
+
+  // TODO re-order the list in its constructor to have default {}
+  Field3StructInput fs({"d2bdry", "rnd_ioni", "rnd_recomb"}, {}, {"nP", "nT"}); 
+  auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
+  gitrPtclStepData = o::Reals(fs.data);
+  assert(0 == static_cast<int>(GitrCompareDataEnum::d2bdryInd));
+  assert(1 == static_cast<int>(GitrCompareDataEnum::ioniInd));
+  assert(2 == static_cast<int>(GitrCompareDataEnum::recombInd));
+  assert(fs.nComp == static_cast<int>(GitrCompareDataEnum::dof));
+  return stat;
+}
+
+void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
+  o::HostRead<o::Real>dh(data);
+  printf("ParticleSourcePositions: nptcl= %d\n", nPtcls);
+  for(int ip=0; ip<nPtcls; ++ip) {
+    printf("PtclSource-pos-vel ");
+    for(int j=0; j<3; ++j)
+      printf("%g ", dh[j*numPtclsRead+ip]);
+    for(int j=3; j<6; ++j)
+      printf("%g ", dh[j*numPtclsRead+ip]);
+    printf("\n");
+  }
+  printf("\n");
+}
 
 void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter, 
   int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
@@ -785,4 +658,146 @@ void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, int numPtcls,
     }// mask
   };
   scs->parallel_for(step, "updateStepData");
+}
+
+/* Depend on netcdf format, and semicolon at the end of fields
+   fieldName = num1 num2 ... ;  //for each component, any number of lines 
+   NOTE: stored in a single data array of 6 components.
+*/
+void processPtclInitTextFile(const std::string &fName,
+    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls) {
+  o::LO verbose = 1;
+  std::ifstream ifs(fName);
+  if (!ifs.good()) //good() 
+    Omega_h_fail("Error opening PtclInitFile file %s \n", fName.c_str());
+
+  // can't set in ps, since field names in ps used below not from array
+  constexpr int nComp = PTCL_READIN_DATA_SIZE_PER_PTCL;
+  OMEGA_H_CHECK(nComp == ps.nComp);
+  bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
+  std::string fieldNames[nComp];
+  bool expectEqual = false;
+  int ind[nComp];
+  std::set<int> nans;
+  for(int i = 0; i < nComp; ++i) {
+    ind[i] = 0;
+    foundComp[i] = dataLine[i] = false;
+  }
+
+  fieldNames[0] = ps.xName;
+  fieldNames[1] = ps.yName;
+  fieldNames[2] = ps.zName;
+  fieldNames[3] = ps.vxName;
+  fieldNames[4] = ps.vyName;
+  fieldNames[5] = ps.vzName;      
+  foundNP = dataInit = false;
+  std::string line, s1, s2, s3;
+  while(std::getline(ifs, line)) {
+    if(verbose >4)
+      std::cout << "Processing  line " << line << '\n';
+    // depend on semicolon to mark the end of fields, otherwise
+    // data of unused fields added to the previous valid field.
+    bool semi = (line.find(';') != std::string::npos);
+    std::replace (line.begin(), line.end(), ',' , ' ');
+    std::replace (line.begin(), line.end(), ';' , ' ');
+    std::stringstream ss(line);
+    // first string or number of EACH LINE is got here
+    ss >> s1;
+    if(verbose >4)
+      std::cout << "str s1:" << s1 << "\n";
+    
+    // Skip blank line
+    if(s1.find_first_not_of(' ') == std::string::npos) {
+      s1 = "";
+      if(!semi)
+       continue;
+    }
+    if(s1 == ps.nPname) {
+      ss >> s2 >> s3;
+      OMEGA_H_CHECK(s2 == "=");
+      ps.nP = std::stoi(s3);
+      if(numPtcls <= 0)
+        numPtcls = ps.nP;
+      else if(numPtcls < ps.nP)
+        ps.nP = numPtcls;
+      else if(numPtcls > ps.nP) {
+        numPtcls = ps.nP;
+        printf("Warning: numPtcls %d reset to %d, max. in file.\n", numPtcls,ps.nP);
+      }
+      foundNP = true;
+      if(verbose >0)
+          std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
+    }
+    if(!dataInit && foundNP) {
+      data = o::HostWrite<o::Real>(nComp*ps.nP);
+      dataInit = true;
+    }
+    int compBeg = 0, compEnd = nComp;
+    // if ; ends data of each parameters, otherwise comment this block
+    // to search for each parameter for every data line
+    for(int iComp = 0; iComp<nComp; ++iComp) {
+      if(dataInit && dataLine[iComp]) {
+        compBeg = iComp;
+        compEnd = compBeg + 1;
+      }
+    }
+    // NOTE: NaN is replaced with 0 to preserve sequential index of particle
+    //TODO change it in storeData()
+    if(dataInit) {
+      // stored in a single data array of 6+1 components.
+      for(int iComp = compBeg; iComp<compEnd; ++iComp) {
+        parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
+          dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls, 
+          false, true);
+
+        if(!foundComp[iComp] && dataLine[iComp]) {
+          foundComp[iComp] = true;
+          if(verbose >1)
+            printf("Found data Component %d\n", iComp);
+        }
+      }
+    }
+    s1 = s2 = s3 = "";
+  } //while
+
+  // remove invalid particles
+  if(nans.size() > 0) {
+    int validMaxInd = numPtcls-1;
+    for(const int& ip:nans) {
+      while(true) {
+        if(nans.find(validMaxInd) != nans.end())
+          --validMaxInd;
+        else
+          break;
+      }
+      OMEGA_H_CHECK(validMaxInd >= 0);
+      if(ip < validMaxInd) {
+        printf("Removed indices: ");
+        for(int j=0; j<nComp; ++j)
+          data[ip*nComp+j] = data[validMaxInd*nComp+j];
+        printf(" %d", ip);
+        --validMaxInd;
+      }
+      printf("\n");
+    } // invalid entry
+    OMEGA_H_CHECK(validMaxInd >= 0);
+    // clean up
+    int filled = numPtcls;
+    for(int ip=validMaxInd+1; ip<filled; ++ip)
+      for(int j=0; j<nComp; ++j)
+        data[ip*nComp+j] = 0;
+    numPtcls = validMaxInd+1;
+    printf("Warning: updated numPtcls %d \n", numPtcls);
+  } //if any invalid
+
+  OMEGA_H_CHECK(dataInit && foundNP);
+  /*
+  for(int i=0; i<nComp; ++i) {
+    if(foundComp[i]==false)
+      printf("Not Found data component %d \n", i);
+    //TODO if only single line of data, the flag is reset instantly
+    // in which case this check should be disabled
+    OMEGA_H_CHECK(foundComp[i]==true);
+  }
+  */
 }

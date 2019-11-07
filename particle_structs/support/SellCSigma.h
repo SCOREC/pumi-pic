@@ -229,11 +229,13 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
   if (sigma > 1) {
     lid_t i;
 #ifdef SCS_USE_CUDA
-    thrust::device_ptr<MyPair> ptcl_pairs_d(ptcl_pairs.data());
-    for (i = 0; i < num_elems - sigma; i+=sigma) {
-      thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + i + sigma);
+    if (false) { //disable device sorting to avoid merge_sort failures
+      thrust::device_ptr<MyPair> ptcl_pairs_d(ptcl_pairs.data());
+      for (i = 0; i < num_elems - sigma; i+=sigma) {
+        thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + i + sigma);
+      }
+      thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + num_elems);
     }
-    thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + num_elems);
 #else
     typename PairView<ExecSpace>::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
     MyPair* ptcl_pair_data = ptcl_pairs_host.data();

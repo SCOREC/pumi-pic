@@ -314,7 +314,7 @@ void testTri8(Omega_h::Library& lib, std::string meshDir) {
 }
 
 void testItg24k(Omega_h::Library& lib, std::string meshDir) {
-  const auto meshName = meshDir+"/xgc/itg24k.osh";
+  const auto meshName = meshDir+"/xgc/24k.osh";
   auto full_mesh = readMesh(meshName.c_str(), lib);
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   for (int i = 0; i < full_mesh.nelems(); ++i)
@@ -335,12 +335,11 @@ void testItg24k(Omega_h::Library& lib, std::string meshDir) {
            mesh->nfaces(), mesh->nelems());
 
   {
-    const auto parentElm = 4924;
-    const auto destElm = 5389;
-    const auto altDestElm = 4933;
-    const double start[2] = {1.342651612585819,-0.003728222089789};
-    const double end[2]  = {1.342951942861444, -0.012512984262059};
-    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
+    const auto parentElm = 7039;
+    const auto destElm = 5912;
+    const double start[2] = {1.30,-0.003728222089789};
+    const double end[2]  = {1.342951942861444, -0.032512984262059};
+    particleSearch(picparts,parentElm,start,end,destElm);
   }
 }
 

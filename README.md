@@ -48,3 +48,7 @@ make
 cd build
 ctest
 ```
+
+### Documentation
+
+SCALA19' Paper - https://www.scorec.rpi.edu/reports/view_report.php?id=758

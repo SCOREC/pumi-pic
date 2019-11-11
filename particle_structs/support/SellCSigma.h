@@ -222,19 +222,32 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
   //Make temporary copy of the particle counts for sorting
   Kokkos::resize(ptcl_pairs, num_elems);
   //PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
-  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-    ptcl_pairs(i).first = ptcls_per_elem(i);
-    ptcl_pairs(i).second = i;
-  });
   if (sigma > 1) {
     lid_t i;
 #ifdef SCS_USE_CUDA
-    thrust::device_ptr<MyPair> ptcl_pairs_d(ptcl_pairs.data());
+    printf("0.1\n");
+    Kokkos::View<lid_t*, typename ExecSpace::device_type> elem_ids("elem_ids", num_elems);
+    Kokkos::View<lid_t*, typename ExecSpace::device_type> temp_ppe("temp_ppe", num_elems);
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+      temp_ppe(i) = ptcls_per_elem(i);
+      elem_ids(i) = i;
+    });
+    printf("0.2\n");
+    thrust::device_ptr<lid_t> ptcls_t(temp_ppe.data());
+    thrust::device_ptr<lid_t> elem_ids_t(elem_ids.data());
     for (i = 0; i < num_elems - sigma; i+=sigma) {
-      thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + i + sigma);
+      thrust::sort_by_key(thrust::device, ptcls_t + i, ptcls_t + i + sigma, elem_ids_t + i);
     }
-    thrust::sort(ptcl_pairs_d + i, ptcl_pairs_d + num_elems);
+    thrust::sort_by_key(thrust::device, ptcls_t + i, ptcls_t + num_elems, elem_ids_t + i);
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+      ptcl_pairs(num_elems - 1 - i).first = temp_ppe(i);
+      ptcl_pairs(num_elems - 1 - i).second = elem_ids(i);
+    });
 #else
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+      ptcl_pairs(num_elems).first = ptcls_per_elem(i);
+      ptcl_pairs(num_elems).second = i;
+    });
     typename PairView<ExecSpace>::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
     MyPair* ptcl_pair_data = ptcl_pairs_host.data();
     for (i = 0; i < num_elems - sigma; i+=sigma) {
@@ -243,6 +256,12 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
     std::sort(ptcl_pair_data + i, ptcl_pair_data + num_elems);
     hostToDevice(ptcl_pairs,  ptcl_pair_data);
 #endif
+  }
+  else {
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+      ptcl_pairs(i).first = ptcls_per_elem(i);
+      ptcl_pairs(i).second = i;
+    });
   }
 }
 

@@ -220,19 +220,17 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
                Kokkos::View<lid_t*,typename ExecSpace::device_type> ptcls_per_elem, 
                lid_t sigma){
   //Make temporary copy of the particle counts for sorting
-  Kokkos::resize(ptcl_pairs, num_elems);
+  ptcl_pairs = PairView<ExecSpace>("ptcl_pairs", num_elems);
   //PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
   if (sigma > 1) {
     lid_t i;
 #ifdef SCS_USE_CUDA
-    printf("0.1\n");
     Kokkos::View<lid_t*, typename ExecSpace::device_type> elem_ids("elem_ids", num_elems);
     Kokkos::View<lid_t*, typename ExecSpace::device_type> temp_ppe("temp_ppe", num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       temp_ppe(i) = ptcls_per_elem(i);
       elem_ids(i) = i;
     });
-    printf("0.2\n");
     thrust::device_ptr<lid_t> ptcls_t(temp_ppe.data());
     thrust::device_ptr<lid_t> elem_ids_t(elem_ids.data());
     for (i = 0; i < num_elems - sigma; i+=sigma) {
@@ -308,9 +306,9 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
                                                        kkLidView& row_element,
                                                        kkLidView& element_row) {
   nchunks = num_elems / C_ + (num_elems % C_ != 0);
-  Kokkos::resize(chunk_widths, nchunks);
-  Kokkos::resize(row_element, nchunks * C_);
-  Kokkos::resize(element_row, nchunks * C_);
+  chunk_widths = kkLidView("chunk_widths", nchunks);
+  row_element = kkLidView("row_element", nchunks * C_);
+  element_row = kkLidView("element_row", nchunks * C_);
   kkLidView empty("empty_elems", 1);
   Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
     const lid_t element = ptcls(i).second;
@@ -345,7 +343,7 @@ void SellCSigma<DataTypes, ExecSpace>::constructChunks(PairView<ExecSpace> ptcls
 template<class DataTypes, typename ExecSpace>
 void SellCSigma<DataTypes, ExecSpace>::createGlobalMapping(kkGidView elmGid,kkGidView& elm2Gid, 
                                                            GID_Mapping& elmGid2Lid) {
-  Kokkos::resize(elm2Gid, numRows());
+  elm2Gid = kkGidView("row to element gid", numRows());
   Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
     const gid_t gid = elmGid(i);
     elm2Gid(i) = gid;
@@ -377,11 +375,8 @@ void SellCSigma<DataTypes, ExecSpace>::constructOffsets(lid_t nChunks, lid_t& nS
   });
 
   nSlices = getLastValue<lid_t>(offset_nslices);
-  Kokkos::resize(offs,nSlices + 1);
-  Kokkos::parallel_for(offs.size(), KOKKOS_LAMBDA(const lid_t& i) {
-    offs(i) = 0;
-  });
-  Kokkos::resize(s2c, nSlices);
+  offs = kkLidView("SCS offset", nSlices + 1);
+  s2c = kkLidView("slice to chunk", nSlices);
   kkLidView slice_size("slice_size", nSlices);
   const lid_t nat_size = V_*C_;
   const lid_t C_local = C_;
@@ -516,7 +511,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
 
   //Allocate the SCS and backup with 10% extra space
   lid_t cap = getLastValue<lid_t>(offsets);
-  Kokkos::resize(particle_mask, cap);
+  particle_mask = kkLidView("particle_mask", cap);
   CreateViews<DataTypes>(scs_data, cap*1.1);
   CreateViews<DataTypes>(scs_data_swap, cap*1.1);
   swap_size = current_size = cap*1.1;

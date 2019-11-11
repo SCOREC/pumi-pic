@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     particle_structs::hostToDevice(element_gids_v, gids);
     delete [] ptcls_per_elem;
     delete [] gids;
-    Kokkos::TeamPolicy<exe_space> po(4, 4);
+    Kokkos::TeamPolicy<exe_space> po(4, 32);
     SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
 
     char rank_str[100];
@@ -146,7 +146,7 @@ bool sendToOne(int ne, int np) {
   particle_structs::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<exe_space> po(4, 4);
+  Kokkos::TeamPolicy<exe_space> po(4, 32);
   int sigma = ne;
   int V = 100;
   SCS* scs = new SCS(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v);

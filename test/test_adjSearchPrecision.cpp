@@ -132,7 +132,7 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
         //o::LO exposed = side_is_exposed[faceId];
         const auto fv2v = o::gather_verts<3>(face_verts, faceId);
         const auto face = p::gatherVectors3x3(coords, fv2v);
-        //auto fcent = p::find_face_centroid(faceId, coords, face_verts);
+        //auto fcent = p::face_centroid_of_tet(faceId, coords, face_verts);
         auto tcent = p::centroid_of_tet(elem, mesh2verts, coords); 
         auto rn1 = rand1[pid];
         auto rn2 = rand2[pid];
@@ -140,7 +140,7 @@ void setPtclInitialCoords(o::Mesh& mesh, SCS* scs, o::Real fac=1.0e-6,
         auto pos1 = face[0]+ rn1*(face[1] - face[0]);
         auto pos = face[2] + rn2*(pos1 - face[2]);
 
-        //auto fnorm = p::find_face_normal(faceId, elem, coords, mesh2verts, 
+        //auto fnorm = p::face_normal_of_tet(faceId, elem, coords, mesh2verts, 
         //                                face_verts, down_r2fs);
         auto dvec = tcent-pos;
         auto dirCent = o::normalize(dvec);

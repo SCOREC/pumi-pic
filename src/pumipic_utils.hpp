@@ -38,20 +38,17 @@ used for host only (openmp) compilation.
 
 OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
   o::Vector<3> v;
-  for(int i=0; i<3; ++i)
+  for(o::LO i=0; i<3; ++i)
     v[i] = arr[i];
   return v;
 }
 
-// TODO use o::are_close() 
 OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
     Omega_h::Real tol=EPSILON) {
-  auto max = (abs(a) < abs(b)) ? b : a;
-  max = (max>0 || max<0) ? max:1;
-  return abs(a-b)/max <= tol;
+  return o::are_close(a, b, tol);
 }
 
-template<int N>
+template<o::LO N>
 OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b, 
   Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
@@ -62,7 +59,7 @@ OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b,
   return true;
 }
 
-template<int N>
+template<o::LO N>
 OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b, 
   Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
@@ -83,10 +80,10 @@ OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b,
   return true;
 }
 
-template<int N>
-inline o::Vector<N> makeVectorHost(const Omega_h::Real(&a)[N], int beg=0) {
+template<o::LO N>
+inline o::Vector<N> makeVectorHost(const Omega_h::Real(&a)[N], o::LO beg=0) {
   o::Vector<N> v;
-  for(int i=beg; i<N+beg; ++i) {
+  for(o::LO i=beg; i<N+beg; ++i) {
     v[i] = a[i];
   }
   return v;
@@ -103,7 +100,7 @@ OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON) {
 }
 
 OMEGA_H_DEVICE Omega_h::LO min3(Omega_h::Vector<3> a) {
-  int idx = (a[0] < a[1]) ? 0 : 1;
+  o::LO idx = (a[0] < a[1]) ? 0 : 1;
   idx = (a[idx] < a[2]) ? idx : 2;
   return idx;
 }
@@ -122,7 +119,7 @@ Omega_h::LO min_index(const T a, Omega_h::LO n) {
 }
 
 template <class T> OMEGA_H_DEVICE  
-Omega_h::LO max_index(const T a, Omega_h::LO n, int beg=0) {
+Omega_h::LO max_index(const T a, Omega_h::LO n, o::LO beg=0) {
   Omega_h::LO ind=0;
   Omega_h::Real max = a[0];
   for(Omega_h::LO i=beg; i < (beg+n-1); ++i) {
@@ -164,15 +161,15 @@ OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
   return true;
 }
 
-template< int N>
+template< o::LO N>
 OMEGA_H_DEVICE void print_matrix(const Omega_h::Matrix<3, N> &M) {
-  for(int i=0; i<N; ++i)
+  for(o::LO i=0; i<N; ++i)
   printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
-template< int N>
+template< o::LO N>
 OMEGA_H_DEVICE void print_few_vectors(const o::Few<o::Vector<3>, N> &M) {
-  for(int i=0; i<N; ++i)
+  for(o::LO i=0; i<N; ++i)
   printf("%d: %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
@@ -184,7 +181,7 @@ inline void print_array(const double* a, int n=3, std::string name=" ") {
   std::cout <<"\n";
 }
 
-template< int N>
+template< o::LO N>
 OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<N> &v,
  const char* name) {
   if(N==3)
@@ -193,13 +190,13 @@ OMEGA_H_DEVICE void print_osh_vector(const Omega_h::Vector<N> &v,
     printf("%s %g %g %g %g\n",  name, v[0], v[1], v[2], v[3]);
   else if(N>4) {
     printf("%s ", name);
-    for(int i=0; i<N; ++i)
+    for(o::LO i=0; i<N; ++i)
       printf("%g ", v[i]); 
     printf("\n");
   }
 }
 
-OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(int id, int elem, 
+OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem, 
     o::Vector<3>& orig, o::Vector<3>& dest, o::Matrix<3, 4>& M) {
   printf("PATH ptcl %d e: %d orig: %g %g %g dest: %g %g %g "
         "Tet: %g %g %g  %g %g %g  %g %g %g  %g %g %g \n", 
@@ -217,7 +214,7 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(int id, int elem,
  *  @param[in] comp, nth component, out of degree of freedom
  *  @return value corresponding to comp
  */
-OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data, 
+OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
   const o::Vector<3> &pos, const bool cylSymm = false, 
@@ -230,12 +227,8 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
   o::Real fxz = 0;
   o::Real fx_z1 = 0;
   o::Real fx_z2 = 0; 
-  o::Real dim1 = pos[0];
-  o::Real z = pos[2]; 
-  if(debug)
-    printf(" interp2D pos: %g %g %g : dx %g gridx0 %g " 
-      "nx %d nz %d fxz %g \n",
-      dim1, pos[1], pos[2],  dx, gridx0, nx, nz, fxz);
+  auto dim1 = pos[0];
+  auto z = pos[2]; 
 
   if(cylSymm) {
       dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
@@ -249,10 +242,10 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
   if (i < 0) i=0;
   if (j < 0) j=0;
 
-  o::Real gridXi = gridx0 + i * dx;
-  o::Real gridXip1 = gridx0 + (i+1) * dx;    
-  o::Real gridZj = gridz0 + j * dz;
-  o::Real gridZjp1 = gridz0 + (j+1) * dz; 
+  auto gridXi = gridx0 + i * dx;
+  auto gridXip1 = gridx0 + (i+1) * dx;    
+  auto gridZj = gridz0 + j * dz;
+  auto gridZjp1 = gridz0 + (j+1) * dz; 
 
   if (i >=nx-1 && j>=nz-1) {
     fxz = data[(nx-1+(nz-1)*nx)*nComp+comp];
@@ -273,18 +266,33 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals &data,
     fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*nComp + comp] + 
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+//printf("interp-data-inds:  %d  %g %d %g  %d %g %d %g  \n", (i+j*nx)*nComp + comp, data[(i+j*nx)*nComp + comp],
+//    (i+1+j*nx)*nComp + comp, data[(i+1+j*nx)*nComp + comp],
+//    (i+(j+1)*nx)*nComp + comp,data[(i+(j+1)*nx)*nComp + comp],
+//    (i+1+(j+1)*nx)*nComp + comp, data[(i+1+(j+1)*nx)*nComp + comp]);
   }
+
   if(debug)
-    printf(" interp2D pos: %g %g %g : i %d j %d dx %g gridx0 %g " 
-      "nx %d nz %d fxz %g \n",
-      dim1, pos[1], pos[2], i, j, dx, gridx0, nx, nz, fxz);
+    printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
+      "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
+      pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
 
   return fxz;
 }
-
+/*
+//TODO make unit test interpolate2dField(
+index,data:  418  1.82241e+18 419 1.55216e+18  518 1.82241e+18 519 1.55216e+18  
+  pos: 0.013715 -0.0183798 7.45029e-06 : dim1 0.0229329 
+  nx 100 nz 50 gridx0 0 gridz0 -0.05 i 18 j 4 dx 0.00121212 dz 0.0102041 
+  fxz 1.57387e+18 
+index,data:  418  2.29957 419 1.97687  518 2.29957 519 1.97687  
+ pos: 0.013715 -0.0183798 7.45029e-06 : dim1 0.0229329 
+ nx 100 nz 50 gridx0 0 gridz0 -0.05 i 18 j 4 dx 0.00121212 dz 0.0102041 
+ fxz 2.0028 
+*/
 
 OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
-  o::Real gridz0, o::Real dx, o::Real dz, int nx, int nz,
+  o::Real gridz0, o::Real dx, o::Real dz, o::LO nx, o::LO nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
 
   field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
@@ -301,7 +309,7 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0,
 }
 
 
-OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid, 
+OMEGA_H_DEVICE o::Vector<3> face_centroid_of_tet(const o::LO fid, 
   const o::Reals &coords, const o::LOs &face_verts) {
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
@@ -319,7 +327,7 @@ OMEGA_H_DEVICE o::Vector<3> find_face_centroid(const o::LO fid,
 }
 
 //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
-OMEGA_H_DEVICE o::LO getFaceMap(int i) {
+OMEGA_H_DEVICE o::LO getFaceMap(o::LO i) {
   assert(i>=0 && i<8);
   const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
   return fmap[i];
@@ -336,7 +344,7 @@ OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v,
 }
 
 //face normal can point to either way
-OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
+OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmId,
   const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
   const o::LOs &elem2faces) {
 
@@ -355,7 +363,7 @@ OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
     ++find;
   }
   if(findex <0 || findex >3) {
-    printf("find_face_normal:getFaceMap:: faceid not found");
+    printf("face_normal_of_tet:getFaceMap:: faceid not found");
     OMEGA_H_CHECK(false);
   }
   o::Vector<3> a = abc[0];
@@ -368,7 +376,7 @@ OMEGA_H_DEVICE o::Vector<3> find_face_normal(const o::LO fid, const o::LO elmId,
 }
 
 // TODO boundary face normal points always outwards
-OMEGA_H_DEVICE o::Vector<3> find_bdry_face_normal(const o::LO fid, 
+OMEGA_H_DEVICE o::Vector<3> bdry_face_normal_of_tet(const o::LO fid, 
   const o::Reals &coords, const o::LOs &face_verts) {
 
   const auto fv2v = o::gather_verts<3>(face_verts, fid);
@@ -380,7 +388,6 @@ OMEGA_H_DEVICE o::Vector<3> find_bdry_face_normal(const o::LO fid,
   o::Vector<3> fnorm = o::cross(b - a, c - a);
   return o::normalize(fnorm);
 }
-
 
 OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
   const o::LOs &f2r_elem) { 

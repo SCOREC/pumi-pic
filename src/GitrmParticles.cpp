@@ -9,6 +9,8 @@
 
 #include "GitrmInputOutput.hpp"
 
+int iTimePlusOne = 0;
+
 //TODO remove mesh argument, once Singleton gm is used
 GitrmParticles::GitrmParticles(o::Mesh& m, double dT):
   scs(nullptr), mesh(m), timeStep(dT)
@@ -66,8 +68,6 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   std::cout << "Loading particle initial data from file: " << fName << " \n";
   o::HostWrite<o::Real> readInData_h;
   // TODO piscesLowFlux/updated/input/particleSource.cfg has r,z,angles, CDF, cylSymm=1
-  //  PtclSourceStruct pst("ptcl_init_data", "nP", "x", "y", "z", "vx", "vy", "vz");
-  //  processPtclInitTextFile(fName, readInData_h, pst, numPtcls);
   int numPtclsRead;
   auto stat = readParticleSourceNcFile(fName, readInData_h, numPtcls, 
     numPtclsRead, true);
@@ -123,10 +123,8 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
   o::LO numPtcls, o::LO numPtclsRead) {
   o::LO maxLoop = 20;
   MESHDATA(mesh);
-  
   auto size = data.size();
-  int dof = PTCL_READIN_DATA_SIZE_PER_PTCL;
-  OMEGA_H_CHECK(dof >= 3);
+  OMEGA_H_CHECK(PTCL_READIN_DATA_SIZE_PER_PTCL >= 3);
   o::Write<o::LO> elemDet(1, -1);
   // Beginning element id of this x,y,z
   o::LO elmBeg=-1, ii=0;
@@ -178,15 +176,15 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
         found = true;
       } else {
         o::LO minInd = p::min_index(bcc, 4);
-        auto dface_ind = dual_elems[elem];
+        auto dual_elem_id = dual_faces[elem];
         o::LO findex = 0;
         for(auto iface = elem*4; iface < (elem+1)*4; ++iface) {
           auto face_id = down_r2fs[iface];
           bool exposed = side_is_exposed[face_id];
           if(!exposed) {
             if(findex == minInd)
-              elem = dual_faces[dface_ind];
-            ++dface_ind;
+              elem = dual_elems[dual_elem_id];
+            ++dual_elem_id;
           }
           ++findex;
         }//for
@@ -287,6 +285,7 @@ void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
   auto next_scs_d = scs->get<PTCL_NEXT_POS>();
   auto pos_scs_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
+  auto vel_prev_d = scs->get<PTCL_VEL_PREV>();
   auto pid_scs = scs->get<PTCL_ID>();
   
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
@@ -309,6 +308,7 @@ void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
       for(int i=0; i<3; i++) {
         pos_scs_d(pid,i) = pos[i];
         vel_d(pid, i) = vel[i];
+        vel_prev_d(pid, i) = vel[i];
         next_scs_d(pid,i) = 0;
       }
     }
@@ -380,7 +380,7 @@ void GitrmParticles::setPtclInitRndDistribution(
       const auto faceId = elemAndFace[2];
       const auto fv2v = o::gather_verts<3>(face_verts, faceId);
       const auto face = p::gatherVectors3x3(coords, fv2v);
-      auto fcent = p::find_face_centroid(faceId, coords, face_verts);
+      auto fcent = p::face_centroid_of_tet(faceId, coords, face_verts);
       auto tcent = p::centroid_of_tet(elem, mesh2verts, coords); 
       auto diff = tcent - fcent;
       if(verbose >3)
@@ -396,7 +396,7 @@ void GitrmParticles::setPtclInitRndDistribution(
         o::Real bc2 = std::abs(rn1 - rn2);
         o::Real bc3 = 1.0 - bc1 - bc2;
         o::Vector<3> fpos = bc1*face[0] + bc2*face[1] + bc3*face[2];
-        auto fnorm = p::find_face_normal(faceId, elem, coords, mesh2verts, 
+        auto fnorm = p::face_normal_of_tet(faceId, elem, coords, mesh2verts, 
                                         face_verts, down_r2fs);
         pos = fpos - 1.0e-6*fnorm;
         auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
@@ -412,7 +412,7 @@ void GitrmParticles::setPtclInitRndDistribution(
         x_scs_prev_d(pid,i) = pos[i];
         x_scs_d(pid,i) = pos[i];
         auto en = energy[i];   
-        //if(! p::almost_equal(energy[i], 0))
+        //if(! o::are_close(energy[i], 0))
         vel[i] = std::sqrt(2.0 * abs(en) * 1.60217662e-19 / (amu * 1.6737236e-27));
         vel[i] *= rand3[pid];  //TODO
       }
@@ -510,7 +510,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
       }
 
       // Start search
-      auto dface_ind = dual_elems[elem];
+      auto dual_elem_id = dual_faces[elem];
       const auto beg_face = elem *4;
       const auto end_face = beg_face +4;
       o::LO fIndex = 0;
@@ -539,7 +539,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
           }
           break;
         } else if(detected && !side_is_exposed[face_id]) {
-          auto adj_elem  = dual_faces[dface_ind];
+          auto adj_elem  = dual_elems[dual_elem_id];
           elem = adj_elem;
           if(debug >4) {
             printf(" faceid %d detected on interior; next elm %d\n", face_id, elem);
@@ -547,7 +547,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
           break;
         }
         if(!side_is_exposed[face_id]){
-          ++dface_ind;
+          ++dual_elem_id;
         }
         ++fIndex;
       } // faces
@@ -574,15 +574,24 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   int& maxNPtcls, int& numPtclsRead) {
   
   assert(COMPARE_WITH_GITR == 1);
-
+  std::cout << "Reading Test GITR step data\n";
   // TODO re-order the list in its constructor to have default {}
-  Field3StructInput fs({"d2bdry", "rnd_ioni", "rnd_recomb"}, {}, {"nP", "nT"}); 
+  Field3StructInput fs({"intermediate"}, {}, {"nP", "nTHist", "dof"}, 0,
+    {/*"Efield_at",*/ "position_at","RndIoni_at","IoniRate_at", "RndRecomb_at",
+      "RecombRate_at", "charge_at"}); 
   auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
-  gitrPtclStepData = o::Reals(fs.data);
-  assert(0 == static_cast<int>(GitrCompareDataEnum::d2bdryInd));
-  assert(1 == static_cast<int>(GitrCompareDataEnum::ioniInd));
-  assert(2 == static_cast<int>(GitrCompareDataEnum::recombInd));
-  assert(fs.nComp == static_cast<int>(GitrCompareDataEnum::dof));
+  testGitrPtclStepData = o::Reals(fs.data);
+  testGitrStepDataEfieldInd = 0; //fs.getIntValueOf("Efield_at");
+  testGitrStepDataPositionInd = fs.getIntValueOf("position_at");
+  testGitrStepDataIoniInd = fs.getIntValueOf("RndIoni_at");
+  testGitrStepDataIoniRateInd = fs.getIntValueOf("IoniRate_at");
+  testGitrStepDataRecombInd = fs.getIntValueOf("RndRecomb_at");
+  testGitrStepDataRecombRateInd = fs.getIntValueOf("RecombRate_at");
+  testGitrStepDataChargeInd = fs.getIntValueOf("charge_at");
+  testGitrStepDataDof = fs.getIntValueOf("dof"); // or fs.getNumGrids(2);
+  testGitrStepDataNumTsteps = fs.getIntValueOf("nTHist") - 1; // NOTE
+  testGitrStepDataNumPtcls = fs.getIntValueOf("nP");
+  
   return stat;
 }
 
@@ -601,10 +610,11 @@ void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
 }
 
 void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter, 
-  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data, 
+  int numPtcls, o::Write<o::Real>& ptclsDataAll,
+  o::Write<o::LO>& lastFilledTimeSteps, o::Write<o::Real>& data, 
   int dof, bool accum) {
   if(iter ==0)
-    updatePtclStepData(scs, ptclsDataAll, numPtcls, dof);//, data);
+    updatePtclStepData(scs, ptclsDataAll,lastFilledTimeSteps, numPtcls, dof);
 
   if(accum) {
     o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
@@ -626,15 +636,30 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
   }
 }
 
-void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
-  int dof, int nTHistory, std::string outNcFileName) {
+void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, 
+  o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, 
+  int nTHistory, std::string outNcFileName) {
+  
+  //fill empty elements with last filled values
+  auto lambda = OMEGA_H_LAMBDA(const int& pid) {
+    auto ts = lastFilledTimeSteps[pid];
+    for(int idof=0; idof<dof; ++idof) { 
+      auto ref = ts*numPtcls*dof + pid*dof + idof;
+      auto dat = ptclsHistoryData[ref];
+      for(int it = ts+1; it < nTHistory; ++it) {
+        auto ind = it*numPtcls*dof + pid*dof + idof;
+        ptclsHistoryData[ind] = dat;
+      }
+    }
+  };
+  o::parallel_for(numPtcls, lambda);
   OutputNcFileFieldStruct outStruct({"nP", "nT"}, {"x", "y", "z", "vx", "vy", "vz"},
                                     {numPtcls, nTHistory});
   writeOutputNcFile(ptclsHistoryData, numPtcls, dof, outStruct, outNcFileName);
 }
 
-void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, int numPtcls, 
-  int dof, int iHistStep) { //  o::Write<o::Real>& data, 
+void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, 
+   o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, int iHistStep) { 
   auto vel_scs = scs->get<PTCL_VEL>();
   auto pos_scs = scs->get<PTCL_POS>();
   auto pid_scs = scs->get<PTCL_ID>();
@@ -643,12 +668,7 @@ void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, int numPtcls,
       auto id = pid_scs(pid);
       auto vel = p::makeVector3(pid, vel_scs);
       auto pos = p::makeVector3(pid, pos_scs);
-     //size is not scs->nPtcls. id: 0 to numPtcls, which were set as pid_scs 
-     //If scs pid were set as ptcl id's, then range > numPtcls => out-of-memory
-      //for(int i=0; i<3; ++i) {
-      //  data[id*dof+i] = pos[i];
-      //  data[id*dof+3+i] = vel[i];
-      //}
+      lastFilledTimeSteps[id] = iHistStep;
       int beg = numPtcls*dof*iHistStep + id*dof; //storage format
       for(int i=0; i<3; ++i) {
         ptclStepData[beg+i] = pos[i];
@@ -660,144 +680,3 @@ void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, int numPtcls,
   scs->parallel_for(step, "updateStepData");
 }
 
-/* Depend on netcdf format, and semicolon at the end of fields
-   fieldName = num1 num2 ... ;  //for each component, any number of lines 
-   NOTE: stored in a single data array of 6 components.
-*/
-void processPtclInitTextFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls) {
-  o::LO verbose = 1;
-  std::ifstream ifs(fName);
-  if (!ifs.good()) //good() 
-    Omega_h_fail("Error opening PtclInitFile file %s \n", fName.c_str());
-
-  // can't set in ps, since field names in ps used below not from array
-  constexpr int nComp = PTCL_READIN_DATA_SIZE_PER_PTCL;
-  OMEGA_H_CHECK(nComp == ps.nComp);
-  bool foundNP, dataInit, foundComp[nComp], dataLine[nComp]; //6=x,y,z,vx,vy,vz
-  std::string fieldNames[nComp];
-  bool expectEqual = false;
-  int ind[nComp];
-  std::set<int> nans;
-  for(int i = 0; i < nComp; ++i) {
-    ind[i] = 0;
-    foundComp[i] = dataLine[i] = false;
-  }
-
-  fieldNames[0] = ps.xName;
-  fieldNames[1] = ps.yName;
-  fieldNames[2] = ps.zName;
-  fieldNames[3] = ps.vxName;
-  fieldNames[4] = ps.vyName;
-  fieldNames[5] = ps.vzName;      
-  foundNP = dataInit = false;
-  std::string line, s1, s2, s3;
-  while(std::getline(ifs, line)) {
-    if(verbose >4)
-      std::cout << "Processing  line " << line << '\n';
-    // depend on semicolon to mark the end of fields, otherwise
-    // data of unused fields added to the previous valid field.
-    bool semi = (line.find(';') != std::string::npos);
-    std::replace (line.begin(), line.end(), ',' , ' ');
-    std::replace (line.begin(), line.end(), ';' , ' ');
-    std::stringstream ss(line);
-    // first string or number of EACH LINE is got here
-    ss >> s1;
-    if(verbose >4)
-      std::cout << "str s1:" << s1 << "\n";
-    
-    // Skip blank line
-    if(s1.find_first_not_of(' ') == std::string::npos) {
-      s1 = "";
-      if(!semi)
-       continue;
-    }
-    if(s1 == ps.nPname) {
-      ss >> s2 >> s3;
-      OMEGA_H_CHECK(s2 == "=");
-      ps.nP = std::stoi(s3);
-      if(numPtcls <= 0)
-        numPtcls = ps.nP;
-      else if(numPtcls < ps.nP)
-        ps.nP = numPtcls;
-      else if(numPtcls > ps.nP) {
-        numPtcls = ps.nP;
-        printf("Warning: numPtcls %d reset to %d, max. in file.\n", numPtcls,ps.nP);
-      }
-      foundNP = true;
-      if(verbose >0)
-          std::cout << "nP:" << ps.nP << " Using numPtcls " << numPtcls << "\n";
-    }
-    if(!dataInit && foundNP) {
-      data = o::HostWrite<o::Real>(nComp*ps.nP);
-      dataInit = true;
-    }
-    int compBeg = 0, compEnd = nComp;
-    // if ; ends data of each parameters, otherwise comment this block
-    // to search for each parameter for every data line
-    for(int iComp = 0; iComp<nComp; ++iComp) {
-      if(dataInit && dataLine[iComp]) {
-        compBeg = iComp;
-        compEnd = compBeg + 1;
-      }
-    }
-    // NOTE: NaN is replaced with 0 to preserve sequential index of particle
-    //TODO change it in storeData()
-    if(dataInit) {
-      // stored in a single data array of 6+1 components.
-      for(int iComp = compBeg; iComp<compEnd; ++iComp) {
-        parseFileFieldData(ss, s1, fieldNames[iComp], semi, data, ind[iComp], 
-          dataLine[iComp], nans, expectEqual, iComp, nComp, numPtcls, 
-          false, true);
-
-        if(!foundComp[iComp] && dataLine[iComp]) {
-          foundComp[iComp] = true;
-          if(verbose >1)
-            printf("Found data Component %d\n", iComp);
-        }
-      }
-    }
-    s1 = s2 = s3 = "";
-  } //while
-
-  // remove invalid particles
-  if(nans.size() > 0) {
-    int validMaxInd = numPtcls-1;
-    for(const int& ip:nans) {
-      while(true) {
-        if(nans.find(validMaxInd) != nans.end())
-          --validMaxInd;
-        else
-          break;
-      }
-      OMEGA_H_CHECK(validMaxInd >= 0);
-      if(ip < validMaxInd) {
-        printf("Removed indices: ");
-        for(int j=0; j<nComp; ++j)
-          data[ip*nComp+j] = data[validMaxInd*nComp+j];
-        printf(" %d", ip);
-        --validMaxInd;
-      }
-      printf("\n");
-    } // invalid entry
-    OMEGA_H_CHECK(validMaxInd >= 0);
-    // clean up
-    int filled = numPtcls;
-    for(int ip=validMaxInd+1; ip<filled; ++ip)
-      for(int j=0; j<nComp; ++j)
-        data[ip*nComp+j] = 0;
-    numPtcls = validMaxInd+1;
-    printf("Warning: updated numPtcls %d \n", numPtcls);
-  } //if any invalid
-
-  OMEGA_H_CHECK(dataInit && foundNP);
-  /*
-  for(int i=0; i<nComp; ++i) {
-    if(foundComp[i]==false)
-      printf("Not Found data component %d \n", i);
-    //TODO if only single line of data, the flag is reset instantly
-    // in which case this check should be disabled
-    OMEGA_H_CHECK(foundComp[i]==true);
-  }
-  */
-}

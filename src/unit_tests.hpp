@@ -65,7 +65,7 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
   }
   else  //, v has size=1
   {
-    if(g::almost_equal(bcc[pos], v[0]))
+    if(o::are_close(bcc[pos], v[0]))
     {
 #ifdef DEBUG
       std::cout << "Barycentric test passed for (" << p[0] << ","

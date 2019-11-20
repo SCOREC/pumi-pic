@@ -70,7 +70,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("gitrm_search");
   SCS* scs = gp.scs;
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 20;
+  Omega_h::LO maxLoops = 50;
   const auto scsCapacity = scs->capacity();
   assert(scsCapacity > 0);
   o::Write<o::LO> elem_ids(scsCapacity,-1);
@@ -86,8 +86,8 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("updateGitrmData");
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(scs, gir, gp, gm, elem_ids, debug);
-    gitrm_recombine(scs, gir, gp, gm, elem_ids, debug);
+    gitrm_ionize(scs, gir, gp, gm, elem_ids, true);
+    gitrm_recombine(scs, gir, gp, gm, elem_ids, true);
   }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
@@ -141,12 +141,12 @@ int main(int argc, char** argv) {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
         << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file>"
-        << " [<nPtcls><nIter> <histInterval> <gitrDataFileName> ]\n";
+        << " [<nPtcls><nIter> <histInterval> <gitrDataInFileName> ]\n";
     exit(1);
   }
   bool piscesRun = true; // add as argument later
   bool chargedTracking = true; //false for neutral tracking
-  bool debug = false;
+  bool debug = true;
 
   auto deviceCount = 0;
   cudaGetDeviceCount(&deviceCount);
@@ -226,7 +226,9 @@ int main(int argc, char** argv) {
   std::string gitrDataFileName = "";
   if(argc > 9)
     gitrDataFileName = argv[9];
-
+  if (!comm_rank)
+    printf(" gitr comparison DataFile %s\n", gitrDataFileName.c_str());
+  
   GitrmParticles gp(*mesh, dTime);
   // TODO use picparts 
   GitrmMesh gm(*mesh);
@@ -239,7 +241,7 @@ int main(int argc, char** argv) {
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
 
   int compare_with_gitr = 0;
-  int testNumPtcls = 10;
+  int testNumPtcls = 1;
   int testNumPtclsRead = 0;
   if(compare_with_gitr) {
     assert(COMPARE_WITH_GITR == 1);
@@ -256,17 +258,17 @@ int main(int argc, char** argv) {
 
   printf("Adding Tags And Loading Profile Data %s\n", profFile.c_str());
   OMEGA_H_CHECK(!profFile.empty());
-  gm.addTagAndLoadProfileData(profFile, profFile);
+  gm.addTagsAndLoadProfileData(profFile, profFile);
 
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile, chargedTracking);
 
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces(false);
-  printf("Preprocessing Distance to boundary \n");
+  printf("Preprocessing Distance to boundary of %g \n", DEPTH_DIST2_BDRY);
   // Add bdry faces to elements within 1mm
-  gm.preProcessDistToBdry();
-
+  //gm.preProcessDistToBdry();
+  gm.preProcessBdryFacesBFS();
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
 
@@ -287,10 +289,12 @@ int main(int argc, char** argv) {
   //always assert size>0 for device data init
   assert(numPtcls*dofStepData*nTHistory >0);
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData); // TODO delete
-  o::Write<o::Real> ptclHitoryData(numPtcls*dofStepData*nTHistory);
+  o::Write<o::LO> lastFilledTimeSteps(numPtcls, 0);
+  o::Write<o::Real> ptclHistoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
   if(histInterval >0)
-    updatePtclStepData(scs, ptclHitoryData, numPtcls, dofStepData, iHistStep);
+    updatePtclStepData(scs, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+      dofStepData, iHistStep);
   
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
@@ -303,13 +307,14 @@ int main(int argc, char** argv) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
     }
-    if(comm_rank == 0 && (debug || iter%1000 ==0))
+    if(comm_rank == 0)// && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {
-      gitrm_findDistanceToBdry(gp, gm);
-      gitrm_calculateE(gp, *mesh, debug);
-      gitrm_borisMove(scs, gm, dTime);
+      fprintf(stderr, "Finding distances to boundaries\n");
+      gitrm_findDistanceToBdry(gp, gm, 0);
+      gitrm_calculateE(gp, *mesh, true);//debug);
+      gitrm_borisMove(scs, gm, dTime, true);
     }
     else
       neutralBorisMove(scs,dTime);
@@ -322,7 +327,8 @@ int main(int argc, char** argv) {
       // move-over if. 0th step(above) kept; last step available at the end.
       if(iter % histInterval == 0)
         ++iHistStep;        
-      updatePtclStepData(scs, ptclHitoryData, numPtcls, dofStepData, iHistStep);
+      updatePtclStepData(scs, ptclHistoryData, lastFilledTimeSteps, numPtcls,
+        dofStepData, iHistStep);
     }
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
@@ -345,8 +351,8 @@ int main(int argc, char** argv) {
   }
   if(histInterval >0) {
     printf("writing out history file \n");
-    writePtclStepHistoryNcFile(ptclHitoryData, numPtcls, dofStepData, 
-      nTHistory, "history.nc");
+    writePtclStepHistoryNcFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+      dofStepData, nTHistory, "gitrm-history.nc");
   }
 
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());

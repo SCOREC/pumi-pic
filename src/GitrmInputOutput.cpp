@@ -12,7 +12,9 @@
 double Field3StructInput::getGridDelta(int ind) {
   assert(ind < MAX_SIZE && ind >=0);
   assert(nGridVec.size() > ind && nGridVec[ind] > 0);
-  return (getGridMax(ind) - getGridMin(ind))/(o::Real)nGridVec[ind];
+  //return (getGridMax(ind) - getGridMin(ind))/(double)nGridVec[ind];
+  auto second = (ind>0) ? ((ind>1)? (grid3[1]): grid2[1]) : grid1[1];
+  return second - getGridMin(ind);
 }
 
 int Field3StructInput::getNumGrids(int ind) {
@@ -30,7 +32,7 @@ double Field3StructInput::getGridMin(int ind) {
 double Field3StructInput::getGridMax(int ind) {
   assert(ind >=0 && ind < 3);
   assert(MAX_SIZE == 3);
-  double max;
+  double max = 0;
   if(ind==0)
     max = grid1[grid1.size()-1];
   else if(ind==1)
@@ -40,7 +42,20 @@ double Field3StructInput::getGridMax(int ind) {
   return max;
 }
 
-int verifyNetcdfFile(std::string& ncFileName, int nc_err) {
+int Field3StructInput::getIntValueOf(std::string name) {
+  for(int i=0; i< nVarNames.size(); ++i)
+    if(name == nVarNames[i])
+      if(nVarVec.size() > i)
+        return nVarVec[i];
+  for(int i=0; i< nGridNames.size(); ++i)
+    if(name == nGridNames[i])
+      if(nGridVec.size() > i)
+        return nGridVec[i];
+  assert(false);
+  return -1;
+}
+
+int verifyNetcdfFile(const std::string& ncFileName, int nc_err) {
   try {
     netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
   } catch (netCDF::exceptions::NcException &e) {
@@ -54,6 +69,8 @@ int readParticleSourceNcFile(std::string ncFileName,
     o::HostWrite<o::Real>& data, int& maxNPtcls, int& numPtclsRead,
     bool replaceNaN) {
   constexpr int dof = 6;
+
+  assert(!verifyNetcdfFile(ncFileName));
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     netCDF::NcDim ncf_np(ncf.getDim("nP"));
@@ -106,6 +123,8 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
 int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, std::string nPstr) {
   int ncSizePerComp = 1;
+  assert(!verifyNetcdfFile(ncFileName));
+
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     for(int i=0; i< fs.nGridNames.size(); ++i) {
@@ -131,16 +150,19 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       if(i==0) {
         fs.grid1 = o::HostWrite<o::Real>(fs.nGridVec[0]);
         ncvar.getVar(&(fs.grid1[0]));
+
+        printf("\n read: size %d %s %g %g ...\n", fs.nGridVec[0], fs.gridNames[i].c_str(), fs.grid1[0], fs.grid1[1]);
       }
       if(i==1) {
         fs.grid2 = o::HostWrite<o::Real>(fs.nGridVec[1]);
         ncvar.getVar(&(fs.grid2[0]));
+
+        printf("\n read: size %d %s %g %g ...\n", fs.nGridVec[1], fs.gridNames[i].c_str(), fs.grid2[0], fs.grid2[1]);
       }
       if(i==2) {
-        fs.grid1 = o::HostWrite<o::Real>(fs.nGridVec[2]);
+        fs.grid3 = o::HostWrite<o::Real>(fs.nGridVec[2]);
         ncvar.getVar(&(fs.grid3[0]));
       }
-      std::cout << i << " "  << fs.gridNames[i] <<  " " << fs.grid1[1] << " \n";
     }
     // TODO use maxNPtcls and numPtclsRead
     for(int i=0; i<fs.nComp; ++i) {
@@ -149,8 +171,14 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       ncvar.getVar(&(fs.data[i*ncSizePerComp]));
     }
     std::cout << " data[0] " <<  (fs.data)[0] << "\n";
-    
-    std::cout << " Done reading " << ncFileName << "\n";
+  
+    for(int i=0; i< fs.nVarNames.size(); ++i) {
+      netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
+      auto size = ncVarName.getSize();
+      fs.nVarVec.push_back(size);
+    }
+
+    std::cout << " Done reading " << ncFileName << "\n\n";
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
     return 1;
@@ -190,13 +218,14 @@ void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
     }
     //stored in timestep order : numPtcls*dof * iHistStep + id*dof
     o::HostWrite<o::Real>ptclsData(ptclHistoryData);
-    int histn = (int)ptclsData.size()/(dof*numPtcls);
+    int nHist = (int)ptclsData.size()/(dof*numPtcls);
 
+    //each component is written as seperate Var
     for(int i=0; i< dof; ++i) {
-      o::HostWrite<o::Real> dat(histn*numPtcls);
+      o::HostWrite<o::Real> dat(nHist*numPtcls);
       for(int j=0; j<numPtcls; ++j) {
-        for(int k=0; k<histn; ++k) {
-          dat[j*histn+k] = ptclsData[j*dof + i + k*numPtcls*dof];
+        for(int k=0; k<nHist; ++k) {
+          dat[j*nHist+k] = ptclsData[j*dof + i + k*numPtcls*dof];
         }
       }
       ncVars[i].putVar(&(dat[0]));

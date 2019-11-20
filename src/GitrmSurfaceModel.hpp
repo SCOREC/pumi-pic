@@ -146,7 +146,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         firstColl(pid) = 1; //scs
     
         auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
-        auto surfNorm = p::find_face_normal(fid, elmId, coords, mesh2verts, 
+        auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
           face_verts, down_r2fs);
         o::Real magSurfNorm = o::norm(surfNorm);
         auto normVel = o::norm(vel);
@@ -162,7 +162,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         o::Real E0 = 0.5*amu*1.6737236e-27*(magPath*magPath)/1.60217662e-19;
         if(E0 > 1000.0) 
           E0 = 990.0;
-        if(p::almost_equal(E0, 0))
+        if(o::are_close(E0, 0))
           thetaImpact = 0;
   
         o::Real Y0;
@@ -281,7 +281,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
             vSampled[0] = V0*sin(aInterpVal*3.1415/180)*cos(2.0*3.1415*r10);
             vSampled[1] = V0*sin(aInterpVal*3.1415/180)*sin(2.0*3.1415*r10);
             vSampled[2] = V0*cos(aInterpVal*3.1415/180);
-            auto surfNorm = p::find_bdry_face_normal(fid,coords,face_verts);
+            auto surfNorm = p::bdry_face_normal_of_tet(fid,coords,face_verts);
             auto surfPar = vtx1 - vtx2; // bdry face vtx
             auto Y = o::cross(surfNorm, surfPar);
             auto vSampled = vSampled[0] * surfPar + vSampled[1]*Y + vSampled[2]*surfNorm;

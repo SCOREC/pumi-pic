@@ -956,16 +956,13 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   return region;
 }
 
-
+// TODO delete this
 // type =1 for  interior, 2=bdry
-OMEGA_H_DEVICE o::LO get_face_type_ids_of_elem(const o::LO elem, 
+OMEGA_H_DEVICE o::LO get_face_types_of_tet(const o::LO elem, 
   const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
   o::LO (&fids)[4], const o::LO type) {
-
   o::LO nf = 0;
-  const auto beg_face = elem *4;
-  const auto end_face = beg_face +4;
-  for(o::LO fi = beg_face; fi < end_face; ++fi){
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
     const auto fid = down_r2f[fi];
     if( (type==1 && !side_is_exposed[fid]) ||
         (type==2 &&  side_is_exposed[fid]) ) {
@@ -976,63 +973,67 @@ OMEGA_H_DEVICE o::LO get_face_type_ids_of_elem(const o::LO elem,
   return nf;
 }
 
-
-//TODO remove print by argument
-OMEGA_H_DEVICE void get_face_data_by_id(const Omega_h::LOs &face_verts, 
-  const Omega_h::Reals &coords,  const o::LO face_id, o::Real (&fdat)[9],
-  const bool p=false) {
-
-  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id);
-  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
-  for(auto i=0; i<3; ++i){
-    for(auto j=0; j<3; ++j){
-      fdat[i*3+j] = face[i][j];
-      if(p){
-        printf(" fdat[%d]=%.3f i_%d j_%d face[i][j]=%.3f \n", i*3+j, 
-          fdat[i], i, j, face[i][j]);
-      }
+OMEGA_H_DEVICE o::LO get_exposed_faces_of_tet(const o::LO elem, 
+  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
+  o::LO (&fids)[4]) {
+  o::LO nf = 0;
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
+    const auto fid = down_r2f[fi];
+    if(side_is_exposed[fid]) {
+      fids[nf] = fid;
+      ++nf;
     }
   }
+  return nf;
 }
 
 
-OMEGA_H_DEVICE bool check_if_face_within_dist_to_tet(const o::Matrix<DIM, 4> &tet, 
-  const Omega_h::LOs &face_verts, const Omega_h::Reals &coords, const o::LO face_id,
-  const o::Real depth = 0.001) {
-
-  //TODO test this copying 
-  /*
-  o::Few<o::Vector<3>, 3> face;
-  for(o::LO i=0; i< dim; ++i){
-    //face[i] = {data[beg+i*3], data[beg+i*3+1], data[beg+i*3+2]};
-    for(o::LO j=0; j< dim; ++j){
-      face[i][j] = data[beg + j]; 
+OMEGA_H_DEVICE o::LO get_interior_faces_of_tet(const o::LO elem, 
+  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
+  o::LO (&fids)[4]) {
+  o::LO nf = 0;
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
+    const auto fid = down_r2f[fi];
+    if(!side_is_exposed[fid]) {
+      fids[nf] = fid;
+      ++nf;
     }
   }
-  */
+  return nf;
+}
 
+OMEGA_H_DEVICE void get_face_coords_of_tet(const Omega_h::LOs &face_verts, 
+  const Omega_h::Reals &coords, const o::LO face_id, o::Real (&fdat)[9]) {
+  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id);
+  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+  for(auto i=0; i<3; ++i)
+    for(auto j=0; j<3; ++j)
+      fdat[i*3+j] = face[i][j];
+}
+
+OMEGA_H_DEVICE bool is_face_within_dist_to_tet(const o::Matrix<DIM, 4>& tet, 
+  const Omega_h::LOs& face_verts, const Omega_h::Reals& coords, const o::LO face_id,
+  const o::Real depth = 0.001) {
   auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
   const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
-
-  for(o::LO i=0; i<3; ++i){ //3 vtx of face
-    for(o::LO j=0; j<4; ++j){ //4 vtx of tet
-      o::Vector<3> dv = face[i] - tet[j];
-      o::Real d2 = osh_dot(dv, dv);
+  for(o::LO i=0; i<3; ++i) { //3 vtx of face
+    for(o::LO j=0; j<4; ++j) { //4 vtx of tet
+      auto dv = face[i] - tet[j];
       
-
-     // printf("face_%0.3f,%0.3f,%0.3f tet_%0.3f,%0.3f,%0.3f \n", 
-     //   face[i][0],face[i][1], face[i][2],tet[j][0],tet[j][1],tet[j][2]);
-      
-      // printf("dist_%0.5f depth_%0.5f \n", sqrt(d2), depth);
-
-      if(d2 <= depth*depth){
+if(0 && face_id == 262387) {
+  //printf("\tface %d %g %g %g  \n", i, face[i][0], face[i][1], face[i][2]);
+  printf("\tTet %d %g %g %g  \n", j, tet[j][0], tet[j][1], tet[j][2]);
+  printf("\tface-tet %g %g %g mag %g \n", dv[0], dv[1], dv[2], sqrt(dv[0]*dv[0]+dv[1]*dv[1]+dv[2]*dv[2]));
+}
+      o::Real d2 = o::norm(dv);
+      if(d2 <= depth) {
+        if(0 && face_id == 262387)printf("depth %g dist %.8f\n", depth, d2);
         return true;
       }
     }
   }
   return false;
 }
-
 
 template < class ParticleType>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh

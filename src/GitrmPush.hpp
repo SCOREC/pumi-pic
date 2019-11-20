@@ -18,10 +18,15 @@
 inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false) {
   auto compareWithGitr = COMPARE_WITH_GITR;
 
+  if(compareWithGitr)
+    iTimePlusOne++;
   //#ifdef COMPARE_WITH_GITR
-  const auto& gitrPtclStepData = gp.gitrPtclStepData;
-  const auto gitrDataDof = static_cast<int>(GitrCompareDataEnum::dof);
-  const auto gitrDataIndD2B = static_cast<int>(GitrCompareDataEnum::d2bdryInd);
+  const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
+  const auto testGDof = gp.testGitrStepDataDof;
+  const auto testGNT = gp.testGitrStepDataNumTsteps;
+  const auto testGEind = gp.testGitrStepDataEfieldInd;
+  const auto testGqInd = gp.testGitrStepDataChargeInd;
+  const auto iTimeStep = iTimePlusOne - 1;
   //#endif
 
   const auto biasedSurface = BIASED_SURFACE;
@@ -34,16 +39,19 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
   auto pos_scs = scs->get<PTCL_POS>();
   auto efield_scs  = scs->get<PTCL_EFIELD>();
   auto pid_scs = scs->get<PTCL_ID>();
-  //TODO replace pid based data by ptcl based
+
+  auto charge_scs = scs->get<PTCL_CHARGE>();
+
+  // Replace pid based data by ptcl based ?
   //NOTE arrays is based on pid, which is reset upon each rebuild
   const auto& closestPoints =  gp.closestPoints;
   const auto& faceIds = gp.closestBdryFaceIds;
 
   auto run = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) { 
     if(mask >0) {
+      auto ptcl = pid_scs(pid);
       auto faceId = faceIds[pid];
       if(faceId < 0) {
-        //TODO check
         efield_scs(pid, 0) = 0;
         efield_scs(pid, 1) = 0;
         efield_scs(pid, 2) = 0;
@@ -55,7 +63,6 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         o::Real debyeLength = debyeLengths[faceId];
         o::Real larmorRadius = larmorRadii[faceId];
         o::Real childLangmuirDist = childLangmuirDists[faceId];
-        auto ptcl = pid_scs(pid);
         auto pos = p::makeVector3(pid, pos_scs);
         o::Vector<3> closest;
         for(o::LO i=0; i<3; ++i)
@@ -63,17 +70,11 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         auto distVector = closest - pos;
         auto dirUnitVector = o::normalize(distVector);
         auto d2bdry = p::osh_mag(distVector);
-
-        if(compareWithGitr)
-          d2bdry = gitrPtclStepData[ptcl*gitrDataDof+gitrDataIndD2B];
         o::Real Emag = 0;
-        /*
-        // Calculate angle at closest point, instead of using it for centroid of a long tet
-        //TODO what about other quantities ???
-        */
+
         if(debug){
           printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%g pot:%g"
-           " Deb:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
+           " DebL:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
            pot, debyeLength, larmorRadius, childLangmuirDist);
           printf("ptcl %d pos %g %g %g closest %g %g %g distVec %g %g %g \n", 
             ptcl, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2],
@@ -90,20 +91,34 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         }
         if(isnan(Emag))
           Emag = 0;
-        if(p::almost_equal(d2bdry, 0.0) || p::almost_equal(larmorRadius, 0.0)) {
+        if(o::are_close(d2bdry, 0.0) || o::are_close(larmorRadius, 0.0)) {
           Emag = 0.0;
-          dirUnitVector = o::zero_vector<3>();
+          dirUnitVector[0] = dirUnitVector[1] = dirUnitVector[2] = 0;
         }
         auto exd = Emag*dirUnitVector;
-        efield_scs(pid, 0) = exd[0];
-        efield_scs(pid, 1) = exd[1];
-        efield_scs(pid, 2) = exd[2];
+        for(int i=0; i<3; ++i)
+          efield_scs(pid, i) = exd[i];
 
         if(debug)
           printf("ptcl %d efield %g %g %g :d2bdry %g Emag %g "
             "pot %g CLD %g dir %g %g %g \n", 
             ptcl, exd[0], exd[1], exd[2], d2bdry, Emag, pot, childLangmuirDist, 
             dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
+
+        if(compareWithGitr) {// TODO FIXME
+          //beg: pindex*nT*dof_intermediate + (nthStep-1)*dof_intermediate
+          auto beg = ptcl*testGNT*testGDof + iTimeStep*testGDof + testGEind;
+          /*
+          efield_scs(pid, 0) = testGitrPtclStepData[beg];
+          efield_scs(pid, 1) = testGitrPtclStepData[beg+1];
+          efield_scs(pid, 2) = testGitrPtclStepData[beg+2];
+
+          charge_scs(pid) = testGitrPtclStepData[beg+ testGqInd];
+          */
+          if(debug)
+            printf("calcE-ptcl %d t %d q %d @ %d efield %g %g %g \n", ptcl, iTimeStep, charge_scs(pid),
+              beg, efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2));
+        }
         // 1st 2 particles used have same position in GITR and GITRm, since it is from file
         // Only difference is in input CLDist.
 
@@ -147,6 +162,8 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   auto use2dInputFields = USE2D_INPUTFIELDS;
   auto useConstantBField = USE_CONSTANT_BFIELD;
 
+  int iTimeStep = iTimePlusOne - 1;
+  
   if(PISCESRUN)
     OMEGA_H_CHECK(useConstantBField);
   o::Vector<3> bFieldConst; // At previous_pos
@@ -154,7 +171,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
     bFieldConst = p::makeVectorHost(CONSTANT_BFIELD);
   auto eFieldConst = p::makeVectorHost(CONSTANT_EFIELD);
 
-  //const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField"));  // TODO FIXME replace this for non-pisces run
+  //const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField")); //TODO
   // Only if used 2D field read from file
   auto shiftB = gm.mesh2Bfield2Dshift;
   o::Real bxz[] = {gm.bGridX0, gm.bGridZ0, gm.bGridDx, gm.bGridDz};
@@ -216,9 +233,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       o::Real bFieldMag = p::osh_mag(bField);
       o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dTime*0.5;
       o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
-      if(debug)
-        printf("ptcl %d Bmag %g charge %d qPrime %g coeff %g eField %g %g %g \n",
-         ptcl, bFieldMag, charge, qPrime, coeff, eField[0], eField[1], eField[2]);
+
       //v_minus = v + q_prime*E;
       o::Vector<3> qpE = qPrime*eField;
       o::Vector<3> vMinus = vel + qpE;
@@ -232,6 +247,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       vel = vMinus + cVpxB;
       //v = v + q_prime*E
       vel = vel + qpE;
+
       // Next position and velocity
       auto tgt = pos + vel * dTime;
       tgt_scs(pid, 0) = tgt[0];
@@ -240,6 +256,11 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       vel_scs(pid, 0) = vel[0];
       vel_scs(pid, 1) = vel[1];
       vel_scs(pid, 2) = vel[2];
+ //     if(debug)
+        auto dvel = p::osh_mag(qpE);
+        printf("ptcl %d timestep %d charge %d eField %g %g %g pos %g %g %g \n",
+         ptcl, iTimeStep, charge, eField[0], eField[1], eField[2], pos[0], pos[1], pos[2]);
+
       if(debug){
         printf("e %d ptcl %d vel %.1f %.1f %.1f \n pos %g %g %g => %g %g %g\n", 
           elem, ptcl, vel[0], vel[1], vel[2], pos[0], pos[1], pos[2],

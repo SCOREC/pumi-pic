@@ -89,7 +89,7 @@ void GitrmMesh::initBField(const std::string &bFile, const o::Real shiftB) {
 }
 
 
-void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string tagName, 
+void GitrmMesh::loadScalarFieldOnBdryFacesFromFile(const std::string tagName, 
   const std::string &file, Field3StructInput& fs, const o::Real shift, int debug) {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
@@ -127,7 +127,7 @@ void GitrmMesh::loadScalarFieldOnBdryFaceFromFile(const std::string tagName,
       return;
     }
     // TODO storing fields at centroid may not be best for long tets.
-    auto pos = p::find_face_centroid(fid, coords, face_verts);
+    auto pos = p::face_centroid_of_tet(fid, coords, face_verts);
     //cylindrical symmetry. Height (z) is same.
     auto rad = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
     // projecting point to y=0 plane, since 2D data is on const-y plane.
@@ -208,7 +208,7 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string tagName,
   mesh.set_tag(o::VERT, tagName, tagData);
 }
 
-void GitrmMesh::addTagAndLoadProfileData(const std::string &profileFile, 
+void GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile, 
   const std::string &profileDensityFile) {
   mesh.add_tag<o::Real>(o::FACE, "ElDensity", 1);
   mesh.add_tag<o::Real>(o::FACE, "IonDensity", 1); //=ni 
@@ -219,7 +219,7 @@ void GitrmMesh::addTagAndLoadProfileData(const std::string &profileFile,
   mesh.add_tag<o::Real>(o::VERT, "IonTempVtx", 1);
   mesh.add_tag<o::Real>(o::VERT, "ElTempVtx", 1);
   Field3StructInput fd({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"}); 
-  loadScalarFieldOnBdryFaceFromFile("IonDensity", profileDensityFile, fd); 
+  loadScalarFieldOnBdryFacesFromFile("IonDensity", profileDensityFile, fd); 
 
   Field3StructInput fdv({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"});   
   load1DFieldOnVtxFromFile("IonDensityVtx", profileDensityFile, fdv, 
@@ -232,11 +232,11 @@ void GitrmMesh::addTagAndLoadProfileData(const std::string &profileFile,
   densIonDz = fdv.getGridDelta(1);
 
   Field3StructInput fne({"ne"}, {"gridR", "gridZ"}, {"nR", "nZ"});  
-  loadScalarFieldOnBdryFaceFromFile("ElDensity", profileFile, fne); 
+  loadScalarFieldOnBdryFacesFromFile("ElDensity", profileFile, fne); 
   Field3StructInput fnev({"ne"}, {"gridR", "gridZ"}, {"nR", "nZ"});  
   load1DFieldOnVtxFromFile("ElDensityVtx", profileFile, fnev, densEl_d, densElVtx_d);
   Field3StructInput fti({"ti"}, {"gridR", "gridZ"}, {"nR", "nZ"}); 
-  loadScalarFieldOnBdryFaceFromFile("IonTemp", profileFile, fti); 
+  loadScalarFieldOnBdryFacesFromFile("IonTemp", profileFile, fti); 
   Field3StructInput ftiv({"ti"}, {"gridR", "gridZ"}, {"nR", "nZ"});
   load1DFieldOnVtxFromFile("IonTempVtx", profileFile, ftiv, temIon_d, tempIonVtx_d);
 
@@ -249,7 +249,7 @@ void GitrmMesh::addTagAndLoadProfileData(const std::string &profileFile,
 
   // electron Temperature
   Field3StructInput fte({"te"}, {"gridR", "gridZ"}, {"nR", "nZ"});
-  loadScalarFieldOnBdryFaceFromFile("ElTemp", profileFile, fte); 
+  loadScalarFieldOnBdryFacesFromFile("ElTemp", profileFile, fte); 
   Field3StructInput ftev({"te"}, {"gridR", "gridZ"}, {"nR", "nZ"});
   load1DFieldOnVtxFromFile("ElTempVtx", profileFile, ftev, temEl_d, tempElVtx_d);
 }
@@ -275,7 +275,8 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
   const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
   auto useConstantBField = USE_CONSTANT_BFIELD;
   o::Real BField_const[] = {CONSTANT_BFIELD[0], CONSTANT_BFIELD[1], CONSTANT_BFIELD[2]};
-
+  o::Real potential = BIAS_POTENTIAL;
+  auto biased = BIASED_SURFACE;
   o::Real bxz[4] = {bGridX0, bGridZ0, bGridDx, bGridDz};
   o::LO bnz[2] = {bGridNx, bGridNz};
   const auto &Bfield_2dm = Bfield_2d;
@@ -301,7 +302,7 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
     //TODO if faceId's are not sequential, create a (bdry) faceIds array 
     if(side_is_exposed[fid]) {
       o::Vector<3> B = o::zero_vector<3>();
-      auto fcent = p::find_face_centroid(fid, coords, face_verts);
+      auto fcent = p::face_centroid_of_tet(fid, coords, face_verts);
       //cylindrical symmetry, height (z) is same.
       auto rad = sqrt(fcent[0]*fcent[0] + fcent[1]*fcent[1]);
       // projecting point to y=0 plane, since 2D data is on const-y plane.
@@ -319,17 +320,17 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
         B[1] = BField_const[1];
         B[2] = BField_const[2];
       } else {
-        assert(!p::almost_equal(bxz,0));
+        assert(! p::almost_equal(bxz,0));
         p::interp2dVector(Bfield_2dm,  bxz[0], bxz[1], bxz[2], bxz[3], bnz[0],
           bnz[1], fcent, B, false);
       }
       /*
       auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
-      auto surfNorm = p::find_face_normal(fid, elmId, coords, mesh.verts, 
+      auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh.verts, 
           face_verts, down_r2fs);
       */
       //TODO verify
-      auto surfNorm = p::find_bdry_face_normal(fid,coords,face_verts);
+      auto surfNorm = p::bdry_face_normal_of_tet(fid,coords,face_verts);
       o::Real magB = o::norm(B);
       o::Real magSurfNorm = o::norm(surfNorm);
       o::Real angleBS = p::osh_dot(B, surfNorm);
@@ -348,10 +349,9 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
       o::Real tel = te[fid];
       o::Real nel = ne[fid];
       o::Real dens = density[fid];  //3.0E+19 ?
-      o::Real pot = BIAS_POTENTIAL;
 
       o::Real dlen = 0;
-      if(p::almost_equal(nel, 0.0)){
+      if(o::are_close(nel, 0.0)){
         dlen = 1.0e12;
       }
       else {
@@ -362,8 +362,8 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
       larmorRadius_d[fid] = 1.44e-4*sqrt(background_amu*tion/2)/(background_Z*magB);
       flux_d[fid] = 0.25* dens *sqrt(8.0*tion*1.60217662e-19/(o::PI*background_amu));
       impacts_d[fid] = 0.0;
-
-      if(BIASED_SURFACE) {
+      o::Real pot = potential;
+      if(biased) {
         o::Real cld = 0;
         if(tel > 0.0) {
           cld = dlen * pow(abs(pot)/tel, 0.75);
@@ -372,13 +372,12 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
           cld = 1e12;
         }
         childLangmuirDist_d[fid] = cld;
-      }
-      else {
+      } else {
         pot = 3.0*tel; 
       }
       potential_d[fid] = pot;
 
-      if(debug)// || p::almost_equal(angle_d[fid],0))
+      if(debug)// || o::are_close(angle_d[fid],0))
         printf("angle[%d] %.5f\n", fid, angle_d[fid]);
     }
   };
@@ -394,8 +393,8 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential_d));
 
  //Book keeping of intersecting particles
-  mesh.add_tag<o::Real>(o::FACE, "gridE", 1); //TODO store subgrid data ?
-  mesh.add_tag<o::Real>(o::FACE, "gridA", 1); //TODO store subgrid data ?
+  mesh.add_tag<o::Real>(o::FACE, "gridE", 1); // store subgrid data ?
+  mesh.add_tag<o::Real>(o::FACE, "gridA", 1);
   mesh.add_tag<o::Real>(o::FACE, "sumParticlesStrike", 1);
   mesh.add_tag<o::Real>(o::FACE, "sumWeightStrike", 1);
   mesh.add_tag<o::Real>(o::FACE, "grossDeposition", 1);
@@ -403,7 +402,6 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "aveSputtYld", 1);
   mesh.add_tag<o::LO>(o::FACE, "sputtYldCount", 1);
 
-  // TODO get nEdist, nAdist;
   o::LO nEdist = 4; //TODO
   o::LO nAdist = 4; //TODO
   mesh.add_tag<o::Real>(o::FACE, "energyDistribution", nEdist*nAdist);
@@ -413,17 +411,19 @@ void GitrmMesh::initBoundaryFaces(bool debug) {
 
 // These are only for temporary writing during pre-processing
 void GitrmMesh::initNearBdryDistData() {
-  OMEGA_H_CHECK(BDRYFACE_SIZE > 0);
-  OMEGA_H_CHECK(SIZE_PER_FACE > 0);
   auto nel = mesh.nelems();
+  int fSize = BDRY_FACE_STORAGE_SIZE_PER_FACE;
+  int bdrySize =BDRYFACE_SIZE;
+  OMEGA_H_CHECK(bdrySize > 0);
+  OMEGA_H_CHECK(fSize > 0);
   printf("Init bdry arrays \n");
   // Flat arrays per element. Copying is passing device data.
-  bdryFacesW = o::Write<o::Real>(nel * BDRYFACE_SIZE * (SIZE_PER_FACE-1), 0);
+  bdryFacesW = o::Write<o::Real>(nel *bdrySize * (fSize - 1), 0);
   numBdryFaceIds = o::Write<o::LO>(nel, 0);
   // This size is also pre-decided
-  bdryFaceIds = o::Write<o::LO>(nel * BDRYFACE_SIZE, -1);
+  bdryFaceIds = o::Write<o::LO>(nel * bdrySize, -1);
   bdryFlags = o::Write<o::LO>(nel, 0);
-  bdryFaceElemIds = o::Write<o::LO>(nel * BDRYFACE_SIZE, -1);
+  bdryFaceElemIds = o::Write<o::LO>(nel * bdrySize, -1);
 }
 
 // No more changes to the bdry faces data; and delete flat arrays
@@ -438,18 +438,20 @@ void GitrmMesh::convert2ReadOnlyCSR() {
 
   auto &bdryFaces = this->bdryFaces;
   auto &bdryFaceInds = this->bdryFaceInds;
-  o::LO S = SIZE_PER_FACE;
+  int size = BDRY_FACE_STORAGE_SIZE_PER_FACE;
+  int nIds = BDRY_FACE_STORAGE_IDS;
+  int bfSize = BDRYFACE_SIZE;
   // Convert to CSR.
-  // Not actual index of bdryFaces, but has to x by SIZE_PER_FACE to get it
+  // Not actual index of bdryFaces, but has to x by BDRY_FACE_STORAGE_SIZE_PER_FACE to get it
   o::LOs numBdryFaceIds_r(numBdryFaceIds);
   numAddedBdryFaces = calculateCsrIndices(numBdryFaceIds_r, bdryFaceInds);
 
   //Keep separate copy of bdry face coords per elem, to avoid  accessing another
   // element's face. Can save storage if common bdry face data is used by face id?
   // Replace flat arrays of Write<> by convenient,
-  // Kokkos::View<double[numAddedBdryFaces][SIZE_PER_FACE]> ..  ?
+  // Kokkos::View<double[numAddedBdryFaces][BDRY_FACE_STORAGE_SIZE_PER_FACE]> ..  ?
 
-  o::Write<o::Real> bdryFacesCsrW(numAddedBdryFaces * S, 0);
+  o::Write<o::Real> bdryFacesCsrW(numAddedBdryFaces * size, 0);
   
   //Copy data
   auto convert = OMEGA_H_LAMBDA(o::LO elem) {
@@ -470,21 +472,21 @@ void GitrmMesh::convert2ReadOnlyCSR() {
     // The face_id is added as Real at the 1st entry of each face.
 
     // Source face size is 1 less.
-    //auto bfd = elem*BDRYFACE_SIZE*(S-1);
-    auto bfi = elem*BDRYFACE_SIZE;
+    //auto bfd = elem*bfSize*(size-1);
+    auto bfi = elem*bfSize;
     o::Real fdat[9] = {0};
 
     // Looping over implicit face numbers
     for(o::LO i = beg; i < end; ++i) {
-      p::get_face_data_by_id(face_verts, coords, bdryFaceIds[bfi], fdat, 0);
+      p::get_face_coords_of_tet(face_verts, coords, bdryFaceIds[bfi], fdat);
 
       // Face index is x by size_per_face 
-      bdryFacesCsrW[i*S] = static_cast<o::Real>(bdryFaceIds[bfi]);
-      bdryFacesCsrW[i*S+1] = static_cast<o::Real>(bdryFaceElemIds[bfi]);
+      bdryFacesCsrW[i*size] = static_cast<o::Real>(bdryFaceIds[bfi]);
+      bdryFacesCsrW[i*size+1] = static_cast<o::Real>(bdryFaceElemIds[bfi]);
       //printf(" f_%d  el_%d\n", bdryFaceIds[bfi], bdryFaceElemIds[bfi]);
-      for(o::LO j = FSKIP; j < S; ++j) {
-        //bdryFacesCsrW[i*S + j] = bdryFacesW[bfd + j-1]; //TODO check this
-        bdryFacesCsrW[i*S + j] = fdat[j - FSKIP];
+      for(o::LO j = nIds; j < size; ++j) {
+        //bdryFacesCsrW[i*size + j] = bdryFacesW[bfd + j-1]; //TODO check this
+        bdryFacesCsrW[i*size + j] = fdat[j - nIds];
       }
       ++bfi;
     }    
@@ -497,9 +499,10 @@ void GitrmMesh::convert2ReadOnlyCSR() {
 
 // Pre-processing to fill bdry faces in elements near bdry within depth needed. 
 // Call init function before this. Filling flat arrays; Later call convert2ReadOnlyCSR.
-
 void GitrmMesh::copyBdryFacesToSelf() {
   MESHDATA(mesh);
+
+  int bfaceSize = BDRYFACE_SIZE;
   //auto &bdryFacesW = this->bdryFacesW;
   auto &numBdryFaceIds = this->numBdryFaceIds;
   auto &bdryFaceIds = this->bdryFaceIds;
@@ -539,28 +542,27 @@ void GitrmMesh::copyBdryFacesToSelf() {
       //From self bdry
 
       // Function call forces the data passed to be const
-      // p::addFaceToBdryData(bdryFacesW, bdryFaceIds, BDRYFACE_SIZE, SIZE_PER_FACE, 
+      // p::addFaceToBdryData(bdryFacesW, bdryFaceIds, BDRYFACE_SIZE, BDRY_FACE_STORAGE_SIZE_PER_FACE, 
      //  3, fi, fid, elem, face);
-      /*
+      
       //TODO test this
-      for(o::LO i=0; i<3; ++i){
+      /*for(o::LO i=0; i<3; ++i){
         for(o::LO j=0; j<3; j++){
-            bdryFacesW[elem* BDRYFACE_SIZE* (SIZE_PER_FACE-1)  + 
-              fi* (SIZE_PER_FACE-1) + i*3 + j] = face[i][j];
+            bdryFacesW[elem* BDRYFACE_SIZE* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1)  + 
+              fi* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1) + i*3 + j] = face[i][j];
             if(verbose>2)
                 printf("elem_%d FACE %d: %d %d %0.3f  @%d \n" , elem, fid ,i,j, face[i][j],
-                elem* BDRYFACE_SIZE* (SIZE_PER_FACE-1)  +  fi* (SIZE_PER_FACE-1) + i*3 + j); 
+                elem* BDRYFACE_SIZE* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1)  +  fi* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1) + i*3 + j); 
         }
       }
       
       for(int fv=0; fv< 3;++fv){ 
         for(int vc=0; vc< 3;++vc){
           printf( "bdryFacesW: e_%d, fid_%d => %0.4f\n", elem, fid, 
-            bdryFacesW[elem* BDRYFACE_SIZE* (SIZE_PER_FACE-1)  + 
-                fi* (SIZE_PER_FACE-1) + fv*3 + vc]);}}
-     
-      */
-      auto ind = elem* BDRYFACE_SIZE + fi;
+            bdryFacesW[elem* BDRYFACE_SIZE* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1)  + 
+                fi* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1) + fv*3 + vc]);}}
+      */ 
+      auto ind = elem* bfaceSize + fi;
       bdryFaceIds[ind] = fid;
       bdryFaceElemIds[ind] = elem;
 
@@ -570,15 +572,15 @@ void GitrmMesh::copyBdryFacesToSelf() {
       printf( "numBdryFaceIds: e_%d, num_%d \n", elem, numBdryFaceIds[elem]);
 
     //Set neigbhor's flags
-   // p::updateAdjElemFlags(dual_elems, dual_faces, elem, bdryFlags, nbdry);
-    auto dface_ind = dual_elems[elem];
+   // p::updateAdjElemFlags(dual_faces, dual_elems, elem, bdryFlags, nbdry);
+    auto dual_elem_id = dual_faces[elem];
     for(o::LO i=0; i<4-nbdry; ++i){
-      auto adj_elem  = dual_faces[dface_ind];
+      auto adj_elem  = dual_elems[dual_elem_id];
       o::LO val = 1;
       Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
       if(verbose>2)
         printf( "bdryFlags: e_%d : %d ; set_by_%d\n", adj_elem, bdryFlags[adj_elem], elem);
-      ++dface_ind;
+      ++dual_elem_id;
     }
 
   };
@@ -589,6 +591,10 @@ void GitrmMesh::copyBdryFacesToSelf() {
 
 void GitrmMesh::preProcessDistToBdry() {
   MESHDATA(mesh);
+  printf("Distance-to-boundary depth DEPTH_DIST2_BDRY = %f \n", DEPTH_DIST2_BDRY);
+  int bfaceSize = BDRYFACE_SIZE;
+  int interior = INTERIOR;
+  double depth = DEPTH_DIST2_BDRY;
   //auto &bdryFacesW = this->bdryFacesW;
   auto &numBdryFaceIds = this->numBdryFaceIds;
   auto &bdryFaceIds = this->bdryFaceIds;
@@ -630,16 +636,16 @@ void GitrmMesh::preProcessDistToBdry() {
     // One purpose of small functions that use mesh.data is to pre-use 
     // mesh.data as far as possible, i.e. minimize using mesh.data 
     // alongside unavoidable large-data in a loop.
-    o::LO nIn = p::get_face_type_ids_of_elem(elem, down_r2f, 
-                  side_is_exposed, inFids, INTERIOR);
+    o::LO nIn = p::get_face_types_of_tet(elem, down_r2f, 
+                  side_is_exposed, inFids, interior);
     nbf = 4 - nIn;
 
-    auto dface_ind = dual_elems[elem]; //first interior
+    auto dual_elem_id = dual_faces[elem]; //first interior
 
     for(auto fi = 0; fi < nIn; ++fi) {
 
       //Check all adjacent elements
-      auto adj_elem  = dual_faces[dface_ind];
+      auto adj_elem  = dual_elems[dual_elem_id];
 
       //auto fid = inFids[fi];
       //auto fv2v = o::gather_verts<3>(face_verts, fid); //Few<LO, 3>
@@ -653,7 +659,7 @@ void GitrmMesh::preProcessDistToBdry() {
 
       for(o::LO ai=0; ai < sizeAdj; ++ai) {
         bool found = false;
-        auto index = BDRYFACE_SIZE*adj_elem + ai;
+        auto index = bfaceSize*adj_elem + ai;
         auto adj_fid = bdryFaceIds[index];
         auto adj_fElid = bdryFaceElemIds[index];
 
@@ -661,8 +667,8 @@ void GitrmMesh::preProcessDistToBdry() {
           printf("adj_elem_%d, fadj_ %d, of_e_%d : ", adj_elem,  adj_fid, adj_fElid); 
 
         for(auto ii = 0; ii < tot; ++ii){
-          if(verbose >2) printf("   this_fid_ %d ", bdryFaceIds[BDRYFACE_SIZE*elem+ii]);
-          if(adj_fid == bdryFaceIds[BDRYFACE_SIZE*elem+ii]){ 
+          if(verbose >2) printf("   this_fid_ %d ", bdryFaceIds[bfaceSize*elem+ii]);
+          if(adj_fid == bdryFaceIds[bfaceSize*elem+ii]){ 
             if(verbose >2) printf("found %d in current \n", adj_fid);
             found = true;
             break;
@@ -675,28 +681,28 @@ void GitrmMesh::preProcessDistToBdry() {
 
         // In current element
         //TODO test this
-        //o::LO start = adj_elem*BDRYFACE_SIZE*(SIZE_PER_FACE-1) + ai*(SIZE_PER_FACE-1);
+        //o::LO start = adj_elem*BDRYFACE_SIZE*(BDRY_FACE_STORAGE_SIZE_PER_FACE-1) + ai*(BDRY_FACE_STORAGE_SIZE_PER_FACE-1);
         //if(verbose >2) printf("start@%d elem_%d adj_elem_%d ai_%d\n", start, elem, adj_elem, ai);
-        bool add = p::check_if_face_within_dist_to_tet(tet, face_verts, coords, 
-                    adj_fid, DEPTH_DIST2_BDRY);
+        bool add = p::is_face_within_dist_to_tet(tet, face_verts, coords, 
+                    adj_fid, depth);
         if(!add) {
           if(verbose >2) printf("NOT adding \n");
           continue;
         }       
         if(verbose >2) 
           printf("From_%d ADDING.. fid %d of_e_%d\n", adj_elem , adj_fid, adj_fElid);
-        /*
+        
         // This step is not needed. Currently this data is not used
-        auto fv2v = o::gather_verts<3>(face_verts, adj_fid); //Few<LO, 3>
-        const auto face = o::gather_vectors<3, 3>(coords, fv2v);
-        for(o::LO i=0; i<3; ++i){
-          for(o::LO j=0; j<3; j++){
-            bdryFacesW[elem* BDRYFACE_SIZE*(SIZE_PER_FACE-1) 
-              + tot* (SIZE_PER_FACE-1) + i*3 + j] = face[i][j];
-          }
-        }
-        */
-        auto ind = elem* BDRYFACE_SIZE + tot;
+        //auto fv2v = o::gather_verts<3>(face_verts, adj_fid); //Few<LO, 3>
+        //const auto face = o::gather_vectors<3, 3>(coords, fv2v);
+        //for(o::LO i=0; i<3; ++i){
+        //  for(o::LO j=0; j<3; j++){
+        //    bdryFacesW[elem* BDRYFACE_SIZE*(BDRY_FACE_STORAGE_SIZE_PER_FACE-1) 
+        //      + tot* (BDRY_FACE_STORAGE_SIZE_PER_FACE-1) + i*3 + j] = face[i][j];
+        //  }
+        // }
+        
+        auto ind = elem* bfaceSize + tot;
         bdryFaceIds[ind] = adj_fid;
         bdryFaceElemIds[ind] = adj_fElid;
         ++tot;
@@ -708,19 +714,19 @@ void GitrmMesh::preProcessDistToBdry() {
         }
 
       }
-      ++dface_ind;
+      ++dual_elem_id;
     }
     if(tot > existing){ 
       if(verbose >2)  printf("numBdryFaceIds_of_%d = %d\n", elem, tot);
       numBdryFaceIds[elem] =  tot;
 
       // After copying is done
-      auto dface_ind = dual_elems[elem];
+      auto dual_elem_id = dual_faces[elem];
       for(o::LO i=0; i<4-nbf; ++i) {
-        auto adj_elem  = dual_faces[dface_ind];
+        auto adj_elem  = dual_elems[dual_elem_id];
         o::LO val = 1;
         Kokkos::atomic_exchange( &bdryFlags[adj_elem], val);
-        ++dface_ind;
+        ++dual_elem_id;
       }
     }
     if(verbose >2)
@@ -753,10 +759,244 @@ void GitrmMesh::preProcessDistToBdry() {
   convert2ReadOnlyCSR();
 }
 
+int GitrmMesh::makeCSRBdryFacePtrs(o::Write<o::LO>& numBdryFaceIdsInElems,
+  o::Read<o::LO>& bdryFacePtrsBFS) {
+  int debug = 1;
+  auto tot = mesh.nelems(); 
+  o::HostWrite<o::LO>nums(numBdryFaceIdsInElems);
+  o::HostWrite<o::LO> ptrs(tot+1);
+  std::cout << "size of numBdryFaceIdsInElems " << tot << "\n";
+  o::LO sum = 0;
+  for(int i=0; i < tot+1; ++i){
+    ptrs[i] = sum;
+    if(i < tot)
+      sum += nums[i];
+    if(debug && i < tot) printf(" e %d numBdryFaceIds %d \n", i, nums[i]);
+  }
+  bdryFacePtrsBFS = o::LOs(ptrs.write());
+  return sum;
+}
+
+/** @brief Preprocess distance to boundary.
+* Use BFS method to store bdry face ids in elements wich are within required depth.
+* This is a 2-step process. (1) Count # bdry faces (2) collect them.
+* Iterated element-wise since #faces are 4x elements, and most of them 
+* are unexposed.
+*/
+
+void GitrmMesh::preProcessBdryFacesBFS() {
+  o::Write<o::LO> numBdryFaceIdsInElems(mesh.nelems(), 0);
+  preprocessCountBdryFaces(numBdryFaceIdsInElems);
+  // preprocessStoreBdryFaces(numBdryFaceIdsInElems, dummy, 0);  
+  auto csrSize = makeCSRBdryFacePtrs(numBdryFaceIdsInElems, bdryFacePtrsBFS);
+  std::cout << "CSR size "<< csrSize << "\n";
+  int sizePerFace = BDRY_FACE_STORAGE_SIZE_PER_FACE;
+  OMEGA_H_CHECK(csrSize*sizePerFace > 0);
+  o::Write<o::Real> bdryFacesCsrW(csrSize*sizePerFace);
+  preprocessStoreBdryFaces(numBdryFaceIdsInElems, bdryFacesCsrW, bdryFacePtrsBFS, csrSize);
+  bdryFacesCsrBFS = o::Reals(bdryFacesCsrW);
+}
+
+// bdryFacesCsr is kept as o::Real, to optionally store vertices of faces. 
+void GitrmMesh::preprocessCountBdryFaces(o::Write<o::LO>& numBdryFaceIdsInElems) {
+  bool debug = false;
+  MESHDATA(mesh);
+  constexpr int bfsLocalSize = 10000; //DIST2BDRY_BFS_ARRAY_SIZE;
+  const double depth = DEPTH_DIST2_BDRY;
+  auto lambda = OMEGA_H_LAMBDA(o::LO elem) {
+    o::LO bdryFids[4] = {-1, -1, -1, -1};
+    auto nExpFaces = p::get_exposed_faces_of_tet(elem, down_r2f, side_is_exposed, bdryFids);
+    if(!nExpFaces)
+      return;
+
+    int visited[bfsLocalSize];
+    int queue[bfsLocalSize];
+    int nThisBfid = 0;
+    //parent elem is within dist, since the face(s) is(are) part of it
+    queue[0] = elem;
+    visited[0] = elem;
+    int qLen = 1;
+    int qFront = 0;
+    int qBack = 1;
+    int nvis = 1;
+    while(qLen) {
+      //deque
+      auto refElem = queue[qFront];
+      OMEGA_H_CHECK(refElem >= 0);
+      queue[qFront] = -1;
+      --qLen;
+      ++qFront;
+      // process
+      OMEGA_H_CHECK(refElem >= 0);
+      const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, refElem);
+      const auto tet = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+      for(o::LO efi=0; efi < 4 && efi < nExpFaces; ++efi) {
+        auto bfid = bdryFids[efi];
+        // At least one face is within depth, but that info is not stored.
+        // Checking again to filter out unnecessary face.
+        if(debug) printf("\nCheck this elem %d \n", refElem);     //e 407968 face 73176; 409271
+        bool add = p::is_face_within_dist_to_tet(tet, face_verts, coords, 
+                      bfid, depth);
+        if(add) {
+          if(debug && elem ==409271) //face 0 -0.0336643 -0.0681375 -0.0383588
+            printf("  adj-e originElem %d bfid %d refe %d \n",elem, bfid, refElem);
+          Kokkos::atomic_add(&(numBdryFaceIdsInElems[refElem]), 1);
+          ++nThisBfid;
+        }
+      }
+
+      //enque adjacent elements
+      o::LO interiorFids[4] = {-1, -1, -1, -1};
+      auto nIntFaces = p::get_interior_faces_of_tet(refElem, down_r2f, side_is_exposed, interiorFids);
+      //across 1st face, if valid. Otherwise it is not used.
+      auto dual_elem_id = dual_faces[refElem]; // ask_dual().a2ab
+      for(o::LO ifi=0; ifi < 4 && ifi < nIntFaces; ++ifi) {
+        // Adjacent element across this face ifi
+        auto adj_elem  = dual_elems[dual_elem_id];
+
+        bool add = false;
+        for(o::LO efi=0; efi < 4 && efi < nExpFaces; ++efi) {
+          auto faceId = bdryFids[efi];
+          const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, adj_elem);
+          const auto tet = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+          if(p::is_face_within_dist_to_tet(tet, face_verts, coords, faceId, depth))
+            add = true;
+        }
+        if(add) {
+          for(int i=0; i<nvis; ++i)
+            if(adj_elem == visited[i])
+              add = false;
+          if(add) {
+            queue[qBack] = adj_elem;
+            ++qBack;
+            visited[nvis] = adj_elem;
+            ++nvis;
+            ++qLen;
+          }
+        }
+        ++dual_elem_id;
+      } //interior faces
+    } //while
+  };
+  o::parallel_for(nel, lambda, "countBdryFaceIds");
+}
+
+
+// bdryFacesCsr is kept as o::Real, to optionally store vertices of faces. 
+void GitrmMesh::preprocessStoreBdryFaces(o::Write<o::LO>& numBdryFaceIdsInElems,
+  o::Write<o::Real>& bdryFacesCsrW, o::Read<o::LO>& bdryFacePtrsBFS, int csrSize) {
+  MESHDATA(mesh);
+  int debug = 0;
+  if(debug) {
+    o::HostRead<o::LO>bdryFacePtrsBFSHost(bdryFacePtrsBFS);
+    for(int i=0; i<nel; ++i)
+      printf("bdryFacePtrsBFShost %d  %d \n", i, bdryFacePtrsBFSHost[i] );
+  }
+
+  constexpr int bfsLocalSize = 10000; //DIST2BDRY_BFS_ARRAY_SIZE;
+  const double depth = DEPTH_DIST2_BDRY;
+  const int sizePerFace = BDRY_STORAGE_SIZE_PER_FACE; //no auto
+  const int storeFaceVtx = (sizePerFace >=9)? 1 : 0;
+  //auto& bdryFacePtrsBFS = this->bdryFacePtrsBFS;
+  o::Write<o::LO> nextPositions(nel, 0);
+  auto lambda = OMEGA_H_LAMBDA(o::LO elem) {
+    o::LO bdryFids[4] = {-1, -1, -1, -1};
+    auto nExpFaces = p::get_exposed_faces_of_tet(elem, down_r2f, side_is_exposed, bdryFids);
+    if(!nExpFaces)
+      return;
+
+    int visited[bfsLocalSize];
+    int queue[bfsLocalSize];
+
+    //parent elem is within dist, since the face(s) is(are) part of it
+    queue[0] = elem;
+    visited[0] = elem;
+    int qLen = 1;
+    int qFront = 0;
+    int qBack = 1;
+    int nvis = 1;
+    while(qLen) {
+      //deque
+      auto refElem = queue[qFront];
+      OMEGA_H_CHECK(refElem >= 0);
+      queue[qFront] = -1;
+      --qLen;
+      ++qFront;
+      // process
+      OMEGA_H_CHECK(refElem >= 0);
+      const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, refElem);
+      const auto tet = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+      for(o::LO efi=0; efi < 4 && efi < nExpFaces; ++efi) {
+        auto bfid = bdryFids[efi];
+        // At least one face is within depth, but that info is not stored.
+        // Checking again to filter out unnecessary face.
+        bool add = p::is_face_within_dist_to_tet(tet, face_verts, coords, 
+                      bfid, depth);
+        if(add) {
+          auto pos = bdryFacePtrsBFS[refElem];
+          auto fInd = nextPositions[refElem];
+          auto index = (pos+fInd)*sizePerFace;
+          auto nBdryFaces = numBdryFaceIdsInElems[refElem];
+          OMEGA_H_CHECK(fInd <= nBdryFaces);
+          OMEGA_H_CHECK(index >= 0);
+          OMEGA_H_CHECK(index < csrSize);
+          Kokkos::atomic_exchange(&(bdryFacesCsrW[index]), static_cast<o::Real>(bfid));
+          ++index;
+          Kokkos::atomic_add(&(nextPositions[refElem]),1);
+          if(false) { //storeFaceVtx) {
+            //storing elem and bdry face
+            o::LO e = elem;
+            Kokkos::atomic_exchange(&(bdryFacesCsrW[index]), static_cast<o::Real>(e));
+            ++index;
+            double face[9] = {0};
+            p::get_face_coords_of_tet(face_verts, coords, bfid, face);
+            for(o::LO i=0; i<4; ++i)
+              for(o::LO j=0; j<3; ++j) {
+                o::Real val =  face[i*3+j]; 
+                Kokkos::atomic_exchange(&(bdryFacesCsrW[index+i*3+j]), val); 
+              }
+          }
+        } 
+      }
+      //enque adjacent elements
+      o::LO interiorFids[4] = {-1, -1, -1, -1};
+      auto nIntFaces = p::get_interior_faces_of_tet(refElem, down_r2f, side_is_exposed, interiorFids);
+      //across 1st face, if valid. Otherwise it is not used.
+      auto dual_elem_id = dual_faces[refElem]; // ask_dual().a2ab
+      for(o::LO ifi=0; ifi < 4 && ifi < nIntFaces; ++ifi) {
+        // Adjacent element across this face ifi
+        auto adj_elem  = dual_elems[dual_elem_id];
+        bool add = false;
+        for(o::LO efi=0; efi < 4 && efi < nExpFaces; ++efi) {
+          auto faceId = bdryFids[efi];
+          const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, adj_elem);
+          const auto tet = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+          if(p::is_face_within_dist_to_tet(tet, face_verts, coords, faceId, depth))
+            add = true;
+        }
+        if(add) {
+          for(int i=0; i<nvis; ++i)
+            if(adj_elem == visited[i])
+              add = false;
+          if(add) {
+            queue[qBack] = adj_elem;
+            ++qBack;
+            visited[nvis] = adj_elem;
+            ++nvis;
+            ++qLen;
+          }
+        }
+        ++dual_elem_id;
+      } //interior faces
+    } //while
+  };
+  o::parallel_for(nel, lambda, "preprocessBdryIds");
+}
+
 void GitrmMesh::markPiscesCylinderResult(o::Write<o::LO>& beadVals_d) {
   o::HostWrite<o::LO> fIds_h{277, 609, 595, 581, 567, 553, 539, 
     525, 511, 497, 483, 469, 455, 154};
-  o::LOs faceIds(fIds_h);
+  o::LOs faceIds(fIds_h); // auto faceIds = o::Reals(fIds_h);
   auto numFaceIds = faceIds.size();
   OMEGA_H_CHECK(numFaceIds == beadVals_d.size());
   const auto sideIsExposed = o::mark_exposed_sides(&mesh);
@@ -924,7 +1164,7 @@ void GitrmMesh::compareInterpolate2d3d(const o::Reals& data3d,
       pos2d[1] = 0;
       auto val2d = p::interpolate2dField(data2d, x0, z0, dx, 
         dz, nx, nz, pos2d, false, 1,0);
-      if(!p::almost_equal(val2d, val3d, 1.0e-6)) {
+      if(!o::are_close(val2d, val3d, 1.0e-6)) {
         printf("testinterpolate: val2D %g val3D %g pos2D %g %g %g el %d\n"
           "bcc %g %g %g %g\n",
           val2d, val3d, pos2d[0], pos2d[1], pos2d[2], el,
@@ -963,29 +1203,29 @@ void GitrmMesh::preProcessCreateIndexDistToBdry(){
   auto &numBdryFaceIdsAdjs = this->numBdryFaceIdsAdjs;
   auto &totalBdryFacesCsrAdjs = this->totalBdryFacesCsrAdjs;
   auto &bdryFacesCsrW  = this->bdryFacesCsrW;
-  auto &bdryFaceIndsAdjs = this->bdryFaceIndsAdjs;
+  auto &bdryFaceIndsBFSdjs = this->bdryFaceIndsBFSdjs;
 
   OMEGA_H_CHECK(countedAdjs);
 
   //Copy to host
   o::HostRead<o::LO> numBdryFaceIdsAdjsH(numBdryFaceIdsAdjs);
-  o::HostWrite<o::LO> bdryFaceIndsAdjsH(mesh.nelems()+1);
+  o::HostWrite<o::LO> bdryFaceIndsBFSdjsH(mesh.nelems()+1);
   //Num of faces
   o::Int sum = 0;
   o::Int e = 0;
   for(e=0; e < mesh.nelems(); ++e){
-    bdryFaceIndsAdjsH[e] = sum; // * S;
+    bdryFaceIndsBFSdjsH[e] = sum; // * S;
     sum += numBdryFaceIdsAdjsH[e];
   }
   // last entry
-  bdryFaceIndsAdjsH[e] = sum;
+  bdryFaceIndsBFSdjsH[e] = sum;
 
   totalBdryFacesCsrAdjs = sum;
 
   //CSR indices
-  bdryFaceIndsAdjs = o::LOs(bdryFaceIndsAdjsH.write());
+  bdryFaceIndsBFSdjs = o::LOs(bdryFaceIndsBFSdjsH.write());
 
-  bdryFacesCsrW = o::Write<o::Real>(totalBdryFacesCsrAdjs * SIZE_PER_FACE, 0);
+  bdryFacesCsrW = o::Write<o::Real>(totalBdryFacesCsrAdjs * BDRY_FACE_STORAGE_SIZE_PER_FACE, 0);
 }
 
 
@@ -994,16 +1234,16 @@ void GitrmMesh::preProcessFillDataDistToBdry(){
   MESHDATA(mesh);
   
   auto &numBdryFaceIdsAdjs = this->numBdryFaceIdsAdjs;
-  auto &bdryFacesAdjs = this->bdryFacesAdjs;
-  auto &bdryFaceIndsAdjs = this->bdryFaceIndsAdjs;
+  auto &bdryFacesBFSdjs = this->bdryFacesBFSdjs;
+  auto &bdryFaceIndsBFSdjs = this->bdryFaceIndsBFSdjs;
   auto &bdryFacesCsrW = this->bdryFacesCsrW;
 
-  auto S = SIZE_PER_FACE;
+  auto S = BDRY_FACE_STORAGE_SIZE_PER_FACE;
 
   //Copy data
   auto convert = OMEGA_H_LAMBDA(o::LO elem){
-    auto beg = bdryFaceIndsAdjs[elem];
-    auto end = bdryFaceIndsAdjs[elem+1];
+    auto beg = bdryFaceIndsBFSdjs[elem];
+    auto end = bdryFaceIndsBFSdjs[elem+1];
     if(beg == end){
       return;
     }
@@ -1012,37 +1252,32 @@ void GitrmMesh::preProcessFillDataDistToBdry(){
     // Looping over implicit face numbers
     for(o::LO ind = beg; ind < end; ++ind){
       auto faceId = static_cast<o::LO>(bdryFacesCsrW[ind*S]);
-      p::get_face_data_by_id(face_verts, coords, faceId, fdat, 0);
-      for(o::LO j = FSKIP; j < S; ++j){
+      p::get_face_coords_of_tet(face_verts, coords, faceId, fdat, 0);
+      for(o::LO j = BDRY_FACE_STORAGE_IDS; j < S; ++j){
         //bdryFacesCsrW[i*S + j] = bdryFacesW[bfd + j-1]; //TODO check this
-        bdryFacesCsrW[ind*S + j] = fdat[j - FSKIP];
+        bdryFacesCsrW[ind*S + j] = fdat[j - BDRY_FACE_STORAGE_IDS];
       }
     }    
   };
   o::parallel_for(nel, convert, "Convert to CSR write");
-  bdryFacesAdjs = o::Reals(bdryFacesCsrW);
+  bdryFacesBFSdjs = o::Reals(bdryFacesCsrW);
 
 }
 
-*/
-/** @brief Find distance to boundary by a redundant method
-*   Current boundary face's element is taken, and its adjacent elements
-*   are found by region -> face -> region
-*/
-/*
-void GitrmMesh::preProcessSearchDistToBdryAdjs(o::LO step){
+
+void GitrmMesh::preProcessSearchDistToBdryAdj(o::LO step){
   MESHDATA(mesh);
 
   auto &numBdryFaceIdsAdjs = this->numBdryFaceIdsAdjs;
-  auto &bdryFaceIndsAdjs = this->bdryFaceIndsAdjs;
+  auto &bdryFaceIndsBFSdjs = this->bdryFaceIndsBFSdjs;
   auto &bdryFacesCsrW = this->bdryFacesCsrW;
 
   o::Write<o::LO>indexWritten;
 
-  auto S = SIZE_PER_FACE;
+  auto S = BDRY_FACE_STORAGE_SIZE_PER_FACE;
 
-  // Count only
-  if(step==1){
+   / Count only
+  if(seeep==1){
     // initializing to 0 is important
     numBdryFaceIdsAdjs = o::Write<o::LO>(mesh.nelems(), 0);
   }
@@ -1058,7 +1293,7 @@ void GitrmMesh::preProcessSearchDistToBdryAdjs(o::LO step){
   auto run = OMEGA_H_LAMBDA(o::LO elem){
     // Collect bdry faces
     o::LO bdryFids[4];
-    o::LO nbdry = p::get_face_type_ids_of_elem(elem, down_r2f, side_is_exposed, bdryFids, EXPOSED);
+    o::LO nbdry = p::get_face_types_of_tet(elem, down_r2f, side_is_exposed, bdryFids, EXPOSED);
     if(nbdry ==0)
       return;
 
@@ -1090,23 +1325,23 @@ void GitrmMesh::preProcessSearchDistToBdryAdjs(o::LO step){
         o::LO e = bfsElems[current];
 
         // Number of interior faces and its adj. element ids
-        nIn = p::get_face_type_ids_of_elem(e, down_r2f, side_is_exposed, bdryFids, INTERIOR);
+        nIn = p::get_face_types_of_tet(e, down_r2f, side_is_exposed, bdryFids, INTERIOR);
 
         // First interior. All are interior faces, CSR entry is certain 
-        auto dface_ind = dual_elems[e]; 
+        auto dual_elem_id = dual_faces[e]; 
 
         for(auto fi=0; fi < nIn; ++fi){
 
           // Adjacent element across this face fi
-          auto adj_elem  = dual_faces[dface_ind];
-          ++dface_ind;
+          auto adj_elem  = dual_elems[dual_elem_id];
+          ++dual_elem_id;
 
           // Adj. element tet
           const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, adj_elem);
           const auto tet = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
 
           // Any vertex of Tet within depth limit  
-          bool add = p::check_if_face_within_dist_to_tet(tet, face_verts, coords, 
+          bool add = p::is_face_within_dist_to_tet(tet, face_verts, coords, 
                       bfid, DEPTH_DIST2_BDRY);
           if(!add) 
             continue;
@@ -1120,8 +1355,8 @@ void GitrmMesh::preProcessSearchDistToBdryAdjs(o::LO step){
 
             // Current position for writing face ids in this element. This data is not updated in
             // the current call of step=2
-            auto beg = bdryFaceIndsAdjs[e];
-            auto next = bdryFaceIndsAdjs[e+1];
+            auto beg = bdryFaceIndsBFSdjs[e];
+            auto next = bdryFaceIndsBFSdjs[e+1];
 
             //Keep track of index written, v is old value.
             //TODO error o::atomic_fetch_add()
@@ -1162,8 +1397,8 @@ void GitrmMesh::preProcessDistToBdryAdjs(){
 }
 //Add in hpp
   // Adjacency based BFS search, for testing the pre-processing
-  o::Reals bdryFacesAdjs;
-  o::LOs bdryFaceIndsAdjs;
+  o::Reals bdryFacesBFSdjs;
+  o::LOs bdryFaceIndsBFSdjs;
 
   void preProcessDistToBdryAdjs();
   void preProcessSearchDistToBdryAdjs(o::LO);
@@ -1173,5 +1408,4 @@ void GitrmMesh::preProcessDistToBdryAdjs(){
   o::Write<o::Real> bdryFacesCsrW;
   bool countedAdjs = false;
   int totalBdryFacesCsrAdjs = 0;
-
 */

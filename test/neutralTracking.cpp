@@ -296,11 +296,13 @@ int main(int argc, char** argv) {
       dTime, NUM_ITERATIONS, nTHistory);
   assert(numPtcls*dofStepData*nTHistory > 0);
   o::Write<o::Real> ptclsDataAll(numPtcls*dofStepData);
-  o::Write<o::Real> ptclsHitoryData(numPtcls*dofStepData*nTHistory);
+  o::Write<o::LO> lastFilledTimeSteps(numPtcls, 0);
+  o::Write<o::Real> ptclHistoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
  
   if(histInterval >0)
-    updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
+    updatePtclStepData(scs, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
+        dofStepData, iHistStep);
  
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
@@ -335,7 +337,8 @@ int main(int argc, char** argv) {
       //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data); 
       if(iter % histInterval == 0)
         ++iHistStep;  
-      updatePtclStepData(scs, ptclsHitoryData, numPtcls, dofStepData, iHistStep);
+      updatePtclStepData(scs, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
+          dofStepData, iHistStep);
       //if((iter+1)%histInterval == 0)
         //printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
        // dofStepData, true); //last accum
@@ -361,8 +364,8 @@ int main(int argc, char** argv) {
     gm.markPiscesCylinderResult(data_d);
   }
   if(histInterval >0)
-    writePtclStepHistoryNcFile(ptclsHitoryData, numPtcls, dofStepData, 
-      nTHistory, "history.nc");
+    writePtclStepHistoryNcFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+      dofStepData, nTHistory, "history.nc");
   
   Omega_h::vtk::write_parallel("mesh_vtk", mesh, picparts.dim());  
   fprintf(stderr, "done\n");

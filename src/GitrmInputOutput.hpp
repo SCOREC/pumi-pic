@@ -12,7 +12,7 @@ namespace o = Omega_h;
 struct Field3StructInput;
 struct OutputNcFileFieldStruct;
 
-int verifyNetcdfFile(std::string& ncFileName, int nc_err);
+int verifyNetcdfFile(const std::string& ncFileName, int nc_err=1);
 int readParticleSourceNcFile(std::string ncFileName,
   o::HostWrite<o::Real>& data, int& maxNPtcls, int& numPtclsRead, 
   bool replaceNaN=false);
@@ -30,11 +30,13 @@ struct Field3StructInput {
   static constexpr int MAX_SIZE = 3; // add grid data before resizing
   Field3StructInput(std::initializer_list<std::string> compNames_in,
     std::initializer_list<std::string> gridNames_in,
-    std::initializer_list<std::string> nGridNames_in, int nGridRead_in=0) {
+    std::initializer_list<std::string> nGridNames_in, int nGridRead_in=-1,
+    std::initializer_list<std::string> nVarNames_in = {}) {
     compNames = compNames_in;
     gridNames = gridNames_in;
     nGridNames = nGridNames_in;
-    nGridRead = (nGridRead_in ==0) ? gridNames.size(): nGridRead_in;
+    nGridRead = (nGridRead_in < 0) ? gridNames.size(): nGridRead_in;
+    nVarNames = nVarNames_in;
     nComp = compNames.size();
     assert(nComp <= MAX_SIZE);
     assert(gridNames.size() <= MAX_SIZE);
@@ -43,14 +45,18 @@ struct Field3StructInput {
   std::vector<std::string> compNames;
   std::vector<std::string> gridNames;
   std::vector<std::string> nGridNames;
+  std::vector<std::string> nVarNames;
+
   int nComp = 0;
   //Only first nGridRead grids are read out of gridNames_in
   int nGridRead = 0;
   std::vector<int> nGridVec;
+  std::vector<int> nVarVec;
   double getGridDelta(int ind);
   int getNumGrids(int ind);
   double getGridMin(int ind);
   double getGridMax(int ind);
+  int getIntValueOf(std::string name);
   // All grids are doubles; otherwise use template
   // grid data stored per grid, to use in interpolation routine
   o::HostWrite<o::Real> data;

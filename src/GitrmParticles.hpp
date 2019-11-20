@@ -24,15 +24,14 @@ namespace p = pumipic;
 constexpr int PTCL_READIN_DATA_SIZE_PER_PTCL = 6;
 
 // TODO: initialize these to its default values: ids =-1, reals=0
-typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
+typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, Vector3d, 
    int, fp_t, int, fp_t, fp_t> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
+enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_VEL_PREV, PTCL_EFIELD, PTCL_CHARGE,
   PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, PTCL_PREV_RECOMBINE};
 
 typedef SellCSigma<Particle> SCS;
-struct PtclSourceStruct;
 
 class GitrmParticles {
 public:
@@ -90,42 +89,36 @@ public:
   // wall collision; changed to per ptcl from per pid
   o::Write<o::Real> collisionPoints;
   o::Write<o::LO> collisionPointFaceIds;
-  o::Reals gitrPtclStepData;
+
+  // test GITR step data
+  o::Reals testGitrPtclStepData;
+  int testGitrStepDataEfieldInd = -1;
+  int testGitrStepDataPositionInd = -1;
+  int testGitrStepDataIoniInd = -1;
+  int testGitrStepDataRecombInd = -1;
+  int testGitrStepDataChargeInd = -1;
+  int testGitrStepDataDof = -1;
+  int testGitrStepDataNumTsteps = -1;
+  int testGitrStepDataNumPtcls = -1;
+  int testGitrStepDataIoniRateInd = -1;
+  int testGitrStepDataRecombRateInd = -1;
 };
 
-enum class GitrCompareDataEnum: int {d2bdryInd, ioniInd, recombInd, dof};
-
+//timestep +1
+extern int iTimePlusOne;
+// TODO move to class, data is kept as members  
 void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData,
-  int iter, int dof, int histStep=1); //o::Write<o::Real>& data, 
+  o::Write<o::LO>& lastFilledTimeSteps, int nP, int dof, int histStep=1); 
 
 void printPtclSource(o::Reals& data, int nPtcls, int nPtclsRead);
 
 void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
-  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::Real>& data,
-  int dof=8, bool accum = false);
+  int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::LO>& lastFilledTimeSteps, 
+  o::Write<o::Real>& data, int dof=8, bool accum = false);
 
-void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
-  int dof, int nTHistory, std::string outNcFileName);
-
-void processPtclInitTextFile(const std::string &fName,
-    o::HostWrite<o::Real> &data, PtclSourceStruct &ps, o::LO& numPtcls);
-
-struct PtclSourceStruct {
-  PtclSourceStruct(std::string n, std::string np, std::string x, std::string y,
-    std::string z,std::string vx, std::string vy, std::string vz):
-    name(n), nPname(np), xName(x), yName(y), zName(z), 
-    vxName(vx), vyName(vy), vzName(vz) {}
-  std::string name;
-  std::string nPname;// "nP"
-  std::string xName;
-  std::string yName;
-  std::string zName;
-  std::string vxName;
-  std::string vyName;
-  std::string vzName;
-  int nComp = 6;  //pos, vel
-  int nP = 0;
-};
+void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, 
+  o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, 
+  int nTHistory, std::string outNcFileName);
 
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
@@ -256,12 +249,12 @@ inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHisto
 } 
 
 /** @brief Calculate distance of particles to domain boundary 
- * TODO add description of data size of bdryFac       es, bdryFaceInds and indexes
  */
 inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
-  const GitrmMesh &gm, bool debug = false) {
-  //o::Mesh &mesh,  const o::Reals &bdryFaces, const o::LOs &bdryFaceInds, 
-  //const o::LO fsize, const o::LO fskip, bool debug = false) {
+  const GitrmMesh &gm, int debug=0) {
+
+  int tstep = iTimePlusOne;
+
   auto* scs = gp.scs;
   o::Mesh& mesh = gm.mesh;  
   const auto nel = mesh.nelems();
@@ -271,51 +264,51 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const o::Reals& bdryFaces = gm.bdryFaces;
   const o::LOs& bdryFaceInds = gm.bdryFaceInds;
   const auto scsCapacity = scs->capacity();
+  // replace with array of size numPtcls ?
+  // NOTE: use pid to set and access these arrays 
   o::Write<o::Real> closestPoints(scsCapacity*3, 0, "closest_points");
   o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
-  o::LO fsize = SIZE_PER_FACE;
-  o::LO fskip = FSKIP;
+  int fsize = BDRY_FACE_STORAGE_SIZE_PER_FACE;
+  int fskip = BDRY_FACE_STORAGE_IDS;
   //fskip is 2, since 1st 2 are not part of face vertices
   OMEGA_H_CHECK((fsize > 0) && (nel >0));
-  auto pos_d = scs->template get<PTCL_NEXT_POS>();
-
-  auto distRun = SCS_LAMBDA(const int &elem, const int &pid,
-                                const int &mask){ 
+  auto pos_d = scs->get<PTCL_POS>();
+  auto pid_scs = scs->get<PTCL_ID>();
+  auto distRun = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if (mask > 0) {
-      o::LO beg = bdryFaceInds[elem];
-      o::LO nFaces = bdryFaceInds[elem+1] - beg;
+      auto beg = bdryFaceInds[elem];
+      auto nFaces = bdryFaceInds[elem+1] - beg;
       if(nFaces >0) {
+        auto ptcl = pid_scs(pid);
         o::Real dist = 0;
-        o::Real min = 1.0e10;
+        o::Real min = 1.0e+10;
         o::Matrix<3, 3> face;
         auto point = o::zero_vector<3>();
         auto pt = o::zero_vector<3>();
-        o::LO fe, fel, fi, fid, minRegion;
-        fe = fi = fel = fid = minRegion = -1;
+        o::Int fe = -1, fel = -1, fi = -1, fid = -1, minRegion = -1;
         if(debug && pid<1)
           printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
             bdryFaceInds[elem+1]);
-
+        auto ref = p::makeVector3(pid, pos_d);
+        if(debug)
+          printf("pos: %d %g %g %g \n", pid, ref[0], ref[1], ref[2]);
+        
         for(o::LO ii = 0; ii < nFaces; ++ii) {
-          // TODO put in a function
-          o::LO ind = (beg + ii)*fsize;
+          auto ind = (beg + ii)*fsize;
           // fskip=2 for faceId, elId
           OMEGA_H_CHECK(fskip ==2);
           fi = static_cast<o::LO>(bdryFaces[ind]);
           fe = static_cast<o::LO>(bdryFaces[ind + 1]);
           for(o::LO i=0; i<3; ++i) { //Tet vertexes
             for(o::LO j=0; j<3; ++j) { //coords
-              face[i][j] = bdryFaces[ind + i*3 + j + fskip];
+              face[i][j] = bdryFaces[ind+fskip + i*3 + j];
             }
           }
-          auto ref = p::makeVector3(pid, pos_d);
-          if(debug && ii == 0)
-            printf("pos: %d %g %g %g \n", pid, ref[0], ref[1], ref[2]);
           //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
-          o::LO region = p::find_closest_point_on_triangle(face, ref, pt); 
+          auto region = p::find_closest_point_on_triangle(face, ref, pt); 
           dist = p::osh_dot(pt - ref, pt - ref);
-          dist = sqrt(dist); // use square ?
-          if(debug) {
+          dist = sqrt(dist);
+          if(debug > 1) {
             printf(": dist_%g e_%d reg_%d fe_%d \n", dist, elem, region, fe);
             p::print_osh_vector(pt, "closest_pt");
           }
@@ -327,7 +320,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
             for(int i=0; i<3; ++i)
               point[i] = pt[i];
 
-            if(debug){
+            if(debug > 1){
               printf("update:: e_%d dist_%g region_%d fi_%d fe_%d\n", 
                 elem, min, region, fi, fe);
               p::print_osh_vector(point, "this_nearest_pt");
@@ -336,8 +329,9 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
         } //for
 
         if(debug) {
-          printf("dist: el=%d MINdist=%g fid=%d face_el=%d reg=%d\n", 
-            elem, min, fid, fel, minRegion);
+          printf("dist: tstep %d el %d MINdist %g fid %d face_el %d reg %d "
+            " pos %g %g %g nearest_pt %g %g %g \n", 
+            tstep, elem, min, fid, fel, minRegion, ref[0], ref[1], ref[2], pt[0], pt[1], pt[2]);
           p::print_osh_vector(point, "Nearest_pt");
 
         }

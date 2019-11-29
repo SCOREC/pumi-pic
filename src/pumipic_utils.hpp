@@ -150,15 +150,40 @@ OMEGA_H_DEVICE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b
   return true;
 }
 
-OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<DIM> &va,
-     const Omega_h::Vector<DIM> &vb) {
-  for(Omega_h::LO i=0; i<DIM; ++i) {
+OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<3> &va,
+     const Omega_h::Vector<3> &vb) {
+  for(Omega_h::LO i=0; i<3; ++i) {
     if((va.data()[i] < 0 && vb.data()[i] > 0) ||
        (va.data()[i] > 0 && vb.data()[i] < 0)) {
       return false;
     }
   }
   return true;
+}
+
+OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
+  const o::Vector<3> v2) {
+  o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
+  return acos(cos);
+}
+
+OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
+  const o::LOs &mesh2verts,  const o::Reals &coords) {
+  o::Vector<3> pos;
+  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+  auto M = o::gather_vectors<4, 3>(coords, tetv2v);
+  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
+  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
+  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
+  return pos;
+}
+
+OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
+  const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
+  r = sqrt(x*x + y*y + z*z);
+  OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));
+  theta = atan(y/x);
+  phi = acos(z/r);
 }
 
 template< o::LO N>
@@ -266,10 +291,6 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
     fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*nComp + comp] + 
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
-//printf("interp-data-inds:  %d  %g %d %g  %d %g %d %g  \n", (i+j*nx)*nComp + comp, data[(i+j*nx)*nComp + comp],
-//    (i+1+j*nx)*nComp + comp, data[(i+1+j*nx)*nComp + comp],
-//    (i+(j+1)*nx)*nComp + comp,data[(i+(j+1)*nx)*nComp + comp],
-//    (i+1+(j+1)*nx)*nComp + comp, data[(i+1+(j+1)*nx)*nComp + comp]);
   }
 
   if(debug)
@@ -314,15 +335,11 @@ OMEGA_H_DEVICE o::Vector<3> face_centroid_of_tet(const o::LO fid,
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
   //TODO check if y and z are in required order
-
-  // Mid point of face, as in GITR.  0.666666667 may be for float
+  // Mid point of face, as in GITR.  0.666666667 -> 2/3
   o::Vector<3> pos;
-  pos[0] = abc[0][0] + 0.666666667*(abc[1][0] + 
-    0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
-  pos[1] = abc[0][1] + 0.666666667*(abc[1][1] + 
-    0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
-  pos[2] = abc[0][2] + 0.666666667*(abc[1][2] + 
-    0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
+  pos[0] = abc[0][0] + 2.0/3.0*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
+  pos[1] = abc[0][1] + 2.0/3.0*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
+  pos[2] = abc[0][2] + 2.0/3.0*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
   return pos;
 }
 
@@ -343,7 +360,7 @@ OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v,
   return flip;       
 }
 
-//face normal can point to either way
+//face normal can point either way
 OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmId,
   const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
   const o::LOs &elem2faces) {
@@ -351,7 +368,6 @@ OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmI
   const auto fv2v = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, fv2v);
   const auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
-
   o::LO findex = -1;
   o::LO find = 0;
   for(auto iface = elmId *4; iface < elmId *4 +4; ++iface) {
@@ -366,10 +382,10 @@ OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmI
     printf("face_normal_of_tet:getFaceMap:: faceid not found");
     OMEGA_H_CHECK(false);
   }
-  o::Vector<3> a = abc[0];
-  o::Vector<3> b = abc[1];
-  o::Vector<3> c = abc[2];
-  o::Vector<3> fnorm = o::cross(b - a, c - a);
+  auto a = abc[0];
+  auto b = abc[1];
+  auto c = abc[2];
+  auto fnorm = o::cross(b - a, c - a);
   if(isFaceFlipped(findex, fv2v, tetv2v))
     fnorm = -1*fnorm;
   return o::normalize(fnorm);
@@ -389,40 +405,152 @@ OMEGA_H_DEVICE o::Vector<3> bdry_face_normal_of_tet(const o::LO fid,
   return o::normalize(fnorm);
 }
 
-OMEGA_H_DEVICE o::LO elem_of_bdry_face(const o::LO fid, const o::LOs &f2r_ptr,
-  const o::LOs &f2r_elem) { 
+OMEGA_H_DEVICE o::LO elem_id_of_bdry_face_of_tet(const o::LO fid, 
+  const o::LOs &f2r_ptr, const o::LOs &f2r_elem) { 
   //bdry
   OMEGA_H_CHECK(f2r_ptr[fid+1] - f2r_ptr[fid] == 1);
   auto ind = f2r_ptr[fid];
   return f2r_elem[ind];
 }
 
-OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
-  const o::Vector<3> v2) {
-  o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
-  return acos(cos);
+//retrieve face coords in the Omega_h order
+OMEGA_H_DEVICE void get_face_from_face_index_of_tet(const Omega_h::Matrix<3, 4> &M,
+  const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<3>, 3> &abc) {
+  //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
+  OMEGA_H_CHECK((iface<4) && (iface>=0));
+  abc[0] = M[Omega_h::simplex_down_template(3, 2, iface, 0)];
+  abc[1] = M[Omega_h::simplex_down_template(3, 2, iface, 1)];
+  abc[2] = M[Omega_h::simplex_down_template(3, 2, iface, 2)];
 }
 
-OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
-  const o::LOs &mesh2verts,  const o::Reals &coords) {
-  o::Vector<3> pos;
+// WARNING: this doesn't give vertex ordering right, so surface normal may be wrong
+OMEGA_H_DEVICE o::Matrix<3, 3> get_face_coords_of_tet(const o::LOs& mesh2verts, 
+  const o::Reals& coords, o::LO elem, o::LO findex) {
+  o::Matrix<3, 3> face;
   auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-  auto M = o::gather_vectors<4, 3>(coords, tetv2v);
-  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
-  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
-  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
-  return pos;
+  auto tet = o::gather_vectors<4, 3>(coords, tetv2v);
+  get_face_from_face_index_of_tet(tet, findex, face);
+  return face;
 }
 
-//TODO modify for cylindrical symmetry 
-OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
-  const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
-  r = sqrt(x*x + y*y + z*z);
-  OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));
-  theta = atan(y/x);
-  phi = acos(z/r);
+//TODO replace use of this by the version using Matrix instead of flat array
+OMEGA_H_DEVICE void get_face_coords_of_tet(const o::LOs &face_verts, 
+  const o::Reals &coords, const o::LO face_id, o::Real (&fdat)[9]) {
+  auto fv2v = o::gather_verts<3>(face_verts, face_id);
+  const auto face = o::gather_vectors<3, 3>(coords, fv2v);
+  for(auto i=0; i<3; ++i)
+    for(auto j=0; j<3; ++j)
+      fdat[i*3+j] = face[i][j];
 }
 
+OMEGA_H_DEVICE o::Matrix<3,3> get_face_coords_of_tet(const o::LOs &face_verts, 
+  const o::Reals &coords, const o::LO face_id) {
+  const auto fv2v = o::gather_verts<3>(face_verts, face_id);
+  return o::gather_vectors<3, 3>(coords, fv2v);
+}
+
+OMEGA_H_DEVICE o::LO is_face_within_limit_from_tet(const o::Matrix<3, 4>& tet, 
+  const Omega_h::LOs& face_verts, const Omega_h::Reals& coords, const o::LO face_id,
+  const o::Real depth) {
+  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
+  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
+  o::LO res = 0;
+  for(o::LO i=0; i<3; ++i) { //3 vtx of face
+    for(o::LO j=0; j<4; ++j) { //4 vtx of tet
+      auto dv = face[i] - tet[j];
+      auto d2 = o::norm(dv);
+      if(d2 <= depth) {
+        res = 1;
+        break;
+      }
+      if(res)
+        break;
+    }
+  }
+  return res;
+}
+
+OMEGA_H_DEVICE o::LO is_tet_within_limit_from_tet(const o::Matrix<3, 4>& tet1, 
+  const o::Matrix<3, 4>& tet2, const o::Real depth) {
+  o::LO res = 0;
+  for(o::LO i=0; i<4; ++i) {
+    for(o::LO j=0; j<4; ++j) {
+      auto dv = tet1[i] - tet2[j];
+      auto d2 = o::norm(dv);
+      if(d2 <= depth) {
+        res = 1;
+        break;
+      }
+      if(res)
+        break;
+    }
+  }
+  return res;
+}
+
+OMEGA_H_DEVICE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<3>, 3> &abc,
+  const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<3>, 2> &ab) {
+  //edge_vert:0,1; 1,2; 2,0
+  ab[0] = abc[Omega_h::simplex_down_template(2, 1, iedge, 0)];
+  ab[1] = abc[Omega_h::simplex_down_template(2, 1, iedge, 1)];
+}
+
+// WARNING: check vertex ordering right, so surface normal may be wrong
+OMEGA_H_DEVICE void check_face(const Omega_h::Matrix<3, 4> &M,
+  const Omega_h::Few<Omega_h::Vector<3>, 3>& face, const Omega_h::LO faceid) {
+  Omega_h::Few<Omega_h::Vector<3>, 3> abc;
+  get_face_from_face_index_of_tet( M, faceid, abc);
+  OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), 3)); //a
+  OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), 3)); //b
+  OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), 3)); //c
+}
+
+// TODO delete this
+// type =1 for  interior, 2=bdry
+OMEGA_H_DEVICE o::LO get_face_types_of_tet(const o::LO elem, 
+  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
+  o::LO (&fids)[4], const o::LO type) {
+  o::LO nf = 0;
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
+    const auto fid = down_r2f[fi];
+    if( (type==1 && !side_is_exposed[fid]) ||
+        (type==2 &&  side_is_exposed[fid]) ) {
+      fids[nf] = fid;
+      ++nf;
+    }
+  }
+  return nf;
+}
+
+OMEGA_H_DEVICE o::LO get_exposed_faces_of_tet(const o::LO elem, 
+  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
+  o::LO (&fids)[4]) {
+  o::LO nf = 0;
+  fids[0] = fids[1] = fids[2] = fids[3] = -1;
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
+    const auto fid = down_r2f[fi];
+    if(side_is_exposed[fid]) {
+      fids[nf] = fid;
+      ++nf;
+    }
+  }
+  return nf;
+}
+
+OMEGA_H_DEVICE o::LO get_interior_faces_of_tet(const o::LO elem, 
+  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
+  o::LO (&fids)[4]) {
+  o::LO nf = 0;
+  fids[0] = fids[1] = fids[2] = fids[3] = -1;
+  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
+    const auto fid = down_r2f[fi];
+    if(!side_is_exposed[fid]) {
+      fids[nf] = fid;
+      ++nf;
+    }
+  }
+  return nf;
+}
 } //namespace
 #endif
 

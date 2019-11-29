@@ -41,7 +41,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   const o::Real gridD0, const o::Real dT, const o::Real dD, 
   const o::LO nT,  const o::LO nD, o::LO charge) {
 
-  int debug = 1;
+  int debug = 0;
   o::LO indT = floor( (log10(tem) - gridT0)/dT );
   //o::LO indT = floor( (tem - gridT0)/dT );
   o::LO indN = floor( (log10(dens) - gridD0)/dD );
@@ -187,20 +187,20 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
           dzDens, nxDens, nzDens, pos, cylSymm, 1,0,debug);
         auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
           dzTemp, nxTemp, nzTemp, pos, cylSymm, 1,0,debug);
-
+        
         if(debug)
           printf("Ionization point: ptcl %d dens2D %g temp2D %g tlocal %g nlocal %g "
             " pos %g %g %g nxTemp %d nzTemp %d\n", 
             ptcl, dens, temp, tlocal, nlocal, pos[0], pos[1], pos[2], nxTemp, nzTemp);
         nlocal = dens;
         tlocal = temp;
-      }
+      } 
       o::Real rateIon = interpolateRateCoeff(iRates, gridTemp, gridDens, tlocal, 
         nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
 
       o::Real P1 = 1.0 - exp(-dt/rateIon);
       double randn = 0; //rands[pid];
-
+      
       double rateGitr = 0;
       double randGitr = 0;
       double randThis = randn;
@@ -209,19 +209,20 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testGIind];
         randn = randGitr;        
       }
+      
       auto xfid = xfaces_d[ptcl];
       auto first_iz = first_ionizeZ_scs(pid);
       if(xfid < 0) {
         if(randn <= P1)
           charge_scs(pid) = charge+1;
-        prev_ionize_scs(pid) = 1;
+      }  prev_ionize_scs(pid) = 1;
         // Z=0 unitialized or specific z(height) value ? question
-        if(o::are_close(first_iz, 0))
+      if(o::are_close(first_iz, 0)) {
           first_ionizeZ_scs(pid) = pos[2]; // z
       } else if(o::are_close(first_iz, 0)) {
         auto fit = first_ionizeT_scs(pid);
         first_ionizeT_scs(pid) = fit + dt;
-      }
+      } 
       
       int chargeGitr = 0;
       if(compareWithGitr && debug) {
@@ -236,6 +237,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
       if(debug)
         printf("ionizable %d ptcl %d charge %d randn %g P1 %g rateIon %g dt %g\n",
           xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, dt);
+      
     } //mask 
   };
   scs->parallel_for(lambda);

@@ -113,7 +113,7 @@ int readParticleSourceNcFile(std::string ncFileName,
 
 //Reads from 0 to 3 grids having gridNames; .
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs) {
+  Field3StructInput& fs, bool debug) {
   int maxNPtcls = 0;
   int numPtclsRead = 0;
   return readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead);
@@ -121,7 +121,8 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
 
 // maxNPtcls updated if > that in file. TODO read only maxNPtcls
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, std::string nPstr) {
+  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, 
+  std::string nPstr, bool debug) {
   int ncSizePerComp = 1;
   assert(!verifyNetcdfFile(ncFileName));
 
@@ -138,11 +139,12 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         //  numPtclsRead = maxNPtcls; //TODO enable it below
         numPtclsRead = size;
       }
-
-      std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " << fs.nGridVec[i] << "\n";
+      if(debug)
+        std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " << fs.nGridVec[i] << "\n";
       ncSizePerComp *= fs.nGridVec[i];
-    }    
-    std::cout << " ncSizePerComp: " << ncSizePerComp << " nComp " << fs.nComp << "\n";
+    }   
+    if(debug) 
+      std::cout << " ncSizePerComp: " << ncSizePerComp << " nComp " << fs.nComp << "\n";
 
     fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
     for(int i=0; i<fs.nGridRead && i<fs.gridNames.size(); ++i) {
@@ -150,14 +152,16 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       if(i==0) {
         fs.grid1 = o::HostWrite<o::Real>(fs.nGridVec[0]);
         ncvar.getVar(&(fs.grid1[0]));
-
-        printf("\n read: size %d %s %g %g ...\n", fs.nGridVec[0], fs.gridNames[i].c_str(), fs.grid1[0], fs.grid1[1]);
+        if(debug)
+          printf("  read: size %d %s %g %g ...\n", fs.nGridVec[0], 
+              fs.gridNames[i].c_str(), fs.grid1[0], fs.grid1[1]);
       }
       if(i==1) {
         fs.grid2 = o::HostWrite<o::Real>(fs.nGridVec[1]);
         ncvar.getVar(&(fs.grid2[0]));
-
-        printf("\n read: size %d %s %g %g ...\n", fs.nGridVec[1], fs.gridNames[i].c_str(), fs.grid2[0], fs.grid2[1]);
+        if(debug)
+          printf("  read: size %d %s %g %g ...\n", fs.nGridVec[1], 
+              fs.gridNames[i].c_str(), fs.grid2[0], fs.grid2[1]);
       }
       if(i==2) {
         fs.grid3 = o::HostWrite<o::Real>(fs.nGridVec[2]);
@@ -167,18 +171,20 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     // TODO use maxNPtcls and numPtclsRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
-      std::cout << "getVar " << fs.compNames[i] << "\n";
+      if(debug)
+        std::cout << "getVar " << fs.compNames[i] << "\n";
       ncvar.getVar(&(fs.data[i*ncSizePerComp]));
     }
-    std::cout << " data[0] " <<  (fs.data)[0] << "\n";
+    if(debug)
+      std::cout << " data[0] " <<  (fs.data)[0] << "\n";
   
     for(int i=0; i< fs.nVarNames.size(); ++i) {
       netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
       auto size = ncVarName.getSize();
       fs.nVarVec.push_back(size);
     }
-
-    std::cout << " Done reading " << ncFileName << "\n\n";
+    if(debug)
+      std::cout << " Done reading " << ncFileName << "\n\n";
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
     return 1;

@@ -36,43 +36,6 @@ namespace pumipic
             \ | /
               1
 */
-//retrieve face coords in the Omega_h order
-OMEGA_H_DEVICE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
-  const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc) {
-  //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
-  OMEGA_H_CHECK((iface<4) && (iface>=0));
-  abc[0] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 0)];
-  abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
-  abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
-}
-
-OMEGA_H_DEVICE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-  const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<DIM>, 2> &ab) {
-  //edge_vert:0,1; 1,2; 2,0
-  ab[0] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 0)];
-  ab[1] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 1)];
-}
-
-
-// WARNING: this doesn't give vertex ordering right, so surface normal may be wrong
-OMEGA_H_DEVICE o::Matrix<3, 3> get_face_of_tet(const o::LOs& mesh2verts, 
-  const o::Reals& coords, o::LO elem, o::LO findex) {
-  o::Matrix<3, 3> face;
-  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-  auto tet = o::gather_vectors<4, 3>(coords, tetv2v);
-  get_face_coords(tet, findex, face);
-  return face;
-}
-
-// WARNING: check vertex ordering right, so surface normal may be wrong
-OMEGA_H_DEVICE void check_face(const Omega_h::Matrix<DIM, 4> &M,
-  const Omega_h::Few<Omega_h::Vector<DIM>, 3>& face, const Omega_h::LO faceid) {
-  Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
-  get_face_coords( M, faceid, abc);
-  OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), DIM)); //a
-  OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), DIM)); //b
-  OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
-}
 
 #define TriVerts 3
 #define TriDim 2
@@ -110,14 +73,14 @@ OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
   for(Omega_h::LO iface=0; iface<4; ++iface) {
-    get_face_coords(Mat, iface, abc);
+    get_face_from_face_index_of_tet(Mat, iface, abc);
     auto vab = abc[1] - abc[0]; //b - a;
     auto vac = abc[2] - abc[0]; //c - a;
     auto vap = pos - abc[0]; // p - a;
     vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab
   }
   //volume using bottom face=0
-  get_face_coords(Mat, 0, abc);
+  get_face_from_face_index_of_tet(Mat, 0, abc);
   auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
   OMEGA_H_CHECK(3 == vtx3);
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
@@ -295,7 +258,6 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const auto rank_d = rank;
 
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_omegah");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -956,84 +918,6 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
   return region;
 }
 
-// TODO delete this
-// type =1 for  interior, 2=bdry
-OMEGA_H_DEVICE o::LO get_face_types_of_tet(const o::LO elem, 
-  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
-  o::LO (&fids)[4], const o::LO type) {
-  o::LO nf = 0;
-  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
-    const auto fid = down_r2f[fi];
-    if( (type==1 && !side_is_exposed[fid]) ||
-        (type==2 &&  side_is_exposed[fid]) ) {
-      fids[nf] = fid;
-      ++nf;
-    }
-  }
-  return nf;
-}
-
-OMEGA_H_DEVICE o::LO get_exposed_faces_of_tet(const o::LO elem, 
-  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
-  o::LO (&fids)[4]) {
-  o::LO nf = 0;
-  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
-    const auto fid = down_r2f[fi];
-    if(side_is_exposed[fid]) {
-      fids[nf] = fid;
-      ++nf;
-    }
-  }
-  return nf;
-}
-
-
-OMEGA_H_DEVICE o::LO get_interior_faces_of_tet(const o::LO elem, 
-  const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
-  o::LO (&fids)[4]) {
-  o::LO nf = 0;
-  for(o::LO fi = elem *4; fi < (elem+1)*4; ++fi){
-    const auto fid = down_r2f[fi];
-    if(!side_is_exposed[fid]) {
-      fids[nf] = fid;
-      ++nf;
-    }
-  }
-  return nf;
-}
-
-OMEGA_H_DEVICE void get_face_coords_of_tet(const Omega_h::LOs &face_verts, 
-  const Omega_h::Reals &coords, const o::LO face_id, o::Real (&fdat)[9]) {
-  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id);
-  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
-  for(auto i=0; i<3; ++i)
-    for(auto j=0; j<3; ++j)
-      fdat[i*3+j] = face[i][j];
-}
-
-OMEGA_H_DEVICE bool is_face_within_dist_to_tet(const o::Matrix<DIM, 4>& tet, 
-  const Omega_h::LOs& face_verts, const Omega_h::Reals& coords, const o::LO face_id,
-  const o::Real depth = 0.001) {
-  auto fv2v = Omega_h::gather_verts<3>(face_verts, face_id); //Few<LO, 3>
-  const auto face = Omega_h::gather_vectors<3, 3>(coords, fv2v);
-  for(o::LO i=0; i<3; ++i) { //3 vtx of face
-    for(o::LO j=0; j<4; ++j) { //4 vtx of tet
-      auto dv = face[i] - tet[j];
-      
-if(0 && face_id == 262387) {
-  //printf("\tface %d %g %g %g  \n", i, face[i][0], face[i][1], face[i][2]);
-  printf("\tTet %d %g %g %g  \n", j, tet[j][0], tet[j][1], tet[j][2]);
-  printf("\tface-tet %g %g %g mag %g \n", dv[0], dv[1], dv[2], sqrt(dv[0]*dv[0]+dv[1]*dv[1]+dv[2]*dv[2]));
-}
-      o::Real d2 = o::norm(dv);
-      if(d2 <= depth) {
-        if(0 && face_id == 262387)printf("depth %g dist %.8f\n", depth, d2);
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 template < class ParticleType>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh

@@ -519,7 +519,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
         const auto face_id = down_r2fs[iface];
 
         o::Vector<3> xpoint = o::zero_vector<3>();
-        const auto face = p::get_face_of_tet(mesh2verts, coords, elem, fIndex);
+        const auto face = p::get_face_coords_of_tet(mesh2verts, coords, elem, fIndex);
         o::Real dproj = 0;
         bool detected = p::line_triangle_intx_simple(face, orig, dest, xpoint, dproj);
         if(debug > 4) {

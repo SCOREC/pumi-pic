@@ -243,7 +243,7 @@ void test_line_tri_intx()
 
   for(int i=0; i<4; ++i)
   {
-    g::get_face_coords( M, i, face);
+    g::get_face_from_face_index_of_tet( M, i, face);
     Omega_h::Real dp = 0;
     bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, dp);
     if(res)

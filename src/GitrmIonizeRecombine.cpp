@@ -18,7 +18,7 @@ void GitrmIonizeRecombine::initIonizeRecombRateData( const std::string &fName, i
     "gridChargeState_Ionization"}, {"n_Temperatures_Ionize", 
     "n_Densities_Ionize", "n_ChargeStates_Ionize"}, 2);
   
-  readInputDataNcFileFS3(fName, ioni);
+  readInputDataNcFileFS3(fName, ioni, debug);
 
   //processFieldFileFS3(fName, ioni, debug);
   ionizeTempGridMin = ioni.getGridMin(0);
@@ -46,7 +46,7 @@ void GitrmIonizeRecombine::initIonizeRecombRateData( const std::string &fName, i
     "gridChargeState_Recombination"}, {"n_Temperatures_Recombine",
     "n_Densities_Recombine", "n_ChargeStates_Recombine"}, 2);
   //processFieldFileFS3(fName, rec, debug);
-  readInputDataNcFileFS3(fName, rec);
+  readInputDataNcFileFS3(fName, rec, debug);
 
   recombTempGridMin = rec.getGridMin(0);
   recombDensGridMin = rec.getGridMin(1);

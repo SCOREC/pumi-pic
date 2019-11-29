@@ -86,8 +86,8 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("updateGitrmData");
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(scs, gir, gp, gm, elem_ids, true);
-    gitrm_recombine(scs, gir, gp, gm, elem_ids, true);
+    gitrm_ionize(scs, gir, gp, gm, elem_ids, false);
+    gitrm_recombine(scs, gir, gp, gm, elem_ids, false);
   }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
   }
   bool piscesRun = true; // add as argument later
   bool chargedTracking = true; //false for neutral tracking
-  bool debug = true;
+  bool debug = false;
 
   auto deviceCount = 0;
   cudaGetDeviceCount(&deviceCount);
@@ -240,11 +240,10 @@ int main(int argc, char** argv) {
     printf("Initializing Particles\n");
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
 
-  int compare_with_gitr = 0;
+  int compare_with_gitr = COMPARE_WITH_GITR;
   int testNumPtcls = 1;
   int testNumPtclsRead = 0;
   if(compare_with_gitr) {
-    assert(COMPARE_WITH_GITR == 1);
     gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testNumPtclsRead);
   }
   auto* scs = gp.scs;
@@ -266,9 +265,9 @@ int main(int argc, char** argv) {
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces(false);
   printf("Preprocessing Distance to boundary of %g \n", DEPTH_DIST2_BDRY);
-  // Add bdry faces to elements within 1mm
-  //gm.preProcessDistToBdry();
+  // Add bdry faces to elements within depth
   gm.preProcessBdryFacesBFS();
+  gm.writeDist2BdryFacesData();
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
 
@@ -311,10 +310,9 @@ int main(int argc, char** argv) {
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {
-      fprintf(stderr, "Finding distances to boundaries\n");
       gitrm_findDistanceToBdry(gp, gm, 0);
-      gitrm_calculateE(gp, *mesh, true);//debug);
-      gitrm_borisMove(scs, gm, dTime, true);
+      gitrm_calculateE(gp, *mesh, false);
+      gitrm_borisMove(scs, gm, dTime, false);
     }
     else
       neutralBorisMove(scs,dTime);
@@ -354,7 +352,7 @@ int main(int argc, char** argv) {
     writePtclStepHistoryNcFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }
-
+  
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
 
   fprintf(stderr, "done\n");

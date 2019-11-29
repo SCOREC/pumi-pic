@@ -248,102 +248,130 @@ inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHisto
   }
 } 
 
-/** @brief Calculate distance of particles to domain boundary 
- */
+/** @brief Calculate distance of particles to domain boundary. 
+ * Not yet clear if a pre-determined depth can be used
+*/
 inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const GitrmMesh &gm, int debug=0) {
-
+  debug = 0;
+  //test
   int tstep = iTimePlusOne;
 
   auto* scs = gp.scs;
   o::Mesh& mesh = gm.mesh;  
-  const auto nel = mesh.nelems();
-  const auto coords = mesh.coords();
-  const auto mesh2verts = mesh.ask_elem_verts(); 
 
-  const o::Reals& bdryFaces = gm.bdryFaces;
-  const o::LOs& bdryFaceInds = gm.bdryFaceInds;
+  //Testing
+  o::LO checkAllBdryFaces = false;
+  int nfaces = mesh.nfaces();
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  auto skipModelIds = o::LOs(gm.piscesBeadCylinderIds);
+  auto numModelIds = skipModelIds.size();
+  auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
+  const auto dual_elems = mesh.ask_dual().ab2b;
+  const auto dual_faces = mesh.ask_dual().a2ab;
+  const auto down_r2f = mesh.ask_down(3, 2).ab2b;
+  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
+
+  const auto nel = mesh.nelems();
+  const auto& coords = mesh.coords();
+  const auto& mesh2verts = mesh.ask_elem_verts();
+  const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  const auto& face_verts = mesh.ask_verts_of(2);
+  const auto& bdryFaces = gm.bdryFacesCsrBFS;
+  const auto& bdryFacePtrs = gm.bdryFacePtrsBFS;
   const auto scsCapacity = scs->capacity();
-  // replace with array of size numPtcls ?
-  // NOTE: use pid to set and access these arrays 
   o::Write<o::Real> closestPoints(scsCapacity*3, 0, "closest_points");
   o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
-  int fsize = BDRY_FACE_STORAGE_SIZE_PER_FACE;
-  int fskip = BDRY_FACE_STORAGE_IDS;
-  //fskip is 2, since 1st 2 are not part of face vertices
-  OMEGA_H_CHECK((fsize > 0) && (nel >0));
   auto pos_d = scs->get<PTCL_POS>();
   auto pid_scs = scs->get<PTCL_ID>();
-  auto distRun = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if (mask > 0) {
-      auto beg = bdryFaceInds[elem];
-      auto nFaces = bdryFaceInds[elem+1] - beg;
+      auto beg = bdryFacePtrs[elem];
+      auto nFaces = bdryFacePtrs[elem+1] - beg;
+      //if checkAllBdryFaces, then comment 2 lines above this
+      //int beg=0;//delete
+      //int nFaces = nfaces;
+
       if(nFaces >0) {
         auto ptcl = pid_scs(pid);
         o::Real dist = 0;
-        o::Real min = 1.0e+10;
-        o::Matrix<3, 3> face;
+        o::Real min = 1.0e+20;
         auto point = o::zero_vector<3>();
         auto pt = o::zero_vector<3>();
-        o::Int fe = -1, fel = -1, fi = -1, fid = -1, minRegion = -1;
-        if(debug && pid<1)
-          printf("\n e_%d nFaces_%d %d %d \n", elem, nFaces, bdryFaceInds[elem], 
-            bdryFaceInds[elem+1]);
+        o::Int bfid = -1, fid = -1, minRegion = -1;
         auto ref = p::makeVector3(pid, pos_d);
-        if(debug)
-          printf("pos: %d %g %g %g \n", pid, ref[0], ref[1], ref[2]);
+        if(debug > 2)
+          printf("pos: ptcl %d %g %g %g \n", ptcl, ref[0], ref[1], ref[2]);
         
+        o::Matrix<3,3> face;
         for(o::LO ii = 0; ii < nFaces; ++ii) {
-          auto ind = (beg + ii)*fsize;
-          // fskip=2 for faceId, elId
-          OMEGA_H_CHECK(fskip ==2);
-          fi = static_cast<o::LO>(bdryFaces[ind]);
-          fe = static_cast<o::LO>(bdryFaces[ind + 1]);
-          for(o::LO i=0; i<3; ++i) { //Tet vertexes
-            for(o::LO j=0; j<3; ++j) { //coords
-              face[i][j] = bdryFaces[ind+fskip + i*3 + j];
+          auto ind = beg + ii;
+
+          bfid = bdryFaces[ind];
+
+          if(checkAllBdryFaces) {
+            bfid = ii;
+            //comment bfid line above 
+            if(!side_is_exposed[ii])
+            continue;
+            auto el = p::elem_id_of_bdry_face_of_tet(ii, f2rPtr, f2rElem);
+            o::LO bdryFids[4] = {-1, -1, -1, -1};
+            auto nExpFaces = p::get_exposed_faces_of_tet(el, down_r2f, side_is_exposed, bdryFids);
+            if(!nExpFaces)
+              continue;
+            bool skipFace = false;
+            for(auto id=0; id < numModelIds; ++id) {
+              for(int i = 0; i< 4 && i<nExpFaces; ++i) {
+                auto bid = bdryFids[i];
+                if(skipModelIds[id] == faceClassIds[bid]){
+                  skipFace = true;
+                  break;
+                }
+              }
+              if(skipFace)break;
             }
+            if(skipFace) continue;
           }
-          //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
+
+          face = p::get_face_coords_of_tet(face_verts, coords, bfid);
+          if(debug > 2) {
+            printf("face  ptcl %d %g %g %g %g %g %g %g %g %g\n", ptcl, face[0][0], face[0][1], face[0][2], 
+              face[1][0], face[1][1], face[1][2],face[2][0], face[2][1], face[2][2]);
+          }
+          // //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
           auto region = p::find_closest_point_on_triangle(face, ref, pt); 
-          dist = p::osh_dot(pt - ref, pt - ref);
+          dist = o::norm(pt - ref);
           dist = sqrt(dist);
-          if(debug > 1) {
-            printf(": dist_%g e_%d reg_%d fe_%d \n", dist, elem, region, fe);
-            p::print_osh_vector(pt, "closest_pt");
+
+          int bfeId = -1;
+          if(debug > 2) {
+            bfeId = p::elem_id_of_bdry_face_of_tet(bfid, f2rPtr, f2rElem);
+            printf(": ptcl %d nFaces %d dist %g el %d bdry_el %d \n", ptcl, nFaces, dist, elem, bfeId);
           }
           if(ii==0 || dist < min) {
             min = dist;
-            fel = fe;
-            fid = fi;
+            fid = bfid;
             minRegion = region;
             for(int i=0; i<3; ++i)
               point[i] = pt[i];
-
-            if(debug > 1){
-              printf("update:: e_%d dist_%g region_%d fi_%d fe_%d\n", 
-                elem, min, region, fi, fe);
-              p::print_osh_vector(point, "this_nearest_pt");
-            }
           }
-        } //for
+        } //for nFaces
 
         if(debug) {
-          printf("dist: tstep %d el %d MINdist %g fid %d face_el %d reg %d "
-            " pos %g %g %g nearest_pt %g %g %g \n", 
-            tstep, elem, min, fid, fel, minRegion, ref[0], ref[1], ref[2], pt[0], pt[1], pt[2]);
-          p::print_osh_vector(point, "Nearest_pt");
-
+          auto fel = p::elem_id_of_bdry_face_of_tet(bfid, f2rPtr, f2rElem);
+          printf("dist: ptcl %d tstep %d el %d MINdist %g nFaces %d fid %d face_el %d reg %d "
+            " pos %g %g %g nearest_pt %g %g %g \n", ptcl, tstep, elem, min, nFaces, fid, fel, 
+            minRegion, ref[0], ref[1], ref[2], point[0], point[1], point[2]);
         }
         OMEGA_H_CHECK(fid >= 0);
         closestBdryFaceIds[pid] = fid;
         for(o::LO j=0; j<3; ++j)
           closestPoints[pid*3+j] = point[j];
-      } 
+      } //if nFaces 
     }
   };
-
-  scs->parallel_for(distRun);
+  scs->parallel_for(lambda);
   gp.closestPoints = o::Reals(closestPoints);
   gp.closestBdryFaceIds = o::LOs(closestBdryFaceIds);
 }

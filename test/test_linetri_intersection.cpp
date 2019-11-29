@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
     Omega_h::Few<Omega_h::Vector<3>, 3> face; //{a,b,d};
 
-    g::get_face_coords( M, 1, face);
+    g::get_face_from_face_index_of_tet( M, 1, face);
     Omega_h::Real dp;
     bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, dp);
     if(res)

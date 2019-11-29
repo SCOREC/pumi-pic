@@ -115,7 +115,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         OMEGA_H_CHECK(side_is_exposed[fid]);
         auto ptcl = pid_scs(pid);
 
-        auto pelem = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
+        auto pelem = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
         if(elemId != pelem)
           elemId = pelem;
 
@@ -145,7 +145,7 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
 
         firstColl(pid) = 1; //scs
     
-        auto elmId = p::elem_of_bdry_face(fid, f2r_ptr, f2r_elem);
+        auto elmId = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
         auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
           face_verts, down_r2fs);
         o::Real magSurfNorm = o::norm(surfNorm);

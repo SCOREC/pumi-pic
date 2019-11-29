@@ -18,10 +18,11 @@ int readParticleSourceNcFile(std::string ncFileName,
   bool replaceNaN=false);
 
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs);
+  Field3StructInput& fs, bool debug=false);
 // numPtclsRead to know data shape, if input file organized differently
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, std::string nPstr="nP");
+  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, 
+  std::string nPstr="nP", bool debug=false);
 
 void writeOutputNcFile( o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
   int dof, OutputNcFileFieldStruct& st, std::string outNcFileName);

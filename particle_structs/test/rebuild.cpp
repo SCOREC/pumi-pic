@@ -259,17 +259,50 @@ bool reshuffleTests() {
 
   scs->rebuild(new_element);
   scs->printFormat();
-  
-  //Needs Rebuild
-  printf("\nSend all particles to 2 forcing rebuild\n");
+
+  //Add new particles to empty spots
+  printf("\nFill Empties with new particles\n");
   pids = scs->get<0>();
-  auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendToSelfAgain = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask && particle_id != pids(particle_id)) {
       fail(0) = 1;
       if (pids(particle_id) == 0)
         printf("[ERROR] Particle 0 was not returned to its original elements\n");
       else 
         printf("[ERROR] Particle %d was moved during a previous shuffle\n", pids(particle_id));
+    }
+    new_element(particle_id) = element_id;
+  };
+  scs->parallel_for(sendToSelfAgain);
+
+  SCS::kkLidView new_particle_elems("new_particle_elems", 2);
+  auto new_particle_info = particle_structs::createMemberViews<Type>(2);
+  auto new_pids = particle_structs::getMemberView<Type, 0>(new_particle_info);
+  Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& i) {
+    new_particle_elems(0) = 2;
+    new_particle_elems(1) = 3;
+    new_pids(0) = 100;
+    new_pids(1) = 200;
+  });
+  
+  scs->rebuild(new_element, new_particle_elems, new_particle_info);
+
+  scs->printFormat();
+  
+  
+  //Needs Rebuild
+  printf("\nSend all particles to 2 forcing rebuild\n");
+  pids = scs->get<0>();
+  auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    if (!mask) {
+      printf("[ERROR] Missing particle %d\n", particle_id);
+      fail(0) = 1;
+    }
+    if (pids(particle_id) == 100 && element_id != 2) {
+      printf("[ERROR] New particle 100 was not inserted into correct element\n");
+    }
+    if (pids(particle_id) == 200 && element_id != 3) {
+      printf("[ERROR] New particle 200 was not inserted into correct element\n");
     }
     new_element(particle_id) = 2;
   };

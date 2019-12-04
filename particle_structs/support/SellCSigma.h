@@ -709,7 +709,7 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
     const lid_t new_elem = new_element(particle_id);
 
     const lid_t row = element_to_row_local(element_id);
-    const bool is_moving = new_elem != -1 & new_elem != element_id;
+    const bool is_moving = new_elem != -1 & new_elem != element_id & mask;
     if (is_moving) {
       const lid_t new_row = element_to_row_local(new_elem);
       Kokkos::atomic_fetch_add(&(new_particles_per_row(new_row)), mask);
@@ -737,11 +737,58 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   }
   
   //Offset moving particles
+  kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
+  kkLidView counting_offset_index("counting_offset_index", numRows() + 1);
+  Kokkos::parallel_scan(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
+    cur += new_particles_per_row(i);
+    if (final) {
+      offset_new_particles(i+1) = cur;
+      counting_offset_index(i+1) = cur;
+    }
+  });
 
+  int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
+  kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
+  kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
   //Gather moving particle list
-  
-  //Assign hole index for moving particles 
+  auto gatherMovingPtcls = SCS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
+    const lid_t new_elem = new_element(particle_id);
 
+    const lid_t row = element_to_row_local(element_id);
+    const bool is_moving = new_elem != -1 & new_elem != element_id & mask;
+    if (is_moving) {
+      const lid_t new_row = element_to_row_local(new_elem);
+      const lid_t index = Kokkos::atomic_fetch_add(&(counting_offset_index(new_row)), 1);
+      movingPtclIndices(index) = particle_id;
+      isFromSCS(index) = 1;
+    }
+  };
+  parallel_for(gatherMovingPtcls, "gatherMovingPtcls");
+
+  //Gather new particles in list
+  
+  //Assign hole index for moving particles
+  kkLidView holes("holeIndex", num_moving_ptcls);
+  auto assignPtclsToHoles = SCS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
+    const lid_t row = element_to_row_local(element_id);
+    if (!mask) {
+      const lid_t moving_index = Kokkos::atomic_fetch_add(&(offset_new_particles(row)),1);
+      const lid_t max_index = counting_offset_index(row);
+      if (moving_index < max_index) {
+        holes(moving_index) = particle_id;
+      }
+    }
+  };
+  parallel_for(assignPtclsToHoles, "assignPtclsToHoles");
+
+  //Update particle mask
+  auto particle_mask_local = particle_mask;
+  Kokkos::parallel_for(num_moving_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
+      const lid_t old_index = movingPtclIndices(i);
+      const lid_t new_index = holes(i);
+      particle_mask_local(old_index) = 0;
+      particle_mask_local(new_index) = 1;
+  });
   //Shift SCS values
   
   return true;
@@ -758,8 +805,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  // if (reshuffle(new_element, new_particle_elements, new_particles))
-  //   return;
+  if (reshuffle(new_element, new_particle_elements, new_particles))
+    return;
+  printf("Rebuilding\n");
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);

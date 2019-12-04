@@ -27,17 +27,17 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   
   bool passed = true;
-  if (!shuffleParticlesTests()) {
-    passed = false;
-    printf("[ERROR] shuffleParticlesTests() failed\n");
-  }
-  if (!resortElementsTest()) {
-    passed = false;
-    printf("[ERROR] resortElementsTest() failed\n");
-  }
+  // if (!shuffleParticlesTests()) {
+  //   passed = false;
+  //   printf("[ERROR] shuffleParticlesTests() failed\n");
+  // }
+  // if (!resortElementsTest()) {
+  //   passed = false;
+  //   printf("[ERROR] resortElementsTest() failed\n");
+  // }
   if (!reshuffleTests()) {
     passed = false;
-    printf("[ERROR] shuffleParticlesTests() failed\n");
+    printf("[ERROR] reshuffleTests() failed\n");
   }
 
   Kokkos::finalize();
@@ -187,8 +187,8 @@ bool reshuffleTests() {
   //Move nothing (should only use reshuffle)
   printf("\n\nReshuffle Tests\n");
 
-  int ne = 5;
-  int np = 1;
+  int ne = 4;
+  int np = 10;
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
@@ -203,10 +203,10 @@ bool reshuffleTests() {
   delete [] ids;
 
   scs->printFormat();
-  scs->printMetrics();
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   //Shuffle
+  printf("\nSend To Self\n");
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = element_id;
   };
@@ -215,26 +215,41 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-  scs->printMetrics();
+  
   //Shuffle
+  printf("\nSend first particle to padding in 2\n");
+  SCS::kkLidView elem("elem",1);
   auto sendToChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    new_element(particle_id) = 2;
+    if (particle_id == 0) {
+      new_element(particle_id) = 2;
+      elem(0) = element_id;
+    }
   };
   scs->parallel_for(sendToChunk);
 
   scs->rebuild(new_element);
-
   scs->printFormat();
-  scs->printMetrics();
+  
+  //Shuffle with particle back to 0
+  printf("\nSend particle back to first id\n");
+  auto sendBack = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    if (element_id == 2 && particle_id <= 4) {
+      new_element(particle_id) = elem(0);
+    }
+  };
+  scs->parallel_for(sendBack);
+
+  scs->rebuild(new_element);
+  scs->printFormat();
+  
   //Needs Rebuild
+  printf("\nSend all particles to 2 forcing rebuild\n");
   auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    new_element(particle_id) = 4;
+    new_element(particle_id) = 2;
   };
   scs->parallel_for(sendOffChunk);
 
   scs->rebuild(new_element);
-
   scs->printFormat();
-  scs->printMetrics();
   return true;
 }

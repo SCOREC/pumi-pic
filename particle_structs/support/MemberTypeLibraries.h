@@ -170,6 +170,52 @@ namespace particle_structs {
     }
   };
 
+  //Shuffle copy currying structs
+  template <typename LidView, typename... Types> struct ShuffleParticlesImpl;
+  template <typename LidView> struct ShuffleParticlesImpl<LidView> {
+    ShuffleParticlesImpl(MemberTypeViewsConst<MemberTypes<void> > scs,
+                         MemberTypeViewsConst<MemberTypes<void> > new_particles,
+                         LidView old_indices, LidView new_indices, LidView fromSCS) {}
+  };
+  template <typename LidView, typename T, typename... Types>
+  struct ShuffleParticlesImpl<LidView, T, Types...> {
+    ShuffleParticlesImpl(MemberTypeViewsConst<MemberTypes<T, Types...> > scs,
+                         MemberTypeViewsConst<MemberTypes<T, Types...> > new_particles,
+                         LidView old_indices, LidView new_indices, LidView fromSCS) {
+      enclose(scs, new_particles, old_indices, new_indices, fromSCS);
+    }
+    void enclose(MemberTypeViewsConst<MemberTypes<T, Types...> > scs,
+                 MemberTypeViewsConst<MemberTypes<T, Types...> > new_particles,
+                 LidView old_indices, LidView new_indices, LidView fromSCS) {
+      int nMoving = old_indices.size();
+      MemberTypeView<T> scs_view = *static_cast<MemberTypeView<T> const*>(scs[0]);
+      MemberTypeView<T> new_view;
+      if (new_particles != NULL) {
+        new_view = *static_cast<MemberTypeView<T> const*>(new_particles[0]);
+        new_particles++;
+      }
+
+      Kokkos::parallel_for(nMoving, KOKKOS_LAMBDA(const lid_t& i) {
+          const lid_t old_index = old_indices(i);
+          const lid_t new_index = new_indices(i);
+          const lid_t isSCS = fromSCS(i);
+          auto src = (isSCS == 1 ? scs_view : new_view);
+          CopyViewToView<T, Kokkos::DefaultExecutionSpace::device_type>(scs_view, new_index,
+                                                                        src, old_index);
+      });
+      ShuffleParticlesImpl<LidView, Types...>(scs+1, new_particles, old_indices,
+                                              new_indices, fromSCS);
+    }
+  };
+  template <typename LidView, typename... Types> struct ShuffleParticles;
+  template <typename LidView, typename... Types> struct ShuffleParticles<LidView, MemberTypes<Types...> > {
+    ShuffleParticles(MemberTypeViewsConst<MemberTypes<Types...> > scs,
+                     MemberTypeViewsConst<MemberTypes<Types...> > new_particles,
+                     LidView old_indices, LidView new_indices, LidView fromSCS) {
+      ShuffleParticlesImpl<LidView, Types...>(scs, new_particles, old_indices, new_indices, fromSCS);
+    }
+  };
+
   template <typename... Types> struct SendViewsImpl;
   template <> struct SendViewsImpl<> {
     SendViewsImpl(MemberTypeViews<MemberTypes<void> > views, int offset, int size, 

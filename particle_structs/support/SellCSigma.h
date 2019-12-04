@@ -748,6 +748,8 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   });
 
   int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
+  if (num_moving_ptcls == 0)
+    return true;
   kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
   kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
   //Gather moving particle list
@@ -789,8 +791,10 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
       particle_mask_local(old_index) = 0;
       particle_mask_local(new_index) = 1;
   });
-  //Shift SCS values
   
+  //Shift SCS values
+  ShuffleParticles<kkLidView, DataTypes>(scs_data, new_particles, movingPtclIndices, holes,
+                                         isFromSCS);
   return true;
 }
 

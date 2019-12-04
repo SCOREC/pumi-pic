@@ -201,10 +201,17 @@ bool reshuffleTests() {
   SCS* scs = new SCS(po, ne, np, ne, np, ptcls_per_elem_v, element_gids_v);
   delete [] ptcls_per_elem;
   delete [] ids;
-
   scs->printFormat();
+
+  auto pids = scs->get<0>();
+  auto setPids = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    pids(particle_id) = particle_id;
+  };
+  scs->parallel_for(setPids);
   SCS::kkLidView new_element("new_element", scs->capacity());
 
+  SCS::kkLidView fail("fail", 1);
+  
   //Shuffle
   printf("\nSend To Self\n");
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
@@ -219,7 +226,12 @@ bool reshuffleTests() {
   //Shuffle
   printf("\nSend first particle to padding in 2\n");
   SCS::kkLidView elem("elem",1);
+  pids = scs->get<0>();
   auto sendToChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    if (particle_id != pids(particle_id)) {
+      fail(0) = 1;
+      printf("[ERROR] Particle %d was moved during first shuffle\n", pids(particle_id));
+    }
     if (particle_id == 0) {
       new_element(particle_id) = 2;
       elem(0) = element_id;
@@ -232,9 +244,15 @@ bool reshuffleTests() {
   
   //Shuffle with particle back to 0
   printf("\nSend particle back to first id\n");
+  pids = scs->get<0>();
   auto sendBack = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (element_id == 2 && particle_id <= 4) {
-      new_element(particle_id) = elem(0);
+    if (mask && pids(particle_id) == 0) {
+      if (element_id == 2)
+        new_element(particle_id) = elem(0);
+      else {
+        printf("[ERROR] Particle 0 (index: %d) was not moved to element 2\n", particle_id);
+        fail(0) = 1;
+      }
     }
   };
   scs->parallel_for(sendBack);
@@ -244,12 +262,22 @@ bool reshuffleTests() {
   
   //Needs Rebuild
   printf("\nSend all particles to 2 forcing rebuild\n");
+  pids = scs->get<0>();
   auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    if (mask && particle_id != pids(particle_id)) {
+      fail(0) = 1;
+      if (pids(particle_id) == 0)
+        printf("[ERROR] Particle 0 was not returned to its original elements\n");
+      else 
+        printf("[ERROR] Particle %d was moved during a previous shuffle\n", pids(particle_id));
+    }
     new_element(particle_id) = 2;
   };
   scs->parallel_for(sendOffChunk);
 
   scs->rebuild(new_element);
   scs->printFormat();
-  return true;
+
+  int f = particle_structs::getLastValue<lid_t>(fail);
+  return !f;
 }

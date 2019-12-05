@@ -213,7 +213,7 @@ bool reshuffleTests() {
   SCS::kkLidView fail("fail", 1);
   
   //Shuffle
-  printf("\nSend To Self\n");
+  printf("\nSend To Self");
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = element_id;
   };
@@ -224,9 +224,8 @@ bool reshuffleTests() {
   scs->printFormat();
   
   //Shuffle
-  printf("\nSend first particle to padding in 2\n");
+  printf("\nSend first particle to padding in 2");
   SCS::kkLidView elem("elem",1);
-  pids = scs->get<0>();
   auto sendToChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (particle_id != pids(particle_id)) {
       fail(0) = 1;
@@ -243,8 +242,7 @@ bool reshuffleTests() {
   scs->printFormat();
   
   //Shuffle with particle back to 0
-  printf("\nSend particle back to first id\n");
-  pids = scs->get<0>();
+  printf("\nSend particle back to first id");
   auto sendBack = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask && pids(particle_id) == 0) {
       if (element_id == 2)
@@ -261,8 +259,7 @@ bool reshuffleTests() {
   scs->printFormat();
 
   //Add new particles to empty spots
-  printf("\nFill Empties with new particles\n");
-  pids = scs->get<0>();
+  printf("\nFill Empties with new particles");
   auto sendToSelfAgain = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask && particle_id != pids(particle_id)) {
       fail(0) = 1;
@@ -291,8 +288,7 @@ bool reshuffleTests() {
   
   
   //Remove all particles from element 0 & 2, move particles from 1 & 3 to 0 & 2
-  printf("\nDump and redistribute particles\n");
-  pids = scs->get<0>();
+  printf("\nDump and redistribute particles");
   auto dumpAndRedistribute = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (!mask) {
       printf("[ERROR] Missing particle %d\n", particle_id);
@@ -314,7 +310,6 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
   scs->printFormat();
 
-  pids = scs->get<0>();
   auto checkFinal = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask) {
       if (element_id % 2 == 1) {

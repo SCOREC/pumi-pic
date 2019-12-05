@@ -79,6 +79,9 @@ class SellCSigma {
   lid_t nElems() const {return num_elems;}
   //Returns the number of particles managed by the SCS
   lid_t nPtcls() const {return num_ptcls;}
+
+  //Change whether or not to try shuffling
+  void setShuffling(bool newS) {tryShuffling = newS;}
   
   /* Gets the Nth datatype SCS to be indexed by particle id 
      Example: auto segment = scs->get<0>()
@@ -198,6 +201,8 @@ private:
   std::size_t current_size, swap_size;
   void destroy();
 
+  //True - try shuffling every rebuild, false - only rebuild
+  bool tryShuffling;
   //Metric Info
   lid_t num_empty_elements;
 };
@@ -475,7 +480,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
                                              kkLidView particle_elements,
                                              MemberTypeViews<DataTypes> particle_info) :
   policy(p), element_gid_to_lid(ne) {
-  
+  tryShuffling = true;
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   int comm_rank;
@@ -700,7 +705,6 @@ template<class DataTypes, typename ExecSpace>
 bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element, 
                                                 kkLidView new_particle_elements, 
                                                 MemberTypeViews<DataTypes> new_particles) {
-  printf("Shuffling\n");
   //Count current/new particles per row
   kkLidView new_particles_per_row("new_particles_per_row", numRows());
   kkLidView num_holes_per_row("num_holes_per_row", numRows());
@@ -829,9 +833,9 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-  if (reshuffle(new_element, new_particle_elements, new_particles))
+  //If tryShuffling is on and shuffling works then rebuild is complete
+  if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles))
     return;
-  printf("Rebuilding\n");
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);

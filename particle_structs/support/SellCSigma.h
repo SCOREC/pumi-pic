@@ -705,16 +705,19 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   kkLidView new_particles_per_row("new_particles_per_row", numRows());
   kkLidView num_holes_per_row("num_holes_per_row", numRows());
   kkLidView element_to_row_local = element_to_row;
+  auto particle_mask_local = particle_mask;  
   auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
 
     const lid_t row = element_to_row_local(element_id);
-    const bool is_moving = new_elem != -1 & new_elem != element_id & mask;
+    const bool is_particle = mask & new_elem != -1;
+    const bool is_moving = is_particle & new_elem != element_id;
     if (is_moving) {
       const lid_t new_row = element_to_row_local(new_elem);
       Kokkos::atomic_fetch_add(&(new_particles_per_row(new_row)), mask);
     }
-    Kokkos::atomic_fetch_add(&(num_holes_per_row(row)), !mask);
+    particle_mask_local(particle_id) = is_particle;
+    Kokkos::atomic_fetch_add(&(num_holes_per_row(row)), !is_particle);
   };
   parallel_for(countNewParticles, "countNewParticles");
   // Add new particles to counts
@@ -748,8 +751,12 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   });
 
   int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
-  if (num_moving_ptcls == 0)
+  if (num_moving_ptcls == 0) {
+    Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
+      sum += particle_mask_local(i);
+    }, num_ptcls);
     return true;
+  }
   kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
   kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
   //Gather moving particle list
@@ -791,7 +798,6 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   parallel_for(assignPtclsToHoles, "assignPtclsToHoles");
 
   //Update particle mask
-  auto particle_mask_local = particle_mask;
   Kokkos::parallel_for(num_moving_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
       const lid_t old_index = movingPtclIndices(i);
       const lid_t new_index = holes(i);
@@ -804,6 +810,11 @@ bool SellCSigma<DataTypes,ExecSpace>::reshuffle(kkLidView new_element,
   //Shift SCS values
   ShuffleParticles<kkLidView, DataTypes>(scs_data, new_particles, movingPtclIndices, holes,
                                          isFromSCS);
+
+  //Count number of active particles
+  Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
+      sum += particle_mask_local(i);
+  }, num_ptcls);
   return true;
 }
 

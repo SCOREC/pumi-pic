@@ -19,6 +19,7 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef SellCSigma<Type, exe_space> SCS;
 
 bool sendToOne(int ne, int np);
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
@@ -31,6 +32,7 @@ int main(int argc, char* argv[]) {
 
   int ne = 5;
   int np = 20;
+  int fails = 0;
   particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
   distribute_elements(ne, 0, comm_rank, comm_size, gids);
   int* ptcls_per_elem = new int[ne];
@@ -88,16 +90,17 @@ int main(int argc, char* argv[]) {
     double3_slice = scs->get<1>();
     SCS::kkLidView fail("fail", 1);
     auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
-      if (mask != double3_slice(ptcl_id, 2)) {
-        printf("mask failure on ptcl %d (%d, %f)\n", ptcl_id, mask, double3_slice(ptcl_id,2));
+      if (mask && mask != double3_slice(ptcl_id, 2)) {
+        printf("%d mask failure on ptcl %d (%d, %f)\n", comm_rank, ptcl_id, mask,
+               double3_slice(ptcl_id,2));
         fail(0) = 1;
       }
       if (mask && comm_rank != int_slice(ptcl_id) && elm_id != 0) {
-        printf("rank failure on ptcl %d\n", ptcl_id);
+        printf("%d rank failure on ptcl %d\n", comm_rank, ptcl_id);
         fail(0) = 1;
       }
       if (mask && int_slice(ptcl_id) != double3_slice(ptcl_id, 0)) {
-        printf("int/double failure on ptcl %d\n", ptcl_id);
+        printf("%d int/double failure on ptcl %d\n", comm_rank, ptcl_id);
         fail(0) = 1;
       }
     };
@@ -108,18 +111,20 @@ int main(int argc, char* argv[]) {
     int f = particle_structs::getLastValue(fail);
     if (f == 1) {
       printf("Migration of values failed on rank %d\n", comm_rank);
-      return EXIT_FAILURE;
+      fails++;
     }
     delete scs;
   }
 
-  if (!sendToOne(100, 100000)) {
+  if (!sendToOne(5000, 100000)) {
     printf("SendToOne failed on rank %d\n", comm_rank);
+    fails++;
   }
   Kokkos::finalize();
-  MPI_Barrier(MPI_COMM_WORLD);
+  int total_fails;
+  MPI_Reduce(&fails, &total_fails, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   MPI_Finalize();
-  if (comm_rank == 0)
+  if (comm_rank == 0 && total_fails == 0)
     printf("All tests passed\n");
   return 0;
 }
@@ -172,10 +177,16 @@ bool sendToOne(int ne, int np) {
   scs->migrate(new_element, new_process);
 
   int nPtcls = scs->nPtcls();
-  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np/100)
+  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np * 1.0/100) {
+    fprintf(stderr, "Rank 0 has incorrect number of particles (%d != %d)\n",
+            nPtcls, np + (comm_size - 1) * np/100);
     return false;
-  else if (comm_rank != 0 && nPtcls != np*99/100)
+  }
+  else if (comm_rank != 0 && nPtcls != np*99/100) {
+    fprintf(stderr, "Rank %d has incorrect number of particles (%d != %d)\n", comm_rank, 
+            nPtcls, np* 99/100);
     return false;
+  }
     
   int_slice = scs->get<0>();
   double_slice = scs->get<1>();
@@ -191,7 +202,6 @@ bool sendToOne(int ne, int np) {
     }
   };
   scs->parallel_for(checkValues);
-  MPI_Barrier(MPI_COMM_WORLD);
   int f = particle_structs::getLastValue(fail);
   return f == 0;
 }

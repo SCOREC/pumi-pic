@@ -27,14 +27,14 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   
   bool passed = true;
-  // if (!shuffleParticlesTests()) {
-  //   passed = false;
-  //   printf("[ERROR] shuffleParticlesTests() failed\n");
-  // }
-  // if (!resortElementsTest()) {
-  //   passed = false;
-  //   printf("[ERROR] resortElementsTest() failed\n");
-  // }
+  if (!shuffleParticlesTests()) {
+    passed = false;
+    printf("[ERROR] shuffleParticlesTests() failed\n");
+  }
+  if (!resortElementsTest()) {
+    passed = false;
+    printf("[ERROR] resortElementsTest() failed\n");
+  }
   if (!reshuffleTests()) {
     passed = false;
     printf("[ERROR] reshuffleTests() failed\n");
@@ -290,10 +290,10 @@ bool reshuffleTests() {
   scs->printFormat();
   
   
-  //Needs Rebuild
-  printf("\nSend all particles to 2 forcing rebuild\n");
+  //Remove all particles from element 0 & 2, move particles from 1 & 3 to 0 & 2
+  printf("\nDump and redistribute particles\n");
   pids = scs->get<0>();
-  auto sendOffChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto dumpAndRedistribute = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (!mask) {
       printf("[ERROR] Missing particle %d\n", particle_id);
       fail(0) = 1;
@@ -304,13 +304,28 @@ bool reshuffleTests() {
     if (pids(particle_id) == 200 && element_id != 3) {
       printf("[ERROR] New particle 200 was not inserted into correct element\n");
     }
-    new_element(particle_id) = 2;
+    if (element_id % 2 == 0)
+      new_element(particle_id) = -1;
+    else
+      new_element(particle_id) = element_id / 2 * 2;
   };
-  scs->parallel_for(sendOffChunk);
+  scs->parallel_for(dumpAndRedistribute);
 
   scs->rebuild(new_element);
   scs->printFormat();
 
+  pids = scs->get<0>();
+  auto checkFinal = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+    if (mask) {
+      if (element_id % 2 == 1) {
+        printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);
+      }
+      if (pids(particle_id) % 2 != 0) {
+        printf("[ERROR] Odd Particle %d remains on element %d\n", particle_id, element_id);
+      }
+    }
+  };
+  scs->parallel_for(checkFinal);
   int f = particle_structs::getLastValue<lid_t>(fail);
   return !f;
 }

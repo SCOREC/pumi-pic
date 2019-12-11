@@ -15,21 +15,45 @@
 
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
-inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false) {
-  auto compareWithGitr = COMPARE_WITH_GITR;
-
+inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, const GitrmMesh &gm) {
+  const int compareWithGitr = COMPARE_WITH_GITR;
+  const int useGitrCLD = USE_GITR_CLD;
+  const int replaceEQ = USE_GITR_EFILED_AND_Q;
+  const int useGitrMidPt = USE_GITR_BFACE_MIDPT_N_CALC_CLD;
+  const int useGitrD2bdry = USE_GITR_DIST2BDRY;
+  const double biasPot = BIAS_POTENTIAL;
   if(compareWithGitr)
     iTimePlusOne++;
-  /*
-  //#ifdef COMPARE_WITH_GITR
+  
+  const auto& temEl_d = gm.temEl_d;
+  const auto& densEl_d = gm.densEl_d;
+  const auto densElX0 = gm.densElX0;
+  const auto densElZ0 = gm.densElZ0;
+  const auto densElNx = gm.densElNx;
+  const auto densElNz = gm.densElNz;
+  const auto densElDx = gm.densElDx;
+  const auto densElDz = gm.densElDz;
+  const auto tempElX0 = gm.tempElX0;
+  const auto tempElZ0 = gm.tempElZ0;
+  const auto tempElNx = gm.tempElNx;
+  const auto tempElNz = gm.tempElNz;
+  const auto tempElDx = gm.tempElDx;
+  const auto tempElDz = gm.tempElDz;
+  o::Write<o::Real> larmorRadius_d = gm.larmorRadius_d;
+  o::Write<o::Real> childLangmuirDist_d = gm.childLangmuirDist_d;
+  o::LO checkAllBdryFaces = CHECK_ALL_BDRYFACES_FOR_D2BDRY;
+
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
   const auto testGEind = gp.testGitrStepDataEfieldInd;
   const auto testGqInd = gp.testGitrStepDataChargeInd;
-  */
+  const auto testGCLDInd = gp.testGitrStepDataCLDInd;
+  const auto testGMinDistInd = gp.testGitrStepDataMinDistInd;
+  const auto testGMidPtInd = gp.testGitrStepDataMidPtInd;
+  const o::LO background_Z = BACKGROUND_Z;
   const auto iTimeStep = iTimePlusOne - 1;
-  //#endif
+  
   const auto biasedSurface = BIASED_SURFACE;
   const auto angles = mesh.get_array<o::Real>(o::FACE, "angleBdryBfield");
   const auto potentials = mesh.get_array<o::Real>(o::FACE, "potential");
@@ -43,7 +67,6 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
 
   auto charge_scs = scs->get<PTCL_CHARGE>();
 
-  // Replace pid based data by ptcl based ?
   //NOTE arrays is based on pid, which is reset upon each rebuild
   const auto& closestPoints =  gp.closestPoints;
   const auto& faceIds = gp.closestBdryFaceIds;
@@ -52,6 +75,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
     if(mask >0) {
       auto ptcl = pid_scs(pid);
       auto faceId = faceIds[pid];
+      //if(faceId < 0) faceId = 0;
       if(faceId < 0) {
         efield_scs(pid, 0) = 0;
         efield_scs(pid, 1) = 0;
@@ -61,9 +85,16 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         // If  face is long, BField is not accurate. Calculate at closest point ?
         o::Real angle = angles[faceId];
         o::Real pot = potentials[faceId];
+        //TODO remove this after testing
+        pot = biasPot;
         o::Real debyeLength = debyeLengths[faceId];
         o::Real larmorRadius = larmorRadii[faceId];
         o::Real childLangmuirDist = childLangmuirDists[faceId];
+        if(checkAllBdryFaces) {
+          larmorRadius = larmorRadius_d[faceId];
+          childLangmuirDist = childLangmuirDist_d[faceId];
+        }
+
         auto pos = p::makeVector3(pid, pos_scs);
         o::Vector<3> closest;
         for(o::LO i=0; i<3; ++i)
@@ -71,79 +102,135 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug=false
         auto distVector = closest - pos;
         auto dirUnitVector = o::normalize(distVector);
         auto d2bdry = p::osh_mag(distVector);
-        o::Real Emag = 0;
+        o::Real emag = 0;
 
-        /*if(debug){
-          printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%g pot:%g"
-           " DebL:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
-           pot, debyeLength, larmorRadius, childLangmuirDist);
-          printf("ptcl %d pos %g %g %g closest %g %g %g distVec %g %g %g \n", 
-            ptcl, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2],
-            distVector[0], distVector[1], distVector[2]);
-        } */
+        o::Real gitrCLD=0;
+        o::Real thisCLD=childLangmuirDist;
+        o::Real thisD2bdry=d2bdry;
+        o::Real gitrD2bdry=0;
+        o::Real calcCLD=0;
+        o::Real emagOrig=0;
+        o::LO beg = ptcl*testGNT*testGDof + iTimeStep*testGDof;
         if(biasedSurface) {
-          Emag = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
+          emag = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
+          if(compareWithGitr) {
+            if(useGitrD2bdry) {
+              gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
+              thisD2bdry= gitrD2bdry;
+            }
+
+            if(useGitrCLD) {
+              gitrCLD = testGitrPtclStepData[beg + testGCLDInd]; 
+              thisCLD = gitrCLD;
+            } else if(useGitrMidPt) {
+              auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
+              auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
+              auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
+              o::Real dlen = 0;
+              
+              auto pos = p::makeVector3FromArray({gitrMidPtx, gitrMidPty, gitrMidPtz});
+              o::Real tel = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
+                tempElDz, tempElNx, tempElNz, pos, true);
+              o::Real nel = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
+                densElDz, densElNx, densElNz, pos, true);
+
+              if(o::are_close(nel, 0.0))
+                dlen = 1.0e12;
+              else 
+                dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
+              // Only for BIASED surface
+              o::Real calcCLD = 0;
+              if(tel > 0.0)
+                calcCLD = dlen * pow(abs(pot)/tel, 0.75);
+              else 
+                calcCLD = 1e12;
+              thisCLD = calcCLD;
+            }
+            
+            emag = pot/(2.0*thisCLD)* exp(-thisD2bdry/(2.0*thisCLD));
+            emagOrig = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
+          }
         } else { 
           o::Real fd = 0.98992 + 5.1220E-03 * angle - 7.0040E-04 * pow(angle,2.0) +
                        3.3591E-05 * pow(angle,3.0) - 8.2917E-07 * pow(angle,4.0) +
                        9.5856E-09 * pow(angle,5.0) - 4.2682E-11 * pow(angle,6.0);
-          Emag = pot*(fd/(2.0 * debyeLength)* exp(-d2bdry/(2.0 * debyeLength))+ 
+          emag = pot*(fd/(2.0 * debyeLength)* exp(-d2bdry/(2.0 * debyeLength))+ 
                   (1.0 - fd)/(larmorRadius)* exp(-d2bdry/larmorRadius));
         }
-        if(isnan(Emag))
-          Emag = 0;
+        if(isnan(emag))
+          emag = 0;
         if(o::are_close(d2bdry, 0.0) || o::are_close(larmorRadius, 0.0)) {
-          Emag = 0.0;
+          emag = 0.0;
           dirUnitVector[0] = dirUnitVector[1] = dirUnitVector[2] = 0;
         }
-        auto exd = Emag*dirUnitVector;
+        auto exd = emag*dirUnitVector;
         for(int i=0; i<3; ++i)
           efield_scs(pid, i) = exd[i];
 
+        if(debug){
+          printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%g pot:%g"
+           " DebL:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
+           pot, debyeLength, larmorRadius, childLangmuirDist);
+          printf("CalcE: ptcl %d pos %g %g %g closest %g %g %g distVec %g %g %g \n", 
+            ptcl, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2],
+            distVector[0], distVector[1], distVector[2]);
+        } 
         if(debug)
-          printf("TStep %d ptcl %d d2bdry %g Emag %g \t CLD %g elem %d dir %g %g %g \n", 
-            iTimeStep, ptcl, d2bdry, Emag, childLangmuirDist, elem,
-            dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
+          printf("CalcE:: TStep %d ptcl %d d2bdry %g gitrD2bdry %g  emag %g, emagOrig %g "
+              "\t CLDorig %g thisCLD %g gitrCLD %g calcCLD %g elem %d dir %g %g %g \n", 
+            iTimeStep, ptcl, d2bdry, gitrD2bdry,  emag, emagOrig, childLangmuirDist, thisCLD, 
+            gitrCLD, calcCLD, elem, dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
 
-        if(compareWithGitr) {// TODO FIXME
+        if(compareWithGitr) {// TODO
           //beg: pindex*nT*dof_intermediate + (nthStep-1)*dof_intermediate
-          /*
-          auto beg = ptcl*testGNT*testGDof + iTimeStep*testGDof + testGEind;
-          efield_scs(pid, 0) = testGitrPtclStepData[beg];
-          efield_scs(pid, 1) = testGitrPtclStepData[beg+1];
-          efield_scs(pid, 2) = testGitrPtclStepData[beg+2];
-
-          charge_scs(pid) = testGitrPtclStepData[beg+ testGqInd];
-          */
+          auto beg = ptcl*testGNT*testGDof + iTimeStep*testGDof;
+          auto gitrE0 = testGitrPtclStepData[beg + testGEind];
+          auto gitrE1 = testGitrPtclStepData[beg + testGEind+1];
+          auto gitrE2 = testGitrPtclStepData[beg + testGEind+2];
+          auto gitrQ = testGitrPtclStepData[beg + testGqInd];
+          auto gitrCLD = testGitrPtclStepData[beg + testGCLDInd];
+          auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
+          auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
+          auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
+          auto gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
+          if(replaceEQ) {
+            efield_scs(pid, 0) = gitrE0;
+            efield_scs(pid, 1) = gitrE1;
+            efield_scs(pid, 2) = gitrE2;
+            charge_scs(pid) = gitrQ;
+          }
          // if(debug)
-         //   printf("calcE-ptcl %d t %d q %d @ %d efield %g %g %g \n", ptcl, iTimeStep, charge_scs(pid),
-         //     beg, efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2));
+            printf("calcE ptcl %d timestep %d q %d  efield %g %g %g  GITRmindist %g gitrCLD %g "
+                "GITR_q %d GITR_Efield %g  %g  %g useGITR_EQ %d useGITR_CLD %d \n", 
+                ptcl, iTimeStep, charge_scs(pid), efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2), 
+               gitrD2bdry, gitrCLD, gitrQ, gitrE0, gitrE1, gitrE2,  replaceEQ, useGitrCLD);
         }
-        // 1st 2 particles used have same position in GITR and GITRm, since it is from file
-        // Only difference is in input CLDist.
-
-        //with 580K mesh of specified mesh size
-        //0 dist2bdry 1e-06 angle:1.30716 pot:250 Deb:8.39096e-06 Larm:0.0170752 CLD:0.00031778 
-        //1 dist2bdry 1e-06 angle:1.14724 pot:250 Deb:8.31213e-06 Larm:0.0201203 CLD:0.00024613 
-        // 0 pos 0.0137135 -0.0183835 1e-06 closest 0.0137135 -0.0183835 0 distVec 0 3.46945e-18 -1e-06 
-        // 1 pos -0.000247493 0.0197626 1e-06 closest -0.000247493 0.0197626 0 distVec -2.1684e-19 0 -1e-06 
-        //0 E 0 1.36258e-06 -392736 :d2bdry 1e-06 Emag 392736 pot 250 CLD 0.00031778 dir 0 3.46945e-12 -1 
-        // 1 E -1.09902e-07 0 -506832 :d2bdry 1e-06 Emag 506832 pot 250 CLD 0.00024613 dir -2.1684e-13 0 -1 
-
-        // with large sized mesh with no size specified
-        //GITR: E 0 0 -400917 Emax 400917 CLD 0.000311285 xyx 0.0137135 -0.0183835 1e-06 minD 1e-06 dir 0 0 -1 
-        //GITRm E 6.78808e-07 0 -391306 :d2bdry 1e-06 Emag 391306 pot 250 CLD 0.000318942 dir 1.73472e-12 0 -1
-        //GITRm:pos 0.0137135 -0.0183835 1e-06 closest 0.0137135 -0.0183835 0 distVec 1.73472e-18 0 -1e-06
-
-        // GITR E 0 0 -573742 Emax 573742 CLD 0.000217368 xyx -0.000247493 0.0197626 1e-06 minD 1e-06 dir 0 0 -1
-        //GITRm:pos -0.000247493 0.0197626 1e-06 closest -0.000247493 0.0197626 0 distVec 9.21572e-19 3.46945e-18 -1e-06
-        //GITRm: E 3.3292e-07 1.25335e-06 -361253 :d2bdry 1e-06 Emag 361253 pot 250 CLD 0.000345518 dir 9.21572e-13 3.46945e-12 -1
-
-      }
-    }
+      } //faceId
+    } //mask
   };
   scs->parallel_for(run);
 }
+/*NOTE: on calculateE
+  1st 2 particles used have same position in GITR and GITRm, since it is from file
+  Only difference is in input CLDist.
+
+  with 580K mesh of specified mesh size
+  0 dist2bdry 1e-06 angle:1.30716 pot:250 Deb:8.39096e-06 Larm:0.0170752 CLD:0.00031778 
+  1 dist2bdry 1e-06 angle:1.14724 pot:250 Deb:8.31213e-06 Larm:0.0201203 CLD:0.00024613 
+  0 pos 0.0137135 -0.0183835 1e-06 closest 0.0137135 -0.0183835 0 distVec 0 3.46945e-18 -1e-06 
+  1 pos -0.000247493 0.0197626 1e-06 closest -0.000247493 0.0197626 0 distVec -2.1684e-19 0 -1e-06 
+  0 E 0 1.36258e-06 -392736 :d2bdry 1e-06 emag 392736 pot 250 CLD 0.00031778 dir 0 3.46945e-12 -1 
+  1 E -1.09902e-07 0 -506832 :d2bdry 1e-06 emag 506832 pot 250 CLD 0.00024613 dir -2.1684e-13 0 -1 
+
+  with large sized mesh with no size specified
+  GITR: E 0 0 -400917 Emax 400917 CLD 0.000311285 xyx 0.0137135 -0.0183835 1e-06 minD 1e-06 dir 0 0 -1 
+  GITRm E 6.78808e-07 0 -391306 :d2bdry 1e-06 emag 391306 pot 250 CLD 0.000318942 dir 1.73472e-12 0 -1
+  GITRm:pos 0.0137135 -0.0183835 1e-06 closest 0.0137135 -0.0183835 0 distVec 1.73472e-18 0 -1e-06
+
+  GITR E 0 0 -573742 Emax 573742 CLD 0.000217368 xyx -0.000247493 0.0197626 1e-06 minD 1e-06 dir 0 0 -1
+  GITRm:pos -0.000247493 0.0197626 1e-06 closest -0.000247493 0.0197626 0 distVec 9.21572e-19 3.46945e-18 -1e-06
+  GITRm: E 3.3292e-07 1.25335e-06 -361253 :d2bdry 1e-06 emag 361253 pot 250 CLD 0.000345518 dir 9.21572e-13 3.46945e-12 -1
+*/
 
 // NOTE: for extruded mesh, TETs are too long that particle's projected position
 // onto nearest poloidal plane is to be used to interpolate fields from 
@@ -197,6 +284,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       // In GITR only constant EField is used
       eField += eFieldConst;
 
+      //TODO move to unit test
       if(testExample)
         pos = p::makeVector3FromArray({0.0137135, -0.0183835, 1e-06});
       
@@ -206,7 +294,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         auto bcc = o::zero_vector<4>();
         p::findBCCoordsInTet(coords, mesh2verts, pos, elem, bcc);
         // BField is 3 component array
-       // p::interpolate3dFieldTet(mesh2verts, BField, elem, bcc, bField);  
+        // p::interpolate3dFieldTet(mesh2verts, BField, elem, bcc, bField);  
       } else if(use2dInputFields) { //TODO for testing
         auto pos = o::zero_vector<3>();
         //cylindrical symmetry, height (z) is same.
@@ -217,6 +305,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
         p::interp2dVector(BField_2d,  bxz[0], bxz[1], bxz[2], bxz[3], bGridNx,
           bGridNz, pos, bField, false);
       }
+      //TODO move to unit tests
       if(testExample) {
         //TODO  velocity is to be set
         printf("ptcl %d pid %d pos_new %g %g %g\n", ptcl, pid, pos[0], pos[1], pos[2]);
@@ -229,6 +318,9 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
          //xyz 0.013715 -0.0183798 7.45029e-06 //result
          //vel 291.384 726.638 1290.06 // result, but its input is also used
       }
+
+      auto vel0 = vel;
+
       OMEGA_H_CHECK((amu >0) && (dTime>0));
       o::Real bFieldMag = p::osh_mag(bField);
       o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dTime*0.5;
@@ -257,14 +349,10 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       vel_scs(pid, 1) = vel[1];
       vel_scs(pid, 2) = vel[2];
       if(debug) {
-        auto dvel = p::osh_mag(qpE);
-        printf("ptcl %d timestep %d charge %d eField %g %g %g pos %g %g %g \n",
-         ptcl, iTimeStep, charge, eField[0], eField[1], eField[2], pos[0], pos[1], pos[2]);
-      }
-      if(debug){
-        printf("e %d ptcl %d vel %.1f %.1f %.1f \n pos %g %g %g => %g %g %g\n", 
-          elem, ptcl, vel[0], vel[1], vel[2], pos[0], pos[1], pos[2],
-          tgt[0], tgt[1], tgt[2]);
+        printf("ptcl %d timestep %d e %d charge %d pos %g %g %g =>  %g %g %g  "
+          "vel %.1f %.1f %.1f =>  %.1f %.1f %.1f eField %g %g %g\n", ptcl, iTimeStep, 
+          elem, charge, pos[0], pos[1], pos[2], tgt[0], tgt[1], tgt[2], 
+          vel0[0], vel0[1], vel0[2], vel[0], vel[1], vel[2], eField[0], eField[1], eField[2]);
       }
     }// mask
   };

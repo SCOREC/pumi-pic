@@ -203,6 +203,7 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   return 0;
 }
 
+
 void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
   int dof, OutputNcFileFieldStruct& st, std::string outNcFileName) {
   //if ext not nc, 
@@ -244,6 +245,69 @@ void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
       //ncVars[i].putVar(start, count, stridep, &(ptclsData[0]));
       
     }
+  } catch (netCDF::exceptions::NcException& e) {
+    std::cout << e.what() << "\n";
+  }
+}
+
+int readCsrFile(const std::string& ncFileName,  
+  const std::vector<std::string>& vars,
+  const std::vector<std::string>& datNames, o::LOs& ptrs, o::LOs& data) {
+  try {
+    netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
+    netCDF::NcDim ncPtrName(ncf.getDim(vars[0].c_str()));
+    auto psize = ncPtrName.getSize();
+    std::cout << ncFileName << " : " << vars[0] << " : " << psize << "\n";
+ 
+    auto pdat = o::HostWrite<o::LO>(psize);
+    netCDF::NcVar ncp(ncf.getVar(datNames[0]));
+    ncp.getVar(&(pdat[0]));
+    ptrs = o::LOs(pdat);
+
+    netCDF::NcDim ncDataName(ncf.getDim(vars[1]));
+    auto dsize = ncDataName.getSize();
+    std::cout << ncFileName << " : " << vars[1] << " : " << dsize << "\n";
+    auto dat = o::HostWrite<o::LO>(dsize);
+    netCDF::NcVar ncd(ncf.getVar(datNames[1]));
+    ncd.getVar(&(dat[0]));
+    data = o::LOs(dat);
+
+    int nans = 0;
+    for(int i=0; i<dat.size(); ++i)
+      if(std::isnan(dat[i]))
+        ++nans;
+    if(nans)
+      printf("\n*******WARNING found %d NaNs in data ******\n\n", nans);
+    std::cout << " Done reading " << ncFileName << "\n\n";
+  } catch (netCDF::exceptions::NcException &e) {
+    std::cout << e.what() << std::endl;
+    return 1;
+  }
+  return 0;
+}
+
+void writeOutputCsrFile(const std::string& outFileName, 
+    const std::vector<std::string> vars,
+    const std::vector<std::string> datNames, o::LOs& ptrs_d, 
+    o::LOs& felems_d, o::LOs& data_d) { 
+  auto felems = o::HostRead<o::LO>(felems_d);
+  auto data = o::HostRead<o::LO>(data_d);
+  auto ptrs = o::HostRead<o::LO>(ptrs_d);
+  int psize = ptrs.size();
+  int dsize = data.size();
+  int nfaces = felems.size();
+  try {
+    netCDF::NcFile ncFile(outFileName, netCDF::NcFile::replace);
+    netCDF::NcDim dim1 = ncFile.addDim(vars[0], psize-1);
+    netCDF::NcDim dim2 = ncFile.addDim(vars[1], psize);
+    netCDF::NcDim dim3 = ncFile.addDim(vars[2], dsize);
+    netCDF::NcDim dim4 = ncFile.addDim(vars[3], nfaces);
+    netCDF::NcVar ncptrs = ncFile.addVar(datNames[0], netCDF::ncInt, dim2);
+    ncptrs.putVar(&(ptrs[0]));
+    netCDF::NcVar ncface_el = ncFile.addVar(datNames[1], netCDF::ncInt, dim4);
+    ncface_el.putVar(&(felems[0]));
+    netCDF::NcVar ncdata = ncFile.addVar(datNames[2], netCDF::ncInt, dim3);
+    ncdata.putVar(&(data[0]));
   } catch (netCDF::exceptions::NcException& e) {
     std::cout << e.what() << "\n";
   }

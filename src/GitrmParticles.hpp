@@ -1,6 +1,7 @@
 #ifndef GITRM_PARTICLES_HPP
 #define GITRM_PARTICLES_HPP
 
+#include <fstream>
 #include "GitrmMesh.hpp"
 #include <netcdf>
 #include <Kokkos_Core.hpp>
@@ -24,11 +25,11 @@ namespace p = pumipic;
 constexpr int PTCL_READIN_DATA_SIZE_PER_PTCL = 6;
 
 // TODO: initialize these to its default values: ids =-1, reals=0
-typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, Vector3d, 
+typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
    int, fp_t, int, fp_t, fp_t> Particle;
 
 // 'Particle' definition retrieval positions. 
-enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_VEL_PREV, PTCL_EFIELD, PTCL_CHARGE,
+enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
   PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, PTCL_PREV_RECOMBINE};
 
 typedef SellCSigma<Particle> SCS;
@@ -76,7 +77,7 @@ public:
     o::LO numPtcls);
   
   int readGITRPtclStepDataNcFile(const std::string& ncFileName, 
-  int& maxNPtcls, int& numPtclsRead);
+  int& maxNPtcls, int& numPtclsRead, bool debug=false);
 
   o::Real timeStep;
   SCS* scs;
@@ -102,6 +103,9 @@ public:
   int testGitrStepDataNumPtcls = -1;
   int testGitrStepDataIoniRateInd = -1;
   int testGitrStepDataRecombRateInd = -1;
+  int testGitrStepDataCLDInd = -1;
+  int testGitrStepDataMinDistInd = -1;
+  int testGitrStepDataMidPtInd = -1;
 };
 
 //timestep +1
@@ -116,7 +120,7 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
   int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::LO>& lastFilledTimeSteps, 
   o::Write<o::Real>& data, int dof=8, bool accum = false);
 
-void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, 
+void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData, 
   o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, 
   int nTHistory, std::string outNcFileName);
 
@@ -158,7 +162,7 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
           if(debug)
             printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
               pid_scs(pid), zInd, detId, x, y, z, iter);
-          Kokkos::atomic_fetch_add(&data_d[detId], 1);
+          Kokkos::atomic_increment(&data_d[detId]);
         }
       }
     }
@@ -192,7 +196,7 @@ inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d
         if(debug)
           printf("grid_ptclID %d ind %d pos %.5f %.5f %.5f iter %d rdir %d\n", 
             pid_scs(pid), ind, x, y, z, iter, dir);
-        Kokkos::atomic_fetch_add(&data_d[ind], 1);
+        Kokkos::atomic_increment(&data_d[ind]);
       }
     } //mask
   };
@@ -216,19 +220,24 @@ inline void printGridDataNComp(o::Write<o::GO> &data_d, int nComp=1) {
 }
 
 template <typename T>
-inline void printGridData(o::Write<T> &data_d) {
+inline void printGridData(o::Write<T> &data_d, std::string fname="", 
+    std::string header="") {
+  if(fname=="")
+    fname = "result.txt";
+  std::ofstream outf(fname);
   o::Write<T>total(1,0);
   o::parallel_for(data_d.size(), OMEGA_H_LAMBDA(const int& i) {
     auto num = data_d[i];
     if(num>0)
-      Kokkos::atomic_fetch_add(&total[0], num);
+      Kokkos::atomic_add(&total[0], num);
   });
   o::HostRead<T> tot(total);
-  printf("total collected %d \n", tot[0]);
+  outf << header << "\n";
+  outf << "total collected " <<  tot[0] << "\n";
   o::HostRead<T> data(data_d);
-  printf("index total  \n");  
+  outf << "index   total\n";  
   for(int i=0; i<data.size(); ++i)
-      printf("%d %d\n", i, data[i]);
+    outf <<  i << " " << data[i] << "\n";
 }
 
 inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHistory, 
@@ -254,32 +263,28 @@ inline void printPtclHostData(o::HostWrite<o::Real>& dh, std::ofstream& ofsHisto
 inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const GitrmMesh &gm, int debug=0) {
   debug = 0;
-  //test
   int tstep = iTimePlusOne;
-
   auto* scs = gp.scs;
   o::Mesh& mesh = gm.mesh;  
-
-  //Testing
-  o::LO checkAllBdryFaces = false;
-  int nfaces = mesh.nfaces();
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  auto skipModelIds = o::LOs(gm.piscesBeadCylinderIds);
-  auto numModelIds = skipModelIds.size();
+  o::LOs modelIdsToSkip(1);
+  if(!USE_PISCES_MESH_VERSION2)
+    modelIdsToSkip = o::LOs(gm.piscesBeadCylinderIds);
+  if(USE_PISCES_MESH_VERSION2)
+    modelIdsToSkip = o::LOs(gm.piscesBeadCylinderIdsMesh2);
+  auto numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
+  const auto coords = mesh.coords();
   const auto dual_elems = mesh.ask_dual().ab2b;
   const auto dual_faces = mesh.ask_dual().a2ab;
   const auto down_r2f = mesh.ask_down(3, 2).ab2b;
   const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
 
   const auto nel = mesh.nelems();
-  const auto& coords = mesh.coords();
-  const auto& mesh2verts = mesh.ask_elem_verts();
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   const auto& face_verts = mesh.ask_verts_of(2);
-  const auto& bdryFaces = gm.bdryFacesCsrBFS;
-  const auto& bdryFacePtrs = gm.bdryFacePtrsBFS;
+  const auto& bdryFaces = gm.bdryFacesSelectedCsr;
+  const auto& bdryFacePtrs = gm.bdryFacePtrsSelected;
   const auto scsCapacity = scs->capacity();
   o::Write<o::Real> closestPoints(scsCapacity*3, 0, "closest_points");
   o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
@@ -287,16 +292,12 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   auto pid_scs = scs->get<PTCL_ID>();
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if (mask > 0) {
-      auto beg = bdryFacePtrs[elem];
-      auto nFaces = bdryFacePtrs[elem+1] - beg;
-      //if checkAllBdryFaces, then comment 2 lines above this
-      //int beg=0;//delete
-      //int nFaces = nfaces;
-
+      o::LO beg = bdryFacePtrs[elem];
+      o::LO nFaces = bdryFacePtrs[elem+1] - beg;
       if(nFaces >0) {
         auto ptcl = pid_scs(pid);
         o::Real dist = 0;
-        o::Real min = 1.0e+20;
+        o::Real min = 1.0e+30;
         auto point = o::zero_vector<3>();
         auto pt = o::zero_vector<3>();
         o::Int bfid = -1, fid = -1, minRegion = -1;
@@ -307,46 +308,20 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
         o::Matrix<3,3> face;
         for(o::LO ii = 0; ii < nFaces; ++ii) {
           auto ind = beg + ii;
-
           bfid = bdryFaces[ind];
-
-          if(checkAllBdryFaces) {
-            bfid = ii;
-            //comment bfid line above 
-            if(!side_is_exposed[ii])
-            continue;
-            auto el = p::elem_id_of_bdry_face_of_tet(ii, f2rPtr, f2rElem);
-            o::LO bdryFids[4] = {-1, -1, -1, -1};
-            auto nExpFaces = p::get_exposed_faces_of_tet(el, down_r2f, side_is_exposed, bdryFids);
-            if(!nExpFaces)
-              continue;
-            bool skipFace = false;
-            for(auto id=0; id < numModelIds; ++id) {
-              for(int i = 0; i< 4 && i<nExpFaces; ++i) {
-                auto bid = bdryFids[i];
-                if(skipModelIds[id] == faceClassIds[bid]){
-                  skipFace = true;
-                  break;
-                }
-              }
-              if(skipFace)break;
-            }
-            if(skipFace) continue;
-          }
-
           face = p::get_face_coords_of_tet(face_verts, coords, bfid);
           if(debug > 2) {
             printf("face  ptcl %d %g %g %g %g %g %g %g %g %g\n", ptcl, face[0][0], face[0][1], face[0][2], 
               face[1][0], face[1][1], face[1][2],face[2][0], face[2][1], face[2][2]);
           }
           // //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
-          auto region = p::find_closest_point_on_triangle(face, ref, pt); 
+          o::LO region;
+          auto pt = p::closest_point_on_triangle(face, ref, &region); 
           dist = o::norm(pt - ref);
           dist = sqrt(dist);
 
-          int bfeId = -1;
           if(debug > 2) {
-            bfeId = p::elem_id_of_bdry_face_of_tet(bfid, f2rPtr, f2rElem);
+            auto bfeId = p::elem_id_of_bdry_face_of_tet(bfid, f2rPtr, f2rElem);
             printf(": ptcl %d nFaces %d dist %g el %d bdry_el %d \n", ptcl, nFaces, dist, elem, bfeId);
           }
           if(ii==0 || dist < min) {
@@ -374,6 +349,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   scs->parallel_for(lambda);
   gp.closestPoints = o::Reals(closestPoints);
   gp.closestBdryFaceIds = o::LOs(closestBdryFaceIds);
+
 }
 #endif//define
 

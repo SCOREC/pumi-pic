@@ -1,23 +1,22 @@
-# - Try to find kokkos
-# Once done this will define
-# NetCDF_FOUND - System has NetCDF
-# NetCDF_INCLUDE_DIRS - The NetCDF include directories
-# NetCDF_LIBRARIES - The libraries needed to use NetCDF
-# NetCDF_VERSION: The version of NetCDF found.
-# NetCDF::NetCDF: A target to use with `target_link_libraries`.
+#[==[
+ Try to find NetCDF. Once done this will define:
+  NetCDF_FOUND - System has NetCDF
+  NetCDF_INCLUDE_DIRS - The NetCDF include directories
+  NetCDF_LIBRARIES - The libraries needed to use NetCDF
+  NetCDF_VERSION: The version of NetCDF found.
+  NetCDF::NetCDF: A target to use with `target_link_libraries`.
+#]==]
 
 set(NetCDF_PREFIX "" CACHE STRING "NetCDF install directory")
 if(NetCDF_PREFIX)
   message(STATUS "NetCDF_PREFIX ${NetCDF_PREFIX}")
 endif()
 
-find_path(NetCDF_INCLUDE_DIR netcdf PATHS "${NetCDF_PREFIX}/include")
+find_path(NetCDF_INCLUDE_DIR NAMES netcdf PATHS "${NetCDF_PREFIX}/include" NO_DEFAULT_PATH)
 
-find_library(NetCDF_LIBRARY netcdf-cxx4 PATHS "${NetCDF_PREFIX}/lib")
+find_library(NetCDF_LIBRARY NAMES netcdf-cxx4 PATHS "${NetCDF_PREFIX}/lib64" NO_DEFAULT_PATH)
 
 if (NetCDF_FOUND)
-  #message(STATUS "Found NetCDF : ${NetCDF_FOUND}")
-  message(STATUS "NetCDF version: ${netCDF_VERSION}")
   set(NetCDF_VERSION ${netCDF_VERSION})
   set(NetCDF_LIBRARIES ${NetCDF_LIBRARY} )
   set(NetCDF_INCLUDE_DIRS ${NetCDF_INCLUDE_DIR} )
@@ -35,6 +34,9 @@ find_package_handle_standard_args(
 mark_as_advanced(NetCDF_INCLUDE_DIR NetCDF_LIBRARY )
 
 if (NetCDF_FOUND)
+  message(STATUS "NetCDF version: ${NetCDF_VERSION} : ${netCDF_VERSION}")
+  message(STATUS "NetCDF lib: ${NetCDF_LIBRARY}")
+  message(STATUS "NetCDF include: ${NetCDF_INCLUDE_DIR}")
   if (NOT TARGET NetCDF::NetCDF)
     add_library(NetCDF::NetCDF UNKNOWN IMPORTED)
     set_target_properties(NetCDF::NetCDF PROPERTIES

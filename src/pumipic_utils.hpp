@@ -242,7 +242,7 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
 OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
-  const o::Vector<3> &pos, const bool cylSymm = false, 
+  const o::Vector<3> &pos, const bool cylSymm = true, 
   const o::LO nComp = 1, const o::LO comp = 0, bool debug= false) {
   
   if(nx*nz == 1) {
@@ -312,8 +312,8 @@ index,data:  418  2.29957 419 1.97687  518 2.29957 519 1.97687
  fxz 2.0028 
 */
 
-OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0, 
-  o::Real gridz0, o::Real dx, o::Real dz, o::LO nx, o::LO nz,
+OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0, 
+  const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
 
   field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
@@ -329,22 +329,29 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, o::Real gridx0,
   }
 }
 
+OMEGA_H_DEVICE o::Vector<3> centroid_of_triangle(const o::Vector<3>& va,
+  const o::Vector<3>& vb, const o::Vector<3>& vc) {
+  o::Vector<3> pos;
+  pos[0] = va[0] + 2.0/3.0*(vb[0] + 0.5*(vc[0] - vb[0]) - va[0]);
+  pos[1] = va[1] + 2.0/3.0*(vb[1] + 0.5*(vc[1] - vb[1]) - va[1]);
+  pos[2] = va[2] + 2.0/3.0*(vb[2] + 0.5*(vc[2] - vb[2]) - va[2]);
+  return pos;  
+}
+
+OMEGA_H_DEVICE o::Vector<3> centroid_of_triangle(const o::Matrix<3, 3>& abc) {
+  return centroid_of_triangle(abc[0], abc[1], abc[2]);
+}
 
 OMEGA_H_DEVICE o::Vector<3> face_centroid_of_tet(const o::LO fid, 
   const o::Reals &coords, const o::LOs &face_verts) {
   const auto facev = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, facev);
   //TODO check if y and z are in required order
-  // Mid point of face, as in GITR.  0.666666667 -> 2/3
-  o::Vector<3> pos;
-  pos[0] = abc[0][0] + 2.0/3.0*(abc[1][0] + 0.5*(abc[2][0] - abc[1][0]) - abc[0][0]);
-  pos[1] = abc[0][1] + 2.0/3.0*(abc[1][1] + 0.5*(abc[2][1] - abc[1][1]) - abc[0][1]);
-  pos[2] = abc[0][2] + 2.0/3.0*(abc[1][2] + 0.5*(abc[2][2] - abc[1][2]) - abc[0][2]);
-  return pos;
+  return centroid_of_triangle(abc);
 }
 
 //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
-OMEGA_H_DEVICE o::LO getFaceMap(o::LO i) {
+OMEGA_H_DEVICE o::LO getFaceMap(const o::LO i) {
   assert(i>=0 && i<8);
   const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
   return fmap[i];
@@ -352,8 +359,8 @@ OMEGA_H_DEVICE o::LO getFaceMap(o::LO i) {
 
 OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v, 
   const o::Few<o::LO, 4>& tetv2v) {
-  o::LO matInd1 = getFaceMap(fi*2);
-  o::LO matInd2 = getFaceMap(fi*2+1);
+  auto matInd1 = getFaceMap(fi*2);
+  auto matInd2 = getFaceMap(fi*2+1);
   bool flip = true;
   if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
     flip = false;
@@ -425,7 +432,7 @@ OMEGA_H_DEVICE void get_face_from_face_index_of_tet(const Omega_h::Matrix<3, 4> 
 
 // WARNING: this doesn't give vertex ordering right, so surface normal may be wrong
 OMEGA_H_DEVICE o::Matrix<3, 3> get_face_coords_of_tet(const o::LOs& mesh2verts, 
-  const o::Reals& coords, o::LO elem, o::LO findex) {
+  const o::Reals& coords, const o::LO elem, const o::LO findex) {
   o::Matrix<3, 3> face;
   auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
   auto tet = o::gather_vectors<4, 3>(coords, tetv2v);
@@ -471,7 +478,7 @@ OMEGA_H_DEVICE o::LO is_face_within_limit_from_tet(const o::Matrix<3, 4>& tet,
 }
 
 OMEGA_H_DEVICE o::LO is_tet_within_limit_from_tet(const o::Matrix<3, 4>& tet1, 
-  const o::Matrix<3, 4>& tet2, const o::Real depth) {
+   const o::Matrix<3, 4>& tet2, const o::Real depth) {
   o::LO res = 0;
   for(o::LO i=0; i<4; ++i) {
     for(o::LO j=0; j<4; ++j) {
@@ -488,15 +495,16 @@ OMEGA_H_DEVICE o::LO is_tet_within_limit_from_tet(const o::Matrix<3, 4>& tet1,
   return res;
 }
 
-OMEGA_H_DEVICE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<3>, 3> &abc,
-  const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<3>, 2> &ab) {
+OMEGA_H_DEVICE void get_edge_coords_of_tet_face(
+   const Omega_h::Few<Omega_h::Vector<3>, 3> &abc, const Omega_h::LO iedge, 
+   Omega_h::Few<Omega_h::Vector<3>, 2> &ab) {
   //edge_vert:0,1; 1,2; 2,0
   ab[0] = abc[Omega_h::simplex_down_template(2, 1, iedge, 0)];
   ab[1] = abc[Omega_h::simplex_down_template(2, 1, iedge, 1)];
 }
 
 // WARNING: check vertex ordering right, so surface normal may be wrong
-OMEGA_H_DEVICE void check_face(const Omega_h::Matrix<3, 4> &M,
+OMEGA_H_DEVICE void check_face_of_tet(const Omega_h::Matrix<3, 4> &M,
   const Omega_h::Few<Omega_h::Vector<3>, 3>& face, const Omega_h::LO faceid) {
   Omega_h::Few<Omega_h::Vector<3>, 3> abc;
   get_face_from_face_index_of_tet( M, faceid, abc);
@@ -522,7 +530,7 @@ OMEGA_H_DEVICE o::LO get_face_types_of_tet(const o::LO elem,
   return nf;
 }
 
-OMEGA_H_DEVICE o::LO get_exposed_faces_of_tet(const o::LO elem, 
+OMEGA_H_DEVICE o::LO get_exposed_face_ids_of_tet(const o::LO elem, 
   const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
   o::LO (&fids)[4]) {
   o::LO nf = 0;
@@ -537,7 +545,7 @@ OMEGA_H_DEVICE o::LO get_exposed_faces_of_tet(const o::LO elem,
   return nf;
 }
 
-OMEGA_H_DEVICE o::LO get_interior_faces_of_tet(const o::LO elem, 
+OMEGA_H_DEVICE o::LO get_interior_face_ids_of_tet(const o::LO elem, 
   const o::LOs &down_r2f, const o::Read<o::I8> &side_is_exposed, 
   o::LO (&fids)[4]) {
   o::LO nf = 0;
@@ -551,6 +559,7 @@ OMEGA_H_DEVICE o::LO get_interior_faces_of_tet(const o::LO elem,
   }
   return nf;
 }
+
 } //namespace
 #endif
 

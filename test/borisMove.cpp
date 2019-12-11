@@ -86,8 +86,9 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("updateGitrmData");
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(scs, gir, gp, gm, elem_ids, false);
-    gitrm_recombine(scs, gir, gp, gm, elem_ids, false);
+    gitrm_ionize(scs, gir, gp, gm, elem_ids, true);
+    gitrm_recombine(scs, gir, gp, gm, elem_ids, true);
+
   }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
@@ -244,7 +245,7 @@ int main(int argc, char** argv) {
   int testNumPtcls = 1;
   int testNumPtclsRead = 0;
   if(compare_with_gitr) {
-    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testNumPtclsRead);
+    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testNumPtclsRead, true);
   }
   auto* scs = gp.scs;
   const auto scsCapacity = scs->capacity();
@@ -264,10 +265,14 @@ int main(int argc, char** argv) {
 
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces(false);
-  printf("Preprocessing Distance to boundary of %g \n", DEPTH_DIST2_BDRY);
-  // Add bdry faces to elements within depth
-  gm.preProcessBdryFacesBFS();
-  gm.writeDist2BdryFacesData();
+  printf("Preprocessing Selecting Boundary Faces\n");
+
+  gm.preprocessSelectBdryFacesFromAll(); 
+ 
+  int writeBdryFacesFile = WRITE_OUT_BDRY_FACES_FILE;
+  if(writeBdryFacesFile)
+    gm.writeDist2BdryFacesData("bdryFaces.nc");
+
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
 
@@ -299,6 +304,10 @@ int main(int argc, char** argv) {
   auto end_init = std::chrono::system_clock::now();
   int np;
   int scs_np;
+
+  //TODO replace by Kokkos
+  std::srand(time(NULL));
+
   for(int iter=0; iter<NUM_ITERATIONS; iter++) {
     scs_np = scs->nPtcls();
     MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -310,9 +319,9 @@ int main(int argc, char** argv) {
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {
-      gitrm_findDistanceToBdry(gp, gm, 0);
-      gitrm_calculateE(gp, *mesh, false);
-      gitrm_borisMove(scs, gm, dTime, false);
+      gitrm_findDistanceToBdry(gp, gm, 1);
+      gitrm_calculateE(gp, *mesh, true, gm);
+      gitrm_borisMove(scs, gm, dTime, true);
     }
     else
       neutralBorisMove(scs,dTime);
@@ -342,14 +351,15 @@ int main(int argc, char** argv) {
   std::cout << "Initialization duration " << dur_init.count()/60 << " min.\n";
   std::chrono::duration<double> dur_steps = end_sim - end_init;
   std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
+  
   if(piscesRun) {
-    std::cout << "Pisces detections \n";
-    printGridData(data_d);
+    std::string fname("piscesCounts.txt");
+    printGridData(data_d, fname, "piscesDetected");
     gm.markPiscesCylinderResult(data_d);
   }
   if(histInterval >0) {
     printf("writing out history file \n");
-    writePtclStepHistoryNcFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+    writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }
   

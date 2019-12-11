@@ -801,22 +801,15 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
 
 //Ref: Real-time Collision Detection by Christer Ericson, 2005.
 //ptp = ref point; ptq = nearest point on triangle; abc = triangle
-OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>, 3> &abc, 
-  const o::Vector<3> &ptp, o::Vector<3> &ptq, o::LO verbose = 0) {
-  
-  //o::LO verbose = 1;
+OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3>, 3> &abc, 
+   const o::Vector<3> &ptp, o::LO* reg=nullptr) {
+  o::LO debug = 0;
   o::LO region = -1;
+  auto ptq = o::zero_vector<3>();
   // Check if P in vertex region outside A
   o::Vector<3> pta = abc[0];
   o::Vector<3> ptb = abc[1];
   o::Vector<3> ptc = abc[2];
-
-  if(verbose >2){
-    print_osh_vector(pta, "pta");
-    print_osh_vector(ptb, "ptb");
-    print_osh_vector(ptc, "ptc");
-    print_osh_vector(ptp, "ptp");
-  }
 
   o::Vector<3> vab = ptb - pta;
   o::Vector<3> vac = ptc - pta;
@@ -828,11 +821,9 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     for(int i=0; i<3; ++i)
       ptq[i] = pta[i];
     region = VTXA;
-    if(verbose >2){
-      print_osh_vector(ptq, "QA");
-      print_osh_vector(ptp, "P");
-    }
-    return VTXA; 
+    if(reg)
+      *reg = region;
+    return ptq; 
   }
 
   // Check if P in vertex region outside B
@@ -844,9 +835,9 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     for(int i=0; i<3; ++i)
       ptq[i] = ptb[i];
     region = VTXB;
-    if(verbose >2)
-      print_osh_vector(ptq, "QB");
-    return VTXB; 
+    if(reg)
+      *reg = region;
+    return ptq; 
   }
 
   // Check if P in edge region of AB, if so return projection of P onto AB
@@ -857,7 +848,7 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     ptq = v*vab;
     ptq = ptq + pta; 
     region = EDGEAB;
-    //return EDGEAB;
+    //return region;
   }
 
   // Check if P in vertex region outside C
@@ -869,9 +860,9 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     for(int i=0; i<3; ++i)
       ptq[i] = ptc[i]; 
     region = VTXC;
-    if(verbose >2)
-      print_osh_vector(ptq, "QAB");
-    return VTXC;
+    if(reg)
+      *reg = region;
+    return ptq;
   }
 
   // Check if P in edge region of AC, if so return projection of P onto AC
@@ -882,9 +873,9 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     ptq = w*vac;
     ptq = ptq + pta; 
     region = EDGEAC;
-    if(verbose >2)
-      print_osh_vector(ptq, "QAC");
-    return EDGEAC;
+    if(reg)
+      *reg = region;
+    return ptq;
   }
 
   // Check if P in edge region of BC, if so return projection of P onto BC
@@ -894,9 +885,9 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     // barycentric coordinates (0,1-w,w)
     ptq =  ptb + w * (ptc - ptb); 
     region = EDGEBC;
-    if(verbose >2)
-      print_osh_vector(ptq, "QBC");
-    return EDGEBC;
+    if(reg)
+      *reg = region;
+    return ptq;
   }
 
   // P inside face region. Compute Q through its barycentric coordinates (u,v,w)
@@ -907,15 +898,14 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle( const o::Few< o::Vector<3>,
     // u*a + v*b + w*c, u = va * inv = 1 - v - w
     ptq =  pta + v * vab+ w * vac;
     region = TRIFACE;
-    if(verbose >2) 
-      print_osh_vector(ptq, "QABC");
-    return TRIFACE;
+    if(reg)
+      *reg = region;
+    return ptq;
   }
-  if(verbose >2){
-    print_osh_vector(ptq, "Q");
+  if(debug)
     printf("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
-  }
-  return region;
+
+  return ptq;
 }
 
 

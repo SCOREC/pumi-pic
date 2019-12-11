@@ -68,7 +68,7 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
           if(debug)
             printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
               pid_scs(pid), zInd, detId, x, y, z, iter);
-          Kokkos::atomic_fetch_add(&(data_d[detId]), 1);
+          Kokkos::atomic_increment(&(data_d[detId]));
         }
       }
     }
@@ -364,7 +364,7 @@ int main(int argc, char** argv) {
     gm.markPiscesCylinderResult(data_d);
   }
   if(histInterval >0)
-    writePtclStepHistoryNcFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+    writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "history.nc");
   
   Omega_h::vtk::write_parallel("mesh_vtk", mesh, picparts.dim());  

@@ -172,7 +172,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
       if(p::all_positive(bcc, 0)) {
         elemIdOfPtcls_w[ip] = elem;
         ptcl_done[ip] = 1;
-        Kokkos::atomic_fetch_add(&numPtclsInElems_w[elem], 1);
+        Kokkos::atomic_increment(&numPtclsInElems_w[elem]);
         found = true;
       } else {
         o::LO minInd = p::min_index(bcc, 4);
@@ -285,7 +285,6 @@ void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
   auto next_scs_d = scs->get<PTCL_NEXT_POS>();
   auto pos_scs_d = scs->get<PTCL_POS>();
   auto vel_d = scs->get<PTCL_VEL>();
-  auto vel_prev_d = scs->get<PTCL_VEL_PREV>();
   auto pid_scs = scs->get<PTCL_ID>();
   
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
@@ -308,7 +307,6 @@ void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
       for(int i=0; i<3; i++) {
         pos_scs_d(pid,i) = pos[i];
         vel_d(pid, i) = vel[i];
-        vel_prev_d(pid, i) = vel[i];
         next_scs_d(pid,i) = 0;
       }
     }
@@ -571,27 +569,40 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
 
 // Read GITR particle step data of all time steps; eg: rand numbers.
 int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName, 
-  int& maxNPtcls, int& numPtclsRead) {
+  int& maxNPtcls, int& numPtclsRead, bool debug) {
   
   assert(COMPARE_WITH_GITR == 1);
   std::cout << "Reading Test GITR step data\n";
-  // TODO re-order the list in its constructor to have default {}
+  // TODO re-order the list in its constructor to leave out empty {}
   Field3StructInput fs({"intermediate"}, {}, {"nP", "nTHist", "dof"}, 0,
-    {/*"Efield_at",*/ "position_at","RndIoni_at","IoniRate_at", "RndRecomb_at",
-      "RecombRate_at", "charge_at"}); 
+    {/*"Efield_at",*/ "position_at","charge_at", "mindist_at", "CLD_at", 
+    "midpt_at", "RndIoni_at","IoniRate_at", "RndRecomb_at", "RecombRate_at"}); 
   auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
   testGitrPtclStepData = o::Reals(fs.data);
   testGitrStepDataEfieldInd = 0; //fs.getIntValueOf("Efield_at");
   testGitrStepDataPositionInd = fs.getIntValueOf("position_at");
+  testGitrStepDataChargeInd = fs.getIntValueOf("charge_at");
+  testGitrStepDataMinDistInd = fs.getIntValueOf("mindist_at");
+  testGitrStepDataCLDInd = fs.getIntValueOf("CLD_at");
+  testGitrStepDataMidPtInd = fs.getIntValueOf("midpt_at");
   testGitrStepDataIoniInd = fs.getIntValueOf("RndIoni_at");
   testGitrStepDataIoniRateInd = fs.getIntValueOf("IoniRate_at");
   testGitrStepDataRecombInd = fs.getIntValueOf("RndRecomb_at");
   testGitrStepDataRecombRateInd = fs.getIntValueOf("RecombRate_at");
-  testGitrStepDataChargeInd = fs.getIntValueOf("charge_at");
   testGitrStepDataDof = fs.getIntValueOf("dof"); // or fs.getNumGrids(2);
   testGitrStepDataNumTsteps = fs.getIntValueOf("nTHist") - 1; // NOTE
   testGitrStepDataNumPtcls = fs.getIntValueOf("nP");
-  
+  if(debug) {
+    printf(" GITRdataIndex: E %d Pos %d Q %d d2bdry %d cld %d midpt %d "
+      "RndIoni %d rateIoni %d RndRec %d rateRec %d dof %d nT %d nP %d\n", 
+      testGitrStepDataEfieldInd, testGitrStepDataPositionInd, 
+      testGitrStepDataChargeInd, testGitrStepDataMinDistInd, testGitrStepDataCLDInd,
+      testGitrStepDataMidPtInd,testGitrStepDataIoniInd, testGitrStepDataIoniRateInd,
+      testGitrStepDataRecombInd, testGitrStepDataRecombRateInd, testGitrStepDataDof,
+      testGitrStepDataNumTsteps, testGitrStepDataNumPtcls);
+
+  }
+
   return stat;
 }
 
@@ -636,7 +647,7 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
   }
 }
 
-void writePtclStepHistoryNcFile(o::Write<o::Real>& ptclsHistoryData, 
+void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData, 
   o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, 
   int nTHistory, std::string outNcFileName) {
   

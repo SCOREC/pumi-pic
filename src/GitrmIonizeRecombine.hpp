@@ -152,14 +152,14 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
   auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
   auto scsCapacity = scs->capacity();
-/*  o::HostWrite<o::Real> rnd1(scsCapacity);
-  std::srand(time(NULL)); // FIXME
+
+  //TODO FIXME replace by Kokkos random
+  o::HostWrite<o::Real> rnd_h(scsCapacity);
   for(auto i=0; i<scsCapacity; ++i) {
-    rnd1[i] = (double)(std::rand())/RAND_MAX;
+    rnd_h[i] = (double)(std::rand())/RAND_MAX;
   }
-  o::Write<o::Real>rand1(rnd1);
-  auto rands = o::Reals(rand1);
- */
+  auto rands = o::Reals(o::Write<o::Real>(rnd_h));
+
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     // invalid elem_ids init to -1
     if(mask > 0 && elm_ids[pid] >= 0) {
@@ -199,7 +199,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
 
       o::Real P1 = 1.0 - exp(-dt/rateIon);
-      double randn = 0; //rands[pid];
+      double randn = 0;
       
       double rateGitr = 0;
       double randGitr = 0;
@@ -208,7 +208,8 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         rateGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testIrate];
         randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testGIind];
         randn = randGitr;        
-      }
+      } else
+        randn = rands[pid];
       
       auto xfid = xfaces_d[ptcl];
       auto first_iz = first_ionizeZ_scs(pid);
@@ -298,15 +299,14 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
   auto prev_recombination_scs = scs->get<PTCL_PREV_RECOMBINE>();
   auto scsCapacity = scs->capacity();
-/*  printf("Recomb: scsCapacity %d \n", scsCapacity);
-  o::HostWrite<o::Real> rnd1(scsCapacity);
-  std::srand(time(NULL)); //TODO FIXME
+
+  //TODO FIXME replace by Kokkos random
+  o::HostWrite<o::Real> rnd_h(scsCapacity);
   for(auto i=0; i<scsCapacity; ++i) {
-    rnd1[i] = (double)(std::rand())/RAND_MAX;
+    rnd_h[i] = (double)(std::rand())/RAND_MAX;
   }
-  o::Write<o::Real>rand1(rnd1);
-  auto rands = o::Reals(rand1);
-*/
+  auto rands = o::Reals(o::Write<o::Real>(rnd_h));
+
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0 && elm_ids[pid] >= 0) {
       auto el = elm_ids[pid];
@@ -352,7 +352,7 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
         P1 = 1.0 - exp(-dt/rateRecomb);
       }
 
-      double randn = 0;//rands[pid];
+      double randn = 0;
       double rateGitr = 0;
       double randGitr = 0;
       double randThis = randn;
@@ -363,6 +363,8 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
           iTimeStep*testGDof + testRrate];
         randn = randGitr;
       }
+      else 
+        randn = rands[pid];
       auto xfid = xfaces_d[ptcl];
       auto first_iz = first_ionizeZ_scs(pid);
       if(xfid < 0 && randn <= P1) {

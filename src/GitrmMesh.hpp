@@ -21,33 +21,45 @@ namespace p = pumipic;
 
 // D3D 0.8 to 2.45 m radial 
 
-constexpr int COMPARE_WITH_GITR = 1;
-constexpr int USE3D_BFIELD = 0;
-constexpr int USE2D_INPUTFIELDS = 0;
+constexpr int COMPARE_WITH_GITR = 1; //=g
+constexpr int USE_GITR_CLD = 0; //if g
+constexpr int USE_GITR_BFACE_MIDPT_N_CALC_CLD = 0;// if g
+constexpr int USE_GITR_DIST2BDRY = 0; //if g
+constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
+
+constexpr o::LO USE3D_BFIELD = 0;
+constexpr o::LO USE2D_INPUTFIELDS = 1;
 // GITR only constant EField is used.
-constexpr int USE_CONSTANT_BFIELD = 1; //used for pisces
-constexpr int USECYLSYMM = 0;
-constexpr int PISCESRUN  = 1;
+constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
+constexpr o::LO USE_CYL_SYMMETRY = 0;
+constexpr o::LO PISCESRUN  = 1;
 constexpr double BACKGROUND_AMU = 4.0; //for pisces
 constexpr double PTCL_AMU=184.0; //W,tungston
-constexpr int BACKGROUND_Z = 1;
+constexpr o::LO BACKGROUND_Z = 1;
+constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
 
-constexpr int USE_READIN_IONI_REC_RATES = 0;
+constexpr double DEPTH_DIST2_BDRY = 0.05;
+constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 100000;
 
-constexpr double DEPTH_DIST2_BDRY = 0.001;
-constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 1000;
+constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
+constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
+constexpr o::LO CHECK_ALL_BDRYFACES_FOR_D2BDRY = 0;
+constexpr o::LO NUM_TET_FACE_SUBDIV_FOR_D2BDRY_PRE = 2;  // =>5
+
+
 constexpr double BIAS_POTENTIAL = 250.0;
-constexpr int BIASED_SURFACE = 1;
+constexpr o::LO BIASED_SURFACE = 1;
 constexpr double CONSTANT_EFIELD[] = {0, 0, 0};
 constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
-constexpr int BDRY_STORAGE_SIZE_PER_FACE = 1;
+constexpr o::LO BDRY_STORAGE_SIZE_PER_FACE = 1;
 // Elements face type
 enum {INTERIOR=1, EXPOSED=2};
 
 constexpr int SKIP_GEOMETRIC_MODEL_IDS_FROM_DIST2BDRY = 1;
+constexpr o::LO USE_PISCES_MESH_VERSION2 = 1;
 
 
 #define MESHDATA(mesh) \
@@ -84,16 +96,24 @@ public:
 
   /** Distance to bdry search
   */
-  void preProcessBdryFacesBFS();
-  void preprocessCountBdryFaces(o::Write<o::LO>& numBdryFaceIdsInElems);
-  int makeCSRBdryFacePtrs(o::Write<o::LO>& numBdryFaceIdsInElems);
-  void preprocessStoreBdryFaces(o::Write<o::LO>& numBdryFaceIdsInElems,
-      o::Write<o::LO>& bdryFacesCsrW, int csrSize=0);
+  void preProcessBdryFacesBfs();
+  int makeCsrPtrs(o::Write<o::LO>& data, int tot, o::LOs& ptrs);
+  void preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
+  o::Write<o::LO>& bdryFacesCsrW, int csrSize);
+
   void writeDist2BdryFacesData(const std::string outFileName="d2bdryFaces.nc");
   void printDist2BdryFacesData(int num=0, int* elemIds=nullptr);
   o::LOs bdryFacesCsrBFS;
   o::LOs bdryFacePtrsBFS;
 
+  void preprocessSelectBdryFacesFromAll();
+  o::LOs bdryFacePtrsSelected;
+  o::LOs bdryFacesSelectedCsr;
+
+  int readDist2BdryFacesData(const std::string &);
+  o::LOs bdryCsrReadInDataPtrs;
+  o::LOs bdryCsrReadInData;
+  
   /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
   *    ChildLangmuirDist
   */
@@ -158,6 +178,19 @@ public:
   o::Real tempIonDx = 0;
   o::Real tempIonDz = 0;
 
+  o::Real densElX0 = 0;
+  o::Real densElZ0 = 0;
+  o::LO densElNx = 0;
+  o::LO densElNz = 0;
+  o::Real densElDx = 0;
+  o::Real densElDz = 0;
+  o::Real tempElX0 = 0;
+  o::Real tempElZ0 = 0;
+  o::LO tempElNx = 0;
+  o::LO tempElNz = 0;
+  o::Real tempElDx = 0;
+  o::Real tempElDz = 0;
+
   // to replace tag
   o::Reals densIonVtx_d;
   o::Reals tempIonVtx_d;  
@@ -166,6 +199,10 @@ public:
  
   //get model Ids by opening mesh/model in Simmodeler
   o::HostWrite<o::LO> piscesBeadCylinderIds;
+  o::HostWrite<o::LO> piscesBeadCylinderIdsMesh2;
+
+  o::Write<o::Real> larmorRadius_d;
+  o::Write<o::Real> childLangmuirDist_d;
 };
 
 // Cumulative sums. Done on host, to get ordered sum of all previous entries CSR.

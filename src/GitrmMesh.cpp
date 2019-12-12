@@ -669,12 +669,10 @@ OMEGA_H_DEVICE o::Vector<4> bcc_grid_of_tet(int ind , int NP) {
 
 OMEGA_H_DEVICE auto grid_points_inside_tet(const o::LOs &mesh2verts,  
     const o::Reals &coords, o::LO elem, o::LO NP, o::LO& npts,
-    o::Few<o::Vector<3>, 20>& grid)-> decltype(grid) {  //TODO FIX
+    o::Few<o::Vector<3>, 25>& grid)-> decltype(grid) {  //TODO FIX
   const auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
   const auto tet = o::gather_vectors<4, 3>(coords, tetv2v);
   OMEGA_H_CHECK(NP > 0);
-  if(NP ==1)
-    grid[0] = p::centroid_of_tet(elem, mesh2verts, coords);
   npts = 0;
   for(o::LO i=0; i < NP ; ++i) {  
     auto bcc = bcc_grid_of_tet(i , NP);        
@@ -683,6 +681,16 @@ OMEGA_H_DEVICE auto grid_points_inside_tet(const o::LOs &mesh2verts,
     grid[npts] = bcc[0]*tet[0] + bcc[1]*tet[1] + bcc[2]*tet[2] + bcc[3]*tet[3];
     ++npts;
   }
+
+  //add centroid
+  grid[npts] = p::centroid_of_tet(elem, mesh2verts, coords);
+  ++npts;
+  //add vertices
+  for(o::LO i=0; i < 4 ; ++i) {
+    grid[i] = tet[i]; 
+      ++npts;
+  }
+  assert(npts ==25); // FIX
   return grid;
 }
 
@@ -707,7 +715,7 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
 
   // mark faces
-  printf("Marking Bdry faces :size %d \n", faceClassIds.size());
+  printf("Marking Bdry faces \n");
   o::Write<o::LO> markedFaces_w(mesh.nfaces(), 0);
   auto lambda1 = OMEGA_H_LAMBDA(o::LO fid) {
     o::LO val = 0;
@@ -726,10 +734,10 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   auto markedFaces = o::LOs(markedFaces_w);
 
   //constexpr int D2BDR_GRID_LENGTH = 0.002; //meters
-  constexpr o::LO NDIV = 20;
+  constexpr o::LO NDIV = 25;
   constexpr o::LO ngrid = NDIV; //NDIV*NDIV*NDIV/3;
 
-  printf("Selecting Bdry-faces: nsub-div %d  ngrid %d\n", NDIV, ngrid );
+  printf("Selecting Bdry-faces: ngrid %d\n", ngrid );
 
   o::Write<o::LO> bdryFaces_nums(mesh.nelems(), 0);
   o::Write<o::LO> bdryFaces_w(mesh.nelems()*ngrid, 0);
@@ -738,8 +746,7 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
     int npts = 1;
    
     // FIX TODO URGENT 
-    o::Few<o::Vector<3>, 20> grid;
-    assert(nDIV <=20);
+    o::Few<o::Vector<3>, NDIV> grid;
     grid_points_inside_tet(mesh2verts, coords, elem, NDIV, npts, grid);
 
     double minDists[ngrid];
@@ -1008,40 +1015,37 @@ int GitrmMesh::readDist2BdryFacesData(const std::string& ncFileName) {
     bdryCsrReadInData);
 }
 
-
-void GitrmMesh::printDist2BdryFacesData(int num, int* elemIds) {
-  //auto& bdryFaceIds = bdryFacesSelectedCsr;
-  //auto& bdryFacePtrs = bdryFacePtrsSelected;
-  //auto data = o::HostRead<o::LO>(bdryFaceIds);
-  //auto ptrs = o::HostRead<o::LO>(bdryFacePtrs);
+//TODO use host print. This doesn't print all entries
+void GitrmMesh::printDist2BdryFacesData() {
+  auto data_d = bdryFacesSelectedCsr;
+  auto ptrs_d = bdryFacePtrsSelected;  
+  o::Write<o::LO> bfel_d(data_d.size(), -1);
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
-  auto& data = bdryFacesSelectedCsr;
-  auto ptrs = bdryFacePtrsSelected;
-  int tot = ptrs.size(); //nelems+1
-  if(num && !elemIds)
-    tot = num+1;
-  if(!num && elemIds)
-    assert(false);
+
   auto lambda = OMEGA_H_LAMBDA(const int &elem) {
-    bool select = false;
-    if(tot < ptrs.size() && elemIds)
-      select = true;
-    bool print = false;
-    if(select)
-      for(int in=0; in<num;++in)
-        if(elemIds[in]==elem)
-          print = true;
-    if(select && !print)
-     return;
-    o::LO ind1 = ptrs[elem];
-    o::LO ind2 = ptrs[elem+1];
+    o::LO ind1 = ptrs_d[elem];
+    o::LO ind2 = ptrs_d[elem+1];
     auto nf = ind2-ind1;
+    if(!nf)
+      return;
     for(o::LO i=ind1; i<ind2; ++i) {
-      auto fid = data[i];
+      auto fid = data_d[i];
       auto el = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem); 
-      printf("printfbfid:bfid,bfel  %d  %d ref_el %d nbfids %d\n", fid, el, elem, nf);
+      bfel_d[i] = el;
     }
   };
-  o::parallel_for(tot-1, lambda);
+  o::parallel_for(ptrs_d.size()-1, lambda);
+
+  auto data_h = o::HostRead<o::LO>(data_d);
+  auto ptrs_h = o::HostRead<o::LO>(ptrs_d);
+  auto bfel_h = o::HostRead<o::LO>(bfel_d);
+  for(int el=0; el<ptrs_h.size()-1; ++el) {
+    auto nf = ptrs_h[el+1] - ptrs_h[el];
+    for(int i = ptrs_h[el]; i<ptrs_h[el+1]; ++i) {
+      auto fid = data_h[i];
+      auto bfel = bfel_h[i];
+      printf("printfbfid:fid;el  %d  %d ref %d n %d\n", fid, bfel, el, nf);
+    }
+  }
 }

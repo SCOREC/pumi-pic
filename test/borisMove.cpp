@@ -269,7 +269,7 @@ int main(int argc, char** argv) {
 
   gm.preprocessSelectBdryFacesFromAll(); 
  
-  bool printD2BdryFaces = false;
+  bool printD2BdryFaces = PRINT_D2BDRY_FACES;
   if(printD2BdryFaces)
     gm.printDist2BdryFacesData();  
   

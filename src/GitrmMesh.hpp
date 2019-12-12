@@ -40,6 +40,7 @@ constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
 
 constexpr double DEPTH_DIST2_BDRY = 0.05;
 constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 100000;
+constexpr int PRINT_D2BDRY_FACES = 0;
 
 constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
 constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
@@ -102,14 +103,14 @@ public:
   o::Write<o::LO>& bdryFacesCsrW, int csrSize);
 
   void writeDist2BdryFacesData(const std::string outFileName="d2bdryFaces.nc");
-  void printDist2BdryFacesData(int num=0, int* elemIds=nullptr);
   o::LOs bdryFacesCsrBFS;
   o::LOs bdryFacePtrsBFS;
 
   void preprocessSelectBdryFacesFromAll();
   o::LOs bdryFacePtrsSelected;
   o::LOs bdryFacesSelectedCsr;
-
+  void printDist2BdryFacesData();
+  
   int readDist2BdryFacesData(const std::string &);
   o::LOs bdryCsrReadInDataPtrs;
   o::LOs bdryCsrReadInData;

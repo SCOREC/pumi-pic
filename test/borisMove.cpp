@@ -269,6 +269,11 @@ int main(int argc, char** argv) {
 
   gm.preprocessSelectBdryFacesFromAll(); 
  
+  bool printD2BdryFaces = false;
+  if(printD2BdryFaces)
+    gm.printDist2BdryFacesData();  
+  
+  
   int writeBdryFacesFile = WRITE_OUT_BDRY_FACES_FILE;
   if(writeBdryFacesFile)
     gm.writeDist2BdryFacesData("bdryFaces.nc");

@@ -66,8 +66,9 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   o::Real bN = dens - pow(10.0, gridD);
   o::Real abN = aN + bN;
   if(debug)
-    printf("InterpRate: gridTnext %g pow(10.0, gridTnext) %g  aT %g bT %g tem %g abT %g aN %g bN %g dens %g abN %g \n", 
-    gridTnext, pow(10.0, gridTnext), aT, bT, tem, abT, aN, bN, dens, abN);
+    printf("InterpRate: gridTnext %g pow(10.0, gridTnext) %g  aT %g bT %g "
+        "tem %g abT %g aN %g bN %g dens %g abN %g \n", 
+         gridTnext, pow(10.0, gridTnext), aT, bT, tem, abT, aN, bN, dens, abN);
   o::Real fx_z1 = (aN*pow(10.0, data[charge*nT*nD + indT*nD + indN]) 
           + bN*pow(10.0, data[charge*nT*nD + indT*nD + indN + 1]))/abN;
   

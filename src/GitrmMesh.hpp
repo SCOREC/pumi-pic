@@ -97,7 +97,7 @@ public:
   /** Distance to bdry search
   */
   void preProcessBdryFacesBfs();
-  int makeCsrPtrs(o::Write<o::LO>& data, int tot, o::LOs& ptrs);
+  o::Write<o::LO> makeCsrPtrs(o::Write<o::LO>& data, int tot, int& sum);
   void preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
   o::Write<o::LO>& bdryFacesCsrW, int csrSize);
 

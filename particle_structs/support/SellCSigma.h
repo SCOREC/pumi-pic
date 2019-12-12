@@ -480,6 +480,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
                                              kkLidView particle_elements,
                                              MemberTypeViews<DataTypes> particle_info) :
   policy(p), element_gid_to_lid(ne) {
+  Kokkos::Profiling::pushRegion("scs_construction");
   tryShuffling = true;
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -529,6 +530,7 @@ SellCSigma<DataTypes, ExecSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, 
   if (given_particles > 0 && particle_info != NULL) {
     initSCSData(chunk_widths, particle_elements, particle_info);
   }
+  Kokkos::Profiling::popRegion();
 }
 
 template<class DataTypes, typename ExecSpace>
@@ -834,8 +836,10 @@ void SellCSigma<DataTypes,ExecSpace>::rebuild(kkLidView new_element,
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   //If tryShuffling is on and shuffling works then rebuild is complete
-  if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles))
+  if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
+    Kokkos::Profiling::popRegion();
     return;
+  }
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
   auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);

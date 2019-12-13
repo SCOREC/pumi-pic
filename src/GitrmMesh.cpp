@@ -575,122 +575,29 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
 }
 
 
-//move to pumipic
-OMEGA_H_DEVICE
-o::Vector<6> bounding_box_min_deltas_of_tet(const o::Matrix<3,4>& tet, o::LO ndiv=2) {
-  int debug = 1;
-
-  auto box = o::zero_vector<6>();
-  double max[3];
-  double minVal = DBL_MAX;
-  double maxVal = -DBL_MAX;
-  for(int i=0; i<3; ++i) {
-    box[i] = minVal;
-    max[i] = maxVal;
-    for(int j=0; j<4; ++j) {
-      auto val = tet[j][i];
-      if(box[i] > val) 
-        box[i] = val;
-      if(max[i] < val)
-        max[i] = val;
-    }
-  }
-  for(int i=0; i<3; ++i) {
-    box[3+i] = (max[i] - box[i])/(double)ndiv;
-  }
-  if(debug)
-    printf("bbox %g %g %g : %g %g %g max: %g %g %g \n", 
-      box[0],box[1],box[2],box[3],box[4],box[5],max[0], max[1],max[2]);
-
-
-/*
-    //get bounding box
-    auto box = bounding_box_min_deltas_of_tet(tet, ndiv);
-    printf("box :: %g %g %g : %g %g %g \n", box[0], box[1], box[2], box[3], box[4], box[5]);
-    for(int i=0; i<ndiv; ++i) {
-      pt[0] = box[0] + i*box[3];
-      for(int j=0; j<ndiv; ++j) {
-        pt[1] = box[1] + j*box[4];
-        for(int k=0; k<ndiv; ++k) {
-          //auto index = i*ndiv*ndiv+j*ndiv+k;
-          pt[2] = box[2] + k*box[5]; 
-          p::find_barycentric_tet(tet, pt, bcc);
-       printf("bcc :: %g %g %g pt %g %g %g \n",bcc[0], bcc[1], bcc[2], pt[0], pt[1], pt[2]);
-          if(!p::all_positive(bcc, tol))
-            continue;
-
-          xx[npts] = pt[0];
-          yy[npts] = pt[1];
-          zz[npts] = pt[2];
-          npts++;
-        }
-      }
-    }
-*/
-    return box;
-}
-
-OMEGA_H_DEVICE o::Vector<4> bcc_grid_of_tet(int ind , int NP) {
-  auto b = o::zero_vector<4>();
-  for(int i=0; i<4; ++i)
-    b[i] = 1.0/4.0; //center of tet
-  auto r4 = pow(NP, 1.0/4.0);
-  int num = (int) r4;
-  if(pow(r4,4) < NP)
-    ++num;
-  //TODO FIX
-  double v = 1.0/4.0, n=1.0/2.0, m=3.0/2.0;
-  if(ind==0) { b[0]=v; b[1]=v; b[2]=v; b[3]=v;}
-  if(ind==1) { b[0]=v; b[1]=v; b[2]=v*n; b[3]=v*m;}
-  if(ind==2) { b[0]=v; b[1]=v; b[2]=v*m; b[3]=v*n;}
-  if(ind==3) { b[0]=v; b[1]=v*n; b[2]=v; b[3]=v*m;}
-  if(ind==4) { b[0]=v; b[1]=v*n; b[2]=v*m; b[3]=v;}
-  if(ind==5) { b[0]=v*n; b[1]=v; b[2]=v*m; b[3]=v;}
-  if(ind==6) { b[0]=v*n; b[1]=v*m; b[2]=v; b[3]=v;}
-  if(ind==7) { b[0]=v*n; b[1]=v; b[2]=v*m; b[3]=v;}
-  if(ind==8) { b[0]=v*n; b[1]=v; b[2]=v; b[3]=v*m;}
-  v = 1.0/6.0; n=2.0; 
-  if(ind==9) { b[0]=v; b[1]=v; b[2]=v*n; b[3]=v*n;}
-  if(ind==10) { b[0]=v; b[1]=v*n; b[2]=v; b[3]=v*n;}
-  if(ind==11) { b[0]=v; b[1]=v*n; b[2]=v*n; b[3]=v;}
-  if(ind==12) { b[0]=v*n; b[1]=v; b[2]=v*n; b[3]=v;}
-  if(ind==13) { b[0]=v*n; b[1]=v*n; b[2]=v; b[3]=v;}
-  v =  1.0/6.0; n=3.0;
-  if(ind==14) { b[0]=v; b[1]=v; b[2]=v; b[3]=v*n;}
-  if(ind==15) { b[0]=v; b[1]=v; b[2]=v*n; b[3]=v;}
-  if(ind==15) { b[0]=v; b[1]=v*n; b[2]=v; b[3]=v;}
-  if(ind==17) { b[0]=v*n; b[1]=v; b[2]=v; b[3]=v;}
-  v = 1.0/5.0; n=2.0;
-  if(ind==18) { b[0]=v; b[1]=v; b[2]=v; b[3]=v*n;}
-  if(ind==19) { b[0]=v; b[1]=v; b[2]=v*n; b[3]=v;}
-
-  return b;
-}
-
-OMEGA_H_DEVICE auto grid_points_inside_tet(const o::LOs &mesh2verts,  
-    const o::Reals &coords, o::LO elem, o::LO NP, o::LO& npts,
-    o::Few<o::Vector<3>, 25>& grid)-> decltype(grid) {  //TODO FIX
+template<size_t N>
+OMEGA_H_DEVICE o::Few<o::Vector<3>, N> grid_points_inside_tet(
+    const o::LOs &mesh2verts, const o::Reals &coords, o::LO elem, 
+    int ndiv, int& npts) {
+  o::Few<o::Vector<3>, N> grid;
   const auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
   const auto tet = o::gather_vectors<4, 3>(coords, tetv2v);
-  OMEGA_H_CHECK(NP > 0);
   npts = 0;
-  for(o::LO i=0; i < NP ; ++i) {  
-    auto bcc = bcc_grid_of_tet(i , NP);        
-    if(!p::all_positive(bcc, 1.0e-6))
-      continue;
-    grid[npts] = bcc[0]*tet[0] + bcc[1]*tet[1] + bcc[2]*tet[2] + bcc[3]*tet[3];
-    ++npts;
-  }
 
-  //add centroid
-  grid[npts] = p::centroid_of_tet(elem, mesh2verts, coords);
-  ++npts;
-  //add vertices
-  for(o::LO i=0; i < 4 ; ++i) {
-    grid[i] = tet[i]; 
-      ++npts;
+ //https://people.sc.fsu.edu/~jburkardt/cpp_src/
+ // tetrahedron_grid/tetrahedron_grid.cpp
+  for(int i=0; i<= ndiv; ++i) {
+    for(int j=0; j<= ndiv-i; ++j) {
+      for(int k=0; k<= ndiv-i-j; ++k) {
+        int l = ndiv - i - j - k;
+        for(int ii=0; ii<3; ++ii) {
+          grid[npts][ii] = (i*tet[0][ii] + j*tet[1][ii] +
+                       k*tet[2][ii] + l*tet[3][ii])/ndiv;
+        }
+        ++npts;
+      }
+    }
   }
-  assert(npts ==25); // FIX
   return grid;
 }
 
@@ -733,25 +640,21 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   o::parallel_for(mesh.nfaces(), lambda1, "MarkFaces");
   auto markedFaces = o::LOs(markedFaces_w);
 
-  //constexpr int D2BDR_GRID_LENGTH = 0.002; //meters
-  constexpr o::LO NDIV = 25;
-  constexpr o::LO ngrid = NDIV; //NDIV*NDIV*NDIV/3;
+  constexpr o::LO NDIV = D2BDRY_GRIDS_PER_TET; //6->84
+  constexpr o::LO NGRID = ((NDIV+1)*(NDIV+2)*(NDIV+3))/6;
 
-  printf("Selecting Bdry-faces: ngrid %d\n", ngrid );
+  printf("Selecting Bdry-faces: ndiv %d ngrid %d\n", NDIV, NGRID );
 
   o::Write<o::LO> bdryFaces_nums(mesh.nelems(), 0);
-  o::Write<o::LO> bdryFaces_w(mesh.nelems()*ngrid, 0);
+  o::Write<o::LO> bdryFaces_w(mesh.nelems()*NGRID, 0);
 
   auto lambda2 = OMEGA_H_LAMBDA(o::LO elem) {
     int npts = 1;
-   
-    // FIX TODO URGENT 
-    o::Few<o::Vector<3>, NDIV> grid;
-    grid_points_inside_tet(mesh2verts, coords, elem, NDIV, npts, grid);
+    auto grid = grid_points_inside_tet<NGRID>(mesh2verts, coords, elem, NDIV, npts);
 
-    double minDists[ngrid];
-    o::LO bfids[ngrid];
-    for(int i=0; i<ngrid; ++i) {
+    double minDists[NGRID];
+    o::LO bfids[NGRID];
+    for(int i=0; i<NGRID; ++i) {
       bfids[i] = -1;
       minDists[i] = minDist;
     }
@@ -782,9 +685,9 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
     }
     for(int i=0; i<npts; ++i) 
       if(bfids[i] >=0) {
-        bdryFaces_w[elem*ngrid+nb] = bfids[i];
+        bdryFaces_w[elem*NGRID+nb] = bfids[i];
         if(false)
-          printf("elem %d : @ %d fid %d nb %d\n", elem, elem*ngrid+nb, bfids[i], nb);
+          printf("elem %d : @ %d fid %d nb %d\n", elem, elem*NGRID+nb, bfids[i], nb);
         ++nb;
       }
     bdryFaces_nums[elem] = nb;
@@ -806,7 +709,7 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   auto lambda3 = OMEGA_H_LAMBDA(int elem) {
     if(false && ptrs_d[elem] < ptrs_d[elem+1])
       printf("elem %d  %d \n", elem, ptrs_d[elem]);
-    auto beg = elem*ngrid;
+    auto beg = elem*NGRID;
     auto ptr = ptrs_d[elem];
     auto num = ptrs_d[elem+1] - ptr;
 
@@ -1001,9 +904,8 @@ void GitrmMesh::writeDist2BdryFacesData(const std::string outFileName) {
   vars.insert( vars.end(), {"nelems", "nindices", "nfaces", "nface_elids"});
   std::vector<std::string> datNames;
   datNames.insert(datNames.end(), {"indices", "face_elements", "bdryfaces"});
-  writeOutputCsrFile(outFileName, vars, datNames, bdryFacePtrsBFS, felems, bdryFacesCsrBFS);
-  //writeOutputCsrFile(outFileName, vars, datNames, bdryCsrReadInDataPtrs, 
-  //  felems, bdryCsrReadInData);
+  writeOutputCsrFile(outFileName, vars, datNames, bdryFacePtrsSelected, 
+      felems, bdryFacesSelectedCsr);
 }
 
 int GitrmMesh::readDist2BdryFacesData(const std::string& ncFileName) {

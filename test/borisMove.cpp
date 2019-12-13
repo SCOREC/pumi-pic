@@ -267,7 +267,11 @@ int main(int argc, char** argv) {
   gm.initBoundaryFaces(false);
   printf("Preprocessing Selecting Boundary Faces\n");
 
-  gm.preprocessSelectBdryFacesFromAll(); 
+  int readInCsrBdryData = USE_READIN_CSR_BDRYFACES;
+  if(readInCsrBdryData)
+    gm.readDist2BdryFacesData("bdryFaces_in.nc");
+  else
+    gm.preprocessSelectBdryFacesFromAll(); 
  
   bool printD2BdryFaces = PRINT_D2BDRY_FACES;
   if(printD2BdryFaces)

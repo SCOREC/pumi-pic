@@ -16,6 +16,12 @@
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
 inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, const GitrmMesh &gm) {
+
+  const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  const auto coords = mesh.coords();
+  const auto face_verts = mesh.ask_verts_of(2);
+
   const int compareWithGitr = COMPARE_WITH_GITR;
   const int useGitrCLD = USE_GITR_CLD;
   const int replaceEQ = USE_GITR_EFILED_AND_Q;
@@ -41,7 +47,6 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
   const auto tempElDz = gm.tempElDz;
   o::Write<o::Real> larmorRadius_d = gm.larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d = gm.childLangmuirDist_d;
-  o::LO checkAllBdryFaces = CHECK_ALL_BDRYFACES_FOR_D2BDRY;
 
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
@@ -60,6 +65,8 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
   const auto debyeLengths = mesh.get_array<o::Real>(o::FACE, "DebyeLength");
   const auto larmorRadii = mesh.get_array<o::Real>(o::FACE, "LarmorRadius");
   const auto childLangmuirDists = mesh.get_array<o::Real>(o::FACE, "ChildLangmuirDist");
+  const auto elDensity = mesh.get_array<o::Real>(o::FACE, "ElDensity");
+  const auto elTemp = mesh.get_array<o::Real>(o::FACE, "ElTemp");
   auto* scs = gp.scs;
   auto pos_scs = scs->get<PTCL_POS>();
   auto efield_scs  = scs->get<PTCL_EFIELD>();
@@ -90,15 +97,42 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
         o::Real debyeLength = debyeLengths[faceId];
         o::Real larmorRadius = larmorRadii[faceId];
         o::Real childLangmuirDist = childLangmuirDists[faceId];
-        if(checkAllBdryFaces) {
-          larmorRadius = larmorRadius_d[faceId];
-          childLangmuirDist = childLangmuirDist_d[faceId];
-        }
-
         auto pos = p::makeVector3(pid, pos_scs);
+        
         o::Vector<3> closest;
         for(o::LO i=0; i<3; ++i)
           closest[i] = closestPoints[pid*3+i];
+        
+        //get Tel, Nel
+        auto nelMesh = elDensity[faceId];
+        auto telMesh = elTemp[faceId];
+        
+        auto bfel = p::elem_id_of_bdry_face_of_tet(faceId, f2rPtr, f2rElem);
+        auto bface_coords = p::get_face_coords_of_tet(face_verts, coords, faceId);
+        auto bmid = p::centroid_of_triangle(bface_coords);
+        auto tel_bclosest = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
+                         tempElDz, tempElNx, tempElNz, closest, true);
+        auto nel_bclosest = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
+                         densElDz, densElNx, densElNz, closest, true);
+        //calculate CLD
+        o::Real calcDLen_bclosest = 0;
+        if(o::are_close(nel_bclosest, 0.0))
+          calcDLen_bclosest = 1.0e12;
+        else 
+          calcDLen_bclosest = sqrt(8.854187e-12*tel_bclosest/(nel_bclosest*pow(background_Z,2)*1.60217662e-19));
+        // Only for BIASED surface
+        o::Real calcCLD_bclosest = 0;
+        if(tel_bclosest > 0.0)
+          calcCLD_bclosest = calcDLen_bclosest * pow(abs(pot)/tel_bclosest, 0.75);
+        else 
+           calcCLD_bclosest = 1e12;
+        printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g nelmid %g Telmid %g "
+            " calcCLD_bclosest %g bfidmid %g %g %g bfid %d bfel %d bface_verts %g %g %g , %g %g %g, %g %g %g \n", 
+            ptcl, pos[0], pos[1], pos[2], nelMesh, telMesh, nel_bclosest, tel_bclosest, calcCLD_bclosest,
+            bmid[0], bmid[1], bmid[2], faceId, bfel, bface_coords[0][0], bface_coords[0][1], bface_coords[0][2],
+            bface_coords[1][0], bface_coords[1][1], bface_coords[1][2],
+            bface_coords[2][0], bface_coords[2][1], bface_coords[2][2]);
+
         auto distVector = closest - pos;
         auto dirUnitVector = o::normalize(distVector);
         auto d2bdry = p::osh_mag(distVector);
@@ -108,43 +142,48 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
         o::Real thisCLD=childLangmuirDist;
         o::Real thisD2bdry=d2bdry;
         o::Real gitrD2bdry=0;
-        o::Real calcCLD=0;
+        o::Real calcCLD_gitrmid=0;
         o::Real emagOrig=0;
+        o::Real emag_closest = 0;
+        auto gitrmid = o::zero_vector<3>();
+        double gitrTel =0, gitrNel = 0;
         o::LO beg = ptcl*testGNT*testGDof + iTimeStep*testGDof;
         if(biasedSurface) {
           emag = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
+          emag_closest = pot/(2.0*calcCLD_bclosest)* exp(-d2bdry/(2.0*calcCLD_bclosest));
           if(compareWithGitr) {
+            gitrCLD = testGitrPtclStepData[beg + testGCLDInd];
+            auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
+            auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
+            auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
+            gitrmid = p::makeVector3FromArray({gitrMidPtx, gitrMidPty, gitrMidPtz});
+            gitrTel = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
+              tempElDz, tempElNx, tempElNz, gitrmid, true);
+            gitrNel = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
+              densElDz, densElNx, densElNz, gitrmid, true);
+            o::Real gdlen = 0;
+            if(o::are_close(gitrNel, 0.0))
+              gdlen = 1.0e12;
+            else 
+              gdlen = sqrt(8.854187e-12*gitrTel/(gitrNel*pow(background_Z,2)*1.60217662e-19));
+            // Only for BIASED surface
+            calcCLD_gitrmid = 0;
+            if(gitrTel > 0.0)
+              calcCLD_gitrmid = gdlen * pow(abs(pot)/gitrTel, 0.75);
+            else 
+              calcCLD_gitrmid = 1e12;
+
+            printf("calcE: ptcl %d gtel %g gnel %g gmid %g %g %g gdlen %g g_calcCLD_gitrmid %g \n", 
+                ptcl, gitrTel, gitrNel, gitrMidPtx, gitrMidPty, gitrMidPtz, gdlen, calcCLD_gitrmid);
+            
+            gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
             if(useGitrD2bdry) {
-              gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
               thisD2bdry= gitrD2bdry;
             }
-
             if(useGitrCLD) {
-              gitrCLD = testGitrPtclStepData[beg + testGCLDInd]; 
               thisCLD = gitrCLD;
             } else if(useGitrMidPt) {
-              auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
-              auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
-              auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
-              o::Real dlen = 0;
-              
-              auto pos = p::makeVector3FromArray({gitrMidPtx, gitrMidPty, gitrMidPtz});
-              o::Real tel = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
-                tempElDz, tempElNx, tempElNz, pos, true);
-              o::Real nel = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
-                densElDz, densElNx, densElNz, pos, true);
-
-              if(o::are_close(nel, 0.0))
-                dlen = 1.0e12;
-              else 
-                dlen = sqrt(8.854187e-12*tel/(nel*pow(background_Z,2)*1.60217662e-19));
-              // Only for BIASED surface
-              o::Real calcCLD = 0;
-              if(tel > 0.0)
-                calcCLD = dlen * pow(abs(pot)/tel, 0.75);
-              else 
-                calcCLD = 1e12;
-              thisCLD = calcCLD;
+              thisCLD = calcCLD_gitrmid;
             }
             
             emag = pot/(2.0*thisCLD)* exp(-thisD2bdry/(2.0*thisCLD));
@@ -168,18 +207,17 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
           efield_scs(pid, i) = exd[i];
 
         if(debug){
-          printf("CalcE: ptcl %d dist2bdry %g  bdryface:%d angle:%g pot:%g"
-           " DebL:%g Larm:%g CLD:%g \n", ptcl, d2bdry, faceId, angle, 
-           pot, debyeLength, larmorRadius, childLangmuirDist);
-          printf("CalcE: ptcl %d pos %g %g %g closest %g %g %g distVec %g %g %g \n", 
-            ptcl, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2],
-            distVector[0], distVector[1], distVector[2]);
+          printf("CalcE2: ptcl %d dist2bdry %g  bdryface:%d  bfel %d emag %g  emag_closest %g CLD:%g "
+              " pos %g %g %g closest %g %g %g \n", ptcl, d2bdry, faceId, bfel, emag, emag_closest,
+              childLangmuirDist, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2]);
         } 
         if(debug)
-          printf("CalcE:: TStep %d ptcl %d d2bdry %g gitrD2bdry %g  emag %g, emagOrig %g "
-              "\t CLDorig %g thisCLD %g gitrCLD %g calcCLD %g elem %d dir %g %g %g \n", 
+          printf("CalcE3:: TStep %d ptcl %d dist2bdry %g gitrD2bdry %g  emag %g, emagOrig %g "
+              " CLDorig %g thisCLD %g gitrCLD %g calcCLD_gitrmid %g calcCLD_bclosest %g elem %d "
+              " gitrmid %g %g %g gTel %g gNel %g telMesh %g nelMesh %g tel_bclosest %g nel_bclosest %g \n", 
             iTimeStep, ptcl, d2bdry, gitrD2bdry,  emag, emagOrig, childLangmuirDist, thisCLD, 
-            gitrCLD, calcCLD, elem, dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
+            gitrCLD, calcCLD_gitrmid, calcCLD_bclosest, elem, gitrmid[0], gitrmid[1], gitrmid[2], 
+            gitrTel, gitrNel, tel_bclosest, nel_bclosest);
 
         if(compareWithGitr) {// TODO
           //beg: pindex*nT*dof_intermediate + (nthStep-1)*dof_intermediate
@@ -200,7 +238,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
             charge_scs(pid) = gitrQ;
           }
          // if(debug)
-            printf("calcE ptcl %d timestep %d q %d  efield %g %g %g  GITRmindist %g gitrCLD %g "
+            printf("calcE4 ptcl %d timestep %d q %d  efield %g %g %g  GITRmindist %g gitrCLD %g "
                 "GITR_q %d GITR_Efield %g  %g  %g useGITR_EQ %d useGITR_CLD %d \n", 
                 ptcl, iTimeStep, charge_scs(pid), efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2), 
                gitrD2bdry, gitrCLD, gitrQ, gitrE0, gitrE1, gitrE2,  replaceEQ, useGitrCLD);

@@ -27,31 +27,31 @@ constexpr int USE_GITR_BFACE_MIDPT_N_CALC_CLD = 0;// if g
 constexpr int USE_GITR_DIST2BDRY = 0; //if g
 constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
 
+constexpr int PRINT_D2BDRY_FACES = 0;
+
+constexpr o::LO USE_READIN_CSR_BDRYFACES = 0;
+constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 1;
+constexpr o::LO D2BDRY_GRIDS_PER_TET = 5;
+
 constexpr o::LO USE3D_BFIELD = 0;
 constexpr o::LO USE2D_INPUTFIELDS = 1;
+constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
+
 // GITR only constant EField is used.
 constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
-constexpr o::LO USE_CYL_SYMMETRY = 0;
+constexpr o::LO USE_CYL_SYMMETRY = 1;
 constexpr o::LO PISCESRUN  = 1;
 constexpr double BACKGROUND_AMU = 4.0; //for pisces
 constexpr double PTCL_AMU=184.0; //W,tungston
 constexpr o::LO BACKGROUND_Z = 1;
-constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
-
-constexpr double DEPTH_DIST2_BDRY = 0.05;
-constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 100000;
-constexpr int PRINT_D2BDRY_FACES = 0;
-
-constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
-constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
-constexpr o::LO CHECK_ALL_BDRYFACES_FOR_D2BDRY = 0;
-constexpr o::LO NUM_TET_FACE_SUBDIV_FOR_D2BDRY_PRE = 2;  // =>5
-
-
 constexpr double BIAS_POTENTIAL = 250.0;
 constexpr o::LO BIASED_SURFACE = 1;
 constexpr double CONSTANT_EFIELD[] = {0, 0, 0};
 constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
+
+//old method
+constexpr double DEPTH_DIST2_BDRY = 0.05;
+constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 100000;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };

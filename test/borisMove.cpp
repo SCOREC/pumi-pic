@@ -70,7 +70,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("gitrm_search");
   SCS* scs = gp.scs;
   assert(scs->nElems() == mesh->nelems());
-  Omega_h::LO maxLoops = 50;
+  Omega_h::LO maxLoops = 200;
   const auto scsCapacity = scs->capacity();
   assert(scsCapacity > 0);
   o::Write<o::LO> elem_ids(scsCapacity,-1);

@@ -126,7 +126,8 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
           calcCLD_bclosest = calcDLen_bclosest * pow(abs(pot)/tel_bclosest, 0.75);
         else 
            calcCLD_bclosest = 1e12;
-        printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g nelmid %g Telmid %g "
+        if(debug)
+          printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g nelmid %g Telmid %g "
             " calcCLD_bclosest %g bfidmid %g %g %g bfid %d bfel %d bface_verts %g %g %g , %g %g %g, %g %g %g \n", 
             ptcl, pos[0], pos[1], pos[2], nelMesh, telMesh, nel_bclosest, tel_bclosest, calcCLD_bclosest,
             bmid[0], bmid[1], bmid[2], faceId, bfel, bface_coords[0][0], bface_coords[0][1], bface_coords[0][2],
@@ -172,8 +173,9 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
               calcCLD_gitrmid = gdlen * pow(abs(pot)/gitrTel, 0.75);
             else 
               calcCLD_gitrmid = 1e12;
-
-            printf("calcE: ptcl %d gtel %g gnel %g gmid %g %g %g gdlen %g g_calcCLD_gitrmid %g \n", 
+            
+            if(debug)
+              printf("calcE: ptcl %d gtel %g gnel %g gmid %g %g %g gdlen %g g_calcCLD_gitrmid %g \n", 
                 ptcl, gitrTel, gitrNel, gitrMidPtx, gitrMidPty, gitrMidPtz, gdlen, calcCLD_gitrmid);
             
             gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
@@ -237,7 +239,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
             efield_scs(pid, 2) = gitrE2;
             charge_scs(pid) = gitrQ;
           }
-         // if(debug)
+          if(debug)
             printf("calcE4 ptcl %d timestep %d q %d  efield %g %g %g  GITRmindist %g gitrCLD %g "
                 "GITR_q %d GITR_Efield %g  %g  %g useGITR_EQ %d useGITR_CLD %d \n", 
                 ptcl, iTimeStep, charge_scs(pid), efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2), 

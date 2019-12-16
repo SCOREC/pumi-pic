@@ -603,7 +603,7 @@ OMEGA_H_DEVICE o::Few<o::Vector<3>, N> grid_points_inside_tet(
 
 void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   MESHDATA(mesh);
-  int debug = 1;
+  int debug = 0;
   const double minDist = DBL_MAX;
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
@@ -686,12 +686,12 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
     for(int i=0; i<npts; ++i) 
       if(bfids[i] >=0) {
         bdryFaces_w[elem*NGRID+nb] = bfids[i];
-        if(false)
+        if(debug)
           printf("elem %d : @ %d fid %d nb %d\n", elem, elem*NGRID+nb, bfids[i], nb);
         ++nb;
       }
     bdryFaces_nums[elem] = nb;
-    if(false)
+    if(debug)
       printf("elem %d : bdryFaces_nums %d total %d\n", elem, nb, npts);
   };
   int num = nel;

@@ -121,7 +121,7 @@ void GitrmParticles::initPtclCollisionData(int numPtcls) {
 void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch( 
   const o::Reals& data, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems,
   o::LO numPtcls, o::LO numPtclsRead) {
-  o::LO maxLoop = 20;
+  o::LO maxLoop = 10000;
   MESHDATA(mesh);
   auto size = data.size();
   OMEGA_H_CHECK(PTCL_READIN_DATA_SIZE_PER_PTCL >= 3);
@@ -138,7 +138,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
         pos[j] = data[j*numPtclsRead+ii];
       auto bcc = o::zero_vector<4>();
       p::find_barycentric_tet(M, pos, bcc);
-      if(p::all_positive(bcc, 0)) {
+      if(p::all_positive(bcc, 1.0e-6)) {
         elemDet[0] = elem;
       }
     };

@@ -86,8 +86,8 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   Kokkos::Profiling::pushRegion("updateGitrmData");
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(scs, gir, gp, gm, elem_ids, true);
-    gitrm_recombine(scs, gir, gp, gm, elem_ids, true);
+    gitrm_ionize(scs, gir, gp, gm, elem_ids, false);
+    gitrm_recombine(scs, gir, gp, gm, elem_ids, false);
 
   }
 
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
     NUM_ITERATIONS = atoi(argv[7]);
   if(argc > 8) {
     histInterval = atoi(argv[8]);
-    if(histInterval >NUM_ITERATIONS)
+    if(histInterval > NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
   std::string gitrDataFileName = "";
@@ -328,9 +328,9 @@ int main(int argc, char** argv) {
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
     if(gir.chargedPtclTracking) {
-      gitrm_findDistanceToBdry(gp, gm, 1);
-      gitrm_calculateE(gp, *mesh, true, gm);
-      gitrm_borisMove(scs, gm, dTime, true);
+      gitrm_findDistanceToBdry(gp, gm, 0);
+      gitrm_calculateE(gp, *mesh, false, gm);
+      gitrm_borisMove(scs, gm, dTime, false);
     }
     else
       neutralBorisMove(scs,dTime);

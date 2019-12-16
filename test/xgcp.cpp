@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
   const auto safeMethod = pumipic::Input::getMethod(argv[9]);
   assert(bufferMethod>=0);
   assert(safeMethod>=0);
-  int num_planes = atoi(argv[4]); //TODO Make commandline arguments
+  int num_planes = atoi(argv[4]);
   int num_processes_per_group = atoi(argv[5]);
   xgcp::Input input(lib, mesh_file, partition_file, num_planes, num_processes_per_group,
                     bufferMethod, safeMethod);

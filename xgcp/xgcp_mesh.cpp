@@ -23,7 +23,7 @@ namespace xgcp {
     //Read other information (background fields, mesh parameters?)
 
     //Create fields on full mesh that will transfer to picparts?
-    //Note this feature is not supported in pumipic::Mesh yet
+    //   Note this feature is not supported in pumipic::Mesh yet
 
     //Breakup group/torodial partitioning
     int num_cores = input.num_core_regions;
@@ -44,9 +44,21 @@ namespace xgcp {
 
     picparts = new p::Mesh(pp_input);
 
+    auto mesh = picparts->mesh();
+    auto safeTag = picparts->safeTag();
+    mesh->add_tag(mesh->dim(), "safe", 1, safeTag);
+    char buffer[100];
+    sprintf(buffer, "XGCp_Mesh_%d", input.library.world()->rank());
+    Omega_h::vtk::write_parallel(buffer, mesh, mesh->dim());
+
     //Build gyro mappings
 
     //Build plane information
+    fp_t delta_phi = 2* M_PI / num_planes;
+    major_phi = delta_phi * torodial_comm->rank();
+    minor_phi = major_phi - delta_phi;
+    if (torodial_comm->rank() == 0)
+      minor_phi += 2*M_PI;
   }
 
   Mesh::~Mesh() {

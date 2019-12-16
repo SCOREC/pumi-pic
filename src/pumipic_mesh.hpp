@@ -7,7 +7,7 @@ namespace pumipic {
   class Mesh {
   public:
     //Delete default compilers
-    Mesh() = delete; 
+    Mesh() = delete;
     Mesh(const Mesh&) = delete;
       Mesh& operator=(const Mesh&) = delete;
 
@@ -66,10 +66,11 @@ namespace pumipic {
     template <class T>
     void reduceCommArray(int dim, Op op, Omega_h::Write<T> array);
 
-    //Users should not run the following functions. 
+    //Users should not run the following functions.
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
-    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,
+    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
+                          Omega_h::LOs owner,
                           Omega_h::Write<Omega_h::LO> has_part,
                           Omega_h::Write<Omega_h::LO> is_safe);
 

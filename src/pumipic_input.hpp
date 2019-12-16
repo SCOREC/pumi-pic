@@ -4,7 +4,7 @@
 namespace pumipic {
 
   class Mesh;
-  
+
   class Input {
   public:
 
@@ -23,11 +23,13 @@ namespace pumipic {
       CLASSIFICATION //partition vector holds ownership for each classification id
     };
 
-    Input(Omega_h::Mesh& mesh, char* partition_filename, 
-          Method bufferMethod_, Method safeMethod_);
+    Input(Omega_h::Mesh& mesh, char* partition_filename,
+          Method bufferMethod_, Method safeMethod_,
+          Omega_h::CommPtr comm = nullptr);
 
     Input(Omega_h::Mesh& mesh, Ownership rule, Omega_h::LOs partition_vector,
-          Method bufferMethod, Method safeMethod);
+          Method bufferMethod, Method safeMethod,
+          Omega_h::CommPtr comm = nullptr);
 
     void printInfo();
     static Method getMethod(std::string s);
@@ -46,6 +48,6 @@ namespace pumipic {
     Omega_h::LOs partition;
     Method bufferMethod;
     Method safeMethod;
-
+    Omega_h::CommPtr comm;
   };
 }

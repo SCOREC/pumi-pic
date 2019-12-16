@@ -11,10 +11,8 @@ namespace pumipic {
   void Mesh::setupComm(int edim, Omega_h::LOs global_ents_per_rank,
                        Omega_h::LOs picpart_ents_per_rank,
                        Omega_h::LOs ent_owners) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int comm_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int rank = commptr->rank();
+    int comm_size = commptr->size();
 
     int nents = picpart->nents(edim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
@@ -62,7 +60,7 @@ namespace pumipic {
       boundary_degree[part_id] = picpart_diff * (is_complete[part_id] == 1);
     };
     Omega_h::parallel_for(comm_size, checkCompleteness, "checkCompleteness");
-      
+
     //Renumber the boundary part ents using atomics
     //  NOTE: We can do this for boundary ents because the order doesn't need to be consistent
     Omega_h::Write<Omega_h::LO> picpart_offsets_tmp(nents, 0, "picpart_offsets_tmp");
@@ -74,7 +72,7 @@ namespace pumipic {
     };
     Omega_h::parallel_for(nents, renumberBoundaryLids, "renumberBoundaryLids");
 
-    
+
     //Calculate communication array indices
     // Index = rank_lid + picpart_ents_per_rank
     auto calculateCommArrayIndices = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
@@ -106,7 +104,7 @@ namespace pumipic {
     MPI_Request alltoall_request;
     MPI_Ialltoall(boundary_degree_host.data(), 1, MPI_INT,
                   recv_boundary_degree_host.data(), 1, MPI_INT,
-                  MPI_COMM_WORLD, &alltoall_request);
+                  commptr->get_impl(), &alltoall_request);
 
     //Create buffers to collect boundary entity ids
     Omega_h::HostRead<Omega_h::LO> boundary_ent_offsets_host(boundary_ent_offsets);
@@ -162,13 +160,13 @@ namespace pumipic {
         int start = boundary_ent_offsets_host[i];
         int deg = boundary_degree_host[i];
         MPI_Isend(&(boundary_rlids_host[start]), deg, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, send_requests + index++);
+                  commptr->get_impl(), send_requests + index++);
       }
       if (recv_boundary_degree_host[i] > 0) {
         int start = recv_boundary_offset_host[i];
         int deg = recv_boundary_degree_host[i];
         MPI_Irecv(&(recv_rlids[start]), deg, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, recv_requests + index2++);
+                  commptr->get_impl(), recv_requests + index2++);
       }
     }
     if (num_bounded > 0) {
@@ -247,7 +245,7 @@ namespace pumipic {
       return;
     }
 
-    
+
     //Shift comm_array indexing to bulk communication ordering
     Omega_h::Read<Omega_h::LO> arr_index = commArrayIndex(edim);
     Omega_h::Write<T> array(length, 0);
@@ -263,7 +261,7 @@ namespace pumipic {
     //Move values to host
     Omega_h::HostWrite<T> host_array(array);
     T* data = host_array.data();
-    
+
     //Prepare sending and receiving data of cores to the owner of that region
     Omega_h::HostRead<Omega_h::LO> ent_offsets(offset_ents_per_rank_per_dim[edim]);
     int my_num_entries = ent_offsets[commptr->rank()+1] - ent_offsets[commptr->rank()];
@@ -373,7 +371,7 @@ namespace pumipic {
     }
     MPI_Waitall(num_sends, send_requests,MPI_STATUSES_IGNORE);
     delete [] neighbor_arrays;
-    
+
     /***************** Fan Out ******************/
     //Flip the sizes of the request arrays
     MPI_Request* temp = send_requests;
@@ -407,7 +405,7 @@ namespace pumipic {
         boundary_array[id*nvals + i] = array[start_index + index*nvals + i];
     };
     Omega_h::parallel_for(bounded_ent_ids_local.size(),gatherBoundaryData, "gatherBoundaryData");
-    
+
     Omega_h::HostWrite<T> boundary_array_host(boundary_array);
     T* sending_data = boundary_array_host.data();
     for (int i = 0; i < num_boundaries[edim]; ++i) {
@@ -441,7 +439,7 @@ namespace pumipic {
 #define INST(T)                                                         \
   template Omega_h::Write<T> Mesh::createCommArray(int, int, T);        \
   template void Mesh::reduceCommArray(int, Op, Omega_h::Write<T>);
-  
+
   INST(Omega_h::LO)
   INST(Omega_h::Real)
 #undef INST

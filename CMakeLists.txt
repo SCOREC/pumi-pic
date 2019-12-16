@@ -11,8 +11,8 @@ endmacro(pumipic_export_lib)
 
 bob_begin_package()
 
-set(CMAKE_MODULE_PATH 
-   ${CMAKE_MODULE_PATH} 
+set(CMAKE_MODULE_PATH
+   ${CMAKE_MODULE_PATH}
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 #Settings options for testing
@@ -23,7 +23,7 @@ option(IS_TESTING "Build for CTest" OFF)
 message(STATUS "IS_TESTING: ${IS_TESTING}")
 
 if(IS_TESTING)
-  set(TEST_DATA_DIR "" CACHE PATH 
+  set(TEST_DATA_DIR "" CACHE PATH
     "Path to a local copy of the pumipic-data repo.")
   if(NOT EXISTS ${TEST_DATA_DIR})
     message(FATAL_ERROR "TEST_DATA_DIR \"${TEST_DATA_DIR}\" is not accessible")
@@ -61,6 +61,9 @@ message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 #code
 add_subdirectory(src)
+#xgcp
+add_subdirectory(xgcp)
+
 if(IS_TESTING)
   add_subdirectory(test)
 endif()

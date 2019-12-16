@@ -1,6 +1,6 @@
 function(make_test exename srcname)
   add_executable(${exename} ${srcname})
-  target_link_libraries(${exename} pumipic Omega_h::omega_h
+  target_link_libraries(${exename} xgcp pumipic Omega_h::omega_h
     particle_structures::particleStructs)
 endfunction(make_test)
 
@@ -17,6 +17,7 @@ make_test(search2d search2d.cpp)
 make_test(pseudoXGCm pseudoXGCm.cpp)
 make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
 make_test(loadSerialMesh loadSerialMesh.cpp)
+make_test(XGCp xgcp.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

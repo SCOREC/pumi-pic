@@ -32,9 +32,9 @@ void getMemImbalance(int hasptcls) {
     printf("ranks with particles %d memory usage imbalance %f\n",
         rankswithptcls, imb);
   }
-  if( used == maxused ) {
-    printf("%d peak mem usage %ld, avg usage %f\n", comm_rank, maxused, avg);
-  }
+  //if( used == maxused ) {
+    printf("%d mem usage %ld, avg usage %f\n", comm_rank, used, avg);
+  //}
 #endif
 }
 
@@ -56,9 +56,9 @@ void getPtclImbalance(lid_t ptclCnt) {
     printf("ranks with particles %d particle imbalance %f\n",
         rankswithptcls, imb);
   }
-  if( ptcls == max ) {
-    printf("%d peak particle count %ld, avg usage %f\n", comm_rank, max, avg);
-  }
+  //if( ptcls == max ) {
+    printf("%d particle count %ld, avg usage %f\n", comm_rank, ptcls, avg);
+  //}
 }
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
@@ -141,7 +141,9 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
   };
   scs->parallel_for(lamb);
   
+  Kokkos::Profiling::pushRegion("pseudoXGCM_migrate");
   scs->migrate(scs_elem_ids, scs_process_ids);
+  Kokkos::Profiling::popRegion();
 
   ids = scs->get<2>();
   if (output) {
@@ -164,7 +166,9 @@ void search(p::Mesh& picparts, SCS* scs, bool output) {
   auto x = scs->get<0>();
   auto xtgt = scs->get<1>();
   auto pid = scs->get<2>();
+  Kokkos::Profiling::pushRegion("pseudoXGCM_search");
   bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids, maxLoops);
+  Kokkos::Profiling::popRegion();
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(picparts, scs, elem_ids, output);
@@ -367,6 +371,7 @@ int main(int argc, char** argv) {
            typeid (Kokkos::DefaultHostExecutionSpace).name());
     printTimerResolution();
   }
+  Kokkos::Profiling::pushRegion("pseudoXGCM_setup");
   auto full_mesh = readMesh(argv[1], lib);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -481,6 +486,7 @@ int main(int argc, char** argv) {
   const auto syncTagName = "ptclToMeshSync";
   mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
   tagParentElements(picparts, scs, 0);
+  Kokkos::Profiling::popRegion();
 
   const auto enable_prebarrier = atoi(argv[9]);
   if(enable_prebarrier) {
@@ -508,7 +514,9 @@ int main(int argc, char** argv) {
     getMemImbalance(scs_np!=0);
     getPtclImbalance(scs_np);
     timer.reset();
+    Kokkos::Profiling::pushRegion("pseudoXGCM_push");
     ellipticalPush::push(scs, *mesh, degPerPush, iter);
+    Kokkos::Profiling::popRegion();
     MPI_Barrier(MPI_COMM_WORLD);
     timer.reset();
     search(picparts,scs, output);
@@ -521,9 +529,13 @@ int main(int argc, char** argv) {
     tagParentElements(picparts,scs,iter);
     if(output && !(iter%100))
       render(picparts,iter, comm_rank);
+    Kokkos::Profiling::pushRegion("pseudoXGCM_scatter");
     gyroScatter(mesh,scs,forward_map,fwdTagName);
     gyroScatter(mesh,scs,backward_map,bkwdTagName);
+    Kokkos::Profiling::popRegion();
+    Kokkos::Profiling::pushRegion("pseudoXGCM_sync");
     gyroSync(picparts,fwdTagName,bkwdTagName,syncTagName);
+    Kokkos::Profiling::popRegion();
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());

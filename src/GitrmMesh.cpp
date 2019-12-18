@@ -951,3 +951,147 @@ void GitrmMesh::printDist2BdryFacesData() {
     }
   }
 }
+
+
+template<typename Arr>
+void outputGitrMeshData(const Arr& data, const o::HostRead<o::Byte>& exposed, 
+    const std::vector<std::string>& vars, FILE* fp, std::string format="%5e") {
+  auto dsize = data.size();
+  auto nComp = vars.size();
+  int len = dsize/nComp;
+  for(int comp=0; comp< nComp; ++comp) {
+    fprintf(fp, "\n %s = [", vars[comp].c_str());
+    int print = 0;
+    for(int id=0; id < len; ++id) {
+      if(!exposed[id])
+        continue;
+      if(id >0 && id < len-1)
+        fprintf(fp, " , ");
+       if(id >0 && id < len-1 && print%5==0)
+        fprintf(fp, "\n"); 
+      fprintf(fp, format.c_str(), data[id*nComp+comp]);
+
+      ++print; 
+    }
+    fprintf(fp, " ]\n");
+  }
+}
+
+void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
+  MESHDATA(mesh);
+  const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
+  const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  auto nf = mesh.nfaces();
+  auto nbdryFaces = 0;
+  //includes non-boundary surfaces
+  Kokkos::parallel_reduce(nf, OMEGA_H_LAMBDA(const int i, o::LO& lsum) {
+    auto plus = (side_is_exposed[i]) ? 1: 0;
+    lsum += plus;
+  }, nbdryFaces);
+  printf("Number of boundary faces(including material surfaces) %d total-faces \n", 
+    nbdryFaces, nf);
+  int skipGeometricModelIds = markCylFromBdry;
+  o::LOs modelIdsToSkip(1);
+  if(skipGeometricModelIds && meshVersion==1)
+    modelIdsToSkip = o::LOs(o::Write<o::LO>(piscesBeadCylinderIds.write()));
+  if(skipGeometricModelIds && meshVersion ==2)
+    modelIdsToSkip = o::LOs(piscesBeadCylinderIdsMesh2);
+  o::LO numModelIds = 0;
+  if(skipGeometricModelIds) 
+    numModelIds = modelIdsToSkip.size();
+  auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
+  // using arrays of all faces, for now
+  printf("Creating GITR surface mesh\n");
+  o::Write<o::Real> points_d(9*nf, 0);
+  o::Write<o::Real> abcd_d(4*nf, 0);
+  o::Write<o::Real> planeNorm_d(nf, 0);
+  o::Write<o::Real> area_d(nf, 0);
+  o::Write<o::Real> BCxBA_d(nf, 0);
+  o::Write<o::Real> CAxCB_d(nf, 0);
+  o::Write<o::LO> surface_d(nf, 0);
+  o::Write<o::LO> material_d(nf, 0);
+  o::Write<o::LO> inDir_d(nf, 0);
+
+  auto lambda = OMEGA_H_LAMBDA(o::LO fid) {
+    if(!side_is_exposed[fid])
+      return;
+    auto abc = p::get_face_coords_of_tet(face_verts, coords, fid);
+    //auto el = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem);
+    for(auto i=0; i<3; ++i)
+      for(auto j=0; j<3; ++j) {
+        points_d[fid*9+i*3+j] = abc[i][j];
+      }
+    auto ab = abc[1] - abc[0];
+    auto ac = abc[2] - abc[0]; 
+    auto bc = abc[2] - abc[1];
+    auto ba = -ab;
+    auto ca = -ac;
+    auto cb = -bc;
+    auto normalVec = o::cross(ab, ac);
+    for(auto i=0; i<3; ++i) {
+      abcd_d[fid*4+i] = normalVec[i];
+    }
+    abcd_d[fid*4+3] = -(p::osh_dot(normalVec, abc[0]));
+    
+    planeNorm_d[fid] = o::norm(normalVec);
+    auto val = p::osh_dot(o::cross(bc, ba), normalVec);
+    auto sign = (val < 0) ? -1 : 0;
+    if(val > 0) sign =1; 
+    BCxBA_d[fid] = sign;
+    val = p::osh_dot(o::cross(ca, cb), normalVec);
+    sign = (val < 0) ? -1 : 0;
+    if(val > 0) sign = 1;
+    CAxCB_d[fid] = sign;
+    auto norm1 = o::norm(ab);
+    auto norm2 = o::norm(bc);
+    auto norm3 = o::norm(ac);
+    auto s = (norm1 + norm2 + norm3)/2.0;
+    area_d[fid] = sqrt(s*(s-norm1)*(s-norm2)*(s-norm3));
+    for(auto id=0; id < numModelIds; ++id) {
+      if(modelIdsToSkip[id] == faceClassIds[fid])
+        material_d[fid] = 1; //Z
+        surface_d[fid] = 1;
+    }
+    //inDir used only in surface-model
+  };
+  o::parallel_for(nf, lambda);
+ 
+  auto points = o::HostRead<o::Real>(points_d);
+  auto abcd = o::HostRead<o::Real>(abcd_d);
+  auto planeNorm = o::HostRead<o::Real>(planeNorm_d);
+  auto BCxBA = o::HostRead<o::Real>(BCxBA_d);
+  auto CAxCB = o::HostRead<o::Real>(CAxCB_d);
+  auto area = o::HostRead<o::Real>(area_d);
+  auto material = o::HostRead<o::LO>(material_d);
+  auto surface = o::HostRead<o::LO>(surface_d);
+  auto inDir = o::HostRead<o::LO>(inDir_d); //TODO not updated
+  auto exposed = o::HostRead<o::Byte>(side_is_exposed);
+
+  //geom = \n{ //next x1 = [...] etc comma separated
+  //x1, x2, x2, x3, y1, y2, y3, a, b, c, d,plane_norm, BCxBA, CAxCB, area, Z, surface, inDir 
+  //periodic = 0; \n theta0 = 0.0; \n theta1 = 0.0; \n} //last separate lines
+  std::string fname("gitrGeometryFromGitrm.cfg");  
+  FILE* fp = fopen(fname.c_str(), "w");
+  fprintf(fp, "geom =\n{\n");  
+  std::vector<std::string> strxyz{"x1", "y1", "z1", "x2", "y2", "z2", "x3", "y3", "z3"};
+  outputGitrMeshData(points, exposed, strxyz, fp);
+  std::vector<std::string> pstr{"a", "b", "c", "d"};
+  outputGitrMeshData(abcd, exposed, pstr, fp);
+  std::vector<std::string>normStr{"plane_norm"};
+  outputGitrMeshData(planeNorm, exposed, normStr, fp);
+  std::vector<std::string>bcbaStr{"BCxBA"};
+  outputGitrMeshData(BCxBA, exposed, bcbaStr, fp);
+  std::vector<std::string>cacbStr{"CAxCB"};
+  outputGitrMeshData(CAxCB, exposed, cacbStr, fp);
+  std::vector<std::string>areaStr{"area"};
+  outputGitrMeshData(area, exposed, areaStr, fp);
+  std::vector<std::string>matStr{"Z"};
+  outputGitrMeshData(material, exposed, matStr, fp,"%f");
+  std::vector<std::string>surfStr{"surface"};
+  outputGitrMeshData(surface, exposed, surfStr, fp, "%d");
+  std::vector<std::string>inDirStr{"inDir"};
+  outputGitrMeshData(inDir, exposed, inDirStr, fp, "%d");
+  fprintf(fp, "periodic = 0;\ntheta0 = 0.0;\ntheta1 = 0.0\n}\n"); 
+  fclose(fp);
+}
+

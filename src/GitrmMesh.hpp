@@ -28,6 +28,7 @@ constexpr int USE_GITR_DIST2BDRY = 0; //if g
 constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
 
 constexpr int PRINT_D2BDRY_FACES = 0;
+constexpr bool CREATE_GITR_MESH = true;
 
 constexpr o::LO USE_READIN_CSR_BDRYFACES = 0;
 constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 1;
@@ -84,6 +85,7 @@ public:
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
 
+  void createSurfaceGitrMesh(int meshVersion=2, bool markCylFromBdry=true);  
   void printBdryFaceIds(bool printIds=true, o::LO minNums=0);
   void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
   void test_preProcessDistToBdry();

@@ -342,15 +342,12 @@ inline void printGridData(o::Write<T> &data_d, std::string fname="",
   if(fname=="")
     fname = "result.txt";
   std::ofstream outf(fname);
-  o::Write<T>total(1,0);
-  o::parallel_for(data_d.size(), OMEGA_H_LAMBDA(const int& i) {
-    auto num = data_d[i];
-    if(num>0)
-      Kokkos::atomic_add(&total[0], num);
-  });
-  o::HostRead<T> tot(total);
+  auto total = 0;
+  Kokkos::parallel_reduce(data_d.size(), OMEGA_H_LAMBDA(const int i, o::LO& lsum) {
+    lsum += data_d[i];
+  }, total);
   outf << header << "\n";
-  outf << "total collected " <<  tot[0] << "\n";
+  outf << "total collected " <<  total << "\n";
   o::HostRead<T> data(data_d);
   outf << "index   total\n";  
   for(int i=0; i<data.size(); ++i)

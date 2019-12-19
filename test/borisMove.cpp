@@ -233,9 +233,9 @@ int main(int argc, char** argv) {
   GitrmParticles gp(*mesh, dTime);
   // TODO use picparts 
   GitrmMesh gm(*mesh);
+
   if(CREATE_GITR_MESH) {
     gm.createSurfaceGitrMesh();
-    return 0;
   }
 
   if(piscesRun)

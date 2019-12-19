@@ -13,11 +13,13 @@ namespace p = pumipic;
 
 GitrmMesh::GitrmMesh(o::Mesh& m): 
   mesh(m) {
-  //TODO handle this to read from input file
-  piscesBeadCylinderIds = o::HostWrite<o::LO>{ 277, 609, 595, 581, 567, 553, 539, 
-    525, 511, 497, 483, 469, 455, 154};
-  piscesBeadCylinderIdsMesh2  = o::HostWrite<o::LO>{154,439, 453, 467, 481, 495, 
-    509, 523, 537, 551, 565, 579, 593, 268};
+  //version3 mesh ht 50cm, rad 10cm. Top lid of small sylinder not included
+  piscesBeadCylinderIds = o::HostWrite<o::LO>{268, 593, 579, 565, 551, 537, 
+    523, 509, 495,481, 467,453, 439, 154};
+  // geometry independent naming
+  modelIdsToSkipFromD2bdry = o::HostWrite<o::LO>{268, 593, 579, 565, 551, 537, 
+    523, 509, 495,481, 467,453, 439, 154, 150};
+  // old: 277, 609, 595, 581, 567, 553, 539, 525, 511, 497, 483, 469, 455, 154
 }
 
 void GitrmMesh::load3DFieldOnVtxFromFile(const std::string tagName, const std::string &file,
@@ -445,7 +447,7 @@ void GitrmMesh::preProcessBdryFacesBfs() {
   preprocessStoreBdryFacesBfs(numBdryFaceIdsInElems, bdryFacesCsrW, csrSize);
   bdryFacesCsrBFS = o::LOs(bdryFacesCsrW);
 }
-
+// This maethod might be needed later
 void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
   o::Write<o::LO>& bdryFacesCsrW, int csrSize) {
   MESHDATA(mesh);
@@ -456,16 +458,12 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
       if(bdryFacePtrsBFSHost[i]>0)
         printf("bdryFacePtrsBFShost %d  %d \n", i, bdryFacePtrsBFSHost[i] );
   }
-  constexpr int bfsLocalSize = DIST2BDRY_BFS_ARRAY_SIZE;
-  const double depth = DEPTH_DIST2_BDRY;
-  const int skipGeometricModelIds = SKIP_GEOMETRIC_MODEL_IDS_FROM_DIST2BDRY;
+  constexpr int bfsLocalSize = 100000;
+  const double depth = 0.05;
+  const int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
 
   //Skip geometric model faces
-  o::LOs modelIdsToSkip(1);
-  if(skipGeometricModelIds && !USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(o::Write<o::LO>(piscesBeadCylinderIds.write()));
-  if(skipGeometricModelIds && USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(piscesBeadCylinderIdsMesh2);
+  o::LOs modelIdsToSkip = o::LOs(modelIdsToSkipFromD2bdry);
 
   auto numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
@@ -485,13 +483,8 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
     if(iLoop==nLoop-1 && last>0) thisLoopStep = last;
     Kokkos::fence();
     o::Write<o::LO> queue(bfsLocalSize*loopStep, -1);  
-     
-    if(debug) { 
+    if(debug)
       printf(" thisLoop %d loopStep %d thisLoopStep %d\n", iLoop, loopStep, thisLoopStep); 
-      size_t available=0, total=0;
-      cudaMemGetInfo(&available, &total);//FIXME
-      std::cout << "CudaMemGetInfo available/MB " << available/(1024*1024) << " total " << total/(1024*1024) << "\n";  
-    }
     auto lambda = OMEGA_H_LAMBDA(o::LO el) {
       auto elem = iLoop*loopStep + el;
       o::LO bdryFids[4];
@@ -609,13 +602,9 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll() {
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
 
   int nFaces = mesh.nfaces();
-  constexpr int skipGeometricModelIds = SKIP_GEOMETRIC_MODEL_IDS_FROM_DIST2BDRY;
+  constexpr int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
   //to skip geometric model faces
-  o::LOs modelIdsToSkip(1);
-  if(skipGeometricModelIds && !USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(o::Write<o::LO>(piscesBeadCylinderIds.write()));
-  if(skipGeometricModelIds && USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(piscesBeadCylinderIdsMesh2);
+  o::LOs modelIdsToSkip = o::LOs(modelIdsToSkipFromD2bdry);
   o::LO numModelIds = 0;
   if(skipGeometricModelIds) 
     numModelIds = modelIdsToSkip.size();
@@ -774,7 +763,7 @@ void GitrmMesh::markPiscesCylinderResult(o::Write<o::LO>& beadVals_d) {
     }
   });
   mesh.add_tag<o::LO>(o::EDGE, "piscesTiRodCounts_edge", 1, o::LOs(edgeTagIds));
-  mesh.add_tag<o::LO>(o::REGION, "Pisces_Bead_Counts", 1, o::LOs(elemTagAsCounts));
+  mesh.add_tag<o::LO>(o::REGION, "pisces_Bead_Counts", 1, o::LOs(elemTagAsCounts));
 }
 
 void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
@@ -799,8 +788,8 @@ void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
     }
   });
 
-  mesh.add_tag<o::LO>(o::FACE, "piscesTiRod_ind", 1, o::LOs(faceTagIds));
-  mesh.add_tag<o::LO>(o::REGION, "piscesTiRodRegIndex", 1, o::LOs(elemTagIds));
+  mesh.add_tag<o::LO>(o::FACE, "piscesBeadCylinder_inds", 1, o::LOs(faceTagIds));
+  mesh.add_tag<o::LO>(o::REGION, "piscesBeadCylinder_regionInds", 1, o::LOs(elemTagIds));
 }
 
 void GitrmMesh::printDensityTempProfile(double rmax, int gridsR, 
@@ -952,7 +941,7 @@ void GitrmMesh::printDist2BdryFacesData() {
   }
 }
 
-
+// Arr having size() and [] indedxing
 template<typename Arr>
 void outputGitrMeshData(const Arr& data, const o::HostRead<o::Byte>& exposed, 
     const std::vector<std::string>& vars, FILE* fp, std::string format="%5e") {
@@ -993,9 +982,9 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
   int skipGeometricModelIds = markCylFromBdry;
   o::LOs modelIdsToSkip(1);
   if(skipGeometricModelIds && meshVersion==1)
-    modelIdsToSkip = o::LOs(o::Write<o::LO>(piscesBeadCylinderIds.write()));
+    modelIdsToSkip = o::LOs(o::Write<o::LO>(modelIdsToSkipFromD2bdry.write()));
   if(skipGeometricModelIds && meshVersion ==2)
-    modelIdsToSkip = o::LOs(piscesBeadCylinderIdsMesh2);
+    modelIdsToSkip = o::LOs(modelIdsToSkipFromD2bdry);
   o::LO numModelIds = 0;
   if(skipGeometricModelIds) 
     numModelIds = modelIdsToSkip.size();
@@ -1073,7 +1062,8 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
   std::string fname("gitrGeometryFromGitrm.cfg");  
   FILE* fp = fopen(fname.c_str(), "w");
   fprintf(fp, "geom =\n{\n");  
-  std::vector<std::string> strxyz{"x1", "y1", "z1", "x2", "y2", "z2", "x3", "y3", "z3"};
+  std::vector<std::string> strxyz{"x1", "y1", "z1", "x2", "y2", 
+                                  "z2", "x3", "y3", "z3"};
   outputGitrMeshData(points, exposed, strxyz, fp);
   std::vector<std::string> pstr{"a", "b", "c", "d"};
   outputGitrMeshData(abcd, exposed, pstr, fp);

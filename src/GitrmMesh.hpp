@@ -50,9 +50,6 @@ constexpr o::LO BIASED_SURFACE = 1;
 constexpr double CONSTANT_EFIELD[] = {0, 0, 0};
 constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
 
-//old method
-constexpr double DEPTH_DIST2_BDRY = 0.05;
-constexpr int DIST2BDRY_BFS_ARRAY_SIZE = 100000;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
@@ -60,8 +57,7 @@ constexpr o::LO BDRY_STORAGE_SIZE_PER_FACE = 1;
 // Elements face type
 enum {INTERIOR=1, EXPOSED=2};
 
-constexpr int SKIP_GEOMETRIC_MODEL_IDS_FROM_DIST2BDRY = 1;
-constexpr o::LO USE_PISCES_MESH_VERSION2 = 1;
+constexpr int SKIP_MODEL_IDS_FROM_DIST2BDRY = 1;
 
 
 #define MESHDATA(mesh) \
@@ -202,7 +198,7 @@ public:
  
   //get model Ids by opening mesh/model in Simmodeler
   o::HostWrite<o::LO> piscesBeadCylinderIds;
-  o::HostWrite<o::LO> piscesBeadCylinderIdsMesh2;
+  o::HostWrite<o::LO> modelIdsToSkipFromD2bdry;
 
   o::Write<o::Real> larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d;

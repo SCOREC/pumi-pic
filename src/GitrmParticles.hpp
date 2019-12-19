@@ -136,11 +136,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   int tstep = iTimePlusOne;
   auto* scs = gp.scs;
   o::Mesh& mesh = gm.mesh;  
-  o::LOs modelIdsToSkip(1);
-  if(!USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(gm.piscesBeadCylinderIds);
-  if(USE_PISCES_MESH_VERSION2)
-    modelIdsToSkip = o::LOs(gm.piscesBeadCylinderIdsMesh2);
+  o::LOs modelIdsToSkip = o::LOs(gm.modelIdsToSkipFromD2bdry);
   auto numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   const auto coords = mesh.coords();
@@ -252,7 +248,7 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
   SCS* scs = gp.scs;
-  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesTiRod_ind");
+  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
   auto pid_scs = scs->get<PTCL_ID>();
   //based on ptcl id or scs pid ?
   const auto& xpoints = gp.collisionPoints;

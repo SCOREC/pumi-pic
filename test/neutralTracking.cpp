@@ -44,7 +44,7 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
   double zMax = 0.15; //m height max 0.14275
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
-  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesTiRod_ind");
+  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
   auto pid_scs = scs->get<PTCL_ID>();
 
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {

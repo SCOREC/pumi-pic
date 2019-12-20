@@ -26,10 +26,10 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
 
 void writeOutputNcFile( o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
   int dof, OutputNcFileFieldStruct& st, std::string outNcFileName);
+
 void writeOutputCsrFile(const std::string& outFileName, 
-    const std::vector<std::string> vars,
-    const std::vector<std::string> datNames, o::LOs& ptrs_d, 
-    o::LOs& felems_d, o::LOs& data_d);
+    const std::vector<std::string>& vars, const std::vector<std::string>& datNames, 
+    o::LOs& ptrs_d, o::LOs& felems_d, o::LOs& data_d, int* valExtra=nullptr);
 
 int readCsrFile(const std::string& ncFileName,  
   const std::vector<std::string>& vars,

@@ -286,10 +286,10 @@ int readCsrFile(const std::string& ncFileName,
   return 0;
 }
 
+
 void writeOutputCsrFile(const std::string& outFileName, 
-    const std::vector<std::string> vars,
-    const std::vector<std::string> datNames, o::LOs& ptrs_d, 
-    o::LOs& felems_d, o::LOs& data_d) { 
+    const std::vector<std::string>& vars, const std::vector<std::string>& datNames, 
+    o::LOs& ptrs_d, o::LOs& felems_d, o::LOs& data_d, int* valExtra) { 
   auto felems = o::HostRead<o::LO>(felems_d);
   auto data = o::HostRead<o::LO>(data_d);
   auto ptrs = o::HostRead<o::LO>(ptrs_d);
@@ -298,10 +298,14 @@ void writeOutputCsrFile(const std::string& outFileName,
   int nfaces = felems.size();
   try {
     netCDF::NcFile ncFile(outFileName, netCDF::NcFile::replace);
+    //TODO pass values to remove ordering
     netCDF::NcDim dim1 = ncFile.addDim(vars[0], psize-1);
     netCDF::NcDim dim2 = ncFile.addDim(vars[1], psize);
     netCDF::NcDim dim3 = ncFile.addDim(vars[2], dsize);
     netCDF::NcDim dim4 = ncFile.addDim(vars[3], nfaces);
+    for(auto i=0; i<vars.size()-4; ++i)
+      netCDF::NcDim dext = ncFile.addDim(vars[4], valExtra[i]);
+
     netCDF::NcVar ncptrs = ncFile.addVar(datNames[0], netCDF::ncInt, dim2);
     ncptrs.putVar(&(ptrs[0]));
     netCDF::NcVar ncface_el = ncFile.addVar(datNames[1], netCDF::ncInt, dim4);

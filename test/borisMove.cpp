@@ -271,21 +271,21 @@ int main(int argc, char** argv) {
   printf("Initializing Boundary faces\n");
   gm.initBoundaryFaces(false);
   printf("Preprocessing Selecting Boundary Faces\n");
-
+  int nD2BdryTetSubDiv = 0;
   int readInCsrBdryData = USE_READIN_CSR_BDRYFACES;
-  if(readInCsrBdryData)
+  if(readInCsrBdryData) {
     gm.readDist2BdryFacesData("bdryFaces_in.nc");
-  else
-    gm.preprocessSelectBdryFacesFromAll(); 
- 
+  } else {
+    gm.preprocessSelectBdryFacesFromAll();
+    nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
+  }
   bool printD2BdryFaces = PRINT_D2BDRY_FACES;
   if(printD2BdryFaces)
-    gm.printDist2BdryFacesData();  
-  
+    gm.printDist2BdryFacesData(nD2BdryTetSubDiv);  
   
   int writeBdryFacesFile = WRITE_OUT_BDRY_FACES_FILE;
   if(writeBdryFacesFile)
-    gm.writeDist2BdryFacesData("bdryFaces.nc");
+    gm.writeDist2BdryFacesData("bdryFaces.nc", nD2BdryTetSubDiv);
 
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test

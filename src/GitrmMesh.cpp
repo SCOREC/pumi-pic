@@ -461,11 +461,12 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
   constexpr int bfsLocalSize = 100000;
   const double depth = 0.05;
   const int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
-
-  //Skip geometric model faces
-  o::LOs modelIdsToSkip = o::LOs(modelIdsToSkipFromD2bdry);
-
-  auto numModelIds = modelIdsToSkip.size();
+  o::LOs modelIdsToSkip(1,-1);
+  int numModelIds = 0;
+  if(skipGeometricModelIds) {
+    modelIdsToSkip = o::LOs(modelIdsToSkipFromD2bdry);
+    numModelIds = modelIdsToSkip.size();
+  }
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   auto nelems = nel;
   int loopStep = (int)nelems/100; //TODO parameter

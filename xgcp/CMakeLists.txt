@@ -2,7 +2,7 @@ set(HEADERS
   xgcp_types.hpp
   xgcp_input.hpp
   xgcp_mesh.hpp
-#  xgcp_scatter.hpp
+  xgcp_gyro_scatter.hpp
 #  xgcp_push.hpp
 #  xgcp_particle.hpp
 )
@@ -10,7 +10,7 @@ set(HEADERS
 set(SOURCES
   xgcp_input.cpp
   xgcp_mesh.cpp
-#  xgcp_scatter.cpp
+  xgcp_gyro_scatter.cpp
 #  xgcp_push.cpp
 #  xgcp_particle.cpp
 )

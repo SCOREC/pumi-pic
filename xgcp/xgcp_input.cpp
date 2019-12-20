@@ -23,5 +23,12 @@ namespace xgcp {
                 num_core_regions * num_planes * num_processes_per_group);
       throw std::runtime_error("Incorrect number of ranks");
     }
+
+    //Default gyro parameters
+    gyro_rmax = 0.038;
+    gyro_num_rings = 3;
+    gyro_points_per_ring = 8;
+    gyro_theta = 0;
+
   }
 }

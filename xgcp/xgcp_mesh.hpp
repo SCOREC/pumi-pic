@@ -1,4 +1,4 @@
-
+#pragma once
 #include "xgcp_types.hpp"
 #include "xgcp_input.hpp"
 #include <pumipic_mesh.hpp>
@@ -26,7 +26,27 @@ namespace xgcp {
     Mesh(xgcp::Input&);
     ~Mesh();
 
+    o::Mesh* omega_h_mesh() {return picparts->mesh();}
+    p::Mesh* pumipic_mesh() {return picparts;}
+    /********Comm Rank/Size/Comm functions********/
+    int worldRank() {return omega_h_mesh()->library()->world()->rank();}
+    int worldSize() {return omega_h_mesh()->library()->world()->size();}
+    MPI_Comm worldComm() {return omega_h_mesh()->library()->world()->get_impl();}
+
+    int meshRank() {return mesh_comm->rank();}
+    int meshSize() {return mesh_comm->size();}
+    MPI_Comm meshComm() {return mesh_comm->get_impl();}
+
+    int groupRank() {return group_comm->rank();}
+    int groupSize() {return group_comm->size();}
+    MPI_Comm groupComm() {return group_comm->get_impl();}
     bool isGroupLeader() {return group_comm->rank() == 0;}
+
+    int torodialRank() {return torodial_comm->rank();}
+    int torodialSize() {return torodial_comm->size();}
+    MPI_Comm torodialComm() {return torodial_comm->get_impl();}
+
+    int planeID() {return torodialRank();}
     fp_t getMajorPlaneAngle() {return major_phi;}
     fp_t getMinorPlaneAngle() {return minor_phi;}
 
@@ -92,5 +112,12 @@ namespace xgcp {
     fp_t minor_phi;
     //Torodial angle of the plane that this process is leader of
     fp_t major_phi;
+
+    //Forward and backward ion projection mapping for each ring point to 3 mesh vertices
+    Omega_h::LOs forward_ion_gyro_map, backward_ion_gyro_map;
+
+    //Forward and backward electron projection mapping for each vertex to 3 mesh vertices
+    Omega_h::LOs forward_electron_gyro_map, backward_electron_gyro_map;
+
   };
 }

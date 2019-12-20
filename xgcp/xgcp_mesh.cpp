@@ -1,4 +1,5 @@
 #include "xgcp_mesh.hpp"
+#include "xgcp_gyro_scatter.hpp"
 #include <Omega_h_file.hpp>
 
 namespace {
@@ -52,6 +53,12 @@ namespace xgcp {
     Omega_h::vtk::write_parallel(buffer, mesh, mesh->dim());
 
     //Build gyro mappings
+    setGyroConfig(input);
+    if (!worldRank())
+      printGyroConfig();
+    createIonGyroRingMappings(mesh, forward_ion_gyro_map, backward_ion_gyro_map);
+
+    //TODO build electron mapping
 
     //Build plane information
     fp_t delta_phi = 2* M_PI / num_planes;
@@ -62,7 +69,7 @@ namespace xgcp {
   }
 
   Mesh::~Mesh() {
-
+    delete picparts;
   }
 }
 

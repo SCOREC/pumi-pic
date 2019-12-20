@@ -32,7 +32,7 @@ constexpr bool CREATE_GITR_MESH = true;
 
 constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
 constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 8;
+constexpr o::LO D2BDRY_GRIDS_PER_TET = 3;
 
 constexpr o::LO USE3D_BFIELD = 0;
 constexpr o::LO USE2D_INPUTFIELDS = 1;

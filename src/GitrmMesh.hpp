@@ -27,12 +27,12 @@ constexpr int USE_GITR_BFACE_MIDPT_N_CALC_CLD = 0;// if g
 constexpr int USE_GITR_DIST2BDRY = 0; //if g
 constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
 
-constexpr int PRINT_D2BDRY_FACES = 0;
+constexpr int PRINT_D2BDRY_FACES = 1;
 constexpr bool CREATE_GITR_MESH = true;
 
-constexpr o::LO USE_READIN_CSR_BDRYFACES = 0;
-constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 1;
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 5;
+constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
+constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
+constexpr o::LO D2BDRY_GRIDS_PER_TET = 8;
 
 constexpr o::LO USE3D_BFIELD = 0;
 constexpr o::LO USE2D_INPUTFIELDS = 1;
@@ -100,14 +100,15 @@ public:
   void preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
   o::Write<o::LO>& bdryFacesCsrW, int csrSize);
 
-  void writeDist2BdryFacesData(const std::string outFileName="d2bdryFaces.nc");
+  void writeDist2BdryFacesData(const std::string outFileName="d2bdryFaces.nc", 
+    int nD2BdryTetSubDiv=0);
   o::LOs bdryFacesCsrBFS;
   o::LOs bdryFacePtrsBFS;
 
   void preprocessSelectBdryFacesFromAll();
   o::LOs bdryFacePtrsSelected;
   o::LOs bdryFacesSelectedCsr;
-  void printDist2BdryFacesData();
+  void printDist2BdryFacesData(int);
   
   int readDist2BdryFacesData(const std::string &);
   o::LOs bdryCsrReadInDataPtrs;

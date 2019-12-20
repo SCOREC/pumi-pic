@@ -879,7 +879,8 @@ void GitrmMesh::test_interpolateFields(bool debug) {
    tempIonDx, tempIonDz, tempIonNx, tempIonNz, debug);
 }
 
-void GitrmMesh::writeDist2BdryFacesData(const std::string outFileName) {
+void GitrmMesh::writeDist2BdryFacesData(const std::string outFileName,
+    int ndiv) {
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   int nfaces = mesh.nfaces();
@@ -888,13 +889,14 @@ void GitrmMesh::writeDist2BdryFacesData(const std::string outFileName) {
     auto el = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem); 
     felems_d[fid] = el;
   });
+  int extra[] = {ndiv};
   auto felems = o::LOs(felems_d);
   std::vector<std::string> vars;
-  vars.insert( vars.end(), {"nelems", "nindices", "nfaces", "nface_elids"});
+  vars.insert( vars.end(), {"nelems", "nindices", "nfaces", "nface_elids", "nsub_div"});
   std::vector<std::string> datNames;
   datNames.insert(datNames.end(), {"indices", "face_elements", "bdryfaces"});
   writeOutputCsrFile(outFileName, vars, datNames, bdryFacePtrsSelected, 
-      felems, bdryFacesSelectedCsr);
+      felems, bdryFacesSelectedCsr, extra);
 }
 
 int GitrmMesh::readDist2BdryFacesData(const std::string& ncFileName) {
@@ -906,8 +908,8 @@ int GitrmMesh::readDist2BdryFacesData(const std::string& ncFileName) {
     bdryCsrReadInData);
 }
 
-//TODO use host print. This doesn't print all entries
-void GitrmMesh::printDist2BdryFacesData() {
+
+void GitrmMesh::printDist2BdryFacesData(int nSubdiv) {
   auto data_d = bdryFacesSelectedCsr;
   auto ptrs_d = bdryFacePtrsSelected;  
   o::Write<o::LO> bfel_d(data_d.size(), -1);
@@ -927,7 +929,8 @@ void GitrmMesh::printDist2BdryFacesData() {
     }
   };
   o::parallel_for(ptrs_d.size()-1, lambda);
-
+   
+  std::ofstream outf("Dist2BdryFaces_div"+ std::to_string(nSubdiv)+".txt");
   auto data_h = o::HostRead<o::LO>(data_d);
   auto ptrs_h = o::HostRead<o::LO>(ptrs_d);
   auto bfel_h = o::HostRead<o::LO>(bfel_d);
@@ -936,9 +939,11 @@ void GitrmMesh::printDist2BdryFacesData() {
     for(int i = ptrs_h[el]; i<ptrs_h[el+1]; ++i) {
       auto fid = data_h[i];
       auto bfel = bfel_h[i];
-      printf("printfbfid:fid;el  %d  %d ref %d n %d\n", fid, bfel, el, nf);
+      outf << "D2bdry:fid " << fid << " bfel " << bfel << " refel " 
+           << el << " nf " << nf << "\n";
     }
   }
+  outf.close();
 }
 
 // Arr having size() and [] indedxing

@@ -19,7 +19,7 @@ namespace {
 namespace xgcp {
   Mesh::Mesh(xgcp::Input& input) {
     //Read the full mesh on every process
-    o::Mesh full_mesh = o::read_mesh_file(input.mesh_file, input.library.self());
+    full_mesh = new o::Mesh(o::read_mesh_file(input.mesh_file, input.library.self()));
 
     //Read other information (background fields, mesh parameters?)
 
@@ -39,13 +39,17 @@ namespace xgcp {
            group_comm->size());
 
     //Create picparts
-    p::Input pp_input(full_mesh, input.partition_file, input.buffer_method,
+    p::Input pp_input(*full_mesh, input.partition_file, input.buffer_method,
                       input.safe_method, mesh_comm);
 
 
     picparts = new p::Mesh(pp_input);
-
-    auto mesh = picparts->mesh();
+    //If the mesh is not fully buffered then delete the full mesh copy
+    if (!picparts->isFullMesh()) {
+      delete full_mesh;
+      full_mesh = NULL;
+    }
+    o::Mesh* mesh = picparts->mesh();
     auto safeTag = picparts->safeTag();
     mesh->add_tag(mesh->dim(), "safe", 1, safeTag);
     char buffer[100];
@@ -70,6 +74,8 @@ namespace xgcp {
 
   Mesh::~Mesh() {
     delete picparts;
+    if (full_mesh)
+      delete full_mesh;
   }
 }
 

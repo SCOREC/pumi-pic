@@ -25,13 +25,27 @@ namespace xgcp {
   public:
     Mesh(xgcp::Input&);
     ~Mesh();
+    //Delete default compilers
+    Mesh() = delete;
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
-    o::Mesh* omega_h_mesh() {return picparts->mesh();}
-    p::Mesh* pumipic_mesh() {return picparts;}
+    //Directly access underlying mesh structures
+    o::Mesh* omegaMesh() {return picparts->mesh();}
+    p::Mesh* pumipicMesh() {return picparts;}
+
+    /********Common mesh count information********/
+    //Returns the dimension of the mesh
+    int dim() const {return picparts->dim();}
+    //Returns the number of entities of the picpart
+    Omega_h::LO nents(int dim) const {return picparts->nents(dim);}
+    //Returns the number of elements of the picpart
+    Omega_h::LO nelems() const {return picparts->nelems();}
+
     /********Comm Rank/Size/Comm functions********/
-    int worldRank() {return omega_h_mesh()->library()->world()->rank();}
-    int worldSize() {return omega_h_mesh()->library()->world()->size();}
-    MPI_Comm worldComm() {return omega_h_mesh()->library()->world()->get_impl();}
+    int worldRank() {return omegaMesh()->library()->world()->rank();}
+    int worldSize() {return omegaMesh()->library()->world()->size();}
+    MPI_Comm worldComm() {return omegaMesh()->library()->world()->get_impl();}
 
     int meshRank() {return mesh_comm->rank();}
     int meshSize() {return mesh_comm->size();}
@@ -104,6 +118,7 @@ namespace xgcp {
   private:
     //Mesh structure for the picparts
     p::Mesh* picparts;
+    o::Mesh* full_mesh;
 
     //Communicators for each partitioning direction
     o::CommPtr mesh_comm, torodial_comm, group_comm;

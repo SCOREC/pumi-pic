@@ -93,9 +93,6 @@ namespace xgcp {
     return o::LOs(gyro_avg_map);
   }
 
-
-
-
 /* Build gyro-avg mapping */
   void createIonGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
                               o::LOs& backward_map) {
@@ -170,7 +167,7 @@ namespace xgcp {
   }
 
   void gyroScatter(Mesh& m, SCS_I* scs, o::LOs v2v, std::string scatterTagName) {
-    o::Mesh* mesh = m.omega_h_mesh();
+    o::Mesh* mesh = m.omegaMesh();
     const auto btime = pumipic_prebarrier();
     Kokkos::Timer timer;
     Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
@@ -236,7 +233,7 @@ namespace xgcp {
 
   void gyroSync(Mesh& m, const std::string& fwdTagName,
                 const std::string& bkwdTagName, const std::string& syncTagName) {
-    p::Mesh* picparts = m.pumipic_mesh();
+    p::Mesh* picparts = m.pumipicMesh();
     const auto btime = pumipic_prebarrier();
     Kokkos::Timer timer;
     Kokkos::Profiling::pushRegion("xgcm_gyroSync");

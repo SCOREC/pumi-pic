@@ -9,7 +9,7 @@ namespace pumipic {
     //Delete default compilers
     Mesh() = delete;
     Mesh(const Mesh&) = delete;
-      Mesh& operator=(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector);

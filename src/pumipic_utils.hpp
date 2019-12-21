@@ -64,7 +64,7 @@ OMEGA_H_DEVICE Omega_h::LO min3(Omega_h::Vector<3> a) {
   return idx;
 }
 
-template <class T> OMEGA_H_DEVICE Omega_h::LO 
+template <class T> OMEGA_H_DEVICE Omega_h::LO
 min_index(const T a, Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   Omega_h::LO ind=0;
@@ -92,7 +92,7 @@ OMEGA_H_INLINE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v)
 }
 
 
-OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
+OMEGA_H_INLINE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b,
  const Omega_h::LO n, Omega_h::Real tol=EPSILON)
 {
   for(Omega_h::LO i=0; i<n; ++i)
@@ -128,31 +128,14 @@ OMEGA_H_INLINE void print_matrix(const Omega_h::Matrix<3, 4> &M)
 }
 
 
-void print_array(const double* a, int n=3, std::string name=" ")
-{
-  if(name!=" ")
-    std::cout << name << ": ";
-  for(int i=0; i<n; ++i)
-    std::cout << a[i] << ", ";
-  std::cout <<"\n";
-}
+  void print_array(const double* a, int n=3, std::string name=" ");
 
-void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true)
-{
-  std::string str = line_break ? ")\n" : "); ";
-  std::cout << name << ": (" << v.data()[0]  << " " << v.data()[1] << " " << v.data()[2] << str;
-}
+  void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true);
 
 void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
-     Omega_h::Write<Omega_h::Real> &bcc)
-{
-    print_matrix(M);  //include file problem ?
-    print_osh_vector(dest, "point");
-    print_array(bcc.data(), 4, "BCoords");
-}
+                Omega_h::Write<Omega_h::Real> &bcc);
 
-
-OMEGA_H_DEVICE Omega_h::Vector<3> centroid_of_tet(const Omega_h::LO elem, 
+OMEGA_H_DEVICE Omega_h::Vector<3> centroid_of_tet(const Omega_h::LO elem,
   const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords) {
   Omega_h::Vector<3> pos;
   auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, elem);
@@ -166,4 +149,3 @@ OMEGA_H_DEVICE Omega_h::Vector<3> centroid_of_tet(const Omega_h::LO elem,
 
 } //namespace
 #endif
-

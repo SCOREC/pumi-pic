@@ -4,10 +4,16 @@ cmake_policy(SET CMP0054 NEW)
 project(particle_structures VERSION 0.0.1 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
+
+macro(ps_export_lib target headers)
+  bob_export_target(${target})
+  install(FILES ${headers} DESTINATION include)
+endmacro(ps_export_lib)
+
 bob_begin_package()
 
-set(CMAKE_MODULE_PATH 
-   ${CMAKE_MODULE_PATH} 
+set(CMAKE_MODULE_PATH
+   ${CMAKE_MODULE_PATH}
    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 #Settings options for testing
@@ -56,38 +62,36 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
+add_subdirectory(support)
 include_directories(support)
+#add_subdirectory(src)
+include_directories(src)
+#add_subdirectory(scs)
+include_directories(scs)
 include_directories(algorithms)
 
-set(PS_SOURCES 
+set(PS_SOURCES
   algorithms/Distribute.cpp
   algorithms/psTypes.cpp
-  support/psAssert.cpp
-  support/SellCSigma.cpp
-  support/ViewComm.cpp
+  scs/SellCSigma.cpp
 )
 
 set(PS_HEADERS
-  support/SCS_Macros.h
-  support/SCS_Types.h
-  support/SupportKK.h
-  support/ViewComm.h
-  support/MemberTypes.h
-  support/MemberTypeArray.h
-  support/MemberTypeLibraries.h
-  support/SCSPair.h
-  support/SellCSigma.h
-  support/Segment.h
-  support/psAssert.h
+  scs/SCS_Macros.h
+  scs/SCS_Types.h
+  scs/SCSPair.h
+  scs/SellCSigma.h
   algorithms/psParams.h
   algorithms/psTypes.h
   algorithms/Distribute.h
 )
 
 add_library(particleStructs ${PS_SOURCES})
+target_link_libraries(particleStructs support)
 install(FILES ${PS_HEADERS} DESTINATION include)
 bob_export_target(particleStructs)
 
+if(false)
 if (ENABLE_KOKKOS)
   add_definitions(-DKOKKOS_ENABLED)
   target_compile_definitions(particleStructs INTERFACE -DKOKKOS_ENABLED)
@@ -104,13 +108,14 @@ if (ENABLE_KOKKOS)
   include(${CMAKE_CURRENT_LIST_DIR}/cmake/detect_kokkos_opts.cmake)
   detect_kokkos_opts()
   if (Kokkos_HAS_CUDA)
-    add_definitions(-DSCS_USE_CUDA)
-    target_compile_definitions(particleStructs INTERFACE -DSCS_USE_CUDA)
+    add_definitions(-DPS_USE_CUDA)
+    target_compile_definitions(particleStructs INTERFACE -DPS_USE_CUDA)
   endif()
   if (Kokkos_HAS_OpenMP)
-    add_definitions(-DSCS_USE_OPENMP)
-    target_compile_definitions(particleStructs INTERFACE -DSCS_USE_OPENMP)
+    add_definitions(-DPS_USE_OPENMP)
+    target_compile_definitions(particleStructs INTERFACE -DPS_USE_OPENMP)
   endif()
+endif()
 endif()
 
 option(FP64 "Use 64bits for floating point values" ON)

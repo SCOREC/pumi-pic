@@ -5,7 +5,7 @@
 #include <SellCSigma.h>
 
 #include <psAssert.h>
-#include <Distribute.h>
+#include "Distribute.h"
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
@@ -25,7 +25,7 @@ bool reshuffleTests();
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
-  
+
   bool passed = true;
   if (!shuffleParticlesTests()) {
     passed = false;
@@ -79,7 +79,7 @@ bool shuffleParticlesTests() {
   };
   scs->parallel_for(sendToSelf);
 
-  //Rebuild with no changes  
+  //Rebuild with no changes
   scs->rebuild(new_element);
 
   scs->printFormat();
@@ -130,7 +130,7 @@ bool resortElementsTest() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  
+
   Kokkos::TeamPolicy<exe_space> po(128, 4);
   SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
   SCS::kkGidView element_gids_v("element_gids_v", ne);
@@ -192,7 +192,7 @@ bool reshuffleTests() {
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  
+
   Kokkos::TeamPolicy<exe_space> po(128, 4);
   SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
   SCS::kkGidView element_gids_v("element_gids_v", 0);
@@ -211,7 +211,7 @@ bool reshuffleTests() {
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   SCS::kkLidView fail("fail", 1);
-  
+
   //Shuffle
   printf("\nSend To Self");
   auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
@@ -222,7 +222,7 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
 
   scs->printFormat();
-  
+
   //Shuffle
   printf("\nSend first particle to padding in 2");
   SCS::kkLidView elem("elem",1);
@@ -240,7 +240,7 @@ bool reshuffleTests() {
 
   scs->rebuild(new_element);
   scs->printFormat();
-  
+
   //Shuffle with particle back to 0
   printf("\nSend particle back to first id");
   auto sendBack = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
@@ -265,7 +265,7 @@ bool reshuffleTests() {
       fail(0) = 1;
       if (pids(particle_id) == 0)
         printf("[ERROR] Particle 0 was not returned to its original elements\n");
-      else 
+      else
         printf("[ERROR] Particle %d was moved during a previous shuffle\n", pids(particle_id));
     }
     new_element(particle_id) = element_id;
@@ -281,12 +281,12 @@ bool reshuffleTests() {
     new_pids(0) = 100;
     new_pids(1) = 200;
   });
-  
+
   scs->rebuild(new_element, new_particle_elems, new_particle_info);
 
   scs->printFormat();
-  
-  
+
+
   //Remove all particles from element 0 & 2, move particles from 1 & 3 to 0 & 2
   printf("\nDump and redistribute particles");
   auto dumpAndRedistribute = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {

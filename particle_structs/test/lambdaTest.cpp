@@ -6,7 +6,7 @@
 #include <SCS_Macros.h>
 
 #include <psAssert.h>
-#include <Distribute.h>
+#include "Distribute.h"
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;

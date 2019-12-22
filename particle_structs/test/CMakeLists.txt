@@ -1,5 +1,8 @@
+set(TEST_SOURCES
+  Distribute.cpp
+)
 function(make_test exename srcname)
-  add_executable(${exename} ${srcname})
+  add_executable(${exename} ${srcname} ${TEST_SOURCES})
   target_link_libraries(${exename} particleStructs)
 endfunction(make_test)
 

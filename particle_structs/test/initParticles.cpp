@@ -6,7 +6,7 @@
 #include <SCS_Macros.h>
 
 #include <psAssert.h>
-#include <Distribute.h>
+#include "Distribute.h"
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     SellCSigma<Type, exe_space>* scs =
       new SellCSigma<Type, exe_space>(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v,
                                       particle_element, particle_info);
-    
+
     scs->printFormat();
     SCS::kkLidView fail("fail",1);
     auto elem_scs = scs->get<0>();

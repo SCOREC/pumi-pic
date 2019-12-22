@@ -6,7 +6,7 @@
 #include <SCS_Macros.h>
 
 #include <psAssert.h>
-#include <Distribute.h>
+#include "Distribute.h"
 #include <mpi.h>
 
 using particle_structs::SellCSigma;
@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     char rank_str[100];
     sprintf(rank_str,"Format for rank %d", comm_rank);
     scs->printFormat(rank_str);
-  
+
     typedef SCS::kkLidView kkLidView;
     kkLidView new_element("new_element", scs->capacity());
     kkLidView new_process("new_process", scs->capacity());
@@ -138,7 +138,7 @@ bool sendToOne(int ne, int np) {
   particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
   for (int i = 0; i < ne; ++i)
     gids[i] = i;
-  
+
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 2, ptcls_per_elem, ids);
@@ -155,7 +155,7 @@ bool sendToOne(int ne, int np) {
   int sigma = ne;
   int V = 100;
   SCS* scs = new SCS(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v);
-  
+
   typedef SCS::kkLidView kkLidView;
   kkLidView new_element("new_element", scs->capacity());
   kkLidView new_process("new_process", scs->capacity());
@@ -183,11 +183,11 @@ bool sendToOne(int ne, int np) {
     return false;
   }
   else if (comm_rank != 0 && nPtcls != np*99/100) {
-    fprintf(stderr, "Rank %d has incorrect number of particles (%d != %d)\n", comm_rank, 
+    fprintf(stderr, "Rank %d has incorrect number of particles (%d != %d)\n", comm_rank,
             nPtcls, np* 99/100);
     return false;
   }
-    
+
   int_slice = scs->get<0>();
   double_slice = scs->get<1>();
   kkLidView fail("fail", 1);

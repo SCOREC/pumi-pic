@@ -64,32 +64,19 @@ message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 add_subdirectory(support)
 include_directories(support)
-#add_subdirectory(src)
+add_subdirectory(src)
 include_directories(src)
-#add_subdirectory(scs)
-include_directories(scs)
 include_directories(algorithms)
 
 set(PS_SOURCES
-  algorithms/Distribute.cpp
   algorithms/psTypes.cpp
-  scs/SellCSigma.cpp
 )
 
 set(PS_HEADERS
-  scs/SCS_Macros.h
-  scs/SCS_Types.h
-  scs/SCSPair.h
-  scs/SellCSigma.h
   algorithms/psParams.h
   algorithms/psTypes.h
-  algorithms/Distribute.h
 )
 
-add_library(particleStructs ${PS_SOURCES})
-target_link_libraries(particleStructs support)
-install(FILES ${PS_HEADERS} DESTINATION include)
-bob_export_target(particleStructs)
 
 if(false)
 if (ENABLE_KOKKOS)

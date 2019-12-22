@@ -4,7 +4,7 @@
 
 #include <MemberTypes.h>
 #include <SellCSigma.h>
-#include <Distribute.h>
+#include "Distribute.h"
 #include <psAssert.h>
 
 using particle_structs::SellCSigma;
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
   typedef MemberTypes<int> Type1;
   typedef MemberTypes<int,double[2]> Type2;
   typedef MemberTypes<int[3],double[2],char> Type3;
-  
+
   printf("Type1: %lu\n",Type1::memsize);
   PS_ALWAYS_ASSERT(Type1::memsize == sizeof(int));
   printf("Type2: %lu\n",Type2::memsize);

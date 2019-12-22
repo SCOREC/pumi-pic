@@ -4,16 +4,12 @@
 #include <utility>
 #include <functional>
 #include <algorithm>
-#include "psAssert.h"
-#include "MemberTypes.h"
-#include "MemberTypeArray.h"
-#include "MemberTypeLibraries.h"
-#include "SCS_Macros.h"
-#include "SCS_Types.h"
-#include "SupportKK.h"
-#include "ViewComm.h"
-#include "Segment.h"
-#include "SCSPair.h"
+#include <psAssert.h>
+#include <SupportKK.h>
+#include <ViewComm.h>
+#include <PS_Types.h>
+#include <Segment.h>
+#include <MemberTypeLibraries.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
@@ -21,6 +17,8 @@
 #include <mpi.h>
 #include <unordered_map>
 #include <climits>
+#include "SCS_Macros.h"
+#include "SCSPair.h"
 
 #ifdef PS_USE_CUDA
 #include <thrust/sort.h>
@@ -40,8 +38,9 @@ class SellCSigma {
  public:
 
   typedef Kokkos::TeamPolicy<ExecSpace> PolicyType ;
-  typedef Kokkos::View<lid_t*, typename ExecSpace::device_type> kkLidView;
-  typedef Kokkos::View<gid_t*, typename ExecSpace::device_type> kkGidView;
+  typedef typename ExecSpace::device_type Device;
+  typedef Kokkos::View<lid_t*, Device> kkLidView;
+  typedef Kokkos::View<gid_t*, Device> kkGidView;
   typedef typename kkLidView::HostMirror kkLidHostMirror;
   typedef typename kkGidView::HostMirror kkGidHostMirror;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, typename ExecSpace::device_type> GID_Mapping;
@@ -61,7 +60,7 @@ class SellCSigma {
     particle_info - Initial values for the particle information (optional)
   */
   SellCSigma(PolicyType& p,
-	     lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
+             lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
              kkLidView particles_per_element, kkGidView element_gids,
              kkLidView particle_elements = kkLidView(),
              MemberTypeViews<DataTypes> particle_info = NULL);
@@ -101,7 +100,7 @@ class SellCSigma {
      new_element - array sized scs->capacity with the new element for each particle
      new_process - array sized scs->capacity with the new process for each particle
   */
-  void migrate(kkLidView new_element, kkLidView new_process);
+ void migrate(kkLidView new_element, kkLidView new_process);
 
   /*
     Reshuffles the scs values to the element in new_element[i]
@@ -226,7 +225,6 @@ void sigmaSort(PairView<ExecSpace>& ptcl_pairs, lid_t num_elems,
                lid_t sigma){
   //Make temporary copy of the particle counts for sorting
   ptcl_pairs = PairView<ExecSpace>("ptcl_pairs", num_elems);
-  //PairView<ExecSpace> ptcl_pairs("ptcl_pairs", num_elems);
   if (sigma > 1) {
     lid_t i;
 #ifdef PS_USE_CUDA

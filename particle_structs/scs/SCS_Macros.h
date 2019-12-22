@@ -1,7 +1,7 @@
 #ifndef __SCS_MACROS_H__
 #define __SCS_MACROS_H__
 
-#ifdef SCS_USE_CUDA
+#ifdef PS_USE_CUDA
 #define SCS_DEVICE __device__ inline
 #define SCS_LAMBDA [=] __device__
 #define SCS_DEVICE_VAR __device__

@@ -24,7 +24,7 @@ namespace particle_structs {
   CREATE_MPITYPE(long double, MPI_LONG_DOUBLE);
   CREATE_MPITYPE(long long int, MPI_LONG_LONG_INT);
 #undef CREATE_MPI_TYPE
-  
+
   template <typename T> using BT = typename BaseType<T>::type;
 
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
@@ -39,7 +39,7 @@ namespace particle_structs {
      MPI_Wait
      MPI_Waitany
    */
-  
+
   /************** Host Communication functions **************/
   template <typename ExecSpace> using IsHost =
     typename std::enable_if<std::is_same<typename ExecSpace::memory_space, Kokkos::HostSpace>::value, int>::type;
@@ -48,7 +48,7 @@ namespace particle_structs {
   IsHost<ExecSpace> PS_Comm_Send(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                  int dest, int tag, MPI_Comm comm) {
     int size_per_entry = BaseType<T>::size;
-    return MPI_Send(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(), 
+    return MPI_Send(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                     dest, tag, comm);
   }
   //Recv
@@ -56,7 +56,7 @@ namespace particle_structs {
   IsHost<ExecSpace> PS_Comm_Recv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                  int sender, int tag, MPI_Comm comm) {
     int size_per_entry = BaseType<T>::size;
-    return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(), 
+    return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                     sender, tag, comm, MPI_STATUS_IGNORE);
   }
   //Isend
@@ -64,7 +64,7 @@ namespace particle_structs {
   IsHost<ExecSpace> PS_Comm_Isend(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                             int dest, int tag, MPI_Comm comm, MPI_Request* req) {
     int size_per_entry = BaseType<T>::size;
-    return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(), 
+    return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                      dest, tag, comm, req);
   }
   //Irecv
@@ -72,7 +72,7 @@ namespace particle_structs {
   IsHost<ExecSpace> PS_Comm_Irecv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
                                             int sender, int tag, MPI_Comm comm, MPI_Request* req) {
     int size_per_entry = BaseType<T>::size;
-    return MPI_Irecv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(), 
+    return MPI_Irecv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                      sender, tag, comm, req);
   }
   //Waitall
@@ -88,9 +88,9 @@ namespace particle_structs {
     return MPI_Alltoall(send.data(), send_size, MpiType<BT<T> >::mpitype(),
                         recv.data(), recv_size, MpiType<BT<T> >::mpitype(), comm);
   }
-  
+
   /************** Cuda Communication functions **************/
-#ifdef SCS_USE_CUDA
+#ifdef PS_USE_CUDA
 
   //TODO change to check if the memory space is not accessible from host and accessible from cuda
   //Return type check to see if the memory space is not the host space
@@ -108,11 +108,11 @@ namespace particle_structs {
     auto subview = Subview<T>::subview(view, offset, size);
 
 #ifdef PS_CUDA_AWARE_MPI
-    return MPI_Send(subview.data(), subview.size(), MpiType<BT<T> >::mpitype(), 
+    return MPI_Send(subview.data(), subview.size(), MpiType<BT<T> >::mpitype(),
                     dest, tag, comm);
 #else
     auto view_host = deviceToHost(subview);
-    return MPI_Send(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype(), 
+    return MPI_Send(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype(),
                     dest, tag, comm);
 #endif
   }
@@ -122,12 +122,12 @@ namespace particle_structs {
                                  int sender, int tag, MPI_Comm comm) {
     Kokkos::View<T*, ExecSpace> new_view("recv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
-    int ret = MPI_Recv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(), 
+    int ret = MPI_Recv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
 #else
     typename Kokkos::View<T*, ExecSpace>::HostMirror view_host =
       Kokkos::create_mirror_view(new_view);
-    int ret = MPI_Recv(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype(), 
+    int ret = MPI_Recv(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
     //Copy received values to device and move it to the proper indices of the view
     Kokkos::deep_copy(new_view, view_host);
@@ -144,11 +144,11 @@ namespace particle_structs {
                                   int dest, int tag, MPI_Comm comm, MPI_Request* req) {
     auto subview = Subview<T>::subview(view, offset, size);
 #ifdef PS_CUDA_AWARE_MPI
-    return MPI_Isend(subview.data(),subview.size(), MpiType<BT<T> >::mpitype(), dest, 
+    return MPI_Isend(subview.data(),subview.size(), MpiType<BT<T> >::mpitype(), dest,
                      tag, comm, req);
 #else
     auto view_host = deviceToHost(subview);
-    int ret =  MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype(), dest, 
+    int ret =  MPI_Isend(view_host.data(),view_host.size(), MpiType<BT<T> >::mpitype(), dest,
                          tag, comm, req);
     //Noop that will keep the view_host around until the lambda is removed
     get_map()[req] = [=]() {
@@ -164,15 +164,15 @@ namespace particle_structs {
     int size_per_entry = BaseType<T>::size;
     Kokkos::View<T*, ExecSpace> new_view("irecv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
-    int ret = MPI_Irecv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(), sender, 
+    int ret = MPI_Irecv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(), sender,
                         tag, comm, req);
 #else
     typename Kokkos::View<T*, ExecSpace>::HostMirror view_host =
       Kokkos::create_mirror_view(new_view);
-    int ret = MPI_Irecv(view_host.data(), size * size_per_entry, MpiType<BT<T> >::mpitype(), 
+    int ret = MPI_Irecv(view_host.data(), size * size_per_entry, MpiType<BT<T> >::mpitype(),
                         sender, tag, comm, req);
 #endif
-    
+
     get_map()[req] = [=]() {
 #ifndef PS_CUDA_AWARE_MPI
       Kokkos::deep_copy(new_view, view_host);

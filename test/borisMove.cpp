@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
     printf(" Profile file %s\n", profFile.c_str());
     printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
   }
-  int numPtcls = 100;
+  int numPtcls = 10;
   int histInterval = 0;
   double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
   int NUM_ITERATIONS = 10; //higher beads needs >10K
@@ -279,13 +279,16 @@ int main(int argc, char** argv) {
     gm.preprocessSelectBdryFacesFromAll();
     nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
   }
-  bool printD2BdryFaces = PRINT_D2BDRY_FACES;
-  if(printD2BdryFaces)
-    gm.printDist2BdryFacesData(nD2BdryTetSubDiv);  
+  bool writeTextBdryFaces = WRITE_TEXT_D2BDRY_FACES;
+  if(writeTextBdryFaces)
+    gm.writeTextDist2BdryFacesData(nD2BdryTetSubDiv);  
   
   int writeBdryFacesFile = WRITE_OUT_BDRY_FACES_FILE;
-  if(writeBdryFacesFile)
-    gm.writeDist2BdryFacesData("bdryFaces.nc", nD2BdryTetSubDiv);
+  if(writeBdryFacesFile && !readInCsrBdryData) {
+    std::string bdryOutName = "bdryFaces_" + 
+      std::to_string(nD2BdryTetSubDiv) + "div.nc";
+    gm.writeDist2BdryFacesData(bdryOutName, nD2BdryTetSubDiv);
+  }
 
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
@@ -362,7 +365,7 @@ int main(int argc, char** argv) {
   }
   auto end_sim = std::chrono::system_clock::now();
   std::chrono::duration<double> dur_init = end_init - start_sim;
-  std::cout << "Initialization duration " << dur_init.count()/60 << " min.\n";
+  std::cout << "\nInitialization duration " << dur_init.count()/60 << " min.\n";
   std::chrono::duration<double> dur_steps = end_sim - end_init;
   std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
   
@@ -379,7 +382,7 @@ int main(int argc, char** argv) {
   
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
 
-  fprintf(stderr, "done\n");
+  fprintf(stderr, "Done\n");
   return 0;
 }
 

@@ -27,37 +27,40 @@ constexpr int USE_GITR_BFACE_MIDPT_N_CALC_CLD = 0;// if g
 constexpr int USE_GITR_DIST2BDRY = 0; //if g
 constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
 
-constexpr int PRINT_D2BDRY_FACES = 1;
-constexpr bool CREATE_GITR_MESH = true;
+constexpr int WRITE_TEXT_D2BDRY_FACES = 0;
+constexpr bool CREATE_GITR_MESH = false;
 
 constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
 constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 3;
+constexpr o::LO D2BDRY_GRIDS_PER_TET = 8; // if not use read-in data
+
+constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
 
 constexpr o::LO USE3D_BFIELD = 0;
 constexpr o::LO USE2D_INPUTFIELDS = 1;
-constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
 
 // GITR only constant EField is used.
 constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
 constexpr o::LO USE_CYL_SYMMETRY = 1;
 constexpr o::LO PISCESRUN  = 1;
-constexpr double BACKGROUND_AMU = 4.0; //for pisces
-constexpr double PTCL_AMU=184.0; //W,tungston
+constexpr o::Real BACKGROUND_AMU = 4.0; //for pisces
+constexpr o::Real PTCL_AMU=184.0; //W,tungston
+constexpr o::LO PARTICLE_Z = 74;
 constexpr o::LO BACKGROUND_Z = 1;
-constexpr double BIAS_POTENTIAL = 250.0;
+constexpr o::Real BIAS_POTENTIAL = 250.0;
 constexpr o::LO BIASED_SURFACE = 1;
-constexpr double CONSTANT_EFIELD[] = {0, 0, 0};
-constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
-
+constexpr o::Real CONSTANT_EFIELD[] = {0, 0, 0};
+constexpr o::Real CONSTANT_BFIELD[] = {0,0,-0.08};
+constexpr o::Real ELECTRON_CHARGE = 1.60217662e-19;
+constexpr o::Real PROTON_MASS = 1.6737236e-27;
+constexpr o::Real CONSTANT_PI = 3.14159265358979323;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
 constexpr o::LO BDRY_STORAGE_SIZE_PER_FACE = 1;
 // Elements face type
 enum {INTERIOR=1, EXPOSED=2};
-
-constexpr int SKIP_MODEL_IDS_FROM_DIST2BDRY = 1;
+constexpr int SKIP_MODEL_IDS_FROM_DIST2BDRY = 0; //set to 0
 
 
 #define MESHDATA(mesh) \
@@ -108,7 +111,7 @@ public:
   void preprocessSelectBdryFacesFromAll();
   o::LOs bdryFacePtrsSelected;
   o::LOs bdryFacesSelectedCsr;
-  void printDist2BdryFacesData(int);
+  void writeTextDist2BdryFacesData(int);
   
   int readDist2BdryFacesData(const std::string &);
   o::LOs bdryCsrReadInDataPtrs;

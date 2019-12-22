@@ -126,11 +126,11 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
           calcCLD_bclosest = calcDLen_bclosest * pow(abs(pot)/tel_bclosest, 0.75);
         else 
            calcCLD_bclosest = 1e12;
-        if(debug)
-          printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g nelmid %g Telmid %g "
-            " calcCLD_bclosest %g bfidmid %g %g %g bfid %d bfel %d bface_verts %g %g %g , %g %g %g, %g %g %g \n", 
-            ptcl, pos[0], pos[1], pos[2], nelMesh, telMesh, nel_bclosest, tel_bclosest, calcCLD_bclosest,
-            bmid[0], bmid[1], bmid[2], faceId, bfel, bface_coords[0][0], bface_coords[0][1], bface_coords[0][2],
+        if(false)
+          printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g "
+            "  bfidmid %g %g %g bfid %d bfel %d bface_verts %g %g %g , %g %g %g, %g %g %g \n", 
+            ptcl, pos[0], pos[1], pos[2], nelMesh, telMesh, bmid[0], bmid[1], bmid[2], 
+            faceId, bfel, bface_coords[0][0], bface_coords[0][1], bface_coords[0][2],
             bface_coords[1][0], bface_coords[1][1], bface_coords[1][2],
             bface_coords[2][0], bface_coords[2][1], bface_coords[2][2]);
 
@@ -174,8 +174,8 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
             else 
               calcCLD_gitrmid = 1e12;
             
-            if(debug)
-              printf("calcE: ptcl %d gtel %g gnel %g gmid %g %g %g gdlen %g g_calcCLD_gitrmid %g \n", 
+            if(false)
+              printf("calcE1: ptcl %d gitrTel %g gitrNel %g gitrMid %g %g %g gitrDLen %g calcCLD_gitrmid %g \n", 
                 ptcl, gitrTel, gitrNel, gitrMidPtx, gitrMidPty, gitrMidPtz, gdlen, calcCLD_gitrmid);
             
             gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
@@ -208,18 +208,17 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
         for(int i=0; i<3; ++i)
           efield_scs(pid, i) = exd[i];
 
-        if(debug){
-          printf("CalcE2: ptcl %d dist2bdry %g  bdryface:%d  bfel %d emag %g  emag_closest %g CLD:%g "
-              " pos %g %g %g closest %g %g %g \n", ptcl, d2bdry, faceId, bfel, emag, emag_closest,
+        if(false){
+          printf("CalcE2: ptcl %d dist2bdry %g  bdryface:%d  bfel %d emag %g  %g CLD:%g "
+              " pos %g %g %g closest %g %g %g \n", ptcl, d2bdry, faceId, bfel, emag,
               childLangmuirDist, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2]);
         } 
-        if(debug)
+        if(false)
           printf("CalcE3:: TStep %d ptcl %d dist2bdry %g gitrD2bdry %g  emag %g, emagOrig %g "
-              " CLDorig %g thisCLD %g gitrCLD %g calcCLD_gitrmid %g calcCLD_bclosest %g elem %d "
-              " gitrmid %g %g %g gTel %g gNel %g telMesh %g nelMesh %g tel_bclosest %g nel_bclosest %g \n", 
+              " CLDorig %g thisCLD %g gitrCLD %g calcCLD_gitrmid %g elem %d "
+              " gTel %g gNel %g telMesh %g nelMesh %g \n", 
             iTimeStep, ptcl, d2bdry, gitrD2bdry,  emag, emagOrig, childLangmuirDist, thisCLD, 
-            gitrCLD, calcCLD_gitrmid, calcCLD_bclosest, elem, gitrmid[0], gitrmid[1], gitrmid[2], 
-            gitrTel, gitrNel, tel_bclosest, nel_bclosest);
+            gitrCLD, calcCLD_gitrmid, elem, gitrTel, gitrNel);
 
         if(compareWithGitr) {// TODO
           //beg: pindex*nT*dof_intermediate + (nthStep-1)*dof_intermediate
@@ -227,7 +226,7 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
           auto gitrE0 = testGitrPtclStepData[beg + testGEind];
           auto gitrE1 = testGitrPtclStepData[beg + testGEind+1];
           auto gitrE2 = testGitrPtclStepData[beg + testGEind+2];
-          auto gitrQ = testGitrPtclStepData[beg + testGqInd];
+          auto gitrQ = static_cast<int>(testGitrPtclStepData[beg + testGqInd]);
           auto gitrCLD = testGitrPtclStepData[beg + testGCLDInd];
           auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
           auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
@@ -240,10 +239,11 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
             charge_scs(pid) = gitrQ;
           }
           if(debug)
-            printf("calcE4 ptcl %d timestep %d q %d  efield %g %g %g  GITRmindist %g gitrCLD %g "
-                "GITR_q %d GITR_Efield %g  %g  %g useGITR_EQ %d useGITR_CLD %d \n", 
-                ptcl, iTimeStep, charge_scs(pid), efield_scs(pid, 0), efield_scs(pid, 1), efield_scs(pid, 2), 
-               gitrD2bdry, gitrCLD, gitrQ, gitrE0, gitrE1, gitrE2,  replaceEQ, useGitrCLD);
+            printf("calcE_this:gitr ptcl %d timestep %d charge %d : %d  dist2bdry %g : %g "
+               "  efield %g : %g %g : %g  %g : %g CLD %g : %g   Nel %g Tel %g \n", 
+                ptcl, iTimeStep, charge_scs(pid), gitrQ, d2bdry, gitrD2bdry, 
+                efield_scs(pid, 0), gitrE0, efield_scs(pid, 1), gitrE1,
+                efield_scs(pid, 2), gitrE2, childLangmuirDist,  gitrCLD, nelMesh, telMesh);
         }
       } //faceId
     } //mask

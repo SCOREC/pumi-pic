@@ -159,7 +159,6 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
   auto pos_d = scs->get<PTCL_POS>();
   auto pid_scs = scs->get<PTCL_ID>();
-  printf("gitrm_findDistanceToBdry\n");
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if (mask > 0) {
       o::LO beg = 0;
@@ -174,8 +173,8 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
 
       if(nFaces >0) {
         auto ptcl = pid_scs(pid);
-        o::Real dist = 0;
-        o::Real min = 1.0e+30;
+        double dist = 0;
+        double min = 1.0e+30;
         auto point = o::zero_vector<3>();
         auto pt = o::zero_vector<3>();
         o::Int bfid = -1, fid = -1, minRegion = -1;
@@ -195,11 +194,9 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
               ref[0], ref[1], ref[2], face[0][0], face[0][1], face[0][2], face[1][0], 
               face[1][1], face[1][2], face[2][0], face[2][1], face[2][2]);
           }
-          // //o::LO region = p::find_closest_point_on_triangle_with_normal(face, ref, point);
           int region;
           auto pt = p::closest_point_on_triangle(face, ref, &region); 
           dist = o::norm(pt - ref);
-          dist = sqrt(dist);
           if(ii==0 || dist < min) {
             min = dist;
             fid = bfid;

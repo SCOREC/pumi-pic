@@ -3,70 +3,68 @@
 
 #include "pumipic_adjacency.hpp"
 #include "GitrmParticles.hpp" 
+#include "GitrmMesh.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;
 
-OMEGA_H_DEVICE o::Real screeningLength(const o::Real projectileZ, const o::Real targetZ)
-{
+OMEGA_H_DEVICE o::Real screeningLength(const o::Real projectileZ, 
+    const o::Real targetZ) {
   o::Real bohrRadius = 5.29177e-11; //TODO
-  o::Real screenLength = 0.885341*bohrRadius*std::pow(std::pow(projectileZ,(2/3)) +
-    std::pow(targetZ,(2.0/3.0)),(-1.0/2.0));
-
-  return screenLength;
+  return 0.885341*bohrRadius*pow(pow(projectileZ,(2.0/3.0)) + 
+      pow(targetZ,(2.0/3.0)),(-1.0/2.0));
 }
 
-
-OMEGA_H_DEVICE o::Real stoppingPower (const Omega_h::Vector<3> &vel, const o::Real targetM, 
-  const o::Real targetZ, const o::Real screenLength)
-{
-  o::Real chargeQ = 1.60217662e-19; //TODO global const
-  o::Real ke2 = 14.4e-10; //TODO global const
-  o::Real amu = 1;// TODO get
-  o::Real atomZ = 10;// TODO get
-  
-  o::Real E0 = 0.5*amu*1.6737236e-27 *1/chargeQ * p::osh_mag(vel);
+OMEGA_H_DEVICE o::Real stoppingPower (const o::Vector<3>& vel, const o::Real targetM, 
+  const o::Real targetZ, const o::Real screenLength) {
+  o::Real elCharge = ELECTRON_CHARGE;
+  o::Real ke2 = 14.4e-10; //TODO
+  o::Real amu = PTCL_AMU;
+  o::Real atomZ = PARTICLE_Z;
+  auto protonMass = PROTON_MASS;
+  o::Real E0 = 0.5*amu*protonMass *1.0/elCharge * p::osh_dot(vel, vel);
   o::Real reducedEnergy = E0*(targetM/(amu+targetM))* (screenLength/(atomZ*targetZ*ke2));
-  o::Real stopPower = 0.5*std::log(1.0 + 1.2288*reducedEnergy)/(reducedEnergy +
-          0.1728*std::sqrt(reducedEnergy) + 0.008*std::pow(reducedEnergy, 0.1504));
-
+  o::Real stopPower = 0.5*log(1.0 + 1.2288*reducedEnergy)/(reducedEnergy +
+          0.1728*sqrt(reducedEnergy) + 0.008*pow(reducedEnergy, 0.1504));
   return stopPower;
 }
 
-inline o::Real erosion(const o::LO indx, const Omega_h::Write<Omega_h::Real> &vx,
-  const Omega_h::Write<Omega_h::Real> &vy, const Omega_h::Write<Omega_h::Real> &vz) {
+//not used ? 
+inline o::Real surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
+  int atomZ = PARTICLE_Z;
+  auto amu = PTCL_AMU;
+  auto elCharge = ELECTRON_CHARGE; //1.60217662e-19
+  auto protonMass = PROTON_MASS; //1.6737236e-27
+  o::Real q = 18.6006;
+  o::Real lambda = 2.2697;
+  o::Real mu = 3.1273;
+  o::Real Eth = 24.9885;
+  o::Real targetZ = 74.0;
+  o::Real targetM = 183.84;
 
+  auto pid_scs = scs->get<PTC_ID>();
+  auto vel_scs = scs->get<PTCL_VEL>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto ptcl = pid_scs(pid);
-
-    //TODO 
-    o::Real q = 18.6006;
-    o::Real lambda = 2.2697;
-    o::Real mu = 3.1273;
-    o::Real Eth = 24.9885;
-    o::Real targetZ = 74.0;
-    o::Real targetM = 183.84;
-
-    o::Real atomz = atomZ_scs(ptcl); //TODO
-    o::Real amu = amu_scs(ptcl); //TODO
-    
-    o::Real screenLength = screeningLength(atomz, targetZ);
+    auto screenLength = screeningLength(atomz, targetZ);
     auto vel = p::makeVector3(pid, vel_scs);
     o::Real stopPower = stoppingPower(vel, targetM, targetZ, screenLength);
-    o::Real E0 = 0.5*amu*1.6737236e-27* p::osh_mag(vel)*1/1.60217662e-19; //TODO
-    o::Real term = pow((E0/Eth - 1),mu);
+    o::Real E0 = 0.5*amu*protonMass* 1/elCharge * p::osh_dot(vel, vel);
+    o::Real term = pow((E0/Eth - 1), mu);
     o::Real Y0 = q*stopPower*term/(lambda + term);
-    erosion_scs(pid) = Y0;
+    erosionData[pid] = Y0;
   };
   scs->parallel_for(lamb);
 }
 
 //TODO split this function/organize data access
 //Note, elem_ids are index by pid=indexes, not scs member. Don't rebuild after search_mesh 
-inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids) {
+inline void surfaceReflection(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids) {
+  int debug = 1;
+  o::Real pi = CONSTANT_PI;
+  o::LO fluxEA = SURFACE_FLUX_EA;
+  o::LO bdryAtomZ = BOUNDARY_ATOM_Z;
 
-  o::LO verbose = 1;
-  o::Real pi = 3.14159265358979323; //TODO
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
@@ -110,46 +108,42 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
     if(mask >0 && elem_ids[pid]==-1) {
       auto elemId = e;
       auto fid = xfaces[ptcl];
-
       if(fid >= 0) {
         OMEGA_H_CHECK(side_is_exposed[fid]);
         auto ptcl = pid_scs(pid);
-
         auto pelem = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
         if(elemId != pelem)
           elemId = pelem;
-
-
 // need fid to fIndex map to access by bdryFaces[fIndex]:  
 //auto fInd = get_bdry_face_index(o::LO fid, coords, side_is_exposed, );
-                        
         auto bdryAtomZ = xtag_d[fInd*dof+ATOMZ];
-      
-
         auto vel = p::makeVector3(pid, vel_scs );
         o::Vector<3> xpt;
         for(o::LO i=0; i<3; ++i)
           xpt[i] = xpoints[ptcl*3+i];
         auto pos = p::makeVector3(pid, tgt_scs);
-
         o::Real dEdist = 0;
         o::Real dAdist = 0;
-        int AdistInd=0;
-        int EdistInd=0;
-        if(FLUX_EA > 0) {
+        o::LO AdistInd=0;
+        o::LO EdistInd=0;
+        if(fluxEA > 0 {
           dEdist = (Edist - E0dist)/nEdist;
           dAdist = (Adist - A0dist)/nAdist;
           AdistInd=0;
           EdistInd=0;
         }
-
-        firstColl(pid) = 1; //scs
-    
+        //firstColl(pid) = 1; //scs
+        o::Real magPath = o::norm(vel);
+        o::Real amu = ptcl_amu(pid); //scs
+        o::Real E0 = 0.5*amu*1.6737236e-27*(magPath*magPath)/1.60217662e-19;
+        if(E0 > 1000.0) 
+          E0 = 990.0;
+  
         auto elmId = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
         auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
-          face_verts, down_r2fs);
+          face_verts, down_r2fs); //inwards ?
         o::Real magSurfNorm = o::norm(surfNorm);
-        auto normVel = o::norm(vel);
+        auto normVel = o::normalize(vel);
         o::Real ptclProj = p::osh_dot(normVel, surfNorm);
         o::Real thetaImpact = acos(ptclProj);
         if(thetaImpact > o::PI*0.5)
@@ -157,14 +151,8 @@ inline void applySurfaceModel(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids
         thetaImpact = thetaImpact*180.0/o::PI;
         if(thetaImpact < 0) thetaImpact = 0;
     
-        o::Real magPath = o::normalize(vel);
-        o::Real amu = ptcl_amu(pid); //scs
-        o::Real E0 = 0.5*amu*1.6737236e-27*(magPath*magPath)/1.60217662e-19;
-        if(E0 > 1000.0) 
-          E0 = 990.0;
         if(o::are_close(E0, 0))
           thetaImpact = 0;
-  
         o::Real Y0;
         o::Real R0;
         if(bdryAtomZ > 0) {//TODO

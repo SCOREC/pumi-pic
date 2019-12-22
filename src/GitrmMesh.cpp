@@ -460,7 +460,7 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
   }
   constexpr int bfsLocalSize = 100000;
   const double depth = 0.05;
-  const int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
+  constexpr int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
   o::LOs modelIdsToSkip(1,-1);
   int numModelIds = 0;
   if(skipGeometricModelIds) {
@@ -910,7 +910,7 @@ int GitrmMesh::readDist2BdryFacesData(const std::string& ncFileName) {
 }
 
 
-void GitrmMesh::printDist2BdryFacesData(int nSubdiv) {
+void GitrmMesh::writeTextDist2BdryFacesData(int nSubdiv) {
   auto data_d = bdryFacesSelectedCsr;
   auto ptrs_d = bdryFacePtrsSelected;  
   o::Write<o::LO> bfel_d(data_d.size(), -1);
@@ -1043,9 +1043,10 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
     auto s = (norm1 + norm2 + norm3)/2.0;
     area_d[fid] = sqrt(s*(s-norm1)*(s-norm2)*(s-norm3));
     for(auto id=0; id < numModelIds; ++id) {
-      if(modelIdsToSkip[id] == faceClassIds[fid])
+      if(modelIdsToSkip[id] == faceClassIds[fid]) {
         material_d[fid] = 1; //Z
         surface_d[fid] = 1;
+      }
     }
     //inDir used only in surface-model
   };

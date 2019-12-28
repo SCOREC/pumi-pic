@@ -80,14 +80,6 @@ OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b,
   return true;
 }
 
-template<o::LO N>
-inline o::Vector<N> makeVectorHost(const Omega_h::Real(&a)[N], o::LO beg=0) {
-  o::Vector<N> v;
-  for(o::LO i=beg; i<N+beg; ++i) {
-    v[i] = a[i];
-  }
-  return v;
-}
 
 template <class Vec>
 OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON) {

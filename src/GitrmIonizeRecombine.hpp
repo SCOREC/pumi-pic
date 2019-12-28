@@ -49,7 +49,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
     indT = 0;
   if(indN < 0 || indN > nD-2)
     indN = 0;
-  //TODO FIXME
+  //TODO
   if(charge > 74-1) //only Tungston
     {charge = 0;} 
   // TODO use log interpolation. This will lose accuracy 
@@ -102,7 +102,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
   bool debug = false) {
   auto& mesh = gm.mesh;
-  auto use2DRatesData = USE_READIN_IONI_REC_RATES;
+  auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
   auto& densIon_d = gm.densIon_d;
   auto& temIon_d = gm.temIon_d;
   auto x0Dens = gm.densIonX0;
@@ -118,14 +118,12 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   auto dxTemp = gm.tempIonDx;
   auto dzTemp = gm.tempIonDz;
 
-  auto compareWithGitr = COMPARE_WITH_GITR;
-  //#ifdef COMPARE_WITH_GITR
+  bool useGitrRnd = USE_GITR_RND_NUMS;
+  //#ifdef USE_GITR_RND_NUMS
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
-  const auto testGqInd = gp.testGitrStepDataChargeInd;
-  const auto testGIind = gp.testGitrStepDataIoniInd;
-  const auto testIrate = gp.testGitrStepDataIoniRateInd;
+  const auto testGIind = gp.testGitrDataIoniRandInd;
   const auto iTimeStep = iTimePlusOne - 1;
   //#endif
 
@@ -154,7 +152,7 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
   auto scsCapacity = scs->capacity();
 
-  //TODO FIXME replace by Kokkos random
+  //TODO replace by Kokkos random
   o::HostWrite<o::Real> rnd_h(scsCapacity);
   for(auto i=0; i<scsCapacity; ++i) {
     rnd_h[i] = (double)(std::rand())/RAND_MAX;
@@ -185,9 +183,9 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         // same as a 2D plane through the particle position, with x'=r=(sqrt(x^2+y^2).
         bool cylSymm = true;
         auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-          dzDens, nxDens, nzDens, pos, cylSymm, 1,0,debug);
+          dzDens, nxDens, nzDens, pos, cylSymm, 1,0,false);
         auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
-          dzTemp, nxTemp, nzTemp, pos, cylSymm, 1,0,debug);
+          dzTemp, nxTemp, nzTemp, pos, cylSymm, 1,0,false);
         
         if(debug)
           printf("Ionization point: ptcl %d dens2D %g temp2D %g tlocal %g nlocal %g "
@@ -201,12 +199,9 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
 
       o::Real P1 = 1.0 - exp(-dt/rateIon);
       double randn = 0;
-      
-      double rateGitr = 0;
+      int gitrInd = -1; 
       double randGitr = 0;
-      double randThis = randn;
-      if(compareWithGitr) {
-        rateGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testIrate];
+      if(useGitrRnd) {
         randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testGIind];
         randn = randGitr;        
       } else
@@ -225,24 +220,15 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         auto fit = first_ionizeT_scs(pid);
         first_ionizeT_scs(pid) = fit + dt;
       } 
-      
-      int chargeGitr = 0;
-      if(compareWithGitr && debug) {
-        auto gitrInd = ptcl*testGNT*testGDof + iTimeStep*testGDof;
-        chargeGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testGqInd];
-        printf("Ionization: ptcl %d rateIoni %g rand %g charge %d P1 %g ::"
-           " start@ %d rateGitr %g randGitr %g chargeGitr %d \n", 
-          ptcl, rateIon, randThis, charge_scs(pid), P1, gitrInd, rateGitr, randGitr, chargeGitr); 
-      }
-      //charge_scs(pid) = chargeGitr;
-
+      if(useGitrRnd && debug)
+        gitrInd = ptcl*testGNT*testGDof + iTimeStep*testGDof+testGIind;
       if(debug)
-        printf("ionizable %d ptcl %d charge %d randn %g P1 %g rateIon %g dt %g\n",
-          xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, dt);
+        printf("ionizable %d ptcl %d charge %d randn %g P1 %g rateIon %g dt %g @ %d\n",
+          xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, dt, gitrInd);
       
     } //mask 
   };
-  scs->parallel_for(lambda);
+  scs->parallel_for(lambda, "ionizeKernel");
 } 
 
 
@@ -265,18 +251,16 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   auto dxTemp = gm.tempIonDx;
   auto dzTemp = gm.tempIonDz;
 
-  auto compareWithGitr = COMPARE_WITH_GITR;
-  //#ifdef COMPARE_WITH_GITR
+  auto useGitrRnd = USE_GITR_RND_NUMS;
+  //#ifdef USE_GITR_RND_NUMS
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
-  const auto testGrecInd = gp.testGitrStepDataRecombInd;
-  const auto testRrate = gp.testGitrStepDataRecombRateInd;
+  const auto testGrecInd = gp.testGitrDataRecRandInd;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
-  const auto testGqInd = gp.testGitrStepDataChargeInd;
   const auto iTimeStep = iTimePlusOne - 1;
   //#endif
 
-  auto use2DRatesData = USE_READIN_IONI_REC_RATES;
+  auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
   auto& xfaces_d = gp.collisionPointFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.recombTempGridMin;
@@ -308,6 +292,8 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   }
   auto rands = o::Reals(o::Write<o::Real>(rnd_h));
 
+
+  // is elm_ids[pid] >= 0 make sure ptcl not intersected bdry ?????????
   auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0 && elm_ids[pid] >= 0) {
       auto el = elm_ids[pid];
@@ -331,9 +317,9 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
           //cylindrical symmetry, height (z) is same.
           // projecting point to y=0 plane, since 2D data is on const-y plane.
           auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-            dzDens, nxDens, nzDens, pos, false,1,0,debug);
+            dzDens, nxDens, nzDens, pos, false,1,0,false);
           auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
-            dzTemp, nxTemp, nzTemp, pos, false,1,0,debug);
+            dzTemp, nxTemp, nzTemp, pos, false,1,0,false);
 
           if(debug)
             printf("Recomb Dens: ptcl %d x0 %g z0 %g dx %g dz %g nx %d " 
@@ -351,42 +337,35 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
         rateRecomb = interpolateRateCoeff(rRates, gridTemp, gridDens, tlocal,
          nlocal, gridT0, gridD0, dTem, dDens, nTRates, nDRates, charge);
         P1 = 1.0 - exp(-dt/rateRecomb);
-      }
 
-      double randn = 0;
-      double rateGitr = 0;
-      double randGitr = 0;
-      double randThis = randn;
-      if(compareWithGitr) {
-        randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + 
-          iTimeStep*testGDof + testGrecInd];
-        rateGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + 
-          iTimeStep*testGDof + testRrate];
-        randn = randGitr;
-      }
-      else 
-        randn = rands[pid];
-      auto xfid = xfaces_d[ptcl];
-      auto first_iz = first_ionizeZ_scs(pid);
-      if(xfid < 0 && randn <= P1) {
-        charge_scs(pid) = charge-1;
-        prev_recombination_scs(pid) = 1;
-      }
+        double randn = 0;
+        double randGitr = 0;
+        int gitrInd = -1;
+        if(useGitrRnd) {
+          randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + 
+            iTimeStep*testGDof + testGrecInd];
+          randn = randGitr;
+        }
+        else 
+          randn = rands[pid];
 
-      int chargeGitr = -1;
-      if(compareWithGitr && debug) {
-        chargeGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + 
-          iTimeStep*testGDof + testGqInd];
-        printf("Recombination: ptcl %d rateRecomb %g rand %g charge %d rateGitr %g "
-          "randGitr %g chargeGitr %d \n", 
-           ptcl, rateRecomb, randThis, charge_scs(pid), rateGitr, randGitr, chargeGitr);
+        auto xfid = xfaces_d[ptcl];
+        auto first_iz = first_ionizeZ_scs(pid);
+        if(xfid < 0 && randn <= P1) {
+          charge_scs(pid) = charge-1;
+          prev_recombination_scs(pid) = 1;
+        }
+
+        if(useGitrRnd && debug)
+          gitrInd = ptcl*testGNT*testGDof+iTimeStep*testGDof+testGrecInd;
+        
+        if(debug)
+          printf("recomb %d ptcl %d charge %d randn %g P1 %g rateRecomb %g @ %d\n", 
+            xfid<0, ptcl, charge_scs(pid), randn, P1, rateRecomb, gitrInd);
       }
-      if(debug)
-        printf("recomb %d ptcl %d charge %d randn %g P1 %g rateRecomb %g\n", 
-          xfid<0, ptcl, charge_scs(pid), randn, P1, rateRecomb);
     } //mask 
   };
-  scs->parallel_for(lambda);
+  scs->parallel_for(lambda, "RecombineKernel");
 } 
 
 #endif

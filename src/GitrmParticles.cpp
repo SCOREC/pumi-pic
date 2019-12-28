@@ -570,40 +570,30 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
 // Read GITR particle step data of all time steps; eg: rand numbers.
 int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName, 
   int& maxNPtcls, int& numPtclsRead, bool debug) {
-  
-  assert(COMPARE_WITH_GITR == 1);
+  assert(USE_GITR_RND_NUMS == 1);
   std::cout << "Reading Test GITR step data\n";
-  // TODO re-order the list in its constructor to leave out empty {}
+  // re-order the list in its constructor to leave out empty {}
   Field3StructInput fs({"intermediate"}, {}, {"nP", "nTHist", "dof"}, 0,
-    {/*"Efield_at",*/ "position_at","charge_at", "mindist_at", "CLD_at", 
-    "midpt_at", "ne_at", "te_at",  "RndIoni_at","IoniRate_at", 
-    "RndRecomb_at", "RecombRate_at"}); 
+    {"RndIoni_at", "RndRecomb_at"});
+  // "CollisionRndn1_at", "CollisionRndn2_at", "CollisionRndxsi_at"}); 
   auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
   testGitrPtclStepData = o::Reals(fs.data);
-  testGitrStepDataEfieldInd = 0; //fs.getIntValueOf("Efield_at");
-  testGitrStepDataPositionInd = fs.getIntValueOf("position_at");
-  testGitrStepDataChargeInd = fs.getIntValueOf("charge_at");
-  testGitrStepDataMinDistInd = fs.getIntValueOf("mindist_at");
-  testGitrStepDataCLDInd = fs.getIntValueOf("CLD_at");
-  testGitrStepDataMidPtInd = fs.getIntValueOf("midpt_at");
-  testGitrStepDataNeInd = fs.getIntValueOf("ne_at");
-  testGitrStepDataTeInd = fs.getIntValueOf("te_at");
-  testGitrStepDataIoniInd = fs.getIntValueOf("RndIoni_at");
-  testGitrStepDataIoniRateInd = fs.getIntValueOf("IoniRate_at");
-  testGitrStepDataRecombInd = fs.getIntValueOf("RndRecomb_at");
-  testGitrStepDataRecombRateInd = fs.getIntValueOf("RecombRate_at");
+  testGitrDataIoniRandInd = fs.getIntValueOf("RndIoni_at");
+  testGitrDataRecRandInd = fs.getIntValueOf("RndRecomb_at");
   testGitrStepDataDof = fs.getIntValueOf("dof"); // or fs.getNumGrids(2);
   testGitrStepDataNumTsteps = fs.getIntValueOf("nTHist") - 1; // NOTE
   testGitrStepDataNumPtcls = fs.getIntValueOf("nP");
+  //testGitrCollisionRndn1Ind = fs.getIntValueOf("CollisionRndn1_at"); 
+  //testGitrCollisionRndn2Ind = fs.getIntValueOf("CollisionRndn2_at");
+  //testGitrCollisionRndxsiInd = fs.getIntValueOf("CollisionRndxsi_at");
   if(debug) {
-    printf(" GITRdataIndex: E %d Pos %d Q %d d2bdry %d cld %d midpt %d "
-      " ne %d te %d RndIoni %d rateIoni %d RndRec %d rateRec %d dof %d nT %d nP %d\n", 
-      testGitrStepDataEfieldInd, testGitrStepDataPositionInd, 
-      testGitrStepDataChargeInd, testGitrStepDataMinDistInd, testGitrStepDataCLDInd,
-      testGitrStepDataMidPtInd, testGitrStepDataNeInd, testGitrStepDataTeInd,
-      testGitrStepDataIoniInd, testGitrStepDataIoniRateInd,
-      testGitrStepDataRecombInd, testGitrStepDataRecombRateInd, testGitrStepDataDof,
-      testGitrStepDataNumTsteps, testGitrStepDataNumPtcls);
+    printf(" TestGITRdata: dof %d nT %d nP %d Index: rndIoni %d rndRec %d"
+        "\n",
+        //" coll_n1 %d coll_n2 %d coll_xsi %d \n",
+      testGitrStepDataDof, testGitrStepDataNumTsteps, testGitrStepDataNumPtcls,
+      testGitrDataIoniRandInd, testGitrDataRecRandInd);
+    //testGitrCollisionRndn1Ind, testGitrCollisionRndn2Ind,
+    //testGitrCollisionRndxsiInd);
   }
   return stat;
 }

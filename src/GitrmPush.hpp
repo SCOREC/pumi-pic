@@ -15,48 +15,21 @@
 
 
 // Angle, DebyeLength etc were calculated at center of LONG tet, using BField.
-inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, const GitrmMesh &gm) {
+inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, 
+    const GitrmMesh &gm) {
 
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
 
-  const int compareWithGitr = COMPARE_WITH_GITR;
-  const int useGitrCLD = USE_GITR_CLD;
-  const int replaceEQ = USE_GITR_EFILED_AND_Q;
-  const int useGitrMidPt = USE_GITR_BFACE_MIDPT_N_CALC_CLD;
-  const int useGitrD2bdry = USE_GITR_DIST2BDRY;
+  const int compareWithGitr = USE_GITR_RND_NUMS;
   const double biasPot = BIAS_POTENTIAL;
   if(compareWithGitr)
     iTimePlusOne++;
   
-  const auto& temEl_d = gm.temEl_d;
-  const auto& densEl_d = gm.densEl_d;
-  const auto densElX0 = gm.densElX0;
-  const auto densElZ0 = gm.densElZ0;
-  const auto densElNx = gm.densElNx;
-  const auto densElNz = gm.densElNz;
-  const auto densElDx = gm.densElDx;
-  const auto densElDz = gm.densElDz;
-  const auto tempElX0 = gm.tempElX0;
-  const auto tempElZ0 = gm.tempElZ0;
-  const auto tempElNx = gm.tempElNx;
-  const auto tempElNz = gm.tempElNz;
-  const auto tempElDx = gm.tempElDx;
-  const auto tempElDz = gm.tempElDz;
   o::Write<o::Real> larmorRadius_d = gm.larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d = gm.childLangmuirDist_d;
-
-  const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
-  const auto testGDof = gp.testGitrStepDataDof;
-  const auto testGNT = gp.testGitrStepDataNumTsteps;
-  const auto testGEind = gp.testGitrStepDataEfieldInd;
-  const auto testGqInd = gp.testGitrStepDataChargeInd;
-  const auto testGCLDInd = gp.testGitrStepDataCLDInd;
-  const auto testGMinDistInd = gp.testGitrStepDataMinDistInd;
-  const auto testGMidPtInd = gp.testGitrStepDataMidPtInd;
-  const o::LO background_Z = BACKGROUND_Z;
   const auto iTimeStep = iTimePlusOne - 1;
   
   const auto biasedSurface = BIASED_SURFACE;
@@ -106,28 +79,11 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
         //get Tel, Nel
         auto nelMesh = elDensity[faceId];
         auto telMesh = elTemp[faceId];
-        
         auto bfel = p::elem_id_of_bdry_face_of_tet(faceId, f2rPtr, f2rElem);
         auto bface_coords = p::get_face_coords_of_tet(face_verts, coords, faceId);
         auto bmid = p::centroid_of_triangle(bface_coords);
-        auto tel_bclosest = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
-                         tempElDz, tempElNx, tempElNz, closest, true);
-        auto nel_bclosest = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
-                         densElDz, densElNx, densElNz, closest, true);
-        //calculate CLD
-        o::Real calcDLen_bclosest = 0;
-        if(o::are_close(nel_bclosest, 0.0))
-          calcDLen_bclosest = 1.0e12;
-        else 
-          calcDLen_bclosest = sqrt(8.854187e-12*tel_bclosest/(nel_bclosest*pow(background_Z,2)*1.60217662e-19));
-        // Only for BIASED surface
-        o::Real calcCLD_bclosest = 0;
-        if(tel_bclosest > 0.0)
-          calcCLD_bclosest = calcDLen_bclosest * pow(abs(pot)/tel_bclosest, 0.75);
-        else 
-           calcCLD_bclosest = 1e12;
-        if(false)
-          printf("calcE1: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g "
+        if(debug>1)
+          printf("calcE0: ptcl %d ppos %g %g %g nelMesh %g TelMesh %g "
             "  bfidmid %g %g %g bfid %d bfel %d bface_verts %g %g %g , %g %g %g, %g %g %g \n", 
             ptcl, pos[0], pos[1], pos[2], nelMesh, telMesh, bmid[0], bmid[1], bmid[2], 
             faceId, bfel, bface_coords[0][0], bface_coords[0][1], bface_coords[0][2],
@@ -136,61 +92,10 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
 
         auto distVector = closest - pos;
         auto dirUnitVector = o::normalize(distVector);
-        auto d2bdry = p::osh_mag(distVector);
+        auto d2bdry = o::norm(distVector);
         o::Real emag = 0;
-
-        o::Real gitrCLD=0;
-        o::Real thisCLD=childLangmuirDist;
-        o::Real thisD2bdry=d2bdry;
-        o::Real gitrD2bdry=0;
-        o::Real calcCLD_gitrmid=0;
-        o::Real emagOrig=0;
-        o::Real emag_closest = 0;
-        auto gitrmid = o::zero_vector<3>();
-        double gitrTel =0, gitrNel = 0;
-        o::LO beg = ptcl*testGNT*testGDof + iTimeStep*testGDof;
         if(biasedSurface) {
           emag = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
-          emag_closest = pot/(2.0*calcCLD_bclosest)* exp(-d2bdry/(2.0*calcCLD_bclosest));
-          if(compareWithGitr) {
-            gitrCLD = testGitrPtclStepData[beg + testGCLDInd];
-            auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
-            auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
-            auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
-            gitrmid = p::makeVector3FromArray({gitrMidPtx, gitrMidPty, gitrMidPtz});
-            gitrTel = p::interpolate2dField(temEl_d, tempElX0, tempElZ0, tempElDx, 
-              tempElDz, tempElNx, tempElNz, gitrmid, true);
-            gitrNel = p::interpolate2dField(densEl_d, densElX0, densElZ0, densElDx, 
-              densElDz, densElNx, densElNz, gitrmid, true);
-            o::Real gdlen = 0;
-            if(o::are_close(gitrNel, 0.0))
-              gdlen = 1.0e12;
-            else 
-              gdlen = sqrt(8.854187e-12*gitrTel/(gitrNel*pow(background_Z,2)*1.60217662e-19));
-            // Only for BIASED surface
-            calcCLD_gitrmid = 0;
-            if(gitrTel > 0.0)
-              calcCLD_gitrmid = gdlen * pow(abs(pot)/gitrTel, 0.75);
-            else 
-              calcCLD_gitrmid = 1e12;
-            
-            if(false)
-              printf("calcE1: ptcl %d gitrTel %g gitrNel %g gitrMid %g %g %g gitrDLen %g calcCLD_gitrmid %g \n", 
-                ptcl, gitrTel, gitrNel, gitrMidPtx, gitrMidPty, gitrMidPtz, gdlen, calcCLD_gitrmid);
-            
-            gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
-            if(useGitrD2bdry) {
-              thisD2bdry= gitrD2bdry;
-            }
-            if(useGitrCLD) {
-              thisCLD = gitrCLD;
-            } else if(useGitrMidPt) {
-              thisCLD = calcCLD_gitrmid;
-            }
-            
-            emag = pot/(2.0*thisCLD)* exp(-thisD2bdry/(2.0*thisCLD));
-            emagOrig = pot/(2.0*childLangmuirDist)* exp(-d2bdry/(2.0*childLangmuirDist));
-          }
         } else { 
           o::Real fd = 0.98992 + 5.1220E-03 * angle - 7.0040E-04 * pow(angle,2.0) +
                        3.3591E-05 * pow(angle,3.0) - 8.2917E-07 * pow(angle,4.0) +
@@ -208,43 +113,19 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug, cons
         for(int i=0; i<3; ++i)
           efield_scs(pid, i) = exd[i];
 
-        if(false){
-          printf("CalcE2: ptcl %d dist2bdry %g  bdryface:%d  bfel %d emag %g  %g CLD:%g "
-              " pos %g %g %g closest %g %g %g \n", ptcl, d2bdry, faceId, bfel, emag,
-              childLangmuirDist, pos[0], pos[1], pos[2], closest[0], closest[1], closest[2]);
+        if(debug>1){
+          printf("calcE2: ptcl %d bdryface:%d  bfel %d emag %g "
+              " pos %g %g %g closest %g %g %g distVec %g %g %g dirUnitVec %g %g %g \n", 
+              ptcl, faceId, bfel, emag, pos[0], pos[1], pos[2],
+              closest[0], closest[1], closest[2], distVector[0], distVector[1],
+              distVector[2], dirUnitVector[0], dirUnitVector[1], dirUnitVector[2]);
         } 
-        if(false)
-          printf("CalcE3:: TStep %d ptcl %d dist2bdry %g gitrD2bdry %g  emag %g, emagOrig %g "
-              " CLDorig %g thisCLD %g gitrCLD %g calcCLD_gitrmid %g elem %d "
-              " gTel %g gNel %g telMesh %g nelMesh %g \n", 
-            iTimeStep, ptcl, d2bdry, gitrD2bdry,  emag, emagOrig, childLangmuirDist, thisCLD, 
-            gitrCLD, calcCLD_gitrmid, elem, gitrTel, gitrNel);
-
-        if(compareWithGitr) {// TODO
-          //beg: pindex*nT*dof_intermediate + (nthStep-1)*dof_intermediate
-          auto beg = ptcl*testGNT*testGDof + iTimeStep*testGDof;
-          auto gitrE0 = testGitrPtclStepData[beg + testGEind];
-          auto gitrE1 = testGitrPtclStepData[beg + testGEind+1];
-          auto gitrE2 = testGitrPtclStepData[beg + testGEind+2];
-          auto gitrQ = static_cast<int>(testGitrPtclStepData[beg + testGqInd]);
-          auto gitrCLD = testGitrPtclStepData[beg + testGCLDInd];
-          auto gitrMidPtx = testGitrPtclStepData[beg + testGMidPtInd];
-          auto gitrMidPty = testGitrPtclStepData[beg + testGMidPtInd+1];
-          auto gitrMidPtz = testGitrPtclStepData[beg + testGMidPtInd+2];
-          auto gitrD2bdry = testGitrPtclStepData[beg + testGMinDistInd];
-          if(replaceEQ) {
-            efield_scs(pid, 0) = gitrE0;
-            efield_scs(pid, 1) = gitrE1;
-            efield_scs(pid, 2) = gitrE2;
-            charge_scs(pid) = gitrQ;
-          }
-          if(debug)
-            printf("calcE_this:gitr ptcl %d timestep %d charge %d : %d  dist2bdry %g : %g "
-               "  efield %g : %g %g : %g  %g : %g CLD %g : %g   Nel %g Tel %g \n", 
-                ptcl, iTimeStep, charge_scs(pid), gitrQ, d2bdry, gitrD2bdry, 
-                efield_scs(pid, 0), gitrE0, efield_scs(pid, 1), gitrE1,
-                efield_scs(pid, 2), gitrE2, childLangmuirDist,  gitrCLD, nelMesh, telMesh);
-        }
+        if(debug)
+          printf("calcE_this:gitr ptcl %d timestep %d charge %d  dist2bdry %g"
+             " CLD %g efield %g  %g  %g  CLD %g  Nel %g Tel %g \n", 
+            ptcl, iTimeStep, charge_scs(pid), d2bdry, childLangmuirDist, 
+            efield_scs(pid, 0), efield_scs(pid, 1), 
+            efield_scs(pid, 2), childLangmuirDist, nelMesh, telMesh);
       } //faceId
     } //mask
   };
@@ -293,15 +174,19 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   
   if(PISCESRUN)
     OMEGA_H_CHECK(useConstantBField);
-  o::Vector<3> bFieldConst; // At previous_pos
-  if(useConstantBField)
-    bFieldConst = p::makeVectorHost(CONSTANT_BFIELD);
-  auto eFieldConst = p::makeVectorHost(CONSTANT_EFIELD);
+  o::Reals bFieldConst(3); // At previous_pos
+  if(useConstantBField) {
+    bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
+        CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
+  }
+  auto eFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_EFIELD0,
+        CONSTANT_EFIELD1, CONSTANT_EFIELD2}).write());
 
   //const auto BField = o::Reals( mesh.get_array<o::Real>(o::VERT, "BField")); //TODO
   // Only if used 2D field read from file
   auto shiftB = gm.mesh2Bfield2Dshift;
-  o::Real bxz[] = {gm.bGridX0, gm.bGridZ0, gm.bGridDx, gm.bGridDz};
+  auto bxz = o::Reals(o::HostWrite<o::Real>({gm.bGridX0, gm.bGridZ0, 
+        gm.bGridDx, gm.bGridDz}).write());
   auto bGridNx = gm.bGridNx;
   auto bGridNz = gm.bGridNz;
   const auto &BField_2d = gm.Bfield_2d;
@@ -322,14 +207,16 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
       // for neutral tracking skip gitrm_calculateE()
       auto eField = p::makeVector3(pid, efield_scs);
       // In GITR only constant EField is used
-      eField += eFieldConst;
+      for(auto i=0; i<3; ++i)
+        eField[i] += eFieldConst[i];
 
       //TODO move to unit test
       if(testExample)
         pos = p::makeVector3FromArray({0.0137135, -0.0183835, 1e-06});
       
       if(useConstantBField) {
-        bField = bFieldConst;
+        for(auto i=0; i<3; ++i)
+          bField[i] = bFieldConst[i];
       } else if(use3dField) {
         auto bcc = o::zero_vector<4>();
         p::findBCCoordsInTet(coords, mesh2verts, pos, elem, bcc);

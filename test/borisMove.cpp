@@ -88,14 +88,13 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   if(gir.chargedPtclTracking) {
     gitrm_ionize(scs, gir, gp, gm, elem_ids, false);
     gitrm_recombine(scs, gir, gp, gm, elem_ids, false);
-
   }
 
   //Apply surface model using face_ids, and update elem if particle reflected. 
   //fprintf(stderr, "Applying surface Model..\n");
   //applySurfaceModel(mesh, scs, elem_ids);
   bool resetFids = true;
-  storePiscesData(mesh, gp, data_d, iter, resetFids, true);
+  storePiscesData(mesh, gp, data_d, iter, resetFids, false);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
@@ -246,11 +245,12 @@ int main(int argc, char** argv) {
     printf("Initializing Particles\n");
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
 
-  int compare_with_gitr = COMPARE_WITH_GITR;
+  int useGitrRandNums = USE_GITR_RND_NUMS;
   int testNumPtcls = 1;
-  int testNumPtclsRead = 0;
-  if(compare_with_gitr) {
-    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testNumPtclsRead, true);
+  int testRead = 0;
+  if(useGitrRandNums) {
+    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testRead, false);
+    assert(testNumPtcls >= numPtcls);
   }
   auto* scs = gp.scs;
   const auto scsCapacity = scs->capacity();
@@ -263,30 +263,35 @@ int main(int argc, char** argv) {
 
   printf("Adding Tags And Loading Profile Data %s\n", profFile.c_str());
   OMEGA_H_CHECK(!profFile.empty());
-  gm.addTagsAndLoadProfileData(profFile, profFile);
+  auto initFields = gm.addTagsAndLoadProfileData(profFile, profFile);
 
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile, chargedTracking);
 
   printf("Initializing Boundary faces\n");
-  gm.initBoundaryFaces(false);
-  printf("Preprocessing Selecting Boundary Faces\n");
-  int nD2BdryTetSubDiv = 0;
+  auto initBdry = gm.initBoundaryFaces(initFields, false);
+  printf("Preprocessing: selecting boundary faces\n");
+  int nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
   int readInCsrBdryData = USE_READIN_CSR_BDRYFACES;
   if(readInCsrBdryData) {
+    printf(" Using stored boundary faces\n");
     gm.readDist2BdryFacesData("bdryFaces_in.nc");
   } else {
-    gm.preprocessSelectBdryFacesFromAll();
-    nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
+    gm.preprocessSelectBdryFacesFromAll(initBdry);
   }
   bool writeTextBdryFaces = WRITE_TEXT_D2BDRY_FACES;
   if(writeTextBdryFaces)
-    gm.writeTextDist2BdryFacesData(nD2BdryTetSubDiv);  
-  
+    gm.writeBdryFacesDataText(nD2BdryTetSubDiv);  
+  bool writeBdryFaceCoords = WRITE_BDRY_FACE_COORDS_NC;
+  if(writeBdryFaceCoords)
+    gm.writeBdryFaceCoordsNcFile(2); //selected  
+  bool writeMeshFaceCoords = WRITE_MESH_FACE_COORDS_NC;
+  if(writeMeshFaceCoords)
+    gm.writeBdryFaceCoordsNcFile(1); //all
   int writeBdryFacesFile = WRITE_OUT_BDRY_FACES_FILE;
   if(writeBdryFacesFile && !readInCsrBdryData) {
     std::string bdryOutName = "bdryFaces_" + 
-      std::to_string(nD2BdryTetSubDiv) + "div.nc";
+      std::to_string(nD2BdryTetSubDiv) + "div.nc"; 
     gm.writeDist2BdryFacesData(bdryOutName, nD2BdryTetSubDiv);
   }
 
@@ -375,7 +380,6 @@ int main(int argc, char** argv) {
     gm.markPiscesCylinderResult(data_d);
   }
   if(histInterval >0) {
-    printf("writing out history file \n");
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }

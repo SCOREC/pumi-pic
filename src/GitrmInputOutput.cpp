@@ -130,7 +130,12 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     for(int i=0; i< fs.nGridNames.size(); ++i) {
       netCDF::NcDim ncGridName(ncf.getDim(fs.nGridNames[i]));
-      auto size = ncGridName.getSize();
+      auto unlimit = ncGridName.isUnlimited();
+      if(unlimit)
+        std::cout << "\nWarning: value of " << fs.nGridNames[i]<< " set to 0 \n";
+      int size = 0;
+      if(!unlimit)
+        size = ncGridName.getSize();
       fs.nGridVec.push_back(size);
       if(fs.nGridNames[i] == nPstr) {
         if(size < maxNPtcls)
@@ -171,16 +176,16 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     // TODO use maxNPtcls and numPtclsRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
-      if(debug)
-        std::cout << "getVar " << fs.compNames[i] << "\n";
       ncvar.getVar(&(fs.data[i*ncSizePerComp]));
     }
-    if(debug)
-      std::cout << " data[0] " <<  (fs.data)[0] << "\n";
-  
     for(int i=0; i< fs.nVarNames.size(); ++i) {
       netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
-      auto size = ncVarName.getSize();
+      auto unlimit = ncVarName.isUnlimited();
+      if(unlimit)
+        std::cout << "\n  Warning: value of " << ncVarName.getName() << " set to 0 \n";
+      int size = 0;
+      if(!unlimit)
+        size = ncVarName.getSize();
       fs.nVarVec.push_back(size);
     }
     if(debug)
@@ -203,6 +208,35 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   return 0;
 }
 
+//TODO combine nc write functions
+void writeOutBdryFaceCoordsNcFile(const std::string& fileName, 
+    o::Write<o::Real>& xd, o::Write<o::Real>& yd, o::Write<o::Real>& zd, 
+    const int nf) { 
+  auto xx = o::HostRead<o::Real>(xd);
+  auto yy = o::HostRead<o::Real>(yd);
+  auto zz = o::HostRead<o::Real>(zd);
+  try {
+    netCDF::NcFile ncMeshFile(fileName, netCDF::NcFile::replace);
+    netCDF::NcDim nc_cells = ncMeshFile.addDim("ncells", nf);
+    netCDF::NcDim nc_xnums = ncMeshFile.addDim("nx", nf*3);
+    netCDF::NcDim nc_ynums = ncMeshFile.addDim("ny", nf*3);
+    netCDF::NcDim nc_znums = ncMeshFile.addDim("nz", nf*3);
+    std::vector<netCDF::NcDim> dims_ncx;
+    dims_ncx.push_back(nc_xnums);
+    std::vector<netCDF::NcDim> dims_ncy;
+    dims_ncy.push_back(nc_ynums);
+    std::vector<netCDF::NcDim> dims_ncz;
+    dims_ncz.push_back(nc_znums);
+    netCDF::NcVar ncvx = ncMeshFile.addVar("x", netCDF::NcDouble(), dims_ncx);
+    netCDF::NcVar ncvy = ncMeshFile.addVar("y", netCDF::NcDouble(), dims_ncy);
+    netCDF::NcVar ncvz = ncMeshFile.addVar("z", netCDF::NcDouble(), dims_ncz);
+    ncvx.putVar(&xx[0]);
+    ncvy.putVar(&yy[0]);
+    ncvz.putVar(&zz[0]);
+  } catch (netCDF::exceptions::NcException& e) {
+    std::cout << e.what() << "\n";
+  }
+}
 
 void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
   int dof, OutputNcFileFieldStruct& st, std::string outNcFileName) {
@@ -289,28 +323,21 @@ int readCsrFile(const std::string& ncFileName,
 
 void writeOutputCsrFile(const std::string& outFileName, 
     const std::vector<std::string>& vars, const std::vector<std::string>& datNames, 
-    o::LOs& ptrs_d, o::LOs& felems_d, o::LOs& data_d, int* valExtra) { 
-  auto felems = o::HostRead<o::LO>(felems_d);
+    o::LOs& ptrs_d, o::LOs& data_d, int* valExtra) { 
   auto data = o::HostRead<o::LO>(data_d);
   auto ptrs = o::HostRead<o::LO>(ptrs_d);
   int psize = ptrs.size();
   int dsize = data.size();
-  int nfaces = felems.size();
   try {
     netCDF::NcFile ncFile(outFileName, netCDF::NcFile::replace);
     //TODO pass values to remove ordering
-    netCDF::NcDim dim1 = ncFile.addDim(vars[0], psize-1);
-    netCDF::NcDim dim2 = ncFile.addDim(vars[1], psize);
-    netCDF::NcDim dim3 = ncFile.addDim(vars[2], dsize);
-    netCDF::NcDim dim4 = ncFile.addDim(vars[3], nfaces);
-    for(auto i=0; i<vars.size()-4; ++i)
-      netCDF::NcDim dext = ncFile.addDim(vars[4], valExtra[i]);
-
-    netCDF::NcVar ncptrs = ncFile.addVar(datNames[0], netCDF::ncInt, dim2);
+    netCDF::NcDim dim1 = ncFile.addDim(vars[0], psize);
+    netCDF::NcDim dim2 = ncFile.addDim(vars[1], dsize);
+    for(auto i=2; i<vars.size(); ++i)
+      netCDF::NcDim dext = ncFile.addDim(vars[i], valExtra[i-2]);
+    netCDF::NcVar ncptrs = ncFile.addVar(datNames[0], netCDF::ncInt, dim1);
     ncptrs.putVar(&(ptrs[0]));
-    netCDF::NcVar ncface_el = ncFile.addVar(datNames[1], netCDF::ncInt, dim4);
-    ncface_el.putVar(&(felems[0]));
-    netCDF::NcVar ncdata = ncFile.addVar(datNames[2], netCDF::ncInt, dim3);
+    netCDF::NcVar ncdata = ncFile.addVar(datNames[1], netCDF::ncInt, dim2);
     ncdata.putVar(&(data[0]));
   } catch (netCDF::exceptions::NcException& e) {
     std::cout << e.what() << "\n";

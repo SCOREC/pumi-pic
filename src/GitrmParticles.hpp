@@ -93,21 +93,14 @@ public:
 
   // test GITR step data
   o::Reals testGitrPtclStepData;
-  int testGitrStepDataEfieldInd = -1;
-  int testGitrStepDataPositionInd = -1;
-  int testGitrStepDataIoniInd = -1;
-  int testGitrStepDataRecombInd = -1;
-  int testGitrStepDataChargeInd = -1;
+  int testGitrDataIoniRandInd = -1;
+  int testGitrDataRecRandInd = -1;
   int testGitrStepDataDof = -1;
   int testGitrStepDataNumTsteps = -1;
   int testGitrStepDataNumPtcls = -1;
-  int testGitrStepDataIoniRateInd = -1;
-  int testGitrStepDataRecombRateInd = -1;
-  int testGitrStepDataCLDInd = -1;
-  int testGitrStepDataMinDistInd = -1;
-  int testGitrStepDataMidPtInd = -1;
-  int testGitrStepDataTeInd = -1;
-  int testGitrStepDataNeInd = -1;
+  int testGitrCollisionRndn1Ind = -1;
+  int testGitrCollisionRndn2Ind = -1;
+  int testGitrCollisionRndxsiInd = -1;
 };
 
 //timestep +1
@@ -131,7 +124,7 @@ void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData,
  * Not yet clear if a pre-determined depth can be used
 */
 inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
-  const GitrmMesh &gm, int debug=0) {
+  const GitrmMesh& gm, int debug=0) {
   int tstep = iTimePlusOne;
   auto* scs = gp.scs;
   o::Mesh& mesh = gm.mesh;  
@@ -189,7 +182,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
           face = p::get_face_coords_of_tet(face_verts, coords, bfid);
           if(debug > 2) {
             auto bfeId = p::elem_id_of_bdry_face_of_tet(bfid, f2rPtr, f2rElem);
-            printf("ptcl %d elem %d d2bdry %g bfid %d bdry-el %d pos: %g %g %g bdry-face: "
+            printf(" ptcl %d elem %d d2bdry %g bfid %d bdry-el %d pos: %g %g %g bdry-face: "
               "%g %g %g : %g %g %g : %g %g %g \n", ptcl, elem, dist, bfid, bfeId, 
               ref[0], ref[1], ref[2], face[0][0], face[0][1], face[0][2], face[1][0], 
               face[1][1], face[1][2], face[2][0], face[2][1], face[2][2]);
@@ -197,7 +190,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
           int region;
           auto pt = p::closest_point_on_triangle(face, ref, &region); 
           dist = o::norm(pt - ref);
-          if(ii==0 || dist < min) {
+          if(dist < min) {
             min = dist;
             fid = bfid;
             minRegion = region;
@@ -208,10 +201,13 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
 
         if(debug) {
           auto fel = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem);
+          auto f = p::get_face_coords_of_tet(face_verts, coords, fid);
           printf("dist: ptcl %d tstep %d el %d MINdist %g nFaces %d fid %d " 
-            "face_el %d reg %d pos %g %g %g nearest_pt %g %g %g \n", 
+            "face_el %d reg %d pos %g %g %g nearest_pt %g %g %g "
+            " face %g %g %g %g %g %g %g %g %g \n", 
             ptcl, tstep, elem, min, nFaces, fid, fel, minRegion, ref[0], 
-            ref[1], ref[2], point[0], point[1], point[2]);
+            ref[1], ref[2], point[0], point[1], point[2], f[0][0], f[0][1],
+            f[0][2], f[1][0],f[1][1], f[1][2],f[2][0], f[2][1],f[2][2]);
         }
         OMEGA_H_CHECK(fid >= 0);
         closestBdryFaceIds[pid] = fid;
@@ -229,7 +225,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
 inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp, 
-    o::Write<o::LO> &data_d, o::LO iter, bool resetFids=true, bool debug=true) {
+    o::Write<o::LO>& data_d, o::LO iter, bool resetFids=true, bool debug=true) {
   // test TODO move test part to separate unit test
   double radMax = 0.05; //m 0.0446+0.005
   double zMin = 0; //m height min
@@ -269,7 +265,7 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
       }
     }
   };
-  scs->parallel_for(lamb);
+  scs->parallel_for(lamb, "StorePiscesData");
 }
 
 //storePtclDataInGridsRZ(scs, iter, data_d, 1, 10, true);

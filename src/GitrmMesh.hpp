@@ -21,46 +21,47 @@ namespace p = pumipic;
 
 // D3D 0.8 to 2.45 m radial 
 
-constexpr int COMPARE_WITH_GITR = 1; //=g
-constexpr int USE_GITR_CLD = 0; //if g
-constexpr int USE_GITR_BFACE_MIDPT_N_CALC_CLD = 0;// if g
-constexpr int USE_GITR_DIST2BDRY = 0; //if g
-constexpr int USE_GITR_EFILED_AND_Q = 0; //TODO
+const int USE_GITR_RND_NUMS = 1;
+const bool CREATE_GITR_MESH = false;
 
-constexpr int WRITE_TEXT_D2BDRY_FACES = 0;
-constexpr bool CREATE_GITR_MESH = false;
+const int USE_READIN_CSR_BDRYFACES = 1;
+const int WRITE_OUT_BDRY_FACES_FILE = 0;
+const bool WRITE_TEXT_D2BDRY_FACES = false;
+const bool WRITE_BDRY_FACE_COORDS_NC = false;
+const bool WRITE_MESH_FACE_COORDS_NC = false;
+//TODO enable runtime
+constexpr o::LO D2BDRY_GRIDS_PER_TET = 15;// if csr bdry not re-used
 
-constexpr o::LO USE_READIN_CSR_BDRYFACES = 1;
-constexpr o::LO WRITE_OUT_BDRY_FACES_FILE = 0;
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 8; // if not use read-in data
+const int USE_2DREADIN_IONI_REC_RATES = 1;
+const int USE3D_BFIELD = 0;
+const int USE2D_INPUTFIELDS = 1;
 
-constexpr o::LO USE_READIN_IONI_REC_RATES = 1;
-
-constexpr o::LO USE3D_BFIELD = 0;
-constexpr o::LO USE2D_INPUTFIELDS = 1;
-
-// GITR only constant EField is used.
-constexpr o::LO USE_CONSTANT_BFIELD = 1; //used for pisces
-constexpr o::LO USE_CYL_SYMMETRY = 1;
-constexpr o::LO PISCESRUN  = 1;
-constexpr o::Real BACKGROUND_AMU = 4.0; //for pisces
-constexpr o::Real PTCL_AMU=184.0; //W,tungston
-constexpr o::LO PARTICLE_Z = 74;
-constexpr o::LO BACKGROUND_Z = 1;
-constexpr o::Real BIAS_POTENTIAL = 250.0;
-constexpr o::LO BIASED_SURFACE = 1;
-constexpr o::Real CONSTANT_EFIELD[] = {0, 0, 0};
-constexpr o::Real CONSTANT_BFIELD[] = {0,0,-0.08};
-constexpr o::Real ELECTRON_CHARGE = 1.60217662e-19;
-constexpr o::Real PROTON_MASS = 1.6737236e-27;
-constexpr o::Real CONSTANT_PI = 3.14159265358979323;
+// in GITR only constant EField is used.
+const int USE_CONSTANT_BFIELD = 1; //used for pisces
+const int USE_CYL_SYMMETRY = 1;
+const int PISCESRUN  = 1;
+const o::Real BACKGROUND_AMU = 4.0; //for pisces
+const o::Real PTCL_AMU=184.0; //W,tungston
+const o::LO PARTICLE_Z = 74;
+const o::LO BACKGROUND_Z = 1;
+const o::Real BIAS_POTENTIAL = 250.0;
+const o::LO BIASED_SURFACE = 1;
+const o::Real CONSTANT_EFIELD0 = 0;
+const o::Real CONSTANT_EFIELD1 = 0;
+const o::Real CONSTANT_EFIELD2 = 0;
+const o::Real CONSTANT_BFIELD0 = 0;
+const o::Real CONSTANT_BFIELD1 = 0;
+const o::Real CONSTANT_BFIELD2 = -0.08;
+const o::Real ELECTRON_CHARGE = 1.60217662e-19;
+const o::Real PROTON_MASS = 1.6737236e-27;
+const o::Real CONSTANT_PI = 3.14159265358979323;
 
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
-constexpr o::LO BDRY_STORAGE_SIZE_PER_FACE = 1;
+const int BDRY_STORAGE_SIZE_PER_FACE = 1;
 // Elements face type
 enum {INTERIOR=1, EXPOSED=2};
-constexpr int SKIP_MODEL_IDS_FROM_DIST2BDRY = 0; //set to 0
+const int SKIP_MODEL_IDS_FROM_DIST2BDRY = 0; //set to 0
 
 
 #define MESHDATA(mesh) \
@@ -108,11 +109,12 @@ public:
   o::LOs bdryFacesCsrBFS;
   o::LOs bdryFacePtrsBFS;
 
-  void preprocessSelectBdryFacesFromAll();
+  void preprocessSelectBdryFacesFromAll(bool init);
   o::LOs bdryFacePtrsSelected;
   o::LOs bdryFacesSelectedCsr;
-  void writeTextDist2BdryFacesData(int);
-  
+  void writeBdryFacesDataText(int, std::string fileName="bdryFacesData.txt"); 
+  void writeBdryFaceCoordsNcFile(int mode, std::string fileName="meshFaces.nc");
+ 
   int readDist2BdryFacesData(const std::string &);
   o::LOs bdryCsrReadInDataPtrs;
   o::LOs bdryCsrReadInData;
@@ -124,8 +126,8 @@ public:
   void load3DFieldOnVtxFromFile(const std::string, const std::string &,
     Field3StructInput&, o::Reals&, const o::Real shift=0 );
   //TODO delete tags after use/ in destructor
-  void addTagsAndLoadProfileData(const std::string &, const std::string &);
-  void initBoundaryFaces(bool debug=false);
+  bool addTagsAndLoadProfileData(const std::string &, const std::string &);
+  bool initBoundaryFaces(bool init, bool debug=false);
   void loadScalarFieldOnBdryFacesFromFile(const std::string, const std::string &, 
     Field3StructInput &, const o::Real shift=0, int debug=0);
   void load1DFieldOnVtxFromFile(const std::string, const std::string &, 

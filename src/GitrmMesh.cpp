@@ -414,25 +414,8 @@ bool GitrmMesh::initBoundaryFaces(bool init, bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "flux", 1, o::Reals(flux_d));
   mesh.add_tag<o::Real>(o::FACE, "impacts", 1, o::Reals(impacts_d));
   mesh.add_tag<o::Real>(o::FACE, "potential", 1, o::Reals(potential_d));
-
- //Book keeping of intersecting particles
-  mesh.add_tag<o::Real>(o::FACE, "gridE", 1); // store subgrid data ?
-  mesh.add_tag<o::Real>(o::FACE, "gridA", 1);
-  mesh.add_tag<o::Real>(o::FACE, "sumParticlesStrike", 1);
-  mesh.add_tag<o::Real>(o::FACE, "sumWeightStrike", 1);
-  mesh.add_tag<o::Real>(o::FACE, "grossDeposition", 1);
-  mesh.add_tag<o::Real>(o::FACE, "grossErosion", 1);
-  mesh.add_tag<o::Real>(o::FACE, "aveSputtYld", 1);
-  mesh.add_tag<o::LO>(o::FACE, "sputtYldCount", 1);
-
-  o::LO nEdist = 4; //TODO
-  o::LO nAdist = 4; //TODO
-  mesh.add_tag<o::Real>(o::FACE, "energyDistribution", nEdist*nAdist);
-  mesh.add_tag<o::Real>(o::FACE, "sputtDistribution", nEdist*nAdist);
-  mesh.add_tag<o::Real>(o::FACE, "reflDistribution", nEdist*nAdist);
   return true;
 }
-
 
 
 /** @brief Preprocess distance to boundary.

@@ -114,14 +114,14 @@ int readParticleSourceNcFile(std::string ncFileName,
 //Reads from 0 to 3 grids having gridNames; .
 int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, bool debug) {
-  int maxNPtcls = 0;
-  int numPtclsRead = 0;
-  return readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead);
+  int numInFile = 0;
+  int numRead = 0;
+  return readInputDataNcFileFS3(ncFileName, fs, numInFile, numRead);
 }
 
-// maxNPtcls updated if > that in file. TODO read only maxNPtcls
+// numInFile updated if > that in file. TODO read only numInFile
 int readInputDataNcFileFS3(const std::string& ncFileName,
-  Field3StructInput& fs, int& maxNPtcls, int& numPtclsRead, 
+  Field3StructInput& fs, int& numInFile, int& numRead, 
   std::string nPstr, bool debug) {
   int ncSizePerComp = 1;
   assert(!verifyNetcdfFile(ncFileName));
@@ -138,11 +138,11 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         size = ncGridName.getSize();
       fs.nGridVec.push_back(size);
       if(fs.nGridNames[i] == nPstr) {
-        if(size < maxNPtcls)
-          maxNPtcls = size;
-        //else if(size > maxNPtcls)
-        //  numPtclsRead = maxNPtcls; //TODO enable it below
-        numPtclsRead = size;
+        if(size < numInFile)
+          numInFile = size;
+        //else if(size > numInFile)
+        //  numRead = numInFile; //TODO enable it below
+        numRead = size;
       }
       if(debug)
         std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " << fs.nGridVec[i] << "\n";
@@ -173,7 +173,7 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         ncvar.getVar(&(fs.grid3[0]));
       }
     }
-    // TODO use maxNPtcls and numPtclsRead
+    // TODO use numInFile and numRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
       ncvar.getVar(&(fs.data[i*ncSizePerComp]));

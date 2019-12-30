@@ -10,13 +10,24 @@ typename View::HostMirror deviceToHost(View view) {
   Kokkos::deep_copy(hv, view);
   return hv;
 }
-template <class T, typename ExecSpace>
-  void hostToDevice(Kokkos::View<T*, ExecSpace> view, T* data) {
-  typename Kokkos::View<T*, ExecSpace>::HostMirror hv = Kokkos::create_mirror_view(view);
-  for (size_t i = 0; i < hv.size(); ++i)
-    hv(i) = data[i];
-  Kokkos::deep_copy(view, hv);
-}
+
+ template <class T, typename ExecSpace>
+   typename std::enable_if<std::rank<T>::value == 0>::type
+ hostToDevice(Kokkos::View<T*, ExecSpace> view, T* data) {
+   typename Kokkos::View<T*, ExecSpace>::HostMirror hv = Kokkos::create_mirror_view(view);
+   for (size_t i = 0; i < hv.size(); ++i)
+     hv(i) = data[i];
+   Kokkos::deep_copy(view, hv);
+ }
+ template <class T, typename ExecSpace, std::size_t N>
+   typename std::enable_if<std::rank<T[N]>::value == 1>::type
+ hostToDevice(Kokkos::View<T*, ExecSpace> view, T* data) {
+   typename Kokkos::View<T*, ExecSpace>::HostMirror hv = Kokkos::create_mirror_view(view);
+   for (size_t i = 0; i < hv.size(); ++i)
+     for (int j = 0; j < N; ++j)
+       hv(i,j) = data[i][j];
+   Kokkos::deep_copy(view, hv);
+ }
 
 template <typename T, typename ExecSpace>
 T getLastValue(Kokkos::View<T*, ExecSpace> view) {
@@ -41,7 +52,7 @@ template <class T, typename ExecSpace, int N> struct CopyViewToView<T[N], ExecSp
       dst(dst_index, i) = src(src_index, i);
   }
 };
-template <class T, typename ExecSpace, int N, int M> 
+template <class T, typename ExecSpace, int N, int M>
 struct CopyViewToView<T[N][M], ExecSpace> {
   KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N][M], ExecSpace> dst, int dst_index,
                                               Kokkos::View<T*[N][M], ExecSpace> src, int src_index) {
@@ -50,11 +61,11 @@ struct CopyViewToView<T[N][M], ExecSpace> {
         src(src_index, i, j) = dst(dst_index, i, j);
   }
 };
-template <class T, typename ExecSpace, int N, int M, int P> 
+template <class T, typename ExecSpace, int N, int M, int P>
   struct CopyViewToView<T[N][M][P], ExecSpace> {
-  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N][M][P], ExecSpace> dst, 
+  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N][M][P], ExecSpace> dst,
                                               int dst_index,
-                                              Kokkos::View<T*[N][M][P], ExecSpace> src, 
+                                              Kokkos::View<T*[N][M][P], ExecSpace> src,
                                               int src_index) {
     for (int i = 0; i < N; ++i)
       for (int j = 0; j < M; ++j)

@@ -1,5 +1,10 @@
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/scs
+  )
 set(HEADERS
   particle_structure.hpp
+  ps_for.hpp
   scs/SCS_Macros.h
   scs/SCS_Types.h
   scs/SCSPair.h

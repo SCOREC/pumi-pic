@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scs/SellCSigma.h"
+#include <PS_Types.h>
 
 namespace particle_structs {
 
@@ -15,11 +15,12 @@ namespace particle_structs {
     typedef Kokkos::UnorderedMap<gid_t, lid_t, Device> GID_Mapping;
     template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
 
-    ~ParticleStructure();
-    lid_t nElems() const;
-    lid_t nPtcls() const;
-    lid_t capacity() const;
-    lid_t nRows() const;
+    ParticleStructure();
+    virtual ~ParticleStructure() {}
+    lid_t nElems() const {return num_elems;}
+    lid_t nPtcls() const {return num_ptcls;}
+    lid_t capacity() const {return capacity_;}
+    lid_t numRows() const {return num_rows;}
 
     /* Provides access to the particle info for Nth time of each particle
 
@@ -27,27 +28,38 @@ namespace particle_structs {
          dimension of the type.
      */
     template <std::size_t N>
-    Segment<DataType<N>, MemSpace> get();
+    Segment<DataType<N>, typename MemSpace::execution_space> get() {
+      if (num_ptcls == 0)
+        return Segment<DataType<N>, typename MemSpace::execution_space>();
+      MemberTypeView<DataType<N> >* view =
+        static_cast<MemberTypeView<DataType<N> >*>(ptcl_data[N]);
+      return Segment<DataType<N>, typename MemSpace::execution_space>(*view);
+    }
 
-    void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
-                 MemberTypeViews<DataTypes> new_particle_info = NULL);
-    void migrate(kkLidView new_element, kkLidView new_process,
-                 kkLidView new_particle_elements = kkLidView(),
-                 MemberTypeViews<DataTypes> new_particle_info = NULL);
 
-    template <typename FunctionType>
-    void parallel_for(FunctionType& fn, std::string name="");
+    virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
+                         MemberTypeViews<DataTypes> new_particle_info = NULL) = 0;
+    virtual void migrate(kkLidView new_element, kkLidView new_process,
+                         kkLidView new_particle_elements = kkLidView(),
+                         MemberTypeViews<DataTypes> new_particle_info = NULL) = 0;
+    virtual void printMetrics() const = 0;
+  protected:
+    //Element and particle Counts/capacities
+    lid_t num_elems;
+    lid_t num_ptcls;
+    lid_t capacity_;
+    lid_t num_rows;
 
-    void printMetrics() const;
-  private:
-    ParticleStructure(SellCSigma<DataTypes, MemSpace::execution_space>* scs);
-    SellCSigma<DataTypes, MemSpace::execution_space>* scs;
+    //Particle information
+    MemberTypeViews<DataTypes> ptcl_data;
+
+    //Number of Data types
+    static constexpr std::size_t num_types = DataTypes::size;
   };
 
-  template <class DataTypes, typename MemSpace>
-  ParticleStructure<DataTypes, MemSpace>::ParticleStructure(SellCSigma<DataTypes, MemSpace::execution_space>* scs_) {
-    scs = scs_;
-  }
 
-  #include "ps_call_fns.hpp"
+  template <class DataTypes, typename MemSpace>
+  ParticleStructure<DataTypes, MemSpace>::ParticleStructure() : num_elems(0), num_ptcls(0),
+                                                                capacity_(0), num_rows(0) {
+  }
 }

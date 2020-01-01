@@ -13,10 +13,9 @@ using particle_structs::distribute_particles;
 using particle_structs::distribute_elements;
 using particle_structs::getLastValue;
 using particle_structs::lid_t;
-
-typedef MemberTypes<int> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef SellCSigma<Type,exe_space> SCS;
+typedef MemberTypes<int> Type;
+typedef SellCSigma<Type> SCS;
 
 bool shuffleParticlesTests();
 bool resortElementsTest();

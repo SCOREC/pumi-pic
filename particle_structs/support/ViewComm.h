@@ -41,49 +41,49 @@ namespace particle_structs {
    */
 
   /************** Host Communication functions **************/
-  template <typename ExecSpace> using IsHost =
-    typename std::enable_if<std::is_same<typename ExecSpace::memory_space, Kokkos::HostSpace>::value, int>::type;
+  template <typename Device> using IsHost =
+    typename std::enable_if<std::is_same<typename Device::memory_space, Kokkos::HostSpace>::value, int>::type;
   //Send
-  template <typename T, typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Send(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsHost<Device> PS_Comm_Send(Kokkos::View<T*, Device> view, int offset, int size,
                                  int dest, int tag, MPI_Comm comm) {
     int size_per_entry = BaseType<T>::size;
     return MPI_Send(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                     dest, tag, comm);
   }
   //Recv
-  template <typename T, typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Recv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsHost<Device> PS_Comm_Recv(Kokkos::View<T*, Device> view, int offset, int size,
                                  int sender, int tag, MPI_Comm comm) {
     int size_per_entry = BaseType<T>::size;
     return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                     sender, tag, comm, MPI_STATUS_IGNORE);
   }
   //Isend
-  template <typename T, typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Isend(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsHost<Device> PS_Comm_Isend(Kokkos::View<T*, Device> view, int offset, int size,
                                             int dest, int tag, MPI_Comm comm, MPI_Request* req) {
     int size_per_entry = BaseType<T>::size;
     return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                      dest, tag, comm, req);
   }
   //Irecv
-  template <typename T, typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Irecv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsHost<Device> PS_Comm_Irecv(Kokkos::View<T*, Device> view, int offset, int size,
                                             int sender, int tag, MPI_Comm comm, MPI_Request* req) {
     int size_per_entry = BaseType<T>::size;
     return MPI_Irecv(view.data() + offset, size*size_per_entry, MpiType<BT<T> >::mpitype(),
                      sender, tag, comm, req);
   }
   //Waitall
-  template <typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
+  template <typename Device>
+  IsHost<Device> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
     return MPI_Waitall(num_reqs, reqs, stats);
   }
   //Alltoall
-  template <typename T, typename ExecSpace>
-  IsHost<ExecSpace> PS_Comm_Alltoall(Kokkos::View<T*, ExecSpace> send, int send_size,
-                                      Kokkos::View<T*, ExecSpace> recv, int recv_size,
+  template <typename T, typename Device>
+  IsHost<Device> PS_Comm_Alltoall(Kokkos::View<T*, Device> send, int send_size,
+                                      Kokkos::View<T*, Device> recv, int recv_size,
                                       MPI_Comm comm) {
     return MPI_Alltoall(send.data(), send_size, MpiType<BT<T> >::mpitype(),
                         recv.data(), recv_size, MpiType<BT<T> >::mpitype(), comm);
@@ -94,16 +94,16 @@ namespace particle_structs {
 
   //TODO change to check if the memory space is not accessible from host and accessible from cuda
   //Return type check to see if the memory space is not the host space
-  template <typename ExecSpace> using IsCuda =
-  typename std::enable_if<not std::is_same<typename ExecSpace::memory_space, Kokkos::HostSpace>::value, int>::type;
+  template <typename Device> using IsCuda =
+  typename std::enable_if<not std::is_same<typename Device::memory_space, Kokkos::HostSpace>::value, int>::type;
 //Cuda-aware check for OpenMPI 2.0+ taken from https://github.com/kokkos/kokkos/issues/2003
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
 #define PS_CUDA_AWARE_MPI
 #endif
 
   //Send
-  template <typename T, typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Send(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsCuda<Device> PS_Comm_Send(Kokkos::View<T*, Device> view, int offset, int size,
                                  int dest, int tag, MPI_Comm comm) {
     auto subview = Subview<T>::subview(view, offset, size);
 
@@ -117,15 +117,15 @@ namespace particle_structs {
 #endif
   }
   //Recv
-  template <typename T, typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Recv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsCuda<Device> PS_Comm_Recv(Kokkos::View<T*, Device> view, int offset, int size,
                                  int sender, int tag, MPI_Comm comm) {
-    Kokkos::View<T*, ExecSpace> new_view("recv_view", size);
+    Kokkos::View<T*, Device> new_view("recv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
     int ret = MPI_Recv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
 #else
-    typename Kokkos::View<T*, ExecSpace>::HostMirror view_host =
+    typename Kokkos::View<T*, Device>::HostMirror view_host =
       Kokkos::create_mirror_view(new_view);
     int ret = MPI_Recv(view_host.data(), view_host.size(), MpiType<BT<T> >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
@@ -133,14 +133,14 @@ namespace particle_structs {
     Kokkos::deep_copy(new_view, view_host);
 #endif
     Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-      CopyViewToView<T, ExecSpace>(view,i+offset, new_view, i);
+      CopyViewToView<T, Device>(view,i+offset, new_view, i);
     });
     return ret;
   }
 
   //Isend
-  template <typename T, typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Isend(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsCuda<Device> PS_Comm_Isend(Kokkos::View<T*, Device> view, int offset, int size,
                                   int dest, int tag, MPI_Comm comm, MPI_Request* req) {
     auto subview = Subview<T>::subview(view, offset, size);
 #ifdef PS_CUDA_AWARE_MPI
@@ -158,16 +158,16 @@ namespace particle_structs {
 #endif
   }
   //Irecv
-  template <typename T, typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Irecv(Kokkos::View<T*, ExecSpace> view, int offset, int size,
+  template <typename T, typename Device>
+  IsCuda<Device> PS_Comm_Irecv(Kokkos::View<T*, Device> view, int offset, int size,
                                   int sender, int tag, MPI_Comm comm, MPI_Request* req) {
     int size_per_entry = BaseType<T>::size;
-    Kokkos::View<T*, ExecSpace> new_view("irecv_view", size);
+    Kokkos::View<T*, Device> new_view("irecv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
     int ret = MPI_Irecv(new_view.data(), new_view.size(), MpiType<BT<T> >::mpitype(), sender,
                         tag, comm, req);
 #else
-    typename Kokkos::View<T*, ExecSpace>::HostMirror view_host =
+    typename Kokkos::View<T*, Device>::HostMirror view_host =
       Kokkos::create_mirror_view(new_view);
     int ret = MPI_Irecv(view_host.data(), size * size_per_entry, MpiType<BT<T> >::mpitype(),
                         sender, tag, comm, req);
@@ -178,7 +178,7 @@ namespace particle_structs {
       Kokkos::deep_copy(new_view, view_host);
 #endif
       Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        CopyViewToView<T, ExecSpace>(view,i+offset, new_view, i);
+        CopyViewToView<T, Device>(view,i+offset, new_view, i);
       });
     };
 
@@ -186,8 +186,8 @@ namespace particle_structs {
 
   }
   //Waitall
-  template <typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
+  template <typename Device>
+  IsCuda<Device> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
 #ifdef PS_CUDA_AWARE_MPI
     return MPI_Waitall(num_reqs, reqs, stats);
 #else
@@ -205,16 +205,16 @@ namespace particle_structs {
   }
 
   //Alltoall
-  template <typename T, typename ExecSpace>
-  IsCuda<ExecSpace> PS_Comm_Alltoall(Kokkos::View<T*, ExecSpace> send, int send_size,
-                                               Kokkos::View<T*, ExecSpace> recv, int recv_size,
+  template <typename T, typename Device>
+  IsCuda<Device> PS_Comm_Alltoall(Kokkos::View<T*, Device> send, int send_size,
+                                               Kokkos::View<T*, Device> recv, int recv_size,
                                                MPI_Comm comm) {
 #ifdef PS_CUDA_AWARE_MPI
     return MPI_Alltoall(send.data(), send_size, MpiType<BT<T> >::mpitype(),
                         recv.data(), recv_size, MpiType<BT<T> >::mpitype(), comm);
 #else
-    typename Kokkos::View<T*, ExecSpace>::HostMirror send_host = deviceToHost(send);
-    typename Kokkos::View<T*, ExecSpace>::HostMirror recv_host = Kokkos::create_mirror_view(recv);
+    typename Kokkos::View<T*, Device>::HostMirror send_host = deviceToHost(send);
+    typename Kokkos::View<T*, Device>::HostMirror recv_host = Kokkos::create_mirror_view(recv);
     int ret = MPI_Alltoall(send_host.data(), send_size, MpiType<BT<T> >::mpitype(),
                            recv_host.data(), recv_size, MpiType<BT<T> >::mpitype(), comm);
     Kokkos::deep_copy(recv, recv_host);

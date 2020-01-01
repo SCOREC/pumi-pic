@@ -32,12 +32,12 @@ namespace particle_structs {
          dimension of the type.
      */
     template <std::size_t N>
-    Segment<DataType<N>, execution_space> get() {
+    Segment<DataType<N>, device_type> get() {
       if (num_ptcls == 0)
-        return Segment<DataType<N>, execution_space>();
+        return Segment<DataType<N>, device_type>();
       MemberTypeView<DataType<N>, device_type>* view =
         static_cast<MemberTypeView<DataType<N>, device_type>*>(ptcl_data[N]);
-      return Segment<DataType<N>, execution_space>(*view);
+      return Segment<DataType<N>, device_type>(*view);
     }
 
 

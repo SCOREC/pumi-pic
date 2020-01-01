@@ -489,6 +489,7 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
   constructChunks(ptcls, num_chunks, chunk_widths, row_to_element, element_to_row);
+  num_rows = num_chunks * C_;
 
   if (element_gids.size() > 0) {
     createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
@@ -849,6 +850,7 @@ void SellCSigma<DataTypes,MemSpace>::rebuild(kkLidView new_element,
     num_ptcls = 0;
     num_slices = 0;
     capacity_ = 0;
+    num_rows = 0;
     return;
   }
   lid_t new_num_ptcls = activePtcls;
@@ -944,6 +946,7 @@ void SellCSigma<DataTypes,MemSpace>::rebuild(kkLidView new_element,
   num_chunks = new_nchunks;
   num_slices = new_num_slices;
   capacity_ = new_capacity;
+  num_rows = num_chunks * C_;
   row_to_element = new_row_to_element;
   element_to_row = new_element_to_row;
   offsets = new_offsets;

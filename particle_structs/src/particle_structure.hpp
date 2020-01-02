@@ -61,7 +61,6 @@ namespace particle_structs {
     static constexpr std::size_t num_types = DataTypes::size;
   };
 
-
   template <class DataTypes, typename MemSpace>
   ParticleStructure<DataTypes, MemSpace>::ParticleStructure() : num_elems(0), num_ptcls(0),
                                                                 capacity_(0), num_rows(0) {

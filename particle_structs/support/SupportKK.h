@@ -4,29 +4,18 @@
 
 namespace particle_structs {
 
-template <class View>
-typename View::HostMirror deviceToHost(View view) {
-  auto hv = Kokkos::create_mirror_view(view);
-  Kokkos::deep_copy(hv, view);
-  return hv;
-}
+  template <class View>
+    typename View::HostMirror deviceToHost(View view) {
+    auto hv = Kokkos::create_mirror_view(view);
+    Kokkos::deep_copy(hv, view);
+    return hv;
+  }
+
+ template <class T, typename Device> struct HostToDevice;
 
  template <class T, typename Device>
-   typename std::enable_if<std::rank<T>::value == 0>::type
- hostToDevice(Kokkos::View<T*, Device> view, T* data) {
-   typename Kokkos::View<T*, Device>::HostMirror hv = Kokkos::create_mirror_view(view);
-   for (size_t i = 0; i < hv.size(); ++i)
-     hv(i) = data[i];
-   Kokkos::deep_copy(view, hv);
- }
- template <class T, typename Device, std::size_t N>
-   typename std::enable_if<std::rank<T[N]>::value == 1>::type
- hostToDevice(Kokkos::View<T*, Device> view, T* data) {
-   typename Kokkos::View<T*, Device>::HostMirror hv = Kokkos::create_mirror_view(view);
-   for (size_t i = 0; i < hv.size(); ++i)
-     for (int j = 0; j < N; ++j)
-       hv(i,j) = data[i][j];
-   Kokkos::deep_copy(view, hv);
+ void hostToDevice(Kokkos::View<T*, Device> view, T* data) {
+   HostToDevice<T, Device>(view, data);
  }
 
 template <typename T, typename Device>
@@ -124,6 +113,23 @@ template <class T, typename Device, int N, int M, int P>
     }
   };
 
+  template <class T, typename Device> struct HostToDevice {
+    HostToDevice(Kokkos::View<T*, Device> view, T* data) {
+      typename Kokkos::View<T*, Device>::HostMirror hv = Kokkos::create_mirror_view(view);
+      for (size_t i = 0; i < hv.size(); ++i)
+        hv(i) = data[i];
+      Kokkos::deep_copy(view, hv);
+    }
+  };
+  template <class T, typename Device, std::size_t N> struct HostToDevice<T[N], Device> {
+    HostToDevice(Kokkos::View<T*[N], Device> view, T (*data)[N]) {
+      typename Kokkos::View<T*[N], Device>::HostMirror hv = Kokkos::create_mirror_view(view);
+      for (size_t i = 0; i < hv.extent(0); ++i)
+        for (size_t j = 0; j < N; ++j)
+          hv(i,j) = data[i][j];
+      Kokkos::deep_copy(view, hv);
+    }
+  };
 
 
 }

@@ -121,7 +121,6 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   template <typename FunctionType>
   void parallel_for(FunctionType& fn, std::string s="");
 
-
   //Prints the format of the SCS labeled by prefix
   void printFormat(const char* prefix = "") const;
 

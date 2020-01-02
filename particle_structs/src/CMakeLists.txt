@@ -1,7 +1,10 @@
 include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/scs
+  ${CMAKE_CURRENT_SOURCE_DIR}/csr
+  ${CMAKE_CURRENT_SOURCE_DIR}
+
   )
+
 set(HEADERS
   particle_structure.hpp
   ps_for.hpp
@@ -9,6 +12,7 @@ set(HEADERS
   scs/SCS_Types.h
   scs/SCSPair.h
   scs/SellCSigma.h
+  csr/CSR.hpp
   particle_structs.hpp
 )
 

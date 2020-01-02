@@ -3,7 +3,6 @@
 
 #include <MemberTypes.h>
 #include <SellCSigma.h>
-#include <SCS_Macros.h>
 
 #include <psAssert.h>
 #include "Distribute.h"
@@ -60,7 +59,7 @@ int main(int argc, char* argv[]) {
     auto int_slice = scs->get<0>();
     auto double3_slice = scs->get<1>();
 
-    auto setValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+    auto setValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       int_slice(ptcl_id) = comm_rank;
       double3_slice(ptcl_id, 0) = comm_rank;
       double3_slice(ptcl_id, 1) = (comm_rank + 1) * elm_id;
@@ -69,14 +68,14 @@ int main(int argc, char* argv[]) {
     scs->parallel_for(setValues);
     //Send half the particles right one process except on rank 0
     if (comm_rank > 0) {
-      auto setElmProcess = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+      auto setElmProcess = PS_LAMBDA(int element_id, int particle_id, int mask) {
         new_element(particle_id) = element_id;
         new_process(particle_id) = (comm_rank + (element_id==4)) % comm_size;
       };
       scs->parallel_for(setElmProcess);
     }
     else {
-      auto setElmProcess = SCS_LAMBDA(int element_id, int particle_id, int mask) {
+      auto setElmProcess = PS_LAMBDA(int element_id, int particle_id, int mask) {
         new_element(particle_id) = element_id;
         new_process(particle_id) = comm_rank;
       };
@@ -89,7 +88,7 @@ int main(int argc, char* argv[]) {
     int_slice = scs->get<0>();
     double3_slice = scs->get<1>();
     SCS::kkLidView fail("fail", 1);
-    auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+    auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       if (mask && mask != double3_slice(ptcl_id, 2)) {
         printf("%d mask failure on ptcl %d (%d, %f)\n", comm_rank, ptcl_id, mask,
                double3_slice(ptcl_id,2));
@@ -163,7 +162,7 @@ bool sendToOne(int ne, int np) {
   auto int_slice = scs->get<0>();
   auto double_slice = scs->get<1>();
 
-  auto setValues = SCS_LAMBDA(int elem_id, int ptcl_id, int mask) {
+  auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
     int_slice(ptcl_id) = comm_rank;
     double_slice(ptcl_id,0) = comm_rank * 5;
     if (ptcl_id < np/100)
@@ -191,7 +190,7 @@ bool sendToOne(int ne, int np) {
   int_slice = scs->get<0>();
   double_slice = scs->get<1>();
   kkLidView fail("fail", 1);
-  auto checkValues = SCS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+  auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
     if (mask) {
       int rank = int_slice(ptcl_id);
       double val = double_slice(ptcl_id, 0);

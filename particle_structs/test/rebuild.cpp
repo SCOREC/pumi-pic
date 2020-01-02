@@ -71,7 +71,7 @@ bool shuffleParticlesTests() {
 
   auto values = scs->get<0>();
   auto values2 = scs2->get<0>();
-  auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendToSelf = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = element_id;
     values(particle_id) = particle_id;
     values2(particle_id) = particle_id;
@@ -86,7 +86,7 @@ bool shuffleParticlesTests() {
   values = scs->get<0>();
 
   SCS::kkLidView fail("fail",1);
-  auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto checkParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     if (mask) {
       if (values(ptcl_id) % C != values2(ptcl_id) % C) {
         printf("Particle mismatch at %d (%d != %d)\n", ptcl_id, values(ptcl_id), values2(ptcl_id));
@@ -99,7 +99,7 @@ bool shuffleParticlesTests() {
     printf("Value mismatch on at least one particle\n");
     return false;
   }
-  auto moveParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto moveParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     new_element(ptcl_id) = (elm_id + 2) % ne;
   };
   scs->parallel_for(moveParticles);
@@ -108,7 +108,7 @@ bool shuffleParticlesTests() {
 
   values = scs->get<0>();
 
-  auto printParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto printParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     if (mask)
       printf("Particle %d has value %d\n", ptcl_id, values(ptcl_id));
   };
@@ -147,7 +147,7 @@ bool resortElementsTest() {
 
   SCS::kkLidView new_element("new_element", scs->capacity());
   //Remove all particles from first element
-  auto moveParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto moveParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     if (mask) {
       values(ptcl_id) = elm_id;
       if (ptcl_id % 4 == 0 && ptcl_id < 8)
@@ -163,7 +163,7 @@ bool resortElementsTest() {
   scs->printMetrics();
   values = scs->get<0>();
   SCS::kkLidView fail("", 1);
-  auto checkParticles = SCS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+  auto checkParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
     if (mask) {
       if (values(ptcl_id) != elm_id) {
         fail(0) = 1;
@@ -203,7 +203,7 @@ bool reshuffleTests() {
   scs->printFormat();
 
   auto pids = scs->get<0>();
-  auto setPids = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto setPids = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     pids(particle_id) = particle_id;
   };
   scs->parallel_for(setPids);
@@ -213,7 +213,7 @@ bool reshuffleTests() {
 
   //Shuffle
   printf("\nSend To Self");
-  auto sendToSelf = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendToSelf = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = element_id;
   };
   scs->parallel_for(sendToSelf);
@@ -225,7 +225,7 @@ bool reshuffleTests() {
   //Shuffle
   printf("\nSend first particle to padding in 2");
   SCS::kkLidView elem("elem",1);
-  auto sendToChunk = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendToChunk = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (particle_id != pids(particle_id)) {
       fail(0) = 1;
       printf("[ERROR] Particle %d was moved during first shuffle\n", pids(particle_id));
@@ -242,7 +242,7 @@ bool reshuffleTests() {
 
   //Shuffle with particle back to 0
   printf("\nSend particle back to first id");
-  auto sendBack = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendBack = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask && pids(particle_id) == 0) {
       if (element_id == 2)
         new_element(particle_id) = elem(0);
@@ -259,7 +259,7 @@ bool reshuffleTests() {
 
   //Add new particles to empty spots
   printf("\nFill Empties with new particles");
-  auto sendToSelfAgain = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto sendToSelfAgain = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask && particle_id != pids(particle_id)) {
       fail(0) = 1;
       if (pids(particle_id) == 0)
@@ -288,7 +288,7 @@ bool reshuffleTests() {
 
   //Remove all particles from element 0 & 2, move particles from 1 & 3 to 0 & 2
   printf("\nDump and redistribute particles");
-  auto dumpAndRedistribute = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto dumpAndRedistribute = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (!mask) {
       printf("[ERROR] Missing particle %d\n", particle_id);
       fail(0) = 1;
@@ -309,7 +309,7 @@ bool reshuffleTests() {
   scs->rebuild(new_element);
   scs->printFormat();
 
-  auto checkFinal = SCS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
+  auto checkFinal = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask) {
       if (element_id % 2 == 1) {
         printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);

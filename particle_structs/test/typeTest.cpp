@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
     auto scs_first = scs->get<0>(); //int
     auto scs_second = scs->get<1>(); //double[2]
 
-    auto setValues = SCS_LAMBDA(int element_id, int particle_id, bool mask) {
+    auto setValues = PS_LAMBDA(int element_id, int particle_id, bool mask) {
       if (mask) {
         scs_first(particle_id) = element_id;
         scs_second(particle_id, 0) = 1.0;

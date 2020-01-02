@@ -27,12 +27,11 @@ struct MyPair {
 }
 namespace Kokkos {
   using particle_structs::MyPair;
-  SCS_DEVICE_VAR MyPair ma = MyPair(10000000);
-  SCS_DEVICE_VAR MyPair mi = MyPair(0);
+  PS_DEVICE_VAR MyPair ma = MyPair(10000000);
+  PS_DEVICE_VAR MyPair mi = MyPair(0);
   template <>
   struct reduction_identity<MyPair> {
     KOKKOS_FORCEINLINE_FUNCTION constexpr static const MyPair& max() {return ma;}
     KOKKOS_FORCEINLINE_FUNCTION constexpr static const  MyPair& min() {return mi;}
   };
 }
-

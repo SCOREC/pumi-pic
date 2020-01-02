@@ -12,7 +12,6 @@
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Sort.hpp>
-#include "SCS_Macros.h"
 #include "SCSPair.h"
 
 #ifdef PS_USE_CUDA
@@ -113,7 +112,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
     Performs a parallel for over the elements/particles in the SCS
     The passed in functor/lambda should take in 3 arguments (int elm_id, int ptcl_id, bool mask)
     Example usage with lambda:
-    auto lamb = SCS_LAMBDA(const int& elm_id, const int& ptcl_id, const bool& mask) {
+    auto lamb = PS_LAMBDA(const int& elm_id, const int& ptcl_id, const bool& mask) {
       do stuff...
     };
     scs->parallel_for(lamb);
@@ -547,7 +546,7 @@ template<class DataTypes, typename MemSpace>
     return;
   }
   kkLidView num_send_particles("num_send_particles", comm_size);
-  auto count_sending_particles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
+  auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
     const lid_t process = new_process(particle_id);
     Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask * (process != comm_rank));
   };
@@ -598,7 +597,7 @@ template<class DataTypes, typename MemSpace>
   CreateViews<device_type, DataTypes>(send_particle, np_send);
   kkLidView send_index("send_particle_index", capacity());
   auto element_to_gid_local = element_to_gid;
-  auto gatherParticlesToSend = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
+  auto gatherParticlesToSend = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
     const lid_t process = new_process(particle_id);
     if (mask && process != comm_rank) {
       send_index(particle_id) =
@@ -667,7 +666,7 @@ template<class DataTypes, typename MemSpace>
   });
 
   /********** Set particles that were sent to non existent on this process *********/
-  auto removeSentParticles = SCS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
+  auto removeSentParticles = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
     const bool sent = new_process(particle_id) != comm_rank;
     const lid_t elm = new_element(particle_id);
     //Subtract (its value + 1) to get to -1 if it was sent, 0 otherwise
@@ -698,7 +697,7 @@ bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,
   kkLidView num_holes_per_row("num_holes_per_row", numRows());
   kkLidView element_to_row_local = element_to_row;
   auto particle_mask_local = particle_mask;
-  auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
+  auto countNewParticles = PS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
 
     const lid_t row = element_to_row_local(element_id);
@@ -752,7 +751,7 @@ bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,
   kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
   kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
   //Gather moving particle list
-  auto gatherMovingPtcls = SCS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
+  auto gatherMovingPtcls = PS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
     const lid_t new_elem = new_element(particle_id);
 
     const lid_t row = element_to_row_local(element_id);
@@ -777,7 +776,7 @@ bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,
 
   //Assign hole index for moving particles
   kkLidView holes("holeIndex", num_moving_ptcls);
-  auto assignPtclsToHoles = SCS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
+  auto assignPtclsToHoles = PS_LAMBDA(const lid_t& element_id,const lid_t& particle_id, const bool& mask){
     const lid_t row = element_to_row_local(element_id);
     if (!mask) {
       const lid_t moving_index = Kokkos::atomic_fetch_add(&(offset_new_particles(row)),1);
@@ -829,7 +828,7 @@ void SellCSigma<DataTypes,MemSpace>::rebuild(kkLidView new_element,
     return;
   }
   kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
-  auto countNewParticles = SCS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
+  auto countNewParticles = PS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
     const lid_t new_elem = new_element(particle_id);
     if (new_elem != -1)
       Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), mask);
@@ -907,7 +906,7 @@ void SellCSigma<DataTypes,MemSpace>::rebuild(kkLidView new_element,
   });
   C_ = old_C;
   kkLidView new_indices("new_scs_index", capacity());
-  auto copySCS = SCS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
+  auto copySCS = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
     const lid_t new_elem = new_element(ptcl_id);
     //TODO remove conditional
     if (mask && new_elem != -1) {

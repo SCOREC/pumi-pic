@@ -3,7 +3,6 @@
 
 #include <MemberTypes.h>
 #include <SellCSigma.h>
-#include <SCS_Macros.h>
 
 #include <psAssert.h>
 #include "Distribute.h"
@@ -38,7 +37,7 @@ int main(int argc, char* argv[]) {
     delete [] ptcls_per_elem;
     delete [] ids;
 
-    auto lamb = SCS_LAMBDA(const int& eid, const int& pid, const int& mask) {
+    auto lamb = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
       if (mask > 0)
         printf("SECOND: %d %d\n", eid, pid);
     };

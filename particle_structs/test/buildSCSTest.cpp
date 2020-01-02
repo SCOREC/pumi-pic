@@ -3,7 +3,6 @@
 
 #include <MemberTypes.h>
 #include <SellCSigma.h>
-#include <SCS_Macros.h>
 
 #include <psAssert.h>
 #include "Distribute.h"
@@ -59,13 +58,13 @@ bool defaultTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView e
 
   scs->printFormat();
   SCS::kkLidView scs_ppe("scs_ppe",ne);
-  auto lamb = SCS_LAMBDA(const int& eid, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
     if (mask > 0)
       Kokkos::atomic_fetch_add(&scs_ppe(eid),1);
   };
   scs->parallel_for(lamb);
   SCS::kkLidView fail("fail",1);
-  auto check = SCS_LAMBDA(const int i) {
+  auto check = PS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
       printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
@@ -87,13 +86,13 @@ bool noSortTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
 
   scs->printFormat();
   SCS::kkLidView scs_ppe("scs_ppe",ne);
-  auto lamb = SCS_LAMBDA(const int& eid, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
     if (mask > 0)
       Kokkos::atomic_fetch_add(&scs_ppe(eid),1);
   };
   scs->parallel_for(lamb);
   SCS::kkLidView fail("fail",1);
-  auto check = SCS_LAMBDA(const int i) {
+  auto check = PS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
       printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
@@ -115,13 +114,13 @@ bool largeCTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
 
   scs->printFormat();
   SCS::kkLidView scs_ppe("scs_ppe",ne);
-  auto lamb = SCS_LAMBDA(const int& eid, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
     if (mask > 0)
       Kokkos::atomic_fetch_add(&scs_ppe(eid),1);
   };
   scs->parallel_for(lamb);
   SCS::kkLidView fail("fail",1);
-  auto check = SCS_LAMBDA(const int i) {
+  auto check = PS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
       printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;

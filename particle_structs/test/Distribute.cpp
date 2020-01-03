@@ -8,8 +8,14 @@
 namespace {
 
 void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
-  int p = np / ne;
-  int r = np % ne;
+  int p;
+  int r;
+  if (ne == 0)
+    p = r = 0;
+  else {
+    p= np / ne;
+    r = np % ne;
+  }
   int index = 0;
   //Give remainder to first elements
   for (int i = 0; i < r; ++i) {

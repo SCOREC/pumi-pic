@@ -61,31 +61,37 @@ namespace particle_structs {
                                 kkGidView element_gids,
                                 kkLidView particle_elements,
                                 MTVs particle_info) {
+    fprintf(stderr, "[WARNING] CSR constructor not implemented\n");
+  }
 
+  template <class DataTypes, typename MemSpace>
+  CSR<DataTypes, MemSpace>::~CSR() {
+    fprintf(stderr, "[WARNING] CSR deconstructor not implemented\n");
   }
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
                kkLidView new_particle_elements,
                MTVs new_particle_info) {
-
+    fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
   }
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
-
+    fprintf(stderr, "[WARNING] CSR rebuild(...) not implemented\n");
   }
 
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
+    fprintf(stderr, "[WARNING] CSR parallel_for(...) not implemented\n");
 
   }
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::printMetrics() const {
-
+    fprintf(stderr, "[WARNING] CSR printMetrics() not implemented\n");
   }
 }

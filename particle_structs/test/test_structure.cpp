@@ -6,14 +6,28 @@ void finalize() {
   MPI_Finalize();
 }
 
-int addSCSs(std::vector<PS*>& structures, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+int comm_rank, comm_size;
+//Structure adding functions
+int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
+int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
+
+//Simple tests of construction
+int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
+int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
+
+//Functionality tests
+int testRebuild(const char* name, PS* structure);
+int testMigration(const char* name, PS* structure);
+int testMetrics(const char* name, PS* structure);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
 
-  int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
@@ -31,6 +45,8 @@ int main(int argc, char* argv[]) {
   {
     //Vector of structures to run all the tests on
     std::vector<PS*> structures;
+    //Vector of names for each structure
+    std::vector<std::string> names;
 
     //General structure parameters
     lid_t num_elems;
@@ -42,11 +58,20 @@ int main(int argc, char* argv[]) {
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
 
-    fails += addSCSs(structures, num_elems, num_ptcls, ppe, element_gids,
+    //Add SCS
+    fails += addSCSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
+    //Add CSR
+    /* Uncomment when CSR is being implemented
+    fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
+                     particle_elements, particle_info);
+    */
 
     //Run each structure on every test
-
+    for (int i = 0; i < structures.size(); ++i) {
+      fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
+      fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
+    }
 
     //Cleanup
     for (size_t i = 0; i < structures.size(); ++i)
@@ -67,12 +92,9 @@ int main(int argc, char* argv[]) {
 
 }
 
-int addSCSs(std::vector<PS*>& structures, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
-  int comm_rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-
   int fails = 0;
   //Build SCS with C = 32, sigma = ne, V = 1024
   try {
@@ -83,6 +105,7 @@ int addSCSs(std::vector<PS*>& structures, lid_t num_elems, lid_t num_ptcls, kkLi
     PS* s = new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
                                                 element_gids, particle_elements, particle_info);
     structures.push_back(s);
+    names.push_back("scs_C32_SMAX_V1024");
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Construction of SCS (C=32, sigma=ne, V=1024) failed on rank %d\n",
@@ -99,11 +122,90 @@ int addSCSs(std::vector<PS*>& structures, lid_t num_elems, lid_t num_ptcls, kkLi
     PS* s = new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
                                                 element_gids, particle_elements, particle_info);
     structures.push_back(s);
+    names.push_back("scs_C32_S1_V10");
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Construction of SCS (C=32, sigma=1, V=10) failed on rank %d\n",
             comm_rank);
     ++fails;
   }
+  return fails;
+}
+
+int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
+  int fails = 0;
+  try {
+    PS* s = new ps::CSR<Types, MemSpace>(num_elems, num_ptcls, ppe,
+                                         element_gids, particle_elements, particle_info);
+    structures.push_back(s);
+    names.push_back("csr");
+  }
+  catch(...) {
+    fprintf(stderr, "[ERROR] Construction of CSR failed on rank %d\n", comm_rank);
+    ++fails;
+  }
+  return fails;
+}
+
+
+int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) {
+  int fails = 0;
+  if (structure->nElems() != num_elems) {
+    fprintf(stderr, "[ERROR] Test %s: Element count mismatch on rank %d "
+            "[(structure)%d != %d(actual)]\n", name,
+            comm_rank, structure->nElems(), num_elems);
+    ++fails;
+  }
+  if (structure->nPtcls() != num_ptcls) {
+    fprintf(stderr, "[ERROR] Test %s: Particle count mismatch on rank %d "
+            "[(structure)%d != %d(actual)]\n", name,
+            comm_rank, structure->nPtcls(), num_ptcls);
+    ++fails;
+  }
+  if (structure->numRows() < num_elems) {
+    fprintf(stderr, "[ERROR] Test %s: Number of rows is too small to fit elements on rank %d "
+            "[(structure)%d < %d(actual)]\n", name, comm_rank,
+            structure->numRows(), num_elems);
+    ++fails;
+  }
+  if (structure->capacity() < num_ptcls) {
+    fprintf(stderr, "[ERROR] Test %s: Capcity is too small to fit particles on rank %d "
+            "[(structure)%d < %d(actual)]\n", name, comm_rank,
+            structure->capacity(), num_ptcls);
+    ++fails;
+  }
+  return fails;
+}
+int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
+  int fails = 0;
+  kkLidView count("count", 1);
+  auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    Kokkos::atomic_fetch_add(&(count(0)), mask);
+  };
+  ps::parallel_for(structure, checkExistence, "check particle existence");
+  lid_t c = ps::getLastValue<lid_t>(count);
+  if (c != num_ptcls) {
+    fprintf(stderr, "[ERROR] Test %s: Number of particles found in parallel_for "
+            "does not match the number of particles on rank %d"
+            "[(parallel_for)%d != %d(actual)]]n", name, comm_rank,
+            c, num_ptcls);
+    ++fails;
+  }
+  return fails;
+}
+
+//Functionality tests
+int testRebuild(const char* name, PS* structure) {
+  int fails = 0;
+  return fails;
+}
+int testMigration(const char* name, PS* structure) {
+  int fails = 0;
+  return fails;
+}
+int testMetrics(const char* name,PS* structure) {
+  int fails = 0;
   return fails;
 }

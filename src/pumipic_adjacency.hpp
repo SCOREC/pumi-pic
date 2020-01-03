@@ -848,7 +848,7 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
     ptq = v*vab;
     ptq = ptq + pta; 
     region = EDGEAB;
-    //return region;
+    return ptq;
   }
 
   // Check if P in vertex region outside C

@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < structures.size(); ++i) {
       fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
       fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
+      fails += testMetrics(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -207,5 +208,13 @@ int testMigration(const char* name, PS* structure) {
 }
 int testMetrics(const char* name,PS* structure) {
   int fails = 0;
+  try {
+    structure->printMetrics();
+  }
+  catch(...) {
+    fprintf(stderr, "[ERROR] Test %s: Failed running printMetrics() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
   return fails;
 }

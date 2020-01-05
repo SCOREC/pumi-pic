@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <xgcp_mesh.hpp>
+#include <xgcp_push.hpp>
 #include <SCS_Macros.h>
 #include <SellCSigma.h>
 #include <Omega_h_for.hpp>
@@ -118,6 +119,18 @@ int main(int argc, char* argv[]) {
   SCS_I* scs = new SCS_I(policy, sigma, V, ne, actualParticles, ptcls_per_elem, element_gids);
   setInitialPtclCoords(picparts, scs, output);
   setPtclIds(scs);
+
+  //Setup push
+  const double h = 1.72479370-.08;
+  const auto k = .020558260;
+  const auto d = 0.6;
+  xgcp::ellipticalPush::setup(scs, h, k, d);
+  const auto degPerPush = atof(argv[8]);
+  if (!comm_rank)
+    fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
+
+  if (comm_rank == 0)
+    fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
 
 
   //cleanup

@@ -11,7 +11,7 @@ set(SOURCES
   xgcp_input.cpp
   xgcp_mesh.cpp
   xgcp_gyro_scatter.cpp
-#  xgcp_push.cpp
+  xgcp_elliptical_push.cpp
 #  xgcp_particle.cpp
 )
 

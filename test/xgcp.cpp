@@ -21,6 +21,7 @@ namespace ps = particle_structs;
 namespace o = Omega_h;
 
 void getMemImbalance(int hasptcls);
+void getPtclImbalance(int ptclCnt);
 void printTimerResolution();
 void setInitialPtclCoords(p::Mesh* picparts, SCS_I* scs, bool output);
 int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
@@ -74,7 +75,7 @@ int main(int argc, char* argv[]) {
   o::Mesh* omesh = mesh.omegaMesh();
 
   /* Particle data */
-  const long int numPtcls = 1000;//atol(argv[3]);
+  const long int numPtcls = atol(argv[3]);
   const int numPtclsPerRank = numPtcls / comm_size;
   const bool output = numPtclsPerRank <= 30;
 
@@ -91,7 +92,7 @@ int main(int argc, char* argv[]) {
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
   });
-  const int mdlFace = atoi(argv[4]);
+  const int mdlFace = atoi(argv[6]);
   int actualParticles = setSourceElements(picparts, ptcls_per_elem, mdlFace, numPtclsPerRank);
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
@@ -105,7 +106,7 @@ int main(int argc, char* argv[]) {
   if (!comm_rank)
     fprintf(stderr, "particles created %ld\n", totNumPtcls);
 
-  const auto maxIter = atoi(argv[5]);
+  const auto maxIter = atoi(argv[7]);
   if (!comm_rank)
     fprintf(stderr, "max iterations: %d\n", maxIter);
 
@@ -125,15 +126,62 @@ int main(int argc, char* argv[]) {
   const auto k = .020558260;
   const auto d = 0.6;
   xgcp::ellipticalPush::setup(scs, h, k, d);
-  const auto degPerPush = atof(argv[8]);
+  const auto degPerPush = atof(argv[10]);
   if (!comm_rank)
     fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
 
   if (comm_rank == 0)
     fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
 
+  //Add tags to mesh
+  o::LOs elmTags(ne, -1, "elmTagVals");
+  omesh->add_tag(o::FACE, "has_particles", 1, elmTags);
+  omesh->add_tag(o::VERT, "avg_density", 1, o::Reals(omesh->nverts(), 0));
+
+  const auto enable_prebarrier = atoi(argv[11]);
+  if(enable_prebarrier) {
+    if(!comm_rank)
+      fprintf(stderr, "pre-barrier enabled\n");
+    particle_structs::enable_prebarrier();
+    pumipic_enable_prebarrier();
+  }
+
+  //Main iteration loop
+  Kokkos::Timer timer;
+  Kokkos::Timer fullTimer;
+  int iter;
+  long int totNp;
+  long int scs_np;
+  for(iter=1; iter<=maxIter; iter++) {
+    //Print Metrics on rank 0 and comm_size/2
+    if(!comm_rank || (comm_rank == comm_size/2))
+      scs->printMetrics();
+    //Stop if there are no more particles
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
+      fprintf(stderr, "No particles remain... exiting push loop\n");
+      break;
+    }
+    //Print Iteration stats
+    if (!comm_rank)
+      fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
+    getMemImbalance(scs_np!=0);
+    getPtclImbalance(scs_np);
+    timer.reset();
+    //Push Particles
+    xgcp::ellipticalPush::push(scs, *omesh, degPerPush, iter);
+    MPI_Barrier(MPI_COMM_WORLD);
+    //Perform search and rebuild
+
+    //Perform gyro scatter
+  }
+  //cleanup
+  if (comm_rank == 0)
+    fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
 
   //cleanup
+  delete scs;
 
   if (!comm_rank)
     fprintf(stderr, "done\n");
@@ -165,6 +213,30 @@ void getMemImbalance(int hasptcls) {
   }
 #endif
 }
+
+void getPtclImbalance(int ptclCnt) {
+  int comm_rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  long ptcls=ptclCnt;
+  long max=0;
+  long tot=0;
+  int hasptcls = (ptclCnt > 0);
+  int rankswithptcls=0;
+  MPI_Allreduce(&ptcls, &max, 1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&ptcls, &tot, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&hasptcls, &rankswithptcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  const double avg=static_cast<double>(tot)/rankswithptcls;
+  const double imb=max/avg;
+  if(!comm_rank) {
+    printf("ranks with particles %d particle imbalance %f\n",
+        rankswithptcls, imb);
+  }
+  if( ptcls == max ) {
+    printf("%d peak particle count %ld, avg usage %f\n", comm_rank, max, avg);
+  }
+}
+
 
 void printTimerResolution() {
   Kokkos::Timer timer;

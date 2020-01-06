@@ -27,6 +27,7 @@ void setInitialPtclCoords(p::Mesh* picparts, SCS_I* scs, bool output);
 int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
                       const int mdlFace, const int numPtclsPerRank);
 void setPtclIds(SCS_I* scs);
+void search(xgcp::Mesh& picparts, SCS_I* scs, bool output);
 
 int main(int argc, char* argv[]) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -173,7 +174,7 @@ int main(int argc, char* argv[]) {
     xgcp::ellipticalPush::push(scs, *omesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
     //Perform search and rebuild
-
+    search(mesh, scs, output);
     //Perform gyro scatter
   }
   //cleanup
@@ -349,4 +350,76 @@ void setInitialPtclCoords(p::Mesh* picparts, SCS_I* scs, bool output) {
     }
   };
   scs->parallel_for(lamb);
+}
+
+void updatePtclPositions(SCS_I* scs) {
+  auto x_scs_d = scs->get<0>();
+  auto xtgt_scs_d = scs->get<1>();
+  auto updatePtclPos = SCS_LAMBDA(const int&, const int& pid, const bool&) {
+    x_scs_d(pid,0) = xtgt_scs_d(pid,0);
+    x_scs_d(pid,1) = xtgt_scs_d(pid,1);
+    x_scs_d(pid,2) = xtgt_scs_d(pid,2);
+    xtgt_scs_d(pid,0) = 0;
+    xtgt_scs_d(pid,1) = 0;
+    xtgt_scs_d(pid,2) = 0;
+  };
+  scs->parallel_for(updatePtclPos);
+}
+
+void rebuild(xgcp::Mesh& mesh, SCS_I* scs, o::LOs elem_ids, const bool output) {
+  p::Mesh* picparts = mesh.pumipicMesh();
+  updatePtclPositions(scs);
+  const int scs_capacity = scs->capacity();
+  auto ids = scs->get<2>();
+  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(output && mask > 0)
+      printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
+  };
+  scs->parallel_for(printElmIds);
+
+  SCS_I::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
+  SCS_I::kkLidView scs_process_ids("scs_process_ids", scs_capacity);
+  Omega_h::LOs is_safe = picparts->safeTag();
+  Omega_h::LOs elm_owners = picparts->entOwners(picparts->dim());
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if (mask) {
+      int new_elem = elem_ids[pid];
+      scs_elem_ids(pid) = new_elem;
+      scs_process_ids(pid) = comm_rank;
+      if (new_elem != -1 && is_safe[new_elem] == 0) {
+        scs_process_ids(pid) = elm_owners[new_elem];
+      }
+    }
+  };
+  scs->parallel_for(lamb);
+
+  scs->migrate(scs_elem_ids, scs_process_ids);
+
+  ids = scs->get<2>();
+  if (output) {
+    auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if (mask > 0)
+        printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+    };
+    scs->parallel_for(printElms);
+  }
+}
+
+void search(xgcp::Mesh& mesh, SCS_I* scs, bool output) {
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  o::Mesh* omesh = mesh.omegaMesh();
+  assert(scs->nElems() == omesh->nelems());
+  Omega_h::LO maxLoops = 200;
+  const auto scsCapacity = scs->capacity();
+  o::Write<o::LO> elem_ids(scsCapacity,-1);
+  auto x = scs->get<0>();
+  auto xtgt = scs->get<1>();
+  auto pid = scs->get<2>();
+  bool isFound = p::search_mesh_2d<xgcp::Ion>(*omesh, scs, x, xtgt, pid, elem_ids, maxLoops);
+  assert(isFound);
+  //rebuild the SCS to set the new element-to-particle lists
+  rebuild(mesh, scs, elem_ids, output);
 }

@@ -101,6 +101,8 @@ public:
   int testGitrCollisionRndn1Ind = -1;
   int testGitrCollisionRndn2Ind = -1;
   int testGitrCollisionRndxsiInd = -1;
+  int testGitrCrossFieldDiffRndInd = -1;
+  int testGitrReflectionRndInd = -1;
 };
 
 //timestep +1

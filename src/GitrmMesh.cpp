@@ -832,7 +832,7 @@ void GitrmMesh::markPiscesCylinderResult(o::Write<o::LO>& beadVals_d) {
   mesh.add_tag<o::LO>(o::REGION, "pisces_Bead_Counts", 1, o::LOs(elemTagAsCounts));
 }
 
-void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
+int GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
   o::LOs faceIds(piscesBeadCylinderIds);
   auto numFaceIds = faceIds.size();
   const auto side_is_exposed = o::mark_exposed_sides(&mesh);
@@ -842,10 +842,12 @@ void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
   o::Write<o::LO> elemTagIds(mesh.nelems(), 0);
   const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
+  o::Write<o::LO> detFaceCount(1,0);
   o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
     for(auto id=0; id<numFaceIds; ++id) {
       if(faceIds[id] == face_class_ids[i] && side_is_exposed[i]) {
         faceTagIds[i] = id;
+        Kokkos::atomic_increment(&(detFaceCount[0]));
         if(renderPiscesCylCells) {
           auto elmId = p::elem_id_of_bdry_face_of_tet(i, f2r_ptr, f2r_elem);
           elemTagIds[elmId] = id;
@@ -856,6 +858,10 @@ void GitrmMesh::markPiscesCylinder(bool renderPiscesCylCells) {
 
   mesh.add_tag<o::LO>(o::FACE, "piscesBeadCylinder_inds", 1, o::LOs(faceTagIds));
   mesh.add_tag<o::LO>(o::REGION, "piscesBeadCylinder_regionInds", 1, o::LOs(elemTagIds));
+  auto count_h = o::HostWrite<o::LO>(detFaceCount);
+  auto ndf = count_h[0];
+  numDetectorSurfaceFaces = ndf;
+  return ndf;
 }
 
 void GitrmMesh::printDensityTempProfile(double rmax, int gridsR, 
@@ -1103,6 +1109,7 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
   if(skipGeometricModelIds) 
     numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
+  //TODO use tag : "piscesBeadCylinder_inds"
   // using arrays of all faces, for now
   printf("Creating GITR surface mesh\n");
   o::Write<o::Real> points_d(9*nf, 0);

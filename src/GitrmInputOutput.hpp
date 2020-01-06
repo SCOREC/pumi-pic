@@ -22,7 +22,7 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
 // numPtclsRead to know data shape, if input file organized differently
 int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, int& numInFile, int& numRead, 
-  std::string nPstr="nP", bool debug=false);
+  std::string numStr="None", bool debug=false);
 
 void writeOutputNcFile( o::Write<o::Real>& ptclsHistoryData, int numPtcls, 
   int dof, OutputNcFileFieldStruct& st, std::string outNcFileName);
@@ -38,10 +38,10 @@ int readCsrFile(const std::string& ncFileName,
 
 struct Field3StructInput {
   static constexpr int MAX_SIZE = 3; // add grid data before resizing
-  Field3StructInput(std::initializer_list<std::string> compNames_in,
-    std::initializer_list<std::string> gridNames_in,
-    std::initializer_list<std::string> nGridNames_in, int nGridRead_in=-1,
-    std::initializer_list<std::string> nVarNames_in = {}) {
+  Field3StructInput(std::vector<std::string> compNames_in,
+    std::vector<std::string> gridNames_in,
+    std::vector<std::string> nGridNames_in, int nGridRead_in=-1,
+    std::vector<std::string> nVarNames_in = {}) {
     compNames = compNames_in;
     gridNames = gridNames_in;
     nGridNames = nGridNames_in;
@@ -77,9 +77,9 @@ struct Field3StructInput {
 
 struct OutputNcFileFieldStruct {
   //require nDims' names first in init-list names
-  OutputNcFileFieldStruct(std::initializer_list<std::string> numStringsIn,
-    std::initializer_list<std::string> namesIn, 
-    std::initializer_list<int> nDimsIn) {
+  OutputNcFileFieldStruct(std::vector<std::string> numStringsIn,
+    std::vector<std::string> namesIn, 
+    std::vector<int> nDimsIn) {
     numStrings = numStringsIn;
     fieldNames = namesIn;
     nDims = nDimsIn;

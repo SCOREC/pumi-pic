@@ -116,13 +116,13 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, bool debug) {
   int numInFile = 0;
   int numRead = 0;
-  return readInputDataNcFileFS3(ncFileName, fs, numInFile, numRead);
+  return readInputDataNcFileFS3(ncFileName, fs, numInFile, numRead, "NA", debug);
 }
 
-// numInFile updated if > that in file. TODO read only numInFile
+// numInFile updated if > that in file.
 int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, int& numInFile, int& numRead, 
-  std::string nPstr, bool debug) {
+  std::string numStr, bool debug) {
   int ncSizePerComp = 1;
   assert(!verifyNetcdfFile(ncFileName));
 
@@ -137,15 +137,14 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       if(!unlimit)
         size = ncGridName.getSize();
       fs.nGridVec.push_back(size);
-      if(fs.nGridNames[i] == nPstr) {
-        if(size < numInFile)
-          numInFile = size;
-        //else if(size > numInFile)
-        //  numRead = numInFile; //TODO enable it below
-        numRead = size;
+      if(fs.nGridNames[i] == numStr) {
+        numInFile = size;
+        //if(size < numRead) //TODO handle it below
+          numRead = size;
       }
       if(debug)
-        std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " << fs.nGridVec[i] << "\n";
+        std::cout << ncFileName << " : " << fs.nGridNames[i] << " : " 
+          << fs.nGridVec[i] << "\n";
       ncSizePerComp *= fs.nGridVec[i];
     }   
     if(debug) 
@@ -173,7 +172,7 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         ncvar.getVar(&(fs.grid3[0]));
       }
     }
-    // TODO use numInFile and numRead
+    // TODO use numRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
       ncvar.getVar(&(fs.data[i*ncSizePerComp]));

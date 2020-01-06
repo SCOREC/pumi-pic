@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
     if(histInterval > NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
-  std::string gitrDataFileName = "";
+  std::string gitrDataFileName;
   if(argc > 9)
     gitrDataFileName = argv[9];
   if (!comm_rank)
@@ -249,7 +249,11 @@ int main(int argc, char** argv) {
   int testNumPtcls = 1;
   int testRead = 0;
   if(useGitrRandNums) {
-    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testRead, false);
+    if(gitrDataFileName.empty()) {
+      printf("ERROR: USE_GITR_RND_NUMS turned on, but NC file is missing\n\n");
+      return 1;
+    }
+    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testRead, true);
     assert(testNumPtcls >= numPtcls);
   }
   auto* scs = gp.scs;

@@ -574,8 +574,8 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   std::cout << "Reading Test GITR step data\n";
   // re-order the list in its constructor to leave out empty {}
   Field3StructInput fs({"intermediate"}, {}, {"nP", "nTHist", "dof"}, 0,
-    {"RndIoni_at", "RndRecomb_at"});
-  // "CollisionRndn1_at", "CollisionRndn2_at", "CollisionRndxsi_at"}); 
+    {"RndIoni_at", "RndRecomb_at", "RndCollision_n1_at", "RndCollision_n2_at", 
+     "RndCollision_xsi_at", "RndCrossField_at", "RndReflection_at"}); 
   auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
   testGitrPtclStepData = o::Reals(fs.data);
   testGitrDataIoniRandInd = fs.getIntValueOf("RndIoni_at");
@@ -583,17 +583,19 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   testGitrStepDataDof = fs.getIntValueOf("dof"); // or fs.getNumGrids(2);
   testGitrStepDataNumTsteps = fs.getIntValueOf("nTHist") - 1; // NOTE
   testGitrStepDataNumPtcls = fs.getIntValueOf("nP");
-  //testGitrCollisionRndn1Ind = fs.getIntValueOf("CollisionRndn1_at"); 
-  //testGitrCollisionRndn2Ind = fs.getIntValueOf("CollisionRndn2_at");
-  //testGitrCollisionRndxsiInd = fs.getIntValueOf("CollisionRndxsi_at");
+  testGitrCrossFieldDiffRndInd = fs.getIntValueOf("RndCrossField_at");
+  testGitrCollisionRndn1Ind = fs.getIntValueOf("RndCollision_n1_at"); 
+  testGitrCollisionRndn2Ind = fs.getIntValueOf("RndCollision_n2_at");
+  testGitrCollisionRndxsiInd = fs.getIntValueOf("RndCollision_xsi_at");
+  testGitrReflectionRndInd = fs.getIntValueOf("RndReflection_at");
   if(debug) {
-    printf(" TestGITRdata: dof %d nT %d nP %d Index: rndIoni %d rndRec %d"
-        "\n",
-        //" coll_n1 %d coll_n2 %d coll_xsi %d \n",
-      testGitrStepDataDof, testGitrStepDataNumTsteps, testGitrStepDataNumPtcls,
-      testGitrDataIoniRandInd, testGitrDataRecRandInd);
-    //testGitrCollisionRndn1Ind, testGitrCollisionRndn2Ind,
-    //testGitrCollisionRndxsiInd);
+    printf(" TestGITRdata: dof %d nT %d nP %d Index: rndIoni %d rndRec %d \n"
+      " rndCrossFieldDiff %d rndColl_n1 %d rndColl_n2 %d rndColl_xsi %d "
+      " rndReflection %d\n", testGitrStepDataDof, testGitrStepDataNumTsteps,
+      testGitrStepDataNumPtcls, testGitrDataIoniRandInd, testGitrDataRecRandInd, 
+      testGitrCrossFieldDiffRndInd, testGitrCollisionRndn1Ind, 
+      testGitrCollisionRndn2Ind, testGitrCollisionRndxsiInd, 
+      testGitrReflectionRndInd);
   }
   return stat;
 }

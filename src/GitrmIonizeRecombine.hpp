@@ -142,6 +142,9 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto tIonVtx = mesh.get_array<o::Real>(o::VERT, "IonTempVtx");
   const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx"); 
+  
+  auto tempWrite = o::deep_copy(mesh.get_array<o::Real>(o::VERT, "IonTempVtx"));
+
   //const auto& tIonVtx = gm.tempIonVtx_d;
   //const auto& densVtx = gm.densIonVtx_d;
   auto pid_scs = scs->get<PTCL_ID>();

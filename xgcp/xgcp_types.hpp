@@ -19,11 +19,8 @@ namespace xgcp {
     -two fp_t[3] arrays, 'Vector3d', for the current and
       computed (pre adjacency search) positions, and
     -an integer to store the particles id
-    -a float to store the value of the constant 'b'
-      that defines the ellipse
-    -a float to store the angle of the particle in polar coordinates
   */
-  typedef ps::MemberTypes<Vector3d, Vector3d, int, float, float> Electron;
+  typedef ps::MemberTypes<Vector3d, Vector3d, int> Electron;
 
   /* Ion Data Type
      -two fp_t[3] arrays, 'Vector3d', for the current and

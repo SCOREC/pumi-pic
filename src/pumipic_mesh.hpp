@@ -23,6 +23,8 @@ namespace pumipic {
 
     //Returns true if the full mesh is buffered
     bool isFullMesh() const;
+    //Calls function on the omega_h mesh
+    Omega_h::Mesh* operator->() {return picpart;}
     //Returns a pointer to the underlying omega_h mesh
     Omega_h::Mesh* mesh() const {return picpart;}
     //Returns the dimension of the mesh
@@ -58,9 +60,10 @@ namespace pumipic {
     typename Omega_h::Write<T> createCommArray(int dim, int num_entries_per_entity,
                                                T default_value);
     enum Op {
-      SUM_OP,
-      MAX_OP,
-      MIN_OP
+      SUM_OP, //Sum contributions
+      MAX_OP, //Take max of all contributions
+      MIN_OP, //Take min of all contributions
+      BCAST_OP //Take the owner's value
     };
     //Performs an MPI reduction on a communication array across all picparts
     template <class T>

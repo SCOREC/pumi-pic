@@ -2,6 +2,9 @@
 #include "xgcp_types.hpp"
 #include "xgcp_input.hpp"
 #include <pumipic_mesh.hpp>
+#include <Omega_h_comm.hpp>
+
+using Omega_h::MpiTraits;
 
 /*
   XGCp Mesh encapsulates the partitioning of the mesh, torodial planes, and groups
@@ -31,6 +34,7 @@ namespace xgcp {
     Mesh& operator=(const Mesh&) = delete;
 
     //Directly access underlying mesh structures
+    o::Mesh* operator->() {return picparts->mesh();}
     o::Mesh* omegaMesh() {return picparts->mesh();}
     p::Mesh* pumipicMesh() {return picparts;}
 
@@ -54,15 +58,29 @@ namespace xgcp {
     int groupRank() {return group_comm->rank();}
     int groupSize() {return group_comm->size();}
     MPI_Comm groupComm() {return group_comm->get_impl();}
-    bool isGroupLeader() {return group_comm->rank() == 0;}
+    bool isGroupLeader() {return group_comm->rank() == groupLeader();}
+    int groupLeader() {return 0;}
 
     int torodialRank() {return torodial_comm->rank();}
     int torodialSize() {return torodial_comm->size();}
     MPI_Comm torodialComm() {return torodial_comm->get_impl();}
+    int torodialMinorNeighbor() {return torodialRank() == 0 ?
+        torodialSize()-1 : torodialRank() - 1;}
+    int torodialMajorNeighbor() {return torodialRank() == torodialSize() - 1 ?
+        0 : torodialRank() + 1;}
 
     int planeID() {return torodialRank();}
     fp_t getMajorPlaneAngle() {return major_phi;}
     fp_t getMinorPlaneAngle() {return minor_phi;}
+
+    typedef Omega_h::Write<Omega_h::Real> GyroField;
+    typedef Omega_h::Read<Omega_h::Real> GyroFieldR;
+    //Get the pointers to the major and minor plane fields
+    void getGyroFields(GyroField& major_plane, GyroField& minor_plane);
+    //Apply the major and minor plane fields to tags on the mesh
+    void applyGyroFieldsToTags();
+    //Get the gyro mappings for major and minor planes for ions
+    void getIonGyroMappings(Omega_h::LOs& major_map, Omega_h::LOs& minor_map);
 
     enum PartitionLevel {
       GROUP,
@@ -72,7 +90,8 @@ namespace xgcp {
     /*
       Accumulates field contributions across different partitioning levels
        * dim - the dimension of the mesh
-       * field - the field being reduced
+       * major - the major plane contributions for the field being reduced
+       * minor - the minor plane contributions for the field being reduced
        * start_level(optional) - The initial partitioning level (defaults to GROUP)
        * end_level(optional) - The final partitioning level (defaults to MESH)
 
@@ -89,13 +108,14 @@ namespace xgcp {
        Note: end_level must be greater than start_level
      */
     template <class T>
-    void gatherField(int dim, Omega_h::Write<T> field,
+    void gatherField(int dim, Omega_h::Write<T>& major, Omega_h::Read<T> minor,
                      PartitionLevel start_level = GROUP, PartitionLevel end_level = MESH);
 
     /*
       Scatters field values across different partitioning levels
        * dim - the dimension of the mesh
-       * field - the field being reduced
+       * major - the major plane contributions for the field being reduced
+       * minor - the minor plane contributions for the field being reduced
        * start_level(optional) - The initial partitioning level (defaults to GROUP)
        * end_level(optional) - The final partitioning level (defaults to MESH)
 
@@ -103,7 +123,7 @@ namespace xgcp {
        from `start_level` to `end_level` inclusively. The accumulation order is
        MESH > TORODIAL > GROUP. By default all levels will be accumulated.
 
-       MESH scatter is performed using pumipic::Mesh's reduceCommArray with max
+       MESH scatter is performed using pumipic::Mesh's reduceCommArray with accept
          operation for each group leader's major plane
        TORODIAL scatter is done by sending values of each group leader's major plane
          to the neighboring plane's minor plane
@@ -112,7 +132,7 @@ namespace xgcp {
        Note: end_level must be greater than start_level
      */
     template <class T>
-    void scatterField(int dim, Omega_h::Write<T> field,
+    void scatterField(int dim, Omega_h::Write<T>& major, Omega_h::Write<T>& minor,
                       PartitionLevel start_level = MESH, PartitionLevel end_level = GROUP);
 
   private:
@@ -128,11 +148,91 @@ namespace xgcp {
     //Torodial angle of the plane that this process is leader of
     fp_t major_phi;
 
-    //Forward and backward ion projection mapping for each ring point to 3 mesh vertices
-    Omega_h::LOs forward_ion_gyro_map, backward_ion_gyro_map;
+    //Major and minor ion projection mapping for each ring point to 3 mesh vertices
+    Omega_h::LOs major_ion_gyro_map, minor_ion_gyro_map;
 
-    //Forward and backward electron projection mapping for each vertex to 3 mesh vertices
-    Omega_h::LOs forward_electron_gyro_map, backward_electron_gyro_map;
+    //Major and minor electron projection mapping for each vertex to 3 mesh vertices
+    Omega_h::LOs major_electron_gyro_map, minor_electron_gyro_map;
+
+    //Tags of fields for the major and minor plane contributions on vertices
+    GyroField major_plane, minor_plane;
 
   };
+
+  //TODO Create methods to distringuish between CUDA_AWARE MPI and non cuda aware
+  template <class T>
+  void Mesh::gatherField(int dim, Omega_h::Write<T>& major, Omega_h::Read<T> minor,
+                         PartitionLevel start_level, PartitionLevel end_level) {
+    if (start_level <= TORODIAL && end_level >= GROUP) {
+      Omega_h::HostWrite<T> major_host(major);
+      Omega_h::HostRead<T> minor_host(minor);
+      //Reduce to group leader
+      if (start_level <= GROUP && end_level >= GROUP) {
+        if(isGroupLeader())
+          MPI_Reduce(MPI_IN_PLACE, major_host.data(), major_host.size(), MpiTraits<T>::datatype(),
+                     MPI_SUM, groupLeader(), groupComm());
+        else
+          MPI_Reduce(major_host.data(), major_host.data(), major_host.size(),
+                     MpiTraits<T>::datatype(), MPI_SUM, groupLeader(), groupComm());
+      }
+      //Send minor contributions to neighbor and recv to major plane
+      if (start_level <= TORODIAL && end_level >= TORODIAL && isGroupLeader()) {
+        MPI_Request minor_req, major_req;
+        MPI_Isend(minor_host.data(), minor_host.size(), MpiTraits<T>::datatype(),
+                  torodialMinorNeighbor(), 0, torodialComm(), &minor_req);
+        Omega_h::HostWrite<T> major_recv(major_host.size(), "major_recv");
+        MPI_Irecv(major_recv.data(), major_recv.size(), MpiTraits<T>::datatype(),
+                  torodialMajorNeighbor(), 0, torodialComm(), &major_req);
+        MPI_Status minor_stat, major_stat;
+        MPI_Wait(&major_req, &major_stat);
+
+        //??? Is it worth moving the data to the device to sum?
+        for (int i = 0; i < major_recv.size(); ++i)
+          major_host[i] += major_recv[i];
+        MPI_Wait(&minor_req, &minor_stat);
+      }
+      major = Omega_h::Write<T>(major_host);
+    }
+    //Perform mesh reduce on mesh for each plane
+    if (start_level <= MESH && end_level >= MESH && isGroupLeader()) {
+      picparts->reduceCommArray(0, pumipic::Mesh::SUM_OP, major);
+    }
+  }
+
+  template <class T>
+  void Mesh::scatterField(int dim, Omega_h::Write<T>& major, Omega_h::Write<T>& minor,
+                          PartitionLevel start_level, PartitionLevel end_level) {
+    if (start_level >= MESH && end_level <= MESH && isGroupLeader()) {
+      picparts->reduceCommArray(0, pumipic::Mesh::BCAST_OP, major);
+    }
+    if (start_level >= GROUP && end_level <= TORODIAL) {
+      Omega_h::HostWrite<T> major_host(major);
+      Omega_h::HostWrite<T> minor_host(minor);
+      //Send major contributions to neighbor and recv to minor plane
+      if (start_level >= TORODIAL && end_level <= TORODIAL && isGroupLeader()) {
+        MPI_Request minor_req, major_req;
+        MPI_Isend(major_host.data(), major_host.size(), MpiTraits<T>::datatype(),
+                  torodialMajorNeighbor(), 0, torodialComm(), &major_req);
+        Omega_h::HostWrite<T> minor_recv(minor_host.size(), "minor_recv");
+        MPI_Irecv(minor_recv.data(), minor_recv.size(), MpiTraits<T>::datatype(),
+                  torodialMinorNeighbor(), 0, torodialComm(), &minor_req);
+        MPI_Status minor_stat, major_stat;
+        MPI_Wait(&minor_req, &minor_stat);
+
+        //??? Is it worth moving the data to the device to set values?
+        for (int i = 0; i < minor_recv.size(); ++i)
+          minor_host[i] = minor_recv[i];
+        MPI_Wait(&major_req, &major_stat);
+      }
+      if (start_level >= GROUP && end_level <= GROUP) {
+        MPI_Bcast(minor_host.data(), minor_host.size(), MpiTraits<T>::datatype(),
+                  groupLeader(), groupComm());
+        MPI_Bcast(major_host.data(), major_host.size(), MpiTraits<T>::datatype(),
+                  groupLeader(), groupComm());
+
+      }
+      minor = Omega_h::Write<T>(minor_host);
+      major = Omega_h::Write<T>(major_host);
+    }
+  }
 }

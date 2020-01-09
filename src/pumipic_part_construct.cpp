@@ -171,6 +171,9 @@ namespace pumipic {
         rank_lids_per_dim[i] = rank_lid_per_dim[i];
         ent_owner_per_dim[i] = owner_dim[i];
         //We dont need to setup communication arrays because an allreduce is used
+        Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(owner_dim[i], comm_size);
+        setupComm(i, rank_offset_nents[i], picpart_offset_nents, owner_dim[i]);
+
       }
       return;
     }

@@ -4,6 +4,7 @@
 #include <thread>
 #include <xgcp_mesh.hpp>
 #include <xgcp_push.hpp>
+#include <xgcp_gyro_scatter.hpp>
 #include <SCS_Macros.h>
 #include <SellCSigma.h>
 #include <Omega_h_for.hpp>
@@ -28,6 +29,8 @@ int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
                       const int mdlFace, const int numPtclsPerRank);
 void setPtclIds(SCS_I* scs);
 void search(xgcp::Mesh& picparts, SCS_I* scs, bool output);
+void tagParentElements(xgcp::Mesh& mesh, SCS_I* scs, int loop);
+void render(xgcp::Mesh& mesh, int iter, int comm_rank);
 
 int main(int argc, char* argv[]) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -175,11 +178,21 @@ int main(int argc, char* argv[]) {
     MPI_Barrier(MPI_COMM_WORLD);
     //Perform search and rebuild
     search(mesh, scs, output);
+    scs_np = scs->nPtcls();
+    MPI_Allreduce(&scs_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if(totNp == 0) {
+      fprintf(stderr, "No particles remain... exiting push loop\n");
+      break;
+    }
+    tagParentElements(mesh,scs,iter);
+
     //Perform gyro scatter
+    xgcp::gyroScatter(mesh, scs);
   }
-  //cleanup
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
+  mesh.applyGyroFieldsToTags();
+  render(mesh, iter, comm_rank);
 
   //cleanup
   delete scs;
@@ -270,39 +283,34 @@ int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
   if(!numMarked)
     return 0;
 
-  int nppe = numPtclsPerRank / numMarked;
-  o::HostWrite<o::LO> rand_per_elem(mesh->nelems());
+  double nppe = numPtclsPerRank / numMarked;
+  int ne = mesh->nelems();
+  o::HostWrite<o::LO> rand_per_elem(ne);
+  for (int i = 0; i < ne; ++i)
+    rand_per_elem[i] = 0;
 
   //Gaussian Random generator with mean = number of particles per element
-  std::default_random_engine generator(ELEMENT_SEED);
-  std::normal_distribution<double> dist(nppe, nppe / 4);
+
+  int r;
+  MPI_Comm_rank(MPI_COMM_WORLD, &r);
+  r+= 1;
+
+  std::default_random_engine generator(ELEMENT_SEED * r * r ^ (12345 * r));
+  std::normal_distribution<double> dist(ne/2.0, ne / 4.0);
 
   Omega_h::HostWrite<o::LO> isFaceOnClass_host(isFaceOnClass);
   int total = 0;
-  int last = -1;
-  for (int i = 0; i < mesh->nelems(); ++i) {
-    rand_per_elem[i] = 0;
-    if (isFaceOnClass_host[i] && total < numPtclsPerRank ) {
-      last = i;
-      rand_per_elem[i] = round(dist(generator));
-      if (rand_per_elem[i] < 0)
-        rand_per_elem[i] = 0;
-      total += rand_per_elem[i];
-      //Stop if we hit the number of particles
-      if (total > numPtclsPerRank) {
-        int over = total - numPtclsPerRank;
-        rand_per_elem[i] -= over;
-      }
-    }
+  while (total < numPtclsPerRank) {
+    int elem = round(dist(generator));
+    if (elem < 0 || elem >= ne)
+      continue;
+    if (!isFaceOnClass_host[elem])
+      continue;
+    ++rand_per_elem[elem];
+    ++total;
   }
-  //If we didn't put all particles in, fill them in the last element we touched
-  if (total < numPtclsPerRank) {
-    int under = numPtclsPerRank - total;
-    rand_per_elem[last] += under;
-  }
+
   o::Write<o::LO> ppe_write(rand_per_elem);
-
-
   int np = o::get_sum(o::LOs(ppe_write));
   o::parallel_for(mesh->nelems(), OMEGA_H_LAMBDA(const o::LO& i) {
     ppe(i) = ppe_write[i];
@@ -313,9 +321,11 @@ int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
 void setInitialPtclCoords(p::Mesh* picparts, SCS_I* scs, bool output) {
   //Randomly distrubite particles within each element (uniformly within the element)
   //Create a deterministic generation of random numbers on the host with 2 number per particle
-
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  comm_rank++;
   o::HostWrite<o::Real> rand_num_per_ptcl(2*scs->capacity());
-  std::default_random_engine generator(PARTICLE_SEED);
+  std::default_random_engine generator(PARTICLE_SEED / comm_rank);
   std::uniform_real_distribution<double> dist(0.0, 1.0);
 
   for (int i = 0; i < scs->capacity(); ++i) {
@@ -422,4 +432,31 @@ void search(xgcp::Mesh& mesh, SCS_I* scs, bool output) {
   assert(isFound);
   //rebuild the SCS to set the new element-to-particle lists
   rebuild(mesh, scs, elem_ids, output);
+}
+
+void tagParentElements(xgcp::Mesh& mesh, SCS_I* scs, int loop) {
+  //read from the tag
+  o::LOs ehp_nm1 = mesh->get_array<o::LO>(mesh.dim(), "has_particles");
+  o::Write<o::LO> ehp_nm0(ehp_nm1.size());
+  auto set_ehp = OMEGA_H_LAMBDA(o::LO i) {
+    ehp_nm0[i] = ehp_nm1[i];
+  };
+  o::parallel_for(ehp_nm1.size(), set_ehp, "set_ehp");
+
+  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    (void) pid;
+    if(mask > 0)
+      ehp_nm0[e] = loop;
+  };
+  scs->parallel_for(lamb);
+
+  o::LOs ehp_nm0_r(ehp_nm0);
+  mesh->set_tag(o::FACE, "has_particles", ehp_nm0_r);
+}
+
+void render(xgcp::Mesh& mesh, int iter, int comm_rank) {
+  std::stringstream ss;
+  ss << "pseudoPush_r" << comm_rank<<"_t"<<iter;
+  std::string s = ss.str();
+  Omega_h::vtk::write_parallel(s, mesh.omegaMesh(), mesh.dim());
 }

@@ -60,7 +60,7 @@ namespace xgcp {
     setGyroConfig(input);
     if (!worldRank())
       printGyroConfig();
-    createIonGyroRingMappings(mesh, forward_ion_gyro_map, backward_ion_gyro_map);
+    createIonGyroRingMappings(mesh, major_ion_gyro_map, minor_ion_gyro_map);
 
     //TODO build electron mapping
 
@@ -70,12 +70,30 @@ namespace xgcp {
     minor_phi = major_phi - delta_phi;
     if (torodial_comm->rank() == 0)
       minor_phi += 2*M_PI;
+    major_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
+    minor_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
+    mesh->add_tag(0, "major_plane", 1, GyroFieldR(major_plane));
+    mesh->add_tag(0, "minor_plane", 1, GyroFieldR(minor_plane));
   }
 
   Mesh::~Mesh() {
     delete picparts;
     if (full_mesh)
       delete full_mesh;
+  }
+
+  void Mesh::getGyroFields(GyroField& ma_plane, GyroField& mi_plane) {
+    ma_plane = major_plane;
+    mi_plane = minor_plane;
+  }
+  void Mesh::applyGyroFieldsToTags() {
+    o::Mesh* mesh = omegaMesh();
+    mesh->set_tag(0, "major_plane", GyroFieldR(major_plane));
+    mesh->set_tag(0, "minor_plane", GyroFieldR(minor_plane));
+  }
+  void Mesh::getIonGyroMappings(Omega_h::LOs& major_map, Omega_h::LOs& minor_map) {
+    major_map = major_ion_gyro_map;
+    minor_map = minor_ion_gyro_map;
   }
 }
 

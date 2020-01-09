@@ -4,6 +4,9 @@
 #include <SCS_Macros.h>
 
 namespace xgcp {
+  using GyroField=Mesh::GyroField;
+  using GyroFieldR=Mesh::GyroFieldR;
+
   namespace {
     o::Real gyro_rmax = 0.038; //max ring radius
     o::LO gyro_num_rings = 3;
@@ -75,7 +78,7 @@ namespace xgcp {
     const auto numElms = mesh->nelems();
     //Gyro avg mapping: 3 vertices per ring point (Assumes all elements are triangles)
     const o::LO nvpe = 3;
-    o::Write<o::LO> gyro_avg_map(nvpe * num_points, -1);
+    o::Write<o::LO> gyro_avg_map(nvpe * num_points, -1, "gyro_map");
     auto elm2Verts = mesh->ask_down(mesh->dim(), 0);
     auto createGyroMapping = SCS_LAMBDA(const int&, const int& pid, const int& mask) {
       const o::LO parent = elem_ids[pid];
@@ -94,8 +97,8 @@ namespace xgcp {
   }
 
 /* Build gyro-avg mapping */
-  void createIonGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
-                              o::LOs& backward_map) {
+  void createIonGyroRingMappings(o::Mesh* mesh, o::LOs& major_map,
+                              o::LOs& minor_map) {
     Kokkos::Profiling::pushRegion("xgcm_createGyroRingMappings");
     const auto gr = gyro_rmax;
     const auto gnr = gyro_num_rings;
@@ -122,13 +125,13 @@ namespace xgcp {
     o::parallel_for(num_points, generateRingPoints, "generateRingPoints");
 
     //Project ring points to +/- planes
-    o::Write<o::Real> forward_ring_points(num_points * 2);
-    o::Write<o::Real> backward_ring_points(num_points * 2);
+    o::Write<o::Real> major_ring_points(num_points * 2);
+    o::Write<o::Real> minor_ring_points(num_points * 2);
     auto projectCoords = OMEGA_H_LAMBDA(const o::LO& id) {
       //TODO Project the points along field lines
       for (int i = 0; i < 2; ++i) {
-        forward_ring_points[id*2+i] = ring_points[id*2+i];
-        backward_ring_points[id*2+i] = ring_points[id*2+i];
+        major_ring_points[id*2+i] = ring_points[id*2+i];
+        minor_ring_points[id*2+i] = ring_points[id*2+i];
       }
     };
     o::parallel_for(num_points, projectCoords, "projectCoords");
@@ -157,17 +160,16 @@ namespace xgcp {
     o::parallel_for(mesh->nelems(), calculateCentroids, "calculateCentroids");
 
     //Create both mapping
-    forward_map = searchAndBuildMap(mesh, o::Reals(element_centroids),
-                                    o::Reals(forward_ring_points),
+    major_map = searchAndBuildMap(mesh, o::Reals(element_centroids),
+                                    o::Reals(major_ring_points),
                                     o::LOs(starting_element));
-    backward_map = searchAndBuildMap(mesh, o::Reals(element_centroids),
-                                     o::Reals(backward_ring_points),
+    minor_map = searchAndBuildMap(mesh, o::Reals(element_centroids),
+                                     o::Reals(minor_ring_points),
                                      o::LOs(starting_element));
     Kokkos::Profiling::popRegion();
   }
 
-  void gyroScatter(Mesh& m, SCS_I* scs, o::LOs v2v, std::string scatterTagName) {
-    o::Mesh* mesh = m.omegaMesh();
+  void gyroScatter(Mesh& mesh, SCS_I* scs, o::LOs v2v, GyroField scatter_w) {
     const auto btime = pumipic_prebarrier();
     Kokkos::Timer timer;
     Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
@@ -204,8 +206,6 @@ namespace xgcp {
       }
     };
     scs->parallel_for(accumulateToRings);
-    const Omega_h::LO nverts = mesh->nverts();
-    o::Write<o::Real> scatter_w(mesh->nverts(),0,"scatterTag_w");
     auto scatterToMappedVerts = OMEGA_H_LAMBDA(const o::LO& v) {
       const auto vtxIdx = v*gnr*gppr;
       const auto gyroVtxIdx = v*gnr;
@@ -224,43 +224,48 @@ namespace xgcp {
       }
     };
     o::parallel_for(mesh->nverts(), scatterToMappedVerts, "xgcm_scatterToMappedVerts");
-    mesh->set_tag(o::VERT, scatterTagName, o::Reals(scatter_w));
     if(!rank || rank == comm_size/2)
       fprintf(stderr, "%d gyro scatter (seconds) %f pre-barrier (seconds) %f\n",
               rank, timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 
-  void gyroSync(Mesh& m, const std::string& fwdTagName,
-                const std::string& bkwdTagName, const std::string& syncTagName) {
-    p::Mesh* picparts = m.pumipicMesh();
+  void gyroSync(Mesh& m, GyroField major, GyroField minor) {
     const auto btime = pumipic_prebarrier();
     Kokkos::Timer timer;
     Kokkos::Profiling::pushRegion("xgcm_gyroSync");
     int rank, comm_size;
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-    Omega_h::Write<Omega_h::Real> sync_array = picparts->createCommArray(0, 2,
-                                                                         Omega_h::Real(0.0));
-    Omega_h::Mesh* mesh = picparts->mesh();
-    Omega_h::Read<Omega_h::Real> fwdTag = mesh->get_array<Omega_h::Real>(0, fwdTagName);
-    Omega_h::Read<Omega_h::Real> bkwdTag = mesh->get_array<Omega_h::Real>(0, bkwdTagName);
-
-    auto setSyncArray = OMEGA_H_LAMBDA(const Omega_h::LO vtx_id) {
-      sync_array[2*vtx_id] = fwdTag[vtx_id];
-      sync_array[2*vtx_id+1] = bkwdTag[vtx_id];
-    };
-    Omega_h::parallel_for(mesh->nverts(), setSyncArray);
-
-    Kokkos::Timer reducetimer;
-    picparts->reduceCommArray(0, p::Mesh::Op::SUM_OP, sync_array);
-    const auto rtime = reducetimer.seconds();
-
-    mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
+    Kokkos::Timer gathertimer;
+    m.gatherField(0, major, GyroFieldR(minor));
+    const auto gtime = gathertimer.seconds();
+    /*
+       Note: In the future, a solve will happen between the gather and scatter field calls.
+             For now we will do one after the other to essentially perform an allreduce
+    */
+    Kokkos::Timer scattertimer;
+    m.scatterField(0, major, minor);
+    const auto stime = scattertimer.seconds();
     if(!rank || rank == comm_size/2) {
-      fprintf(stderr, "%d gyro sync times (sec): sync %f pre-barrier %f reduction %f\n",
-              rank, timer.seconds(), btime, rtime);
+      fprintf(stderr, "%d gyro sync times (sec): sync %f pre-barrier %f gather %f "
+              "scatter %f\n",
+              rank, timer.seconds(), btime, gtime, stime);
     }
     Kokkos::Profiling::popRegion();
+  }
+
+  void gyroScatter(Mesh& mesh, SCS_I* scs) {
+    GyroField major, minor;
+    mesh.getGyroFields(major,minor);
+    Omega_h::LOs major_map, minor_map;
+    mesh.getIonGyroMappings(major_map, minor_map);
+    gyroScatter(mesh, scs, major_map, major);
+    gyroScatter(mesh, scs, minor_map, minor);
+    gyroSync(mesh, major, minor);
+  }
+
+  void gyroScatter(Mesh& mesh, SCS_E* scs) {
+
   }
 }

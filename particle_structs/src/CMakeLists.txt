@@ -11,6 +11,10 @@ set(HEADERS
   scs/SCS_Macros.h
   scs/SCS_Types.h
   scs/SCSPair.h
+  scs/SCS_sort.h
+  scs/SCS_rebuild.h
+  scs/SCS_migrate.h
+  scs/SCS_buildFns.h
   scs/SellCSigma.h
   csr/CSR.hpp
   particle_structs.hpp

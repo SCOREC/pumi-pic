@@ -67,6 +67,8 @@ int main(int argc, char* argv[]) {
                      particle_elements, particle_info);
     */
 
+
+
     //Run each structure on every test
     for (int i = 0; i < structures.size(); ++i) {
       fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
@@ -75,6 +77,7 @@ int main(int argc, char* argv[]) {
     }
 
     //Cleanup
+    ps::destroyViews<Types>(particle_info);
     for (size_t i = 0; i < structures.size(); ++i)
       delete structures[i];
     structures.clear();

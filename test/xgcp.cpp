@@ -289,27 +289,52 @@ int setSourceElements(p::Mesh* picparts, SCS_I::kkLidView ppe,
   for (int i = 0; i < ne; ++i)
     rand_per_elem[i] = 0;
 
-  //Gaussian Random generator with mean = number of particles per element
-
   int r;
   MPI_Comm_rank(MPI_COMM_WORLD, &r);
   r+= 1;
-
-  std::default_random_engine generator(ELEMENT_SEED * r * r ^ (12345 * r));
-  std::normal_distribution<double> dist(ne/2.0, ne / 4.0);
-
-  Omega_h::HostWrite<o::LO> isFaceOnClass_host(isFaceOnClass);
   int total = 0;
-  while (total < numPtclsPerRank) {
-    int elem = round(dist(generator));
-    if (elem < 0 || elem >= ne)
-      continue;
-    if (!isFaceOnClass_host[elem])
-      continue;
-    ++rand_per_elem[elem];
-    ++total;
-  }
+  std::default_random_engine generator(ELEMENT_SEED * r * r ^ (12345 * r));
+  Omega_h::HostRead<o::LO> isFaceOnClass_host(isFaceOnClass);
 
+  if (nppe < 5) {
+    //Gaussian Random generator to randomly select an element to add each particle to
+    std::normal_distribution<double> dist(ne/2.0, ne / 4.0);
+
+    while (total < numPtclsPerRank) {
+      int elem = round(dist(generator));
+      if (elem < 0 || elem >= ne)
+        continue;
+      if (!isFaceOnClass_host[elem])
+        continue;
+      ++rand_per_elem[elem];
+      ++total;
+    }
+  }
+  else {
+    //Gaussian Random generator with mean = number of particles per element
+    std::normal_distribution<double> dist(nppe, nppe / 4);
+    int last = -1;
+    for (int i = 0; i < mesh->nelems(); ++i) {
+      rand_per_elem[i] = 0;
+      if (isFaceOnClass_host[i] && total < numPtclsPerRank ) {
+        last = i;
+        rand_per_elem[i] = round(dist(generator));
+        if (rand_per_elem[i] < 0)
+          rand_per_elem[i] = 0;
+        total += rand_per_elem[i];
+        //Stop if we hit the number of particles
+        if (total > numPtclsPerRank) {
+          int over = total - numPtclsPerRank;
+          rand_per_elem[i] -= over;
+        }
+      }
+    }
+    //If we didn't put all particles in, fill them in the last element we touched
+    if (total < numPtclsPerRank) {
+      int under = numPtclsPerRank - total;
+      rand_per_elem[last] += under;
+    }
+  }
   o::Write<o::LO> ppe_write(rand_per_elem);
   int np = o::get_sum(o::LOs(ppe_write));
   o::parallel_for(mesh->nelems(), OMEGA_H_LAMBDA(const o::LO& i) {

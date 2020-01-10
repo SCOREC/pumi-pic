@@ -20,7 +20,7 @@ target_include_directories(xgcp INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(xgcp particle_structures::particleStructs Omega_h::omega_h pumipic)
+target_link_libraries(xgcp ${ALL_LIBS} Omega_h::omega_h)
 pumipic_export_lib(xgcp "${HEADERS}")
 
 bob_end_subdir()

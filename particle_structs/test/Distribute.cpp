@@ -137,7 +137,7 @@ bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, gid_t*
   int starting_index = (ne-1) * comm_rank;
   for (int i = 0; i < ne; ++i)
     gids[i] = starting_index+i;
-  if (comm_rank == comm_size-1 && comm_size != 1)
+  if (comm_rank == comm_size-1 && comm_size != 1 && ne > 0)
     gids[ne-1] = 0;
   return true;
 }

@@ -27,9 +27,12 @@ set(SOURCES
 add_library(particleStructs ${SOURCES})
 target_link_libraries(particleStructs support)
 target_include_directories(particleStructs INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>)
+target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/scs>
   $<INSTALL_INTERFACE:include>)
 
-ps_export_lib(particleStructs "${HEADERS}")
+pumipic_export_lib(particleStructs "${HEADERS}")
 
 bob_end_subdir()

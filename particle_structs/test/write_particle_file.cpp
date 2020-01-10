@@ -45,6 +45,10 @@ int main(int argc, char* argv[]) {
     ps::hostToDevice(ppe_k, ppe);
     ps::hostToDevice(eGids_k, gids);
     ps::hostToDevice(pElems_k, pElems);
+    delete [] gids;
+    delete [] ppe;
+    delete [] ids;
+    delete [] pElems;
 
     auto pids = ps::getMemberView<Types, 0>(particle_info);
     Kokkos::parallel_for(num_ptcls, KOKKOS_LAMBDA(const int& i) {
@@ -54,6 +58,7 @@ int main(int argc, char* argv[]) {
     char filename[256];
     sprintf(filename, "%s_%d.ptl", argv[5], comm_rank);
     writeParticles(filename, num_elems, num_ptcls, ppe_k, eGids_k, pElems_k, particle_info);
+
   }
   MPI_Finalize();
   Kokkos::finalize();

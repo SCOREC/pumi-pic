@@ -1,22 +1,17 @@
 #include <Omega_h_mesh.hpp>
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
-#include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
-#include <Distribute.h>
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
 
-using particle_structs::fp_t;
 using particle_structs::lid_t;
-using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
+using pumipic::fp_t;
+using pumipic::Vector3d;
 
 namespace o = Omega_h;
 namespace p = pumipic;

@@ -41,11 +41,6 @@ set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 bob_public_dep(Omega_h)
 
-find_package(particle_structures 0.0.1 REQUIRED)
-set(pumipic_USE_particle_structures_DEFAULT ON)
-message(STATUS "Found particle_structures: ${particle_structures_VERSION}")
-bob_public_dep(particle_structures)
-
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")
@@ -59,10 +54,25 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
-#code
+#particle structures
+add_subdirectory(particle_structs)
+set(ALL_LIBS
+  support
+  particleStructs
+  )
+#pumipic
 add_subdirectory(src)
+set(ALL_LIBS
+  ${ALL_LIBS}
+  pumipic
+  )
+
 #xgcp
 add_subdirectory(xgcp)
+set(ALL_LIBS
+  ${ALL_LIBS}
+  xgcp
+  )
 
 if(IS_TESTING)
   add_subdirectory(test)

@@ -2,23 +2,18 @@
 #include <Omega_h_bbox.hpp>
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
-#include <psTypes.h>
 #include <SellCSigma.h>
 #include <SCS_Macros.h>
-#include <Distribute.h>
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
 #define NUM_ITERATIONS 30
 
-using particle_structs::fp_t;
 using particle_structs::lid_t;
-using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
+using pumipic::fp_t;
+using pumipic::Vector3d;
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -181,7 +176,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
     }
   };
   scs->parallel_for(lamb);
-  
+
   scs->migrate(scs_elem_ids, scs_process_ids);
 
   printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
@@ -431,21 +426,21 @@ int main(int argc, char** argv) {
     }
     int own;
     int index = 0;
-    while(in_str >> own) 
+    while(in_str >> own)
       host_owners[index++] = own;
   }
   else
     for (int i = 0; i < full_mesh.nelems(); ++i)
       host_owners[i] = 0;
   Omega_h::Write<Omega_h::LO> owner(host_owners);
-  
+
   //Create Picparts with the full mesh
   p::Mesh picparts(full_mesh,owner);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
-  
+
   if (comm_rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(),
            mesh->nfaces(), mesh->nelems());
 
   /* Particle data */
@@ -539,7 +534,7 @@ int main(int argc, char** argv) {
     if (comm_rank == 0)
       fprintf(stderr, "search, rebuild, and transfer (seconds) %f\n", timer.seconds());
     scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
+    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -549,7 +544,7 @@ int main(int argc, char** argv) {
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
-  
+
   //cleanup
   delete scs;
 

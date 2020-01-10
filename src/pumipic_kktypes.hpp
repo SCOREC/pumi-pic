@@ -3,14 +3,20 @@
 
 #include <Kokkos_Core.hpp>
 #include <SellCSigma.h>
-#include <psTypes.h>
 #include <chrono>
 #include <thread>
+#include <PS_Types.h>
 
 namespace pumipic {
-  using particle_structs::fp_t;
   using particle_structs::lid_t;
-  using particle_structs::Vector3d;
+
+#ifdef FP64
+  typedef double fp_t;
+#endif
+#ifdef FP32
+  typedef float fp_t;
+#endif
+  typedef fp_t Vector3d[3];
 
   typedef Kokkos::DefaultExecutionSpace exe_space;
   typedef exe_space::device_type device_type;

@@ -12,6 +12,8 @@
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
+bool allowInPlaceRebuild;
+
 void getMemImbalance(int hasptcls) {
 #ifdef SCS_USE_CUDA
   int comm_rank, comm_size;
@@ -140,7 +142,8 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
     }
   };
   scs->parallel_for(lamb);
-
+  
+  scs->setShuffling(allowInPlaceRebuild);
   scs->migrate(scs_elem_ids, scs_process_ids);
 
   ids = scs->get<2>();
@@ -343,14 +346,15 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 10;
+  const int numargs = 11;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
       "<max initial model face> <maxIterations> "
       "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
       "<degrees per elliptical push>"
-      "<enable prebarrier>";
+      "<enable prebarrier>"
+      "<force out-of-place rebuild>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -378,12 +382,15 @@ int main(int argc, char** argv) {
   const auto vtx_to_elm = full_mesh.ask_up(0, 2);
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
 
+
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
     fprintf(stderr, "partition file %s\n", argv[2]);
     fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
+    fprintf(stderr, "allow in-place rebuild %d\n", argv[10]);
   }
 
+  allowInPlaceRebuild=argv[10];
   const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
   const auto safeMethod = pumipic::Input::getMethod(argv[7]);
   assert(bufferMethod>=0);

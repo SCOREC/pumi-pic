@@ -53,6 +53,42 @@ namespace particle_structs {
         thread.team_reduce(Kokkos::Max<lid_t,MemSpace>(width));
         chunk_widths[chunk_id] = width;
       });
+
+    //Apply padding
+    if (shuffle_padding > 0) {
+      lid_t cw_sum;
+      Kokkos::parallel_reduce("sum_chunk_widths", nchunks,
+                              KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
+        sum += chunk_widths[i];
+      }, cw_sum);
+      double cw_sum_inv;
+      Kokkos::parallel_reduce("sum_chunk_widths", nchunks,
+                              KOKKOS_LAMBDA(const lid_t& i, double& sum) {
+        sum += 1.0/chunk_widths[i];
+      }, cw_sum_inv);
+
+      if (cw_sum > 0) {
+        const lid_t cw_sum2 = cw_sum / cw_sum_inv * shuffle_padding;
+        const lid_t avg_pad = cw_sum * shuffle_padding / nchunks;
+        const double local_padding = shuffle_padding;
+
+        if (pad_strat == PAD_EVENLY)
+          Kokkos::parallel_for(nchunks, KOKKOS_LAMBDA(const lid_t& i) {
+              chunk_widths[i] += avg_pad;
+            });
+        else if (pad_strat == PAD_PROPORTIONALLY)
+          Kokkos::parallel_for(nchunks, KOKKOS_LAMBDA(const lid_t& i) {
+              chunk_widths[i] += chunk_widths[i] * local_padding;
+            });
+        else if (pad_strat == PAD_INVERSELY)
+          Kokkos::parallel_for(nchunks, KOKKOS_LAMBDA(const lid_t& i) {
+              if (chunk_widths[i] != 0)
+                chunk_widths[i] += cw_sum2 / chunk_widths[i];
+              else
+                chunk_widths[i] += cw_sum2;
+            });
+      }
+    }
   }
 
   template<class DataTypes, typename MemSpace>

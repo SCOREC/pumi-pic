@@ -20,6 +20,8 @@ make_test(lambdaTest lambdaTest.cpp)
 
 make_test(migrateTest migrateTest.cpp)
 
+make_test(test_scs_padding scs_padding.cpp)
+
 make_test(write_particles write_particle_file.cpp)
 make_test(test_structure test_structure.cpp)
 

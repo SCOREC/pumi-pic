@@ -4,6 +4,8 @@ add_test(NAME buildSCS COMMAND ./buildSCSTest)
 
 add_test(NAME initParticles COMMAND ./initParticles)
 
+add_test(NAME scs_padding COMMAND ./test_scs_padding)
+
 add_test(NAME rebuild COMMAND ./rebuild)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)

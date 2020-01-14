@@ -13,7 +13,7 @@
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Sort.hpp>
 #include "SCSPair.h"
-
+#include "scs_input.hpp"
 #ifdef PS_USE_CUDA
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
@@ -40,7 +40,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
-
+  typedef SCS_Input<DataTypes, MemSpace> Input_T;
   SellCSigma() = delete;
   SellCSigma(const SellCSigma&) = delete;
   SellCSigma& operator=(const SellCSigma&) = delete;
@@ -60,6 +60,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
              kkLidView particles_per_element, kkGidView element_gids,
              kkLidView particle_elements = kkLidView(),
              MTVs particle_info = NULL);
+  SellCSigma(SCS_Input<DataTypes, MemSpace>&);
   ~SellCSigma();
 
   //Functions from ParticleStructure
@@ -127,8 +128,8 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
 
   //Do not call these functions:
   int chooseChunkHeight(int maxC, kkLidView ptcls_per_elem);
- void sigmaSort(PairView& ptcl_pairs, lid_t num_elems,
-                kkLidView ptcls_per_elem, lid_t sigma);
+  void sigmaSort(PairView& ptcl_pairs, lid_t num_elems,
+                 kkLidView ptcls_per_elem, lid_t sigma);
   void constructChunks(PairView ptcls, lid_t& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element,
                        kkLidView& element_row);
@@ -183,21 +184,30 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   //Pointers to the start of each SCS for each data type
   MTVs scs_data_swap;
   std::size_t current_size, swap_size;
-  void destroy();
 
+  //Padding terms
+  double extra_padding;
+  double shuffle_padding;
+  PaddingStrategy pad_strat;
   //True - try shuffling every rebuild, false - only rebuild
   bool tryShuffling;
   //Metric Info
   lid_t num_empty_elements;
+
+  //Private construct function
+  void construct(kkLidView ptcls_per_elem,
+                 kkGidView element_gids,
+                 kkLidView particle_elements,
+                 MTVs particle_info);
+  void destroy();
+
 };
 
 template<class DataTypes, typename MemSpace>
-SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne,
-                                            lid_t np, kkLidView ptcls_per_elem,
-                                            kkGidView element_gids,
-                                            kkLidView particle_elements,
-                                            MTVs particle_info) :
- ParticleStructure<DataTypes, MemSpace>(), policy(p), element_gid_to_lid(ne) {
+void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
+                                                kkGidView element_gids,
+                                                kkLidView particle_elements,
+                                                MTVs particle_info) {
   Kokkos::Profiling::pushRegion("scs_construction");
   tryShuffling = true;
   int comm_size;
@@ -207,11 +217,6 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
 
   C_max = policy.team_size();
   C_ = chooseChunkHeight(C_max, ptcls_per_elem);
-
-  sigma = sig;
-  V_ = v;
-  num_elems = ne;
-  num_ptcls = np;
 
   if(!comm_rank)
     fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
@@ -237,11 +242,13 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   //Allocate the SCS and backup with 10% extra space
   lid_t cap = getLastValue<lid_t>(offsets);
   particle_mask = kkLidView("particle_mask", cap);
-  CreateViews<device_type, DataTypes>(ptcl_data, cap*1.1);
-  CreateViews<device_type, DataTypes>(scs_data_swap, cap*1.1);
-  swap_size = current_size = cap*1.1;
+  if (extra_padding > 0)
+    cap *= (1 + extra_padding);
+  CreateViews<device_type, DataTypes>(ptcl_data, cap);
+  CreateViews<device_type, DataTypes>(scs_data_swap, cap);
+  swap_size = current_size = cap;
 
-  if (np > 0)
+  if (num_ptcls > 0)
     setupParticleMask(particle_mask, ptcls, chunk_widths);
 
   //If particle info is provided then enter the information
@@ -252,6 +259,37 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   Kokkos::Profiling::popRegion();
 }
 
+
+template<class DataTypes, typename MemSpace>
+SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, lid_t ne,
+                                            lid_t np, kkLidView ptcls_per_elem,
+                                            kkGidView element_gids,
+                                            kkLidView particle_elements,
+                                            MTVs particle_info) :
+  ParticleStructure<DataTypes, MemSpace>(), policy(p), element_gid_to_lid(ne) {
+  //Set variables
+  sigma = sig;
+  V_ = v;
+  num_elems = ne;
+  num_ptcls = np;
+  shuffle_padding = 0.0;
+  extra_padding = 0.1;
+  pad_strat = PAD_EVENLY;
+  construct(ptcls_per_elem, element_gids, particle_elements, particle_info);
+}
+
+template<class DataTypes, typename MemSpace>
+SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
+  ParticleStructure<DataTypes, MemSpace>(), policy(input.policy), element_gid_to_lid(input.ne) {
+  sigma = input.sig;
+  V_ = input.V;
+  num_elems = input.ne;
+  num_ptcls = input.np;
+  shuffle_padding = input.shuffle_padding;
+  extra_padding = input.extra_padding;
+  pad_strat = input.padding_strat;
+  construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
+}
 template<class DataTypes, typename MemSpace>
 void SellCSigma<DataTypes, MemSpace>::destroy() {
   destroyViews<DataTypes, memory_space>(ptcl_data);

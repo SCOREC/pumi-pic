@@ -16,6 +16,7 @@ set(HEADERS
   scs/SCS_migrate.h
   scs/SCS_buildFns.h
   scs/SellCSigma.h
+  scs/scs_input.hpp
   csr/CSR.hpp
   particle_structs.hpp
 )

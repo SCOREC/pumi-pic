@@ -1,6 +1,6 @@
 #include <Omega_h_mesh.hpp>
 #include <SCS_Macros.h>
-#include <SellCSigma.h>
+#include <particle_structs.hpp>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
 #include "pumipic_profiling.hpp"
@@ -140,7 +140,7 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
     }
   };
   scs->parallel_for(lamb);
-  
+
   scs->migrate(scs_elem_ids, scs_process_ids);
 
   ids = scs->get<2>();
@@ -227,7 +227,7 @@ int setSourceElements(p::Mesh& picparts, SCS::kkLidView ppe,
   }
   o::Write<o::LO> ppe_write(rand_per_elem);
 
-  
+
   int np = o::get_sum(o::LOs(ppe_write));
   o::parallel_for(mesh->nelems(), OMEGA_H_LAMBDA(const o::LO& i) {
     ppe(i) = ppe_write[i];
@@ -370,7 +370,7 @@ int main(int argc, char** argv) {
   auto full_mesh = readMesh(argv[1], lib);
 
   MPI_Barrier(MPI_COMM_WORLD);
- 
+
   if(!comm_rank)
     printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
         full_mesh.nfaces());
@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
   p::Mesh picparts(input);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
- 
+
   //Build gyro avg mappings
   const auto rmax = 0.038;
   const auto numRings = 3;
@@ -407,7 +407,7 @@ int main(int argc, char** argv) {
   Omega_h::LOs forward_map;
   Omega_h::LOs backward_map;
   createGyroRingMappings(mesh, forward_map, backward_map);
-  
+
   /* Particle data */
   const long int numPtcls = atol(argv[3]);
   const int numPtclsPerRank = numPtcls / comm_size;
@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
 
   Omega_h::Int ne = mesh->nelems();
 
-  
+
   SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   SCS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
@@ -453,8 +453,15 @@ int main(int argc, char** argv) {
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
-                                                       ptcls_per_elem, element_gids);
+  ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
+                                    ptcls_per_elem, element_gids);
+  //Uniformly pad (other choices are PAD_PROPORTIONALLY/PAD_INVERSELY)
+  scs_input.padding_strat = ps::PAD_EVENLY;
+  //10% padding according to above strat
+  scs_input.shuffle_padding = 0.1;
+  //0% padding at the end -> rebuild will need to reallocate if the structure expands
+  scs_input.extra_padding = 0;
+  SellCSigma<Particle>* scs = new SellCSigma<Particle>(scs_input);
   setInitialPtclCoords(picparts, scs, output);
   setPtclIds(scs);
 
@@ -526,7 +533,7 @@ int main(int argc, char** argv) {
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
-  
+
   //cleanup
   delete scs;
 

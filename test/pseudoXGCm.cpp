@@ -15,7 +15,7 @@
 bool allowInPlaceRebuild;
 
 void getMemImbalance(int hasptcls) {
-#ifdef SCS_USE_CUDA
+#ifdef PS_USE_CUDA
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -31,8 +31,8 @@ void getMemImbalance(int hasptcls) {
   const double avg=static_cast<double>(totused)/rankswithptcls;
   const double imb=maxused/avg;
   if(!comm_rank) {
-    printf("ranks with particles %d memory usage imbalance %f\n",
-        rankswithptcls, imb);
+    printf("ranks with particles %d memory usage imbalance %f peak mem usage %ld\n",
+        rankswithptcls, imb, maxused);
   }
   if( used == maxused ) {
     printf("%d peak mem usage %ld, avg usage %f\n", comm_rank, maxused, avg);
@@ -382,15 +382,15 @@ int main(int argc, char** argv) {
   const auto vtx_to_elm = full_mesh.ask_up(0, 2);
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
 
+  allowInPlaceRebuild = atoi(argv[10]);
 
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
     fprintf(stderr, "partition file %s\n", argv[2]);
     fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
-    fprintf(stderr, "allow in-place rebuild %d\n", argv[10]);
+    fprintf(stderr, "allow in-place rebuild %d\n", allowInPlaceRebuild);
   }
 
-  allowInPlaceRebuild=argv[10];
   const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
   const auto safeMethod = pumipic::Input::getMethod(argv[7]);
   assert(bufferMethod>=0);
@@ -458,12 +458,13 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  const int C = 16;
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, C);
   //Create the particle structure
   ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
                                     ptcls_per_elem, element_gids);
-  //Uniformly pad (other choices are PAD_PROPORTIONALLY/PAD_INVERSELY)
-  scs_input.padding_strat = ps::PAD_EVENLY;
+  //Uniformly pad (other choices are PAD_EVENLY|PAD_PROPORTIONALLY|PAD_INVERSELY)
+  scs_input.padding_strat = ps::PAD_PROPORTIONALLY;
   //10% padding according to above strat
   scs_input.shuffle_padding = 0.1;
   //0% padding at the end -> rebuild will need to reallocate if the structure expands

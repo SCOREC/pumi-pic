@@ -43,6 +43,10 @@ namespace particle_structs {
       return false;
     }
 
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank) printf("SCS in-place rebuild\n");
+
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
     kkLidView counting_offset_index("counting_offset_index", numRows() + 1);

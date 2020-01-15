@@ -44,7 +44,7 @@ namespace particle_structs {
     //FIXME
     lid_t paddingNeeded;
     Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
-        const auto rowsz = (new_particles_per_row(i) > num_holes_per_row(i));
+        const auto rowsz = (new_particles_per_row(i) - num_holes_per_row(i));
         if( rowsz > sum )
           sum = rowsz;
       }, Kokkos::Max<lid_t>(paddingNeeded));

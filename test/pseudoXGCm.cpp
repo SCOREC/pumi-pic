@@ -346,7 +346,7 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 11;
+  const int numargs = 12;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
     auto args = " <mesh> <owner_file> <numPtcls> "
@@ -354,7 +354,8 @@ int main(int argc, char** argv) {
       "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
       "<degrees per elliptical push>"
       "<enable prebarrier>"
-      "<force out-of-place rebuild>";
+      "<force out-of-place rebuild>"
+      "<padding distribution=[even|relative|inverseRelative>";
     std::cout << "Usage: " << argv[0] << args << "\n";
     exit(1);
   }
@@ -383,6 +384,7 @@ int main(int argc, char** argv) {
   const auto edge_to_elm = full_mesh.ask_up(1, 2);
 
   allowInPlaceRebuild = atoi(argv[10]);
+  const auto paddingDist = std::string(argv[11]);
 
   if(!comm_rank) {
     fprintf(stderr, "done mesh topo checks\n");
@@ -463,10 +465,23 @@ int main(int argc, char** argv) {
   //Create the particle structure
   ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
                                     ptcls_per_elem, element_gids);
-  //Uniformly pad (other choices are PAD_EVENLY|PAD_PROPORTIONALLY|PAD_INVERSELY)
-  scs_input.padding_strat = ps::PAD_PROPORTIONALLY;
+
+  ps::PaddingStrategy paddingStrat;
+  if( paddingDist == "even" ) {
+    paddingStrat = ps::PAD_EVENLY;
+  } else if( paddingDist == "proportional" ) {
+    paddingStrat = ps::PAD_PROPORTIONALLY;
+  } else if( paddingDist == "inverse" ) {
+    paddingStrat = ps::PAD_INVERSELY;
+  } else {
+    if(!comm_rank)
+      printf("Unknown padding distribution specified %s... exiting\n",
+          paddingDist.c_str());
+    exit(1);
+  }
+  scs_input.padding_strat = paddingStrat;
   //10% padding according to above strat
-  scs_input.shuffle_padding = 0.1;
+  scs_input.shuffle_padding = 0.25;
   //0% padding at the end -> rebuild will need to reallocate if the structure expands
   scs_input.extra_padding = 0;
   SellCSigma<Particle>* scs = new SellCSigma<Particle>(scs_input);

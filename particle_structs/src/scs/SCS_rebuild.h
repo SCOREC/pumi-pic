@@ -5,6 +5,9 @@ namespace particle_structs {
     bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,
                                                    kkLidView new_particle_elements,
                                                    MTVs new_particles) {
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    printf("%d SCS attempting in-place rebuild\n", comm_rank);
     //Count current/new particles per row
     kkLidView new_particles_per_row("new_particles_per_row", numRows());
     kkLidView num_holes_per_row("num_holes_per_row", numRows());
@@ -38,14 +41,22 @@ namespace particle_structs {
           fail(0) = 1;
       });
 
+    //FIXME
+    lid_t paddingNeeded;
+    Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
+        const auto rowsz = (new_particles_per_row(i) > num_holes_per_row(i));
+        if( rowsz > sum )
+          sum = rowsz;
+      }, Kokkos::Max<lid_t>(paddingNeeded));
+
     if (getLastValue<lid_t>(fail)) {
+      assert(paddingNeeded);
       //Reshuffle fails
+      printf("%d SCS insufficient padding for in-place rebuild, paddingNeeded %d\n", comm_rank, paddingNeeded);
       return false;
     }
 
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank) printf("SCS in-place rebuild\n");
+    printf("%d SCS performing in-place rebuild\n", comm_rank);
 
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);

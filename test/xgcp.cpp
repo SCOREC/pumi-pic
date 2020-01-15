@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
   mesh.applyGyroFieldsToTags();
-  render(mesh, iter, comm_rank);
+  mesh.render("pseudoPush_tf");
 
   //cleanup
   delete scs;

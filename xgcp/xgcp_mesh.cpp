@@ -1,6 +1,10 @@
 #include "xgcp_mesh.hpp"
 #include "xgcp_gyro_scatter.hpp"
 #include <Omega_h_file.hpp>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
 
 namespace {
   namespace o=Omega_h;
@@ -50,11 +54,6 @@ namespace xgcp {
       full_mesh = NULL;
     }
     o::Mesh* mesh = picparts->mesh();
-    auto safeTag = picparts->safeTag();
-    mesh->add_tag(mesh->dim(), "safe", 1, safeTag);
-    char buffer[100];
-    sprintf(buffer, "XGCp_Mesh_%d", input.library.world()->rank());
-    Omega_h::vtk::write_parallel(buffer, mesh, mesh->dim());
 
     //Build gyro mappings
     setGyroConfig(input);
@@ -94,6 +93,33 @@ namespace xgcp {
   void Mesh::getIonGyroMappings(Omega_h::LOs& major_map, Omega_h::LOs& minor_map) {
     major_map = major_ion_gyro_map;
     minor_map = minor_ion_gyro_map;
+  }
+
+  void Mesh::render(const char* prefix) {
+    auto mesh = omegaMesh();
+    //Get coordinates before changing them
+    auto old_coords = mesh->coords();
+    Omega_h::Write<Omega_h::Real> new_coords(old_coords.size());
+    printf("HERE: %d has %d verts %d coords\n", worldRank(), mesh->nverts(), old_coords.size());
+    //Make a directory for the files
+    char directory[128];
+    sprintf(directory, "%s_g%d", prefix, groupRank());
+    if (torodialRank() == 0) {
+      DIR* dir = opendir(directory);
+      if (dir) {
+        closedir(dir);
+      } else if (ENOENT == errno) {
+        if (mkdir(directory, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
+          fprintf(stderr, "[ERROR] Failed to create directory for rendering on rank %d\n",
+                  worldRank());
+          return;
+        }
+      }
+    }
+    MPI_Barrier(torodialComm());
+    char filename[512];
+    sprintf(filename, "%s/%s_t%d.vtu", directory, prefix, torodialRank());
+    Omega_h::vtk::write_vtu(filename, omegaMesh(), dim());
   }
 }
 

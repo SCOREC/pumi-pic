@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SellCSigma.h>
+#include <particle_structs.hpp>
 #include <Omega_h_mesh.hpp>
 #include <pumipic_mesh.hpp>
 
@@ -33,6 +33,6 @@ namespace xgcp {
   typedef ps::MemberTypes<Vector3d, Vector3d, int, float, float> Ion;
 
   //Particle Data Structures for Electrons and Ions
-  typedef ps::SellCSigma<Electron> SCS_E;
-  typedef ps::SellCSigma<Ion> SCS_I;
+  typedef ps::ParticleStructure<Electron> PS_E;
+  typedef ps::ParticleStructure<Ion> PS_I;
 }

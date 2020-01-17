@@ -5,14 +5,14 @@
 namespace xgcp {
   namespace ellipticalPush {
     double h,k,d;
-    void setup(SCS_I* scs, const double h_, const double k_, const double d_) {
+    void setup(PS_I* ptcls, const double h_, const double k_, const double d_) {
       h = h_;
       k = k_;
       d = d_;
-      auto x_nm1 = scs->get<0>();
-      auto ptcl_id = scs->get<2>();
-      auto ptcl_b = scs->get<3>();
-      auto ptcl_phi = scs->get<4>();
+      auto x_nm1 = ptcls->get<0>();
+      auto ptcl_id = ptcls->get<2>();
+      auto ptcl_b = ptcls->get<3>();
+      auto ptcl_phi = ptcls->get<4>();
       const auto h_d = h;
       const auto k_d = k;
       const auto d_d = d;
@@ -27,9 +27,9 @@ namespace xgcp {
           ptcl_b(pid) = b;
         }
       };
-      scs->parallel_for(setMajorAxis);
+      ps::parallel_for(ptcls, setMajorAxis);
     }
-    void push(SCS_I* scs, Omega_h::Mesh& m, const double deg, const int iter) {
+    void push(PS_I* ptcls, Omega_h::Mesh& m, const double deg, const int iter) {
       const auto btime = pumipic_prebarrier();
       Kokkos::Profiling::pushRegion("ellipticalPush");
       Kokkos::Timer timer;
@@ -37,10 +37,10 @@ namespace xgcp {
       MPI_Comm_rank(MPI_COMM_WORLD,&rank);
       MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
       auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
-      auto x_nm0 = scs->get<1>();
-      auto ptcl_id = scs->get<2>();
-      auto ptcl_b = scs->get<3>();
-      auto ptcl_phi = scs->get<4>();
+      auto x_nm0 = ptcls->get<1>();
+      auto ptcl_id = ptcls->get<2>();
+      auto ptcl_b = ptcls->get<3>();
+      auto ptcl_phi = ptcls->get<4>();
       const auto h_d = h;
       const auto k_d = k;
       const auto d_d = d;
@@ -60,7 +60,7 @@ namespace xgcp {
           ptcl_phi(pid) = rad;
         }
       };
-      scs->parallel_for(setPosition);
+      ps::parallel_for(ptcls, setPosition);
       if(!rank || rank == comm_size/2)
         fprintf(stderr, "%d elliptical push (seconds) %f pre-barrier (seconds) %f\n",
                 rank, timer.seconds(), btime);

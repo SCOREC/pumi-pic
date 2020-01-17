@@ -2,7 +2,7 @@
 #define PUMIPIC_KKTYPES_H
 
 #include <Kokkos_Core.hpp>
-#include <SellCSigma.h>
+#include <particle_structs.hpp>
 #include <chrono>
 #include <thread>
 #include <PS_Types.h>

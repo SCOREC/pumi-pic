@@ -1,6 +1,10 @@
 #include "xgcp_mesh.hpp"
 #include "xgcp_gyro_scatter.hpp"
 #include <Omega_h_file.hpp>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
 
 namespace {
   namespace o=Omega_h;
@@ -50,11 +54,6 @@ namespace xgcp {
       full_mesh = NULL;
     }
     o::Mesh* mesh = picparts->mesh();
-    auto safeTag = picparts->safeTag();
-    mesh->add_tag(mesh->dim(), "safe", 1, safeTag);
-    char buffer[100];
-    sprintf(buffer, "XGCp_Mesh_%d", input.library.world()->rank());
-    Omega_h::vtk::write_parallel(buffer, mesh, mesh->dim());
 
     //Build gyro mappings
     setGyroConfig(input);
@@ -94,6 +93,42 @@ namespace xgcp {
   void Mesh::getIonGyroMappings(Omega_h::LOs& major_map, Omega_h::LOs& minor_map) {
     major_map = major_ion_gyro_map;
     minor_map = minor_ion_gyro_map;
+  }
+
+  bool createDirectory(const char* directory, int rank) {
+    DIR* dir = opendir(directory);
+    if (dir) {
+      closedir(dir);
+    } else if (ENOENT == errno) {
+      if (mkdir(directory, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
+        fprintf(stderr, "[ERROR] Failed to create directory for rendering on rank %d\n",
+                rank);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void Mesh::render(const char* prefix) {
+    auto mesh = omegaMesh();
+    //Get coordinates before changing them
+    auto old_coords = mesh->coords();
+    Omega_h::Write<Omega_h::Real> new_coords(old_coords.size());
+    //Make a directory for the files
+    char name[128];
+    char* dir_ptr = name;
+    dir_ptr += sprintf(dir_ptr, "%s", prefix);
+    if (worldRank() == 0) {
+      createDirectory(name, worldRank());
+    }
+    MPI_Barrier(worldComm());
+    dir_ptr += sprintf(dir_ptr, "/plane_%d", torodialRank());
+    if (groupRank() == 0 && meshRank() == 0) {
+      createDirectory(name, worldRank());
+    }
+    MPI_Barrier(torodialComm());
+    dir_ptr +=sprintf(dir_ptr, "/piece_g%d_m%d.vtu", groupRank(), meshRank());
+    Omega_h::vtk::write_vtu(name, omegaMesh(), dim());
   }
 }
 

@@ -38,16 +38,18 @@ int main(int argc, char* argv[]) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 12;
+  const int numargs = 13;
   if( argc != numargs ) {
-    printf("numargs %d expected %d\n", argc, numargs);
-    auto args = " <mesh> <owner_file> <numPtcls> "
-      "<num planes> <num procs per group>"
-      "<max initial model face> <maxIterations> "
-      "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
-      "<degrees per elliptical push>"
-      "<enable prebarrier>";
-    std::cout << "Usage: " << argv[0] << args << "\n";
+    if (comm_rank == 0) {
+      printf("numargs %d expected %d\n", argc, numargs);
+      auto args = " <mesh> <owner_file> <numPtcls> "
+        "<num planes> <num procs per group>"
+        "<max initial model face> <maxIterations> "
+        "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
+        "<degrees per elliptical push> "
+        "<enable prebarrier> <enable rendering>";
+      std::cout << "Usage: " << argv[0] << args << "\n";
+    }
     exit(1);
   }
   getMemImbalance(1);
@@ -191,8 +193,11 @@ int main(int argc, char* argv[]) {
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
-  mesh.applyGyroFieldsToTags();
-  render(mesh, iter, comm_rank);
+  const auto enable_render = atoi(argv[12]);
+  if (enable_render) {
+    mesh.applyGyroFieldsToTags();
+    mesh.render("pseudoPush_tf");
+  }
 
   //cleanup
   delete scs;

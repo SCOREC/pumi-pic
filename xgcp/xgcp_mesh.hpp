@@ -135,6 +135,8 @@ namespace xgcp {
     void scatterField(int dim, Omega_h::Write<T>& major, Omega_h::Write<T>& minor,
                       PartitionLevel start_level = MESH, PartitionLevel end_level = GROUP);
 
+    // Render polodial planes and fields
+    void render(const char* prefix);
   private:
     //Mesh structure for the picparts
     p::Mesh* picparts;

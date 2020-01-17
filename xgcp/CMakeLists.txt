@@ -3,8 +3,8 @@ set(HEADERS
   xgcp_input.hpp
   xgcp_mesh.hpp
   xgcp_gyro_scatter.hpp
-#  xgcp_push.hpp
-#  xgcp_particle.hpp
+  xgcp_push.hpp
+  xgcp_particle.hpp
 )
 
 set(SOURCES
@@ -12,7 +12,7 @@ set(SOURCES
   xgcp_mesh.cpp
   xgcp_gyro_scatter.cpp
   xgcp_elliptical_push.cpp
-#  xgcp_particle.cpp
+  xgcp_particle.cpp
 )
 
 add_library(xgcp ${SOURCES})

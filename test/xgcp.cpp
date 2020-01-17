@@ -5,13 +5,13 @@
 #include <xgcp_mesh.hpp>
 #include <xgcp_push.hpp>
 #include <xgcp_gyro_scatter.hpp>
+#include <xgcp_particle.hpp>
 #include <particle_structs.hpp>
 #include <Omega_h_for.hpp>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_profiling.hpp"
 
 #define ELEMENT_SEED 1024*1024
-#define PARTICLE_SEED 512*512
 
 using xgcp::fp_t;
 using xgcp::PS_I;
@@ -23,10 +23,8 @@ namespace o = Omega_h;
 void getMemImbalance(int hasptcls);
 void getPtclImbalance(int ptclCnt);
 void printTimerResolution();
-void setInitialPtclCoords(p::Mesh* picparts, PS_I* ptcls, bool output);
 int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
                       const int mdlFace, const int numPtclsPerRank);
-void setPtclIds(PS_I* ptcls);
 void search(xgcp::Mesh& picparts, PS_I* ptcls, bool output);
 void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop);
 void render(xgcp::Mesh& mesh, int iter, int comm_rank);
@@ -115,17 +113,8 @@ int main(int argc, char* argv[]) {
   if (!comm_rank)
     fprintf(stderr, "max iterations: %d\n", maxIter);
 
-  //'sigma', 'V', and the 'policy' control the layout of the PS structure
-  //in memory and can be ignored until performance is being evaluated.  These
-  //are reasonable initial settings for OpenMP.
-  const int sigma = INT_MAX; // full sorting
-  const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  //Create the Ion particle structure
-  PS_I* ptcls = new ps::SellCSigma<xgcp::Ion>(policy, sigma, V, ne, actualParticles,
-                                              ptcls_per_elem, element_gids);
-  setInitialPtclCoords(picparts, ptcls, output);
-  setPtclIds(ptcls);
+  //Create and initialize Ions
+  PS_I* ptcls = xgcp::initializeIons(mesh, actualParticles, ptcls_per_elem, element_gids);
 
   //Setup push
   const double h = 1.72479370-.08;
@@ -163,8 +152,7 @@ int main(int argc, char* argv[]) {
     if(!comm_rank || (comm_rank == comm_size/2))
       ptcls->printMetrics();
     //Stop if there are no more particles
-    ps_np = ptcls->nPtcls();
-    MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    totNp = xgcp::getGlobalParticleCount(ptcls);
     if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -172,16 +160,15 @@ int main(int argc, char* argv[]) {
     //Print Iteration stats
     if (!comm_rank)
       fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
+    ps_np = ptcls->nPtcls();
     getMemImbalance(ps_np!=0);
     getPtclImbalance(ps_np);
     timer.reset();
     //Push Particles
     xgcp::ellipticalPush::push(ptcls, *omesh, degPerPush, iter);
-    MPI_Barrier(MPI_COMM_WORLD);
     //Perform search and rebuild
     search(mesh, ptcls, output);
-    ps_np = ptcls->nPtcls();
-    MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+    totNp = xgcp::getGlobalParticleCount(ptcls);
     if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -263,14 +250,6 @@ void printTimerResolution() {
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
 }
 
-void setPtclIds(PS_I* ptcls) {
-  auto pid_d = ptcls->get<2>();
-  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
-    pid_d(pid) = pid;
-  };
-  ps::parallel_for(ptcls, setIDs);
-}
-
 int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
     const int mdlFace, const int numPtclsPerRank) {
   //Deterministically generate random number of particles on each element with classification less than mdlFace
@@ -348,49 +327,6 @@ int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
   return np;
 }
 
-void setInitialPtclCoords(p::Mesh* picparts, PS_I* ptcls, bool output) {
-  //Randomly distrubite particles within each element (uniformly within the element)
-  //Create a deterministic generation of random numbers on the host with 2 number per particle
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  comm_rank++;
-  o::HostWrite<o::Real> rand_num_per_ptcl(2*ptcls->capacity());
-  std::default_random_engine generator(PARTICLE_SEED / comm_rank);
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
-
-  for (int i = 0; i < ptcls->capacity(); ++i) {
-    o::Real x = dist(generator);
-    o::Real y = dist(generator);
-    if (x+y > 1) {
-      x = 1-x;
-      y = 1-y;
-    }
-    rand_num_per_ptcl[2*i] = x;
-    rand_num_per_ptcl[2*i+1] = y;
-  }
-  o::Write<o::Real> rand_nums(rand_num_per_ptcl);
-  o::Mesh* mesh = picparts->mesh();
-  auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
-  auto nodes2coords = mesh->coords();
-  //set particle positions and parent element ids
-  auto x_ps_d = ptcls->get<0>();
-  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
-      auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
-      o::Real r1 = rand_nums[2*pid];
-      o::Real r2 = rand_nums[2*pid+1];
-      // X = A + r1(B-A) + r2(C-A)
-      for (int i = 0; i < 2; i++)
-        x_ps_d(pid,i) = vtxCoords[0][i] + r1 * (vtxCoords[1][i] - vtxCoords[0][i])
-                                        + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
-      x_ps_d(pid,2) = 0;
-      if (output)
-        printf("pid %d: %.3f %.3f %.3f\n", pid, x_ps_d(pid,0), x_ps_d(pid,1), x_ps_d(pid,2));
-    }
-  };
-  ps::parallel_for(ptcls, lamb);
-}
 
 void updatePtclPositions(PS_I* ptcls) {
   auto x_ps_d = ptcls->get<0>();
@@ -448,8 +384,6 @@ void rebuild(xgcp::Mesh& mesh, PS_I* ptcls, o::LOs elem_ids, const bool output) 
 }
 
 void search(xgcp::Mesh& mesh, PS_I* ptcls, bool output) {
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   o::Mesh* omesh = mesh.omegaMesh();
   assert(ptcls->nElems() == omesh->nelems());
   Omega_h::LO maxLoops = 200;

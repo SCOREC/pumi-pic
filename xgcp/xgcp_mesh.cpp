@@ -65,10 +65,10 @@ namespace xgcp {
 
     //Build plane information
     fp_t delta_phi = 2* M_PI / num_planes;
-    major_phi = delta_phi * torodial_comm->rank();
+    major_phi = delta_phi * (torodial_comm->rank() + 1);
     minor_phi = major_phi - delta_phi;
-    if (torodial_comm->rank() == 0)
-      minor_phi += 2*M_PI;
+    if (torodial_comm->rank() == torodial_comm->size() - 1)
+      major_phi = 0;
     major_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
     minor_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
     mesh->add_tag(0, "major_plane", 1, GyroFieldR(major_plane));

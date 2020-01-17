@@ -117,7 +117,8 @@ namespace xgcp {
     //Make a directory for the files
     char name[128];
     char* dir_ptr = name;
-    dir_ptr += sprintf(dir_ptr, "%s", prefix);
+    dir_ptr += sprintf(dir_ptr, "%s_t%d_m%d_g%d", prefix,
+                       torodialSize(), meshSize(), groupSize());
     if (worldRank() == 0) {
       createDirectory(name, worldRank());
     }

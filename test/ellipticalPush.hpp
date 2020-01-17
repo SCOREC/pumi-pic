@@ -8,19 +8,19 @@ namespace ellipticalPush {
   double k; //y coordinate of center
   double d; //ratio of ellipse minor axis length (a) to major axis length (b)
 
-  void setup(SCS* scs, const double h_in, const double k_in,
+  void setup(PS* ptcls, const double h_in, const double k_in,
       const double d_in) {
     h = h_in;
     k = k_in;
     d = d_in;
-    auto x_nm1 = scs->get<0>();
-    auto ptcl_id = scs->get<2>();
-    auto ptcl_b = scs->get<3>();
-    auto ptcl_phi = scs->get<4>();
+    auto x_nm1 = ptcls->get<0>();
+    auto ptcl_id = ptcls->get<2>();
+    auto ptcl_b = ptcls->get<3>();
+    auto ptcl_phi = ptcls->get<4>();
     const auto h_d = h;
     const auto k_d = k;
     const auto d_d = d;
-    auto setMajorAxis = SCS_LAMBDA(const int&, const int& pid, const int& mask) {
+    auto setMajorAxis = PS_LAMBDA(const int&, const int& pid, const int& mask) {
       if(mask) {
         const auto w = x_nm1(pid,0);
         const auto z = x_nm1(pid,1);
@@ -31,10 +31,10 @@ namespace ellipticalPush {
         ptcl_b(pid) = b;
       }
     };
-    scs->parallel_for(setMajorAxis);
+    ps::parallel_for(ptcls, setMajorAxis);
   }
-  
-  void push(SCS* scs, Omega_h::Mesh& m, const double deg, const int iter) {
+
+  void push(PS* ptcls, Omega_h::Mesh& m, const double deg, const int iter) {
     const auto btime = pumipic_prebarrier();
     Kokkos::Profiling::pushRegion("ellipticalPush");
     Kokkos::Timer timer;
@@ -42,14 +42,14 @@ namespace ellipticalPush {
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
     MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
-    auto x_nm0 = scs->get<1>();
-    auto ptcl_id = scs->get<2>();
-    auto ptcl_b = scs->get<3>();
-    auto ptcl_phi = scs->get<4>();
+    auto x_nm0 = ptcls->get<1>();
+    auto ptcl_id = ptcls->get<2>();
+    auto ptcl_b = ptcls->get<3>();
+    auto ptcl_phi = ptcls->get<4>();
     const auto h_d = h;
     const auto k_d = k;
     const auto d_d = d;
-    auto setPosition = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto setPosition = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if(mask) {
         const double centerFactor = class_ids[e] == 1 ? 0.01 : 1.0;
         const double distByClass = centerFactor * (double) 1.0 / class_ids[e];
@@ -65,7 +65,7 @@ namespace ellipticalPush {
         ptcl_phi(pid) = rad;
       }
     };
-    scs->parallel_for(setPosition);
+    ps::parallel_for(ptcls, setPosition);
     if(!rank || rank == comm_size/2)
       fprintf(stderr, "%d elliptical push (seconds) %f pre-barrier (seconds) %f\n",
           rank, timer.seconds(), btime);

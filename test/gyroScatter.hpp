@@ -2,7 +2,6 @@
 #define GYRO_SCATTER_H
 
 #include "pseudoXGCmTypes.hpp"
-#include <SCS_Macros.h>
 
 namespace {
   o::Real gyro_rmax = 0.038; //max ring radius
@@ -27,9 +26,9 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
                                o::Reals projected_points, o::LOs starting_element) {
   o::LO num_points = starting_element.size();
 
-  //Create SCS for the projected points to perform adjacency search on
-  SCSpt::kkLidView ptcls_per_elem("ptcls_per_elem", mesh->nelems());
-  SCSpt::kkLidView point_element("point_element", num_points);
+  //Create PS for the projected points to perform adjacency search on
+  PSpt::kkLidView ptcls_per_elem("ptcls_per_elem", mesh->nelems());
+  PSpt::kkLidView point_element("point_element", num_points);
   auto point_info = particle_structs::createMemberViews<Point>(num_points);
   auto start_pos = particle_structs::getMemberView<Point, 0>(point_info);
   auto end_pos = particle_structs::getMemberView<Point, 1>(point_info);
@@ -45,26 +44,26 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
     }
   };
   o::parallel_for(num_points, countPointsInElement, "countPointsInElement");
-  
+
   const int sigma = INT_MAX;
   const int V = 64;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  SCSpt::kkGidView empty_gids("empty_gids", 0);
-  SellCSigma<Point>* gyro_scs = new SellCSigma<Point>(policy, sigma, V,
-                                                      mesh->nelems(), num_points,
-                                                      ptcls_per_elem, empty_gids,
-                                                      point_element, point_info);
-  printf("created scs for gyro mapping with %d points and %d elms\n",
+  PSpt::kkGidView empty_gids("empty_gids", 0);
+  PSpt* gyro_ps = new ps::SellCSigma<Point>(policy, sigma, V,
+                                            mesh->nelems(), num_points,
+                                            ptcls_per_elem, empty_gids,
+                                            point_element, point_info);
+  printf("created ps for gyro mapping with %d points and %d elms\n",
       num_points, mesh->nelems());
 
   //Adjacency search
-  auto start = gyro_scs->get<0>();
-  auto end = gyro_scs->get<1>();
-  auto pids = gyro_scs->get<2>();
+  auto start = gyro_ps->get<0>();
+  auto end = gyro_ps->get<1>();
+  auto pids = gyro_ps->get<2>();
   int maxLoops = 100;
-  int scsCapacity = gyro_scs->capacity();
-  o::Write<o::LO> elem_ids(scsCapacity, -1);
-  bool isFound = p::search_mesh_2d<Point>(*mesh, gyro_scs, start, end, pids,
+  int psCapacity = gyro_ps->capacity();
+  o::Write<o::LO> elem_ids(psCapacity, -1);
+  bool isFound = p::search_mesh_2d<Point>(*mesh, gyro_ps, start, end, pids,
                                           elem_ids, maxLoops);
   assert(isFound);
 
@@ -73,7 +72,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   const o::LO nvpe = 3;
   o::Write<o::LO> gyro_avg_map(nvpe * num_points, -1);
   auto elm2Verts = mesh->ask_down(mesh->dim(), 0);
-  auto createGyroMapping = SCS_LAMBDA(const int&, const int& pid, const int& mask) {
+  auto createGyroMapping = PS_LAMBDA(const int&, const int& pid, const int& mask) {
     const o::LO parent = elem_ids[pid];
     if (mask && parent >= 0) { //skip points outside the domain (parent == -1)
       assert(parent>=0 && parent<numElms);
@@ -84,8 +83,8 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
         gyro_avg_map[start_index+i] = elm2Verts.ab2b[start_elm+i];
     }
   };
-  gyro_scs->parallel_for(createGyroMapping);
-  delete gyro_scs;
+  ps::parallel_for(gyro_ps, createGyroMapping);
+  delete gyro_ps;
   return o::LOs(gyro_avg_map);
 }
 
@@ -165,7 +164,7 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
   Kokkos::Profiling::popRegion();
 }
 
-void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName) {
+void gyroScatter(o::Mesh* mesh, PS* ptcls, o::LOs v2v, std::string scatterTagName) {
   const auto btime = pumipic_prebarrier();
   Kokkos::Timer timer;
   Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
@@ -179,7 +178,7 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
   auto nvpe = 3; //triangles
   const double ringWidth = gr/gnr;
   o::Write<o::Real> ring_accum(gnr*mesh->nverts(),0, "ring_accumulator");
-  auto accumulateToRings = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto accumulateToRings = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       const auto ptclRadius = ringWidth*1.125; //TODO compute the radius
       assert(ptclRadius >= ringWidth);
@@ -201,7 +200,7 @@ void gyroScatter(o::Mesh* mesh, SCS* scs, o::LOs v2v, std::string scatterTagName
       }
     }
   };
-  scs->parallel_for(accumulateToRings);
+  ps::parallel_for(ptcls,accumulateToRings);
   const Omega_h::LO nverts = mesh->nverts();
   o::Write<o::Real> scatter_w(mesh->nverts(),0,"scatterTag_w");
   auto scatterToMappedVerts = OMEGA_H_LAMBDA(const o::LO& v) {
@@ -247,7 +246,7 @@ void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
     sync_array[2*vtx_id+1] = bkwdTag[vtx_id];
   };
   Omega_h::parallel_for(mesh->nverts(), setSyncArray);
-  
+
   Kokkos::Timer reducetimer;
   picparts.reduceCommArray(0, p::Mesh::Op::SUM_OP, sync_array);
   const auto rtime = reducetimer.seconds();

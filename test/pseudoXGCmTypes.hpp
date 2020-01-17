@@ -1,7 +1,7 @@
 #ifndef PSEUDO_XGCM_TYPES_H
 #define PSEUDO_XGCM_TYPES_H
 #include "pumipic_kktypes.hpp"
-#include <SellCSigma.h>
+#include <particle_structs.hpp>
 #include <Kokkos_Core.hpp>
 
 using particle_structs::lid_t;
@@ -12,9 +12,10 @@ using pumipic::Vector3d;
 
 namespace o = Omega_h;
 namespace p = pumipic;
+namespace ps = particle_structs;
 
 typedef MemberTypes<Vector3d, Vector3d, int> Point;
-typedef SellCSigma<Point> SCSpt;
+typedef ps::ParticleStructure<Point> PSpt;
 
 //To demonstrate push and adjacency search we store:
 //-two fp_t[3] arrays, 'Vector3d', for the current and
@@ -24,6 +25,6 @@ typedef SellCSigma<Point> SCSpt;
 // that defines the ellipse
 //-a float to store the angle of the particle in polar coordinates
 typedef MemberTypes<Vector3d, Vector3d, int, float, float> Particle;
-typedef SellCSigma<Particle> SCS;
+typedef ps::ParticleStructure<Particle> PS;
 
 #endif

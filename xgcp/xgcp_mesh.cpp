@@ -95,31 +95,40 @@ namespace xgcp {
     minor_map = minor_ion_gyro_map;
   }
 
+  bool createDirectory(const char* directory, int rank) {
+    DIR* dir = opendir(directory);
+    if (dir) {
+      closedir(dir);
+    } else if (ENOENT == errno) {
+      if (mkdir(directory, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
+        fprintf(stderr, "[ERROR] Failed to create directory for rendering on rank %d\n",
+                rank);
+        return false;
+      }
+    }
+    return true;
+  }
+
   void Mesh::render(const char* prefix) {
     auto mesh = omegaMesh();
     //Get coordinates before changing them
     auto old_coords = mesh->coords();
     Omega_h::Write<Omega_h::Real> new_coords(old_coords.size());
-    printf("HERE: %d has %d verts %d coords\n", worldRank(), mesh->nverts(), old_coords.size());
     //Make a directory for the files
-    char directory[128];
-    sprintf(directory, "%s_g%d", prefix, groupRank());
-    if (torodialRank() == 0) {
-      DIR* dir = opendir(directory);
-      if (dir) {
-        closedir(dir);
-      } else if (ENOENT == errno) {
-        if (mkdir(directory, S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
-          fprintf(stderr, "[ERROR] Failed to create directory for rendering on rank %d\n",
-                  worldRank());
-          return;
-        }
-      }
+    char name[128];
+    char* dir_ptr = name;
+    dir_ptr += sprintf(dir_ptr, "%s", prefix);
+    if (worldRank() == 0) {
+      createDirectory(name, worldRank());
+    }
+    MPI_Barrier(worldComm());
+    dir_ptr += sprintf(dir_ptr, "/plane_%d", torodialRank());
+    if (groupRank() == 0 && meshRank() == 0) {
+      createDirectory(name, worldRank());
     }
     MPI_Barrier(torodialComm());
-    char filename[512];
-    sprintf(filename, "%s/%s_t%d.vtu", directory, prefix, torodialRank());
-    Omega_h::vtk::write_vtu(filename, omegaMesh(), dim());
+    dir_ptr +=sprintf(dir_ptr, "/piece_g%d_m%d.vtu", groupRank(), meshRank());
+    Omega_h::vtk::write_vtu(name, omegaMesh(), dim());
   }
 }
 

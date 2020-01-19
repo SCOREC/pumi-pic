@@ -19,8 +19,9 @@ namespace p = pumipic;
 // sheath efield is calcualted efield, it is always used. Skip calling 
 // gitrm_calculateE for neutrals.
 
-// D3D 0.8 to 2.45 m radial 
-
+// D3D 0.8 to 2.45 m radial
+ 
+//TODO put in config class
 const int USE_GITR_RND_NUMS = 1;
 const bool CREATE_GITR_MESH = false;
 
@@ -40,9 +41,6 @@ const int USE2D_INPUTFIELDS = 1;
 const int USE_CONSTANT_BFIELD = 1; //used for pisces
 const int USE_CYL_SYMMETRY = 1;
 const int PISCESRUN  = 1;
-const o::Real BACKGROUND_AMU = 4.0; //for pisces
-const o::Real PTCL_AMU=184.0; //W,tungston
-const o::LO PARTICLE_Z = 74;
 const o::LO BACKGROUND_Z = 1;
 const o::Real BIAS_POTENTIAL = 250.0;
 const o::LO BIASED_SURFACE = 1;
@@ -52,10 +50,6 @@ const o::Real CONSTANT_EFIELD2 = 0;
 const o::Real CONSTANT_BFIELD0 = 0;
 const o::Real CONSTANT_BFIELD1 = 0;
 const o::Real CONSTANT_BFIELD2 = -0.08;
-const o::Real ELECTRON_CHARGE = 1.60217662e-19;
-const o::Real PROTON_MASS = 1.6737236e-27;
-const o::Real CONSTANT_PI = 3.14159265358979323;
-
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
 const int BDRY_STORAGE_SIZE_PER_FACE = 1;
@@ -77,7 +71,6 @@ const int SKIP_MODEL_IDS_FROM_DIST2BDRY = 0; //set to 0
 
 class GitrmMesh {
 public:
-  //TODO make it Singleton; make mesh a pointer, and use function: init(Mesh *mesh) 
   GitrmMesh(o::Mesh& m);
   //TODO delete tags ?
   ~GitrmMesh(){};
@@ -120,9 +113,6 @@ public:
   o::LOs bdryCsrReadInDataPtrs;
   o::LOs bdryCsrReadInData;
   
-  /** @brief Fields reals : angle, potential, debyeLength, larmorRadius, 
-  *    ChildLangmuirDist
-  */
   void initBField(const std::string &, const o::Real shiftB=0);
   void load3DFieldOnVtxFromFile(const std::string, const std::string &,
     Field3StructInput&, o::Reals&, const o::Real shift=0 );
@@ -209,6 +199,8 @@ public:
 
   o::Write<o::Real> larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d;
+private:
+  bool exists = false;
 };
 
 // Cumulative sums. Done on host, to get ordered sum of all previous entries CSR.

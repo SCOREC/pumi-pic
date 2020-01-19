@@ -71,6 +71,8 @@ mpi_test(input_construct_cube 4
 mpi_test(comm_array_pisces 4 
          ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
 
+#impi_test(test_dist2bdry_preprocess 1  ./test_dist2ddry_preprocess --kokkos-threads=1)
+
   #mpi_test(borisMove 1
   # ./borisMove --kokkos-threads=1 ${TEST_DATA_DIR}/pisces/gitr.msh 
   #${TEST_DATA_DIR}/inputFields)

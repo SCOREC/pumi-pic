@@ -125,6 +125,11 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto testGNT = gp.testGitrStepDataNumTsteps;
   const auto testGIind = gp.testGitrDataIoniRandInd;
   const auto iTimeStep = iTimePlusOne - 1;
+  if(useGitrRnd)
+    OMEGA_H_CHECK(gp.testGitrOptIoniRec);
+  else
+    OMEGA_H_CHECK(!gp.testGitrOptIoniRec);
+
   //#endif
 
   auto& xfaces_d = gp.collisionPointFaceIds;
@@ -261,6 +266,10 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto testGrecInd = gp.testGitrDataRecRandInd;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
   const auto iTimeStep = iTimePlusOne - 1;
+  if(useGitrRnd)
+    OMEGA_H_CHECK(gp.testGitrOptIoniRec);
+  else
+    OMEGA_H_CHECK(!gp.testGitrOptIoniRec);
   //#endif
 
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
@@ -285,7 +294,7 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   auto new_pos = scs->get<PTCL_NEXT_POS>();
   auto charge_scs = scs->get<PTCL_CHARGE>();
   auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
-  auto prev_recombination_scs = scs->get<PTCL_PREV_RECOMBINE>();
+  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
   auto scsCapacity = scs->capacity();
 
   //TODO FIXME replace by Kokkos random
@@ -356,7 +365,7 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
         auto first_iz = first_ionizeZ_scs(pid);
         if(xfid < 0 && randn <= P1) {
           charge_scs(pid) = charge-1;
-          prev_recombination_scs(pid) = 1;
+          prev_recomb_scs(pid) = 1;
         }
 
         if(useGitrRnd && debug)

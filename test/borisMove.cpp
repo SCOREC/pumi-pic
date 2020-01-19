@@ -11,7 +11,7 @@
 #include "GitrmParticles.hpp"
 #include "GitrmPush.hpp"
 #include "GitrmIonizeRecombine.hpp"
-//#include "GitrmSurfaceModel.hpp"
+#include "GitrmSurfaceModel.hpp"
 
 
 void printTiming(const char* name, double t) {
@@ -63,8 +63,8 @@ void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids,
 }
 
 void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
-    GitrmIonizeRecombine& gir, int iter, o::Write<o::LO>& data_d, 
-    bool debug=false) {
+    GitrmIonizeRecombine& gir, GitrmSurfaceModel& sm, int iter, 
+    o::Write<o::LO>& data_d, bool debug=false) {
   //auto& picparts = gm.picparts;
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
@@ -88,11 +88,9 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   if(gir.chargedPtclTracking) {
     gitrm_ionize(scs, gir, gp, gm, elem_ids, false);
     gitrm_recombine(scs, gir, gp, gm, elem_ids, false);
+    //printf("Applying surface Model..\n");
+    //gitrm_surfaceReflection_test(scs, sm, gp, gm, elem_ids, false);
   }
-
-  //Apply surface model using face_ids, and update elem if particle reflected. 
-  //fprintf(stderr, "Applying surface Model..\n");
-  //applySurfaceModel(mesh, scs, elem_ids);
   bool resetFids = true;
   storePiscesData(mesh, gp, data_d, iter, resetFids, false);
   Kokkos::Profiling::popRegion();
@@ -136,11 +134,11 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  if(argc < 6)
+  if(argc < 7)
   {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
-        << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file>"
+        << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file><surf_file>"
         << " [<nPtcls><nIter> <histInterval> <gitrDataInFileName> ]\n";
     exit(1);
   }
@@ -200,6 +198,7 @@ int main(int argc, char** argv) {
   std::string profFile = argv[4];
   std::string ionizeRecombFile = argv[5];
   std::string bFile=""; //TODO
+  std::string surfModelFile = argv[6];
 
   if (!comm_rank) {
     if(!chargedTracking)
@@ -214,18 +213,18 @@ int main(int argc, char** argv) {
   double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
   int NUM_ITERATIONS = 10; //higher beads needs >10K
   
-  if(argc > 6)
-    numPtcls = atoi(argv[6]);
   if(argc > 7)
-    NUM_ITERATIONS = atoi(argv[7]);
-  if(argc > 8) {
-    histInterval = atoi(argv[8]);
+    numPtcls = atoi(argv[7]);
+  if(argc > 8)
+    NUM_ITERATIONS = atoi(argv[8]);
+  if(argc > 9) {
+    histInterval = atoi(argv[9]);
     if(histInterval > NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
   std::string gitrDataFileName;
-  if(argc > 9)
-    gitrDataFileName = argv[9];
+  if(argc > 10)
+    gitrDataFileName = argv[10];
   if (!comm_rank)
     printf(" gitr comparison DataFile %s\n", gitrDataFileName.c_str());
   
@@ -249,11 +248,7 @@ int main(int argc, char** argv) {
   int testNumPtcls = 1;
   int testRead = 0;
   if(useGitrRandNums) {
-    if(gitrDataFileName.empty()) {
-      printf("ERROR: USE_GITR_RND_NUMS turned on, but NC file is missing\n\n");
-      return 1;
-    }
-    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testRead, true);
+    gp.readGITRPtclStepDataNcFile(gitrDataFileName, testNumPtcls, testRead);
     assert(testNumPtcls >= numPtcls);
   }
   auto* scs = gp.scs;
@@ -274,11 +269,10 @@ int main(int argc, char** argv) {
 
   printf("Initializing Boundary faces\n");
   auto initBdry = gm.initBoundaryFaces(initFields, false);
-  printf("Preprocessing: selecting boundary faces\n");
+  printf("Preprocessing: dist-to-boundary faces\n");
   int nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
   int readInCsrBdryData = USE_READIN_CSR_BDRYFACES;
   if(readInCsrBdryData) {
-    printf(" Using stored boundary faces\n");
     gm.readDist2BdryFacesData("bdryFaces_in.nc");
   } else {
     gm.preprocessSelectBdryFacesFromAll(initBdry);
@@ -298,6 +292,8 @@ int main(int argc, char** argv) {
       std::to_string(nD2BdryTetSubDiv) + "div.nc"; 
     gm.writeDist2BdryFacesData(bdryOutName, nD2BdryTetSubDiv);
   }
+
+  GitrmSurfaceModel sm(gm, surfModelFile);
 
   if(debug)
     profileAndInterpolateTest(gm, true); //move to unit_test
@@ -354,7 +350,7 @@ int main(int argc, char** argv) {
     Kokkos::Profiling::popRegion();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    search(picparts, gp, gm, gir, iter, data_d, debug);
+    search(picparts, gp, gm, gir, sm, iter, data_d, debug);
     
     if(histInterval >0) {
       // move-over if. 0th step(above) kept; last step available at the end.

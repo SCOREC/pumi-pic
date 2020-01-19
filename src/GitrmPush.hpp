@@ -164,7 +164,7 @@ inline void gitrm_borisMove(particle_structs::SellCSigma<Particle>* scs,
   o::Mesh &mesh = gm.mesh;  
   const auto& coords = mesh.coords();
   const auto& mesh2verts = mesh.ask_elem_verts();
-  auto amu = PTCL_AMU;
+  auto amu = gitrm::PTCL_AMU;
   // Only 3D field from mesh tags
   auto use3dField = USE3D_BFIELD;
   auto use2dInputFields = USE2D_INPUTFIELDS;

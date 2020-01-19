@@ -18,6 +18,7 @@ endfunction(make_test)
 #make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
 #make_test(loadSerialMesh loadSerialMesh.cpp)
 
+#make_test(test_dist2bdry_preprocess test_dist2Bdry_preprocess.cpp)
 make_test(borisMove borisMove.cpp)
 make_test(neutralTracking neutralTracking.cpp)
 make_test(SCStest SCStest.cpp)

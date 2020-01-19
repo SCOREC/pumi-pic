@@ -43,34 +43,43 @@ double Field3StructInput::getGridMax(int ind) {
 }
 
 int Field3StructInput::getIntValueOf(std::string name) {
-  for(int i=0; i< nVarNames.size(); ++i)
-    if(name == nVarNames[i])
-      if(nVarVec.size() > i)
+  for(int i=0; i< nVarNames.size(); ++i) {
+    if(name == nVarNames[i]) {
+      if(nVarVec.size() > i) {
         return nVarVec[i];
-  for(int i=0; i< nGridNames.size(); ++i)
-    if(name == nGridNames[i])
-      if(nGridVec.size() > i)
+      }
+    }
+  }
+  for(int i=0; i< nGridNames.size(); ++i) {
+    if(name == nGridNames[i]) {
+      if(nGridVec.size() > i) {
         return nGridVec[i];
-  assert(false);
+      }
+    }
+  }
+  Omega_h_fail("Error: getIntValueOf %s\n", name.c_str());
   return -1;
 }
 
 int verifyNetcdfFile(const std::string& ncFileName, int nc_err) {
+  int status = 0;
   try {
     netCDF::NcFile ncFile(ncFileName, netCDF::NcFile::read);
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
-    return nc_err;
+    status = nc_err;
   }
-  return 0;
+  if(status)
+    Omega_h_fail("Error: invalid NetCDF file %s\n", ncFileName.c_str());
+  return status;
 } 
 
 int readParticleSourceNcFile(std::string ncFileName, 
     o::HostWrite<o::Real>& data, int& maxNPtcls, int& numPtclsRead,
     bool replaceNaN) {
   constexpr int dof = 6;
-
-  assert(!verifyNetcdfFile(ncFileName));
+  int status = 0;
+  verifyNetcdfFile(ncFileName);
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     netCDF::NcDim ncf_np(ncf.getDim("nP"));
@@ -80,7 +89,7 @@ int readParticleSourceNcFile(std::string ncFileName,
     //if(maxNPtcls >0 && maxNPtcls < np)
     //  np = maxNPtcls;
     numPtclsRead = np;
-    std::cout << "nPtcls in source file " << np << "\n";
+    std::cout << " nPtcls in source file " << np << "\n";
     data = o::HostWrite<o::Real>(np*dof);
     netCDF::NcVar ncx(ncf.getVar("x"));
     netCDF::NcVar ncy(ncf.getVar("y"));
@@ -96,7 +105,7 @@ int readParticleSourceNcFile(std::string ncFileName,
     ncvz.getVar(&data[5*np]);
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
-    return 1;
+    status = 1;
   }
   if(replaceNaN) {
     int nans = 0;
@@ -108,7 +117,9 @@ int readParticleSourceNcFile(std::string ncFileName,
     if(nans)
       printf("\n*******WARNING replaced %d NaNs in ptclSrc *******\n\n", nans);
   }
-  return 0;
+  if(status)
+    Omega_h_fail("ERROR: reading file %s\n", ncFileName.c_str());
+  return status;
 }
 
 //Reads from 0 to 3 grids having gridNames; .
@@ -124,10 +135,14 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   Field3StructInput& fs, int& numInFile, int& numRead, 
   std::string numStr, bool debug) {
   int ncSizePerComp = 1;
-  assert(!verifyNetcdfFile(ncFileName));
-
+  int status = 0;
+  verifyNetcdfFile(ncFileName);
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
+    int dimCount = ncf.getDimCount();
+    int nameCount = fs.nVarNames.size() + fs.nGridNames.size();
+    if(dimCount < nameCount)
+      std::cout << " WARNING: mismatch between NC file #dims and #reading\n";
     for(int i=0; i< fs.nGridNames.size(); ++i) {
       netCDF::NcDim ncGridName(ncf.getDim(fs.nGridNames[i]));
       auto unlimit = ncGridName.isUnlimited();
@@ -181,17 +196,22 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
       auto unlimit = ncVarName.isUnlimited();
       if(unlimit)
-        std::cout << "\n  Warning: value of " << ncVarName.getName() << " set to 0 \n";
+        std::cout << " Warning: value of " << ncVarName.getName() << " set to 0 \n";
       int size = 0;
       if(!unlimit)
         size = ncVarName.getSize();
+      if(ncf.getDim(fs.nVarNames[i]).isNull())
+        size = -1;
+      if(debug)
+        std::cout << " " << fs.nVarNames[i] << " " << ncVarName.getName() 
+          << " size " << size << " \n";
       fs.nVarVec.push_back(size);
     }
     if(debug)
       std::cout << " Done reading " << ncFileName << "\n\n";
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
-    return 1;
+    status = 1;
   }
 
   // replace NaNs
@@ -204,7 +224,9 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   if(nans)
     printf("\n*******WARNING replaced %d NaNs in data ******\n\n", nans);
 
-  return 0;
+  if(status)
+    Omega_h_fail("ERROR: failed reading file %s\n", ncFileName.c_str());
+  return status;
 }
 
 //TODO combine nc write functions
@@ -214,6 +236,7 @@ void writeOutBdryFaceCoordsNcFile(const std::string& fileName,
   auto xx = o::HostRead<o::Real>(xd);
   auto yy = o::HostRead<o::Real>(yd);
   auto zz = o::HostRead<o::Real>(zd);
+  int status = 0;
   try {
     netCDF::NcFile ncMeshFile(fileName, netCDF::NcFile::replace);
     netCDF::NcDim nc_cells = ncMeshFile.addDim("ncells", nf);
@@ -234,7 +257,10 @@ void writeOutBdryFaceCoordsNcFile(const std::string& fileName,
     ncvz.putVar(&zz[0]);
   } catch (netCDF::exceptions::NcException& e) {
     std::cout << e.what() << "\n";
+    status = 1;
   }
+  if(status)
+    Omega_h_fail("ERROR: failed writing file %s\n", fileName.c_str());
 }
 
 void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
@@ -243,6 +269,7 @@ void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
   //outNcFileName = outNcFileName + std::to_string(i) + ".nc";
   assert(dof == st.fieldNames.size());
   assert(numPtcls == st.nDims[0]);
+  int status = 0;
   try {
     netCDF::NcFile ncFile(outNcFileName, netCDF::NcFile::replace);
     std::vector<netCDF::NcDim> ncDims;
@@ -280,12 +307,16 @@ void writeOutputNcFile( o::Write<o::Real>& ptclHistoryData, int numPtcls,
     }
   } catch (netCDF::exceptions::NcException& e) {
     std::cout << e.what() << "\n";
+    status = 1;
   }
+  if(status)
+    Omega_h_fail("ERROR: failed writing file %s \n", outNcFileName.c_str());
 }
 
 int readCsrFile(const std::string& ncFileName,  
   const std::vector<std::string>& vars,
   const std::vector<std::string>& datNames, o::LOs& ptrs, o::LOs& data) {
+  int status = 0;
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     netCDF::NcDim ncPtrName(ncf.getDim(vars[0].c_str()));
@@ -314,9 +345,11 @@ int readCsrFile(const std::string& ncFileName,
     std::cout << " Done reading " << ncFileName << "\n\n";
   } catch (netCDF::exceptions::NcException &e) {
     std::cout << e.what() << std::endl;
-    return 1;
+    status = 1;
   }
-  return 0;
+  if(status)
+    Omega_h_fail("ERROR: failed reading file %s \n", ncFileName.c_str());
+  return status;
 }
 
 
@@ -327,6 +360,7 @@ void writeOutputCsrFile(const std::string& outFileName,
   auto ptrs = o::HostRead<o::LO>(ptrs_d);
   int psize = ptrs.size();
   int dsize = data.size();
+  int status = 0;
   try {
     netCDF::NcFile ncFile(outFileName, netCDF::NcFile::replace);
     //TODO pass values to remove ordering
@@ -340,5 +374,8 @@ void writeOutputCsrFile(const std::string& outFileName,
     ncdata.putVar(&(data[0]));
   } catch (netCDF::exceptions::NcException& e) {
     std::cout << e.what() << "\n";
-  }
+    status = 1;
+  }    
+  if(status)
+    Omega_h_fail("Error: writing NC file %s failed\n", outFileName.c_str());
 }

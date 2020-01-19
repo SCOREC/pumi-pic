@@ -104,6 +104,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   setPtclInitData(readInData_r, numPtclsRead);
   printf("setting ionization recombination init data \n");
   initPtclChargeIoniRecombData();
+  initPtclSurfaceModelData();
 
   if(printSource)
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
@@ -124,7 +125,6 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
   o::LO maxLoop = 10000;
   MESHDATA(mesh);
   auto size = data.size();
-  OMEGA_H_CHECK(PTCL_READIN_DATA_SIZE_PER_PTCL >= 3);
   o::Write<o::LO> elemDet(1, -1);
   // Beginning element id of this x,y,z
   o::LO elmBeg=-1, ii=0;
@@ -321,13 +321,27 @@ void GitrmParticles::initPtclChargeIoniRecombData() {
   auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
   auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
 
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto lambda = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask > 0) {
       charge_scs(pid) = 0;
       first_ionizeZ_scs(pid) = 0;
       prev_ionize_scs(pid) = 0;
       first_ionizeT_scs(pid) = 0;
       prev_recomb_scs(pid) = 0;
+    }
+  };
+  scs->parallel_for(lambda);
+}
+
+void GitrmParticles::initPtclSurfaceModelData() {
+  auto ps_weight = scs->get<PTCL_WEIGHT>();
+  auto ps_hitNum = scs->get<PTCL_HIT_NUM>();
+  auto ps_newVelMag = scs->get<PTCL_VMAG_NEW>();
+  auto lambda = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+    if(mask > 0) {
+      ps_weight(pid) = 0;
+      ps_hitNum(pid) = 0;
+      ps_newVelMag(pid) = 0;
     }
   };
   scs->parallel_for(lambda);
@@ -571,12 +585,14 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
 int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName, 
   int& maxNPtcls, int& numPtclsRead, bool debug) {
   assert(USE_GITR_RND_NUMS == 1);
-  std::cout << "Reading Test GITR step data\n";
+  std::cout << "Reading Test GITR step data " << ncFileName << "\n";
   // re-order the list in its constructor to leave out empty {}
   Field3StructInput fs({"intermediate"}, {}, {"nP", "nTHist", "dof"}, 0,
     {"RndIoni_at", "RndRecomb_at", "RndCollision_n1_at", "RndCollision_n2_at", 
-     "RndCollision_xsi_at", "RndCrossField_at", "RndReflection_at"}); 
-  auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, "nP");
+     "RndCollision_xsi_at", "RndCrossField_at", "RndReflection_at",
+     "Opt_IoniRecomb", "Opt_Diffusion", "Opt_Collision", "Opt_SurfaceModel"}); 
+  auto stat = readInputDataNcFileFS3(ncFileName, fs, maxNPtcls, numPtclsRead, 
+      "nP", debug);
   testGitrPtclStepData = o::Reals(fs.data);
   testGitrDataIoniRandInd = fs.getIntValueOf("RndIoni_at");
   testGitrDataRecRandInd = fs.getIntValueOf("RndRecomb_at");
@@ -588,15 +604,22 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   testGitrCollisionRndn2Ind = fs.getIntValueOf("RndCollision_n2_at");
   testGitrCollisionRndxsiInd = fs.getIntValueOf("RndCollision_xsi_at");
   testGitrReflectionRndInd = fs.getIntValueOf("RndReflection_at");
-  if(debug) {
+  testGitrOptIoniRec = fs.getIntValueOf("Opt_IoniRecomb");
+  testGitrOptDiffusion =  fs.getIntValueOf("Opt_Diffusion");
+  testGitrOptCollision =  fs.getIntValueOf("Opt_Collision");
+  testGitrOptSurfaceModel = fs.getIntValueOf("Opt_SurfaceModel");
+
+  //if(debug)
     printf(" TestGITRdata: dof %d nT %d nP %d Index: rndIoni %d rndRec %d \n"
       " rndCrossFieldDiff %d rndColl_n1 %d rndColl_n2 %d rndColl_xsi %d "
-      " rndReflection %d\n", testGitrStepDataDof, testGitrStepDataNumTsteps,
+      " rndReflection %d\n GITR run Flags: ioniRec %d diffusion %d "
+      " collision %d surfmodel %d \n", testGitrStepDataDof, testGitrStepDataNumTsteps,
       testGitrStepDataNumPtcls, testGitrDataIoniRandInd, testGitrDataRecRandInd, 
       testGitrCrossFieldDiffRndInd, testGitrCollisionRndn1Ind, 
       testGitrCollisionRndn2Ind, testGitrCollisionRndxsiInd, 
-      testGitrReflectionRndInd);
-  }
+      testGitrReflectionRndInd, testGitrOptIoniRec, testGitrOptDiffusion,
+      testGitrOptCollision, testGitrOptSurfaceModel);
+
   return stat;
 }
 

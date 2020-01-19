@@ -7,6 +7,7 @@ set(HEADERS
   pumipic_library.hpp
   pumipic_input.hpp
   GitrmInputOutput.hpp
+  GitrmSurfaceModel.hpp
 )
 
 set(SOURCES
@@ -20,6 +21,7 @@ set(SOURCES
   GitrmParticles.cpp
   GitrmIonizeRecombine.cpp
   GitrmInputOutput.cpp
+  GitrmSurfaceModel.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE

@@ -22,15 +22,21 @@ using particle_structs::MemberTypes;
 namespace o = Omega_h;
 namespace p = pumipic;
 
-constexpr int PTCL_READIN_DATA_SIZE_PER_PTCL = 6;
+namespace gitrm {
+const o::Real ELECTRON_CHARGE = 1.60217662e-19;
+const o::Real PROTON_MASS = 1.6737236e-27;
+const o::Real BACKGROUND_AMU = 4.0; //for pisces
+const o::Real PTCL_AMU=184.0; //W,tungsten
+const o::LO PARTICLE_Z = 74;
+}
 
-// TODO: initialize these to its default values: ids =-1, reals=0
 typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
-   int, fp_t, int, fp_t, fp_t> Particle;
+   int, fp_t, fp_t, int, fp_t, fp_t, int, fp_t> Particle;
 
-// 'Particle' definition retrieval positions. 
+// 'Particle' definition retrieval indices. 
 enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
-  PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, PTCL_PREV_RECOMBINE};
+ PTCL_WEIGHT, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
+ PTCL_PREV_RECOMBINE, PTCL_HIT_NUM, PTCL_VMAG_NEW};
 
 typedef SellCSigma<Particle> SCS;
 
@@ -61,7 +67,8 @@ public:
     o::LO& numPtcls, o::LO maxLoops=100, bool print=false);
   
   void initPtclChargeIoniRecombData();
-  
+  void initPtclSurfaceModelData();
+
   void setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem,
     const o::LOs& ptclIdsInElem,  const o::LOs& elemIdOfPtcls, 
     const o::LO numPtcls, const o::LO nel);
@@ -103,6 +110,10 @@ public:
   int testGitrCollisionRndxsiInd = -1;
   int testGitrCrossFieldDiffRndInd = -1;
   int testGitrReflectionRndInd = -1;
+  int testGitrOptIoniRec = 0;
+  int testGitrOptDiffusion = 0;
+  int testGitrOptCollision = 0;
+  int testGitrOptSurfaceModel = 0;
 };
 
 //timestep +1

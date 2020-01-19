@@ -8,6 +8,126 @@
 namespace o = Omega_h;
 namespace p = pumipic;
 
+namespace gitrm {
+//TODO get from config
+const int SURFACE_FLUX_EA = 1;
+const int BOUNDARY_ATOM_Z = 1;
+}
+
+class GitrmSurfaceModel {
+public:
+  GitrmSurfaceModel(GitrmMesh& gm, std::string ncFile);
+  void getConfigData(std::string ncFile);
+  void initSurfaceModelData(std::string ncFile, bool debug=false);
+  void prepareSurfaceModelData();
+
+  void getSurfaceModelDataFromFile(const std::string,
+   const std::vector<std::string>&, const std::vector<std::string>&,
+   const std::vector<std::vector<int>>&, std::vector<int>&, std::vector<o::Reals>&);
+  GitrmMesh& gm;
+  o::Mesh& mesh;
+  std::string ncFile;
+  int numDetectorSurfaceFaces = 0;
+
+  //from NC file
+  std::string fileString{};
+  std::string nEnSputtRefCoeffStr{};
+  std::string nAngSputtRefCoeffStr{};
+  std::string nEnSputtRefDistInStr{};
+  std::string nAngSputtRefDistInStr{};
+  std::string nEnSputtRefDistOutStr{};
+  std::string nEnSputtRefDistOutRefStr{};
+  std::string nAngSputtRefDistOutStr{};
+  std::string enSputtRefCoeffStr{};
+  std::string angSputtRefCoeffStr{};
+  std::string enSputtRefDistInStr{};
+  std::string angSputtRefDistInStr{};
+  std::string enSputtRefDistOutStr{};
+  std::string enSputtRefDistOutRefStr{};
+  std::string angPhiSputtRefDistOutStr{};
+  std::string angThetaSputtRefDistOutStr{};
+  std::string sputtYldStr{};
+  std::string reflYldStr{};
+  std::string enDistYStr{};
+  std::string angPhiDistYStr{};
+  std::string angThetaDistYStr{};
+  std::string enDistRStr{};
+  std::string angPhiDistRStr{};
+  std::string angThetaDistRStr{};
+
+  int nEnSputtRefCoeff = 0; //"nE"
+  int nAngSputtRefCoeff = 0; // "nA"
+  int nEnSputtRefDistIn = 0; //"nE"
+  int nAngSputtRefDistIn = 0; // "nA"
+  int nEnSputtRefDistOut = 0; //"nEdistBins"
+  int nEnSputtRefDistOutRef = 0; //"nEdistBinsRef"
+  int nAngSputtRefDistOut = 0; // "nAdistBins"
+  // shapes are given as comments
+  o::Reals enSputtRefCoeff; // nEnSputtRefCoeff
+  o::Reals angSputtRefCoeff; // nAngSputtRefCoeff
+  o::Reals enSputtRefDistIn; //nEnSputtRefDistIn
+  o::Reals angSputtRefDistIn; //nAngSputtRefDistIn
+  o::Reals enSputtRefDistOut; // nEnSputtRefDistOut
+  o::Reals enSputtRefDistOutRef; //nEnSputtRefDistOutRef
+  o::Reals angPhiSputtRefDistOut; //nAngSputtRefDistOut
+  o::Reals angThetaSputtRefDistOut; //nAngSputtRefDistOut
+  o::Reals sputtYld; // nEnSputtRefCoeff X nAngSputtRefCoeff
+  o::Reals reflYld; //  nEnSputtRefCoeff X nAngSputtRefCoeff
+  o::Reals enDist_Y ; // nEnSputtRefCoeff X nAngSputtRefCoeff X nEnSputtRefDistOut
+  o::Reals enDist_R; // nEnSputtRefCoeff X nAngSputtRefCoeff X nEnSputtRefDistOutRef
+  o::Reals angPhiDist_Y; //nEnSputtRefCoeff X nAngSputtRefCoeff X nAngSputtRefDistOut
+  o::Reals angThetaDist_Y; // ""
+  o::Reals angPhiDist_R; // ""
+  o::Reals angThetaDist_R; // ""
+  
+  o::Reals enLogSputtRefCoef; // nEnSputtRefCoeff
+  o::Reals enLogSputtRefDistIn; //nEnSputtRefDistIn
+  o::Reals energyDistGrid01; //nEnSputtRefDistOut
+  o::Reals energyDistGrid01Ref; //nEnSputtRefDistOutRef
+  o::Reals angleDistGrid01; //nAngSputtRefDistOut
+
+  o::Reals enDist_CDF_Y_regrid; //EDist_CDF_Y_regrid(nDistE_surfaceModel)
+  o::Reals angPhiDist_CDF_Y_regrid;  //AphiDist_CDF_R_regrid(nDistA_surfaceModel)
+  o::Reals angPhiDist_CDF_R_regrid;  //APhiDist_CDF_R_regrid(nDistA_surfaceModel)
+  o::Reals enDist_CDF_R_regrid;  //EDist_CDF_R_regrid(nDistE_surfaceModelRef)
+  o::Reals angThetaDist_CDF_R_regrid; //
+  o::Reals angThetaDist_CDF_Y_regrid;//
+
+  int nDistEsurfaceModel = 0;
+  int nDistEsurfaceModelRef = 0;
+  int nDistAsurfaceModel = 0;
+
+  int nEnDist = 0;
+  double en0Dist = 0;
+  double enDist = 0;
+  int nAngDist = 0; 
+  double ang0Dist = 0;
+  double angDist = 0; 
+  double dEdist = 0;
+  double dAdist = 0;
+  
+  //size/bdry_face in comments. Distribute data upon partitioning.
+  o::Write<o::Real> energyDistribution; //9k/detFace
+  o::Write<o::Real> sputtDistribution;
+  o::Write<o::Real> reflDistribution;
+
+  int fluxEA = 0;
+
+  template<typename T>
+  void regrid2dCDF(const int nX, const int nY, const int nZ, 
+    const o::HostWrite<T>& xGrid, const int nNew, const T maxNew, 
+    const o::HostWrite<T>& cdf, o::HostWrite<T>& cdf_regrid);
+
+  template<typename T>
+  void make2dCDF(const int nX, const int nY, const int nZ, 
+    const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf);
+
+  template<typename T>
+  T interp1dUnstructured(const T samplePoint, const int nx, const T max_x, 
+    const T* data, int& lowInd);
+};
+
+
 OMEGA_H_DEVICE o::Real screeningLength(const o::Real projectileZ, 
     const o::Real targetZ) {
   o::Real bohrRadius = 5.29177e-11; //TODO
@@ -17,11 +137,11 @@ OMEGA_H_DEVICE o::Real screeningLength(const o::Real projectileZ,
 
 OMEGA_H_DEVICE o::Real stoppingPower (const o::Vector<3>& vel, const o::Real targetM, 
   const o::Real targetZ, const o::Real screenLength) {
-  o::Real elCharge = ELECTRON_CHARGE;
+  o::Real elCharge = gitrm::ELECTRON_CHARGE;
   o::Real ke2 = 14.4e-10; //TODO
-  o::Real amu = PTCL_AMU;
-  o::Real atomZ = PARTICLE_Z;
-  auto protonMass = PROTON_MASS;
+  o::Real amu = gitrm::PTCL_AMU;
+  o::Real atomZ = gitrm::PARTICLE_Z;
+  auto protonMass = gitrm::PROTON_MASS;
   o::Real E0 = 0.5*amu*protonMass *1.0/elCharge * p::osh_dot(vel, vel);
   o::Real reducedEnergy = E0*(targetM/(amu+targetM))* (screenLength/(atomZ*targetZ*ke2));
   o::Real stopPower = 0.5*log(1.0 + 1.2288*reducedEnergy)/(reducedEnergy +
@@ -30,11 +150,11 @@ OMEGA_H_DEVICE o::Real stoppingPower (const o::Vector<3>& vel, const o::Real tar
 }
 
 //not used ? 
-inline o::Real surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
-  int atomZ = PARTICLE_Z;
-  auto amu = PTCL_AMU;
-  auto elCharge = ELECTRON_CHARGE; //1.60217662e-19
-  auto protonMass = PROTON_MASS; //1.6737236e-27
+inline void surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
+  int atomZ = gitrm::PARTICLE_Z;
+  auto amu = gitrm::PTCL_AMU;
+  auto elCharge = gitrm::ELECTRON_CHARGE; //1.60217662e-19
+  auto protonMass = gitrm::PROTON_MASS; //1.6737236e-27
   o::Real q = 18.6006;
   o::Real lambda = 2.2697;
   o::Real mu = 3.1273;
@@ -42,11 +162,11 @@ inline o::Real surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
   o::Real targetZ = 74.0;
   o::Real targetM = 183.84;
 
-  auto pid_scs = scs->get<PTC_ID>();
+  auto pid_scs = scs->get<PTCL_ID>();
   auto vel_scs = scs->get<PTCL_VEL>();
   auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
     auto ptcl = pid_scs(pid);
-    auto screenLength = screeningLength(atomz, targetZ);
+    auto screenLength = screeningLength(atomZ, targetZ);
     auto vel = p::makeVector3(pid, vel_scs);
     o::Real stopPower = stoppingPower(vel, targetM, targetZ, screenLength);
     o::Real E0 = 0.5*amu*protonMass* 1/elCharge * p::osh_dot(vel, vel);
@@ -57,255 +177,10 @@ inline o::Real surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
   scs->parallel_for(lamb);
 }
 
-//TODO split this function/organize data access
-//Note, elem_ids are index by pid=indexes, not scs member. Don't rebuild after search_mesh 
-inline void surfaceReflection(o::Mesh& mesh, SCS* scs, o::Write<o::LO>& elem_ids) {
-  int debug = 1;
-  o::Real pi = CONSTANT_PI;
-  o::LO fluxEA = SURFACE_FLUX_EA;
-  o::LO bdryAtomZ = BOUNDARY_ATOM_Z;
 
-  const auto coords = mesh.coords();
-  const auto face_verts = mesh.ask_verts_of(2);
-  const auto f2r_ptr = mesh.ask_up(o::FACE, o::REGION).a2ab;
-  const auto f2r_elem = mesh.ask_up(o::FACE, o::REGION).ab2b;
-  const auto side_is_exposed = mark_exposed_sides(&mesh);
-  const auto mesh2verts = mesh.ask_elem_verts();
-  const auto down_r2fs = mesh.ask_down(3, 2).ab2b;
-
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
-  auto pos_prev_scs = scs->get<PTCL_POS>();
-  auto vel_scs = scs->get<PTCL_VEL>();
-  auto weight_scs = scs->get<PTCL_WEIGHT>();
-
-  auto& xpoints = gp.collisionPoints;
-  auto& xfaces = gp.collisionPointFaceIds;
-  //TODO check if this works, otherwise read and write as shown below
-  //get mesh tag for boundary data id,xpt,vel. deep_copy doesn't work
-  //auto xtag_w = deep_copy(mesh->get_array<o::Real>(o::FACE, "gridE"));
-  auto gridE =  deep_copy(mesh->get_array<o::Real>(o::FACE, "gridE"));//TODO store subgrid data ?
-  auto gridA =  deep_copy(mesh->get_array<o::Real>(o::FACE, "gridA"));//TODO store subgrid data ?
-  auto sumPtclStrike =  deep_copy(mesh->get_array<o::Real>(o::FACE, "sumParticlesStrike"));
-  auto sumWtStike =  deep_copy(mesh->get_array<o::Real>(o::FACE, "sumWeightStrike"));
-  auto grossDep =  deep_copy(mesh->get_array<o::Real>(o::FACE, "grossDeposition"));
-  auto grossEros_=  deep_copy(mesh->get_array<o::Real>(o::FACE, "grossErosion"));
-  auto aveSputtYld =  deep_copy(mesh->get_array<o::Real>(o::FACE, "aveSputtYld"));  
-  auto sputtYldCount =  deep_copy(mesh->get_array<o::Real>(o::FACE, "sputtYldCount")); 
-  auto enerDist =  deep_copy(mesh->get_array<o::Real>(o::FACE, "energyDistribution")); //nEdist*nAdist
-  auto sputtDist =  deep_copy(mesh->get_array<o::Real>(o::FACE, "sputtDistribution")); // nEdist*nAdist
-  auto reflDist =  deep_copy(mesh->get_array<o::Real>(o::FACE, "reflDistribution")); //nEdist x nAdist
-
- /*
-  auto xtag_r = mesh.get_array<o::Real>(o::FACE, "gridE"); 
-  o::Write<o::Real> xtag_d(xtag_r.size());
-  o::parallel_for(mesh.nfaces(), OMEGA_H_LAMBDA(int i) {
-    xtag_d[i] = xtag_r[i];
-  };);  //no tag for only bdry faces
- */
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    //mask is set for origin element, not for detected/exiting element
-    if(mask >0 && elem_ids[pid]==-1) {
-      auto elemId = e;
-      auto fid = xfaces[ptcl];
-      if(fid >= 0) {
-        OMEGA_H_CHECK(side_is_exposed[fid]);
-        auto ptcl = pid_scs(pid);
-        auto pelem = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
-        if(elemId != pelem)
-          elemId = pelem;
-// need fid to fIndex map to access by bdryFaces[fIndex]:  
-//auto fInd = get_bdry_face_index(o::LO fid, coords, side_is_exposed, );
-        auto bdryAtomZ = xtag_d[fInd*dof+ATOMZ];
-        auto vel = p::makeVector3(pid, vel_scs );
-        o::Vector<3> xpt;
-        for(o::LO i=0; i<3; ++i)
-          xpt[i] = xpoints[ptcl*3+i];
-        auto pos = p::makeVector3(pid, tgt_scs);
-        o::Real dEdist = 0;
-        o::Real dAdist = 0;
-        o::LO AdistInd=0;
-        o::LO EdistInd=0;
-        if(fluxEA > 0 {
-          dEdist = (Edist - E0dist)/nEdist;
-          dAdist = (Adist - A0dist)/nAdist;
-          AdistInd=0;
-          EdistInd=0;
-        }
-        //firstColl(pid) = 1; //scs
-        o::Real magPath = o::norm(vel);
-        o::Real amu = ptcl_amu(pid); //scs
-        o::Real E0 = 0.5*amu*1.6737236e-27*(magPath*magPath)/1.60217662e-19;
-        if(E0 > 1000.0) 
-          E0 = 990.0;
-  
-        auto elmId = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
-        auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
-          face_verts, down_r2fs); //inwards ?
-        o::Real magSurfNorm = o::norm(surfNorm);
-        auto normVel = o::normalize(vel);
-        o::Real ptclProj = p::osh_dot(normVel, surfNorm);
-        o::Real thetaImpact = acos(ptclProj);
-        if(thetaImpact > o::PI*0.5)
-           thetaImpact = abs(thetaImpact - o::PI);
-        thetaImpact = thetaImpact*180.0/o::PI;
-        if(thetaImpact < 0) thetaImpact = 0;
-    
-        if(o::are_close(E0, 0))
-          thetaImpact = 0;
-        o::Real Y0;
-        o::Real R0;
-        if(bdryAtomZ > 0) {//TODO
-          Y0 = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, true);
-
-          interp2d(thetaImpact,log10(E0),nA_sputtRefCoeff, nE_sputtRefCoeff,
-               A_sputtRefCoeff, Elog_sputtRefCoeff,spyl_surfaceModel);
-          R0 = interp2d(thetaImpact,log10(E0),nA_sputtRefCoeff, nE_sputtRefCoeff,
-               A_sputtRefCoeff, Elog_sputtRefCoeff,rfyl_surfaceModel);
-        }
-        else
-        {
-            Y0 = 0.0;
-            R0 = 0.0;
-        }
-
-        o::Real totalYR=Y0+R0;
-        //particle either reflects or deposits
-        o::Real sputtProb = Y0/totalYR;
-        int didReflect = 0;
-        
-        if(totalYR > 0) {
-          if(r7 > sputtProb) { //reflect
-            //resetting hitface
-            xfaces[ptcl] = -1;
-            // for next push
-            elem_ids[pid] = elemId;
-
-            didReflect = 1;
-            aInterpVal = interp3d (r8,thetaImpact,log10(E0),
-                      nA_sputtRefDistOut,nA_sputtRefDistIn,nE_sputtRefDistIn,
-                                angleDistGrid01,A_sputtRefDistIn,
-                                E_sputtRefDistIn,ADist_CDF_R_regrid);
-            eInterpVal = interp3d ( r9,thetaImpact,log10(E0),
-                       nE_sputtRefDistOutRef,nA_sputtRefDistIn,nE_sputtRefDistIn,
-                                     energyDistGrid01Ref,A_sputtRefDistIn,
-                                     E_sputtRefDistIn,EDist_CDF_R_regrid );
-            //newWeight=(R0/(1.0f-sputtProb))*weight;
-            newWeight = weight*(totalYR);
-            if(FLUX_EA > 0) {
-              EdistInd = floor((eInterpVal-E0dist)/dEdist);
-              AdistInd = floor((aInterpVal-A0dist)/dAdist);
-              if((EdistInd >= 0) && (EdistInd < nEdist) && 
-                 (AdistInd >= 0) && (AdistInd < nAdist)) {
-                reflDist[fid*nEdist*nAdist + EdistInd*nAdist + AdistInd] += newWeight; //TODO faceId serial ?
-              }
-            } 
-            if(surface > 0) {
-              auto dep = grossDep[fid];
-              grossDep[fid] = dep + weight*(1.0-R0);
-            }
-          } else {//sputters                
-            aInterpVal = interp3d(r8,thetaImpact,log10(E0),
-                      nA_sputtRefDistOut,nA_sputtRefDistIn,nE_sputtRefDistIn,
-                      angleDistGrid01,A_sputtRefDistIn, E_sputtRefDistIn,ADist_CDF_Y_regrid);
-            eInterpVal = interp3d(r9,thetaImpact,log10(E0),
-                    nE_sputtRefDistOut,nA_sputtRefDistIn,nE_sputtRefDistIn,
-                    energyDistGrid01,A_sputtRefDistIn,E_sputtRefDistIn,EDist_CDF_Y_regrid);
-                    newWeight = weight*totalYR;
-            if(FLUX_EA > 0){
-              EdistInd = floor((eInterpVal-E0dist)/dEdist);
-              AdistInd = floor((aInterpVal-A0dist)/dAdist);
-              if((EdistInd >= 0) && (EdistInd < nEdist) && 
-                 (AdistInd >= 0) && (AdistInd < nAdist)) {
-                sputtDist[fid*nEdist*nAdist + EdistInd*nAdist + AdistInd] += newWeight;
-	            }
-            }
-            
-            if(sputtProb == 0) 
-              newWeight = 0;
-            if(surface > 0) {
-              grossDep[fid] += weight*(1.0-R0);
-              grossEros[fid] += newWeight;
-              aveSputtYld[fid] += Y0;
-              if(weight > 0)
-                sputtYldCount[fid] += 1;
-            }
-          }
-          else {
-            newWeight = 0;
-            particles->hitWall[indx] = 2;
-            if(surface > 0)
-              grossDep[fid] += weight;
-          }
-
-          if(eInterpVal <= 0) {
-            newWeight = 0;
-            particles->hitWall[indx] = 2;
-            if(surface > 0 && didReflect)
-              grossDep[fid] += weight;            
-          }
-          if(surface) {
-            sumWtStike[fid] += weight;
-            sumPtclStrike[fid] += 1;
-
-            if(FLUX_EA > 0) {
-              EdistInd = floor((E0-E0dist)/dEdist);
-              AdistInd = floor((thetaImpact-A0dist)/dAdist);
-              if((EdistInd >= 0) && (EdistInd < nEdist) && 
-                  (AdistInd >= 0) && (AdistInd < nAdist)) {
-                enerDist[fid*nEdist*nAdist + EdistInd*nAdist + AdistInd] += weight;
-              }
-            }
-          }
-
-          if( bdryAtomZ > 0 && newWeight > 0) {
-            ptcl_weight(pid) = newWeight;
-            ptcl_hitWall(pid) = 0;
-            ptcl_charge(pid) = 0;
-            o::Real V0 = sqrt(2*eInterpVal*1.602e-19/(amu*1.66e-27));
-            ptcl_newVelMag(pid) = V0;
-            
-            o::Vector<3> vSampled; 
-            vSampled[0] = V0*sin(aInterpVal*3.1415/180)*cos(2.0*3.1415*r10);
-            vSampled[1] = V0*sin(aInterpVal*3.1415/180)*sin(2.0*3.1415*r10);
-            vSampled[2] = V0*cos(aInterpVal*3.1415/180);
-            auto surfNorm = p::bdry_face_normal_of_tet(fid,coords,face_verts);
-            auto surfPar = vtx1 - vtx2; // bdry face vtx
-            auto Y = o::cross(surfNorm, surfPar);
-            auto vSampled = vSampled[0] * surfPar + vSampled[1]*Y + vSampled[2]*surfNorm;
-
-            auto newPos = -dbryInDir *surfNorm*vSampled; //boundaryVector[wallHit].inDir
-            for(o::LO i=0; i<3; ++i)
-              tgt_scs(pid,i) = newPos[i];
-
-            auto prevPos = pos - 1e-6*dbryInDir *surfNorm;
-
-            for(o::LO i=0; i<3; ++i)
-              pos_prev_scs(pid,i) = prevPos[i];
-          } else {
-            particles->hitWall[indx] = 2.0;
-          }
-        }
-        
-      } //fid
-    } //mask
-  };
-  scs->parallel_for(lamb);
-  mesh.set_tag(o::FACE, "gridE", o::Reals(gridE)); //TODO store subgrid data ?
-  mesh.set_tag(o::FACE, "gridA", o::Reals(gridA); //TODO store subgrid data ?
-  mesh.set_tag(o::FACE, "sumParticlesStrike", o::Reals(sumPtclStrike);
-  mesh.set_tag(o::FACE, "sumWeightStrike", o::Reals(sumWtStike);
-  mesh.set_tag(o::FACE, "grossDeposition", o::Reals(grossDep);
-  mesh.set_tag(o::FACE, "grossErosion", o::Reals(grossEros);
-  mesh.set_tag(o::FACE, "aveSputtYld", o::Reals(aveSputtYld);
-  mesh.set_tag(o::FACE, "sputtYldCount", o::Reals(sputtYldCount);
-  mesh.set_tag(o::FACE, "energyDistribution", o::Reals(enerDist);
-  mesh.set_tag(o::FACE, "sputtDistribution", o::Reals(sputtDist);
-  mesh.set_tag(o::FACE, "reflDistribution", o::Reals(reflDist);
+//Note, elem_ids indexed by pids of scs, not ptcl. Don't rebuild after search_mesh 
+inline void gitrm_surfaceReflection(SCS* scs, GitrmSurfaceModel& sm, GitrmParticles& gp,
+  const GitrmMesh& gm, o::Write<o::LO>& elem_ids, bool debug=false) {
 }
-
-
-
-
 
 #endif

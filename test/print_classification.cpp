@@ -12,9 +12,10 @@ int main(int argc, char** argv) {
   Omega_h::Library& lib = pic_lib.omega_h_lib();
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (argc != 4) {
+  if (argc != 5) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition file prefix> <num_ranks (-1 -> num classids)>\n", 
+      fprintf(stderr, "Usage: %s <mesh> <partition file prefix> <num_ranks (-1 -> num classids)>"
+              "<minimum number of elements per rank>\n", 
               argv[0]);
     return EXIT_FAILURE;
   }
@@ -25,6 +26,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   comm_size = atoi(argv[3]);
+  int min_elems = atoi(argv[4]);
   //Load mesh
   Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.world());
   int dim = mesh.dim();
@@ -48,13 +50,6 @@ int main(int argc, char** argv) {
   Omega_h::LO nclasses = Omega_h::get_sum(Omega_h::LOs(class_checks));
   if (comm_size == -1)
     comm_size = nclasses;
-  Omega_h::LO classes_per_rank = nclasses/comm_size;
-  Omega_h::LO extra_classes = nclasses%comm_size;
-  if (comm_size > nclasses) {
-    fprintf(stderr,"[WARNING] Too many ranks for number of parts, reducing comm_size to fit classifications\n");
-    comm_size = nclasses;
-    classes_per_rank = 1;
-  }
 
   //Exclusive sum to set part ids per class id (ignoring 0s in array)
   Omega_h::LOs class_ptn = Omega_h::offset_scan(Omega_h::LOs(class_checks));
@@ -67,17 +62,49 @@ int main(int argc, char** argv) {
     ptn_sizes[i] = 0;
 
   Omega_h::HostWrite<Omega_h::LO> host_class_owners(max_class+1);
+
+  int id = 0;
+  int nc = 0;
+  //filling is true if a current part is being filled with classifications
+  bool filling = false;
   int outrank = 0;
-  int somecount = 0;
-  for(int id=0; id<max_class+1; id++) {
+  while (filling || (class_size_h[id] < min_elems)) {
+    filling = true;
     host_class_owners[id] = -1;
     const Omega_h::LO my_class = class_ptn_h[id];
     const Omega_h::LO next_class = class_ptn_h[id+1];
+    //Skip empty classifications
+    if (my_class != next_class) {
+      nc++;
+      host_class_owners[id] = outrank;
+      ptn_sizes[outrank] += class_size_h[id];
+      if (ptn_sizes[outrank] >= min_elems) {
+        outrank++;
+        filling = false;
+      }
+    }
+    ++id;
+  }
+  Omega_h::LO classes_per_rank = (nclasses-nc)/(comm_size-outrank);
+  Omega_h::LO extra_classes = (nclasses-nc)%(comm_size-outrank);
+  if (comm_size-outrank > nclasses-id) {
+    fprintf(stderr,"[WARNING] Too many ranks for number of parts, reducing comm_size to fit classifications\n");
+    comm_size = nclasses - id;
+    extra_classes = 0;
+    classes_per_rank = 1;
+  }
+  int start = outrank;
+  int somecount = 0;
+  for(; id<max_class+1; id++) {
+    host_class_owners[id] = -1;
+    const Omega_h::LO my_class = class_ptn_h[id];
+    const Omega_h::LO next_class = class_ptn_h[id+1];
+    //Skip empty classifications
     if (my_class != next_class) {
       somecount++;
       host_class_owners[id] = outrank;
       ptn_sizes[outrank] += class_size_h[id];
-      if(somecount >= classes_per_rank + (outrank<extra_classes) ) {
+      if(somecount >= classes_per_rank + (outrank-start<extra_classes) ) {
         outrank++;
         somecount = 0;
       }

@@ -1,22 +1,16 @@
 #include <Omega_h_mesh.hpp>
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <Distribute.h>
+#include <particle_structs.hpp>
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
 
-using particle_structs::fp_t;
 using particle_structs::lid_t;
-using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_name;
-using particle_structs::elemCoords;
+using pumipic::fp_t;
+using pumipic::Vector3d;
 
 namespace o = Omega_h;
 namespace p = pumipic;
@@ -26,92 +20,90 @@ namespace p = pumipic;
 // computed (pre adjacency search) positions, and
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
-typedef SellCSigma<Particle> SCS;
+typedef ps::ParticleStructure<Particle> PS;
 
-void setPtclIds(SCS* scs) {
-  auto pid_d = scs->get<2>();
-  auto setIDs = SCS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+void setPtclIds(PS* ptcls) {
+  auto pid_d = ptcls->get<2>();
+  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
     if(mask)
       pid_d(pid) = pid;
   };
-  scs->parallel_for(setIDs);
+  ps::parallel_for(ptcls, setIDs);
 }
 
-void updatePtclPositions(SCS* scs) {
-  auto x_scs_d = scs->get<0>();
-  auto xtgt_scs_d = scs->get<1>();
-  auto updatePtclPos = SCS_LAMBDA(const int&, const int& pid, const bool&) {
-    x_scs_d(pid,0) = xtgt_scs_d(pid,0);
-    x_scs_d(pid,1) = xtgt_scs_d(pid,1);
-    x_scs_d(pid,2) = xtgt_scs_d(pid,2);
-    xtgt_scs_d(pid,0) = 0;
-    xtgt_scs_d(pid,1) = 0;
-    xtgt_scs_d(pid,2) = 0;
+void updatePtclPositions(PS* ptcls) {
+  auto x_ps_d = ptcls->get<0>();
+  auto xtgt_ps_d = ptcls->get<1>();
+  auto updatePtclPos = PS_LAMBDA(const int&, const int& pid, const bool&) {
+    x_ps_d(pid,0) = xtgt_ps_d(pid,0);
+    x_ps_d(pid,1) = xtgt_ps_d(pid,1);
+    x_ps_d(pid,2) = xtgt_ps_d(pid,2);
+    xtgt_ps_d(pid,0) = 0;
+    xtgt_ps_d(pid,1) = 0;
+    xtgt_ps_d(pid,2) = 0;
   };
-  scs->parallel_for(updatePtclPos);
+  ps::parallel_for(ptcls, updatePtclPos);
 }
 
-void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
-  updatePtclPositions(scs);
-  const int scs_capacity = scs->capacity();
-  auto ids = scs->get<2>();
-  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
+  updatePtclPositions(ptcls);
+  const int ps_capacity = ptcls->capacity();
+  auto ids = ptcls->get<2>();
+  auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
       printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
-  scs->parallel_for(printElmIds);
+  ps::parallel_for(ptcls, printElmIds);
 
-  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
-  SCS::kkLidView scs_process_ids("scs_process_ids", scs_capacity);
+  PS::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
+  PS::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
   Omega_h::LOs is_safe = picparts.safeTag();
   Omega_h::LOs elm_owners = picparts.entOwners(picparts.dim());
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask) {
       int new_elem = elem_ids[pid];
-      scs_elem_ids(pid) = new_elem;
-      scs_process_ids(pid) = comm_rank;
+      ps_elem_ids(pid) = new_elem;
+      ps_process_ids(pid) = comm_rank;
       if (new_elem != -1 && is_safe[new_elem] == 0) {
-        scs_process_ids(pid) = elm_owners[new_elem];
+        ps_process_ids(pid) = elm_owners[new_elem];
       }
     }
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb);
 
-  scs->migrate(scs_elem_ids, scs_process_ids);
+  ptcls->migrate(ps_elem_ids, ps_process_ids);
 
-  printf("SCS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
-         , comm_rank, scs->nElems(), scs->nPtcls(), scs->capacity(), scs->numRows());
-  ids = scs->get<2>();
+  printf("PS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
+         , comm_rank, ptcls->nElems(), ptcls->nPtcls(), ptcls->capacity(), ptcls->numRows());
+  ids = ptcls->get<2>();
   if (output) {
-    auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if (mask > 0)
         printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
     };
-    scs->parallel_for(printElms);
+    ps::parallel_for(ptcls, printElms);
   }
 }
 
-void search(p::Mesh& picparts, SCS* scs, bool output=false) {
+void search(p::Mesh& picparts, PS* ptcls, bool output=false) {
   o::Mesh* mesh = picparts.mesh();
-  assert(scs->nElems() == mesh->nelems());
+  assert(ptcls->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 100;
-  const auto scsCapacity = scs->capacity();
-  o::Write<o::LO> elem_ids(scsCapacity,-1);
+  const auto psCapacity = ptcls->capacity();
+  o::Write<o::LO> elem_ids(psCapacity,-1);
   Kokkos::Timer timer;
-  auto x = scs->get<0>();
-  auto xtgt = scs->get<1>();
-  auto pid = scs->get<2>();
-  o::Write<o::Real> xpoints_d(3 * scsCapacity, "intersection points");
-  o::Write<o::LO> xface_id(scsCapacity, "intersection faces");
-  bool isFound = p::search_mesh_2d<Particle>(*mesh, scs, x, xtgt, pid, elem_ids,
-                                          xpoints_d, maxLoops);
+  auto x = ptcls->get<0>();
+  auto xtgt = ptcls->get<1>();
+  auto pid = ptcls->get<2>();
+  o::Write<o::LO> xface_id(psCapacity, "intersection faces");
+  bool isFound = p::search_mesh_2d<Particle>(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
   fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
-  //rebuild the SCS to set the new element-to-particle lists
+  //rebuild the PS to set the new element-to-particle lists
   timer.reset();
-  rebuild(picparts, scs, elem_ids, output);
+  rebuild(picparts, ptcls, elem_ids, output);
   fprintf(stderr, "rebuild (seconds) %f\n", timer.seconds());
 }
 
@@ -139,8 +131,8 @@ void particleSearch(p::Mesh& picparts,
   /* Particle data */
   const auto ne = mesh->nelems();
   const auto numPtcls = 1;
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  SCS::kkGidView element_gids("element_gids", ne);
+  PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  PS::kkGidView element_gids("element_gids", ne);
   //place one particle in element 0
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
@@ -153,39 +145,39 @@ void particleSearch(p::Mesh& picparts,
   const int V = 32;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-                                                       ptcls_per_elem, element_gids);
+  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+                                       ptcls_per_elem, element_gids);
   auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
   auto nodes2coords = mesh->coords();
   //set particle positions
-  auto x_scs_d = scs->get<0>();
-  auto x_scs_tgt = scs->get<1>();
+  auto x_ps_d = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
   const double ptclStart[2] = {start[0],start[1]};
   const double ptclEnd[2] = {end[0],end[1]};
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask && !pid) {
       for(int i=0; i<2; i++) {
-        x_scs_d(pid,i) = ptclStart[i];
-        x_scs_tgt(pid,i) = ptclEnd[i];
+        x_ps_d(pid,i) = ptclStart[i];
+        x_ps_tgt(pid,i) = ptclEnd[i];
       }
       printf("pid %d elm %d src %f %f dest %f %f\n",
-          pid, e, x_scs_d(pid,0), x_scs_d(pid,1),
-          x_scs_tgt(pid,0), x_scs_tgt(pid,1));
+          pid, e, x_ps_d(pid,0), x_ps_d(pid,1),
+          x_ps_tgt(pid,0), x_ps_tgt(pid,1));
     }
   };
-  scs->parallel_for(lamb);
-  setPtclIds(scs);
-  search(picparts,scs);
-  auto printPtclElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  ps::parallel_for(ptcls, lamb);
+  setPtclIds(ptcls);
+  search(picparts,ptcls);
+  auto printPtclElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask) {
       assert(e == destElm || e == altDestElm);
       printf("pid %d elm %d (x,y) %f %f\n",
-          pid, e, x_scs_d(pid, 0), x_scs_d(pid, 1));
+          pid, e, x_ps_d(pid, 0), x_ps_d(pid, 1));
     }
   };
-  scs->parallel_for(printPtclElm);
+  ps::parallel_for(ptcls, printPtclElm);
 
-  delete scs;
+  delete ptcls;
 }
 
 int comm_rank, comm_size;
@@ -316,7 +308,7 @@ void testTri8(Omega_h::Library& lib, std::string meshDir) {
 }
 
 void testItg24k(Omega_h::Library& lib, std::string meshDir) {
-  const auto meshName = meshDir+"/xgc/itg24k.osh";
+  const auto meshName = meshDir+"/xgc/24k.osh";
   auto full_mesh = readMesh(meshName.c_str(), lib);
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   for (int i = 0; i < full_mesh.nelems(); ++i)
@@ -337,12 +329,11 @@ void testItg24k(Omega_h::Library& lib, std::string meshDir) {
            mesh->nfaces(), mesh->nelems());
 
   {
-    const auto parentElm = 4924;
-    const auto destElm = 5389;
-    const auto altDestElm = 4933;
-    const double start[2] = {1.342651612585819,-0.003728222089789};
-    const double end[2]  = {1.342951942861444, -0.012512984262059};
-    particleSearch(picparts,parentElm,start,end,destElm,altDestElm);
+    const auto parentElm = 7039;
+    const auto destElm = 5912;
+    const double start[2] = {1.30,-0.003728222089789};
+    const double end[2]  = {1.342951942861444, -0.032512984262059};
+    particleSearch(picparts,parentElm,start,end,destElm);
   }
 }
 

@@ -1,5 +1,4 @@
 #include <Omega_h_mesh.hpp>
-#include <SCS_Macros.h>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
 #include "pseudoXGCmTypes.hpp"

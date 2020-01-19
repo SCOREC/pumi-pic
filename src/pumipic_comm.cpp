@@ -11,10 +11,8 @@ namespace pumipic {
   void Mesh::setupComm(int edim, Omega_h::LOs global_ents_per_rank,
                        Omega_h::LOs picpart_ents_per_rank,
                        Omega_h::LOs ent_owners) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int comm_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int rank = commptr->rank();
+    int comm_size = commptr->size();
 
     int nents = picpart->nents(edim);
     Omega_h::Write<Omega_h::LO> ent_rank_lids(nents,0);
@@ -62,7 +60,7 @@ namespace pumipic {
       boundary_degree[part_id] = picpart_diff * (is_complete[part_id] == 1);
     };
     Omega_h::parallel_for(comm_size, checkCompleteness, "checkCompleteness");
-      
+
     //Renumber the boundary part ents using atomics
     //  NOTE: We can do this for boundary ents because the order doesn't need to be consistent
     Omega_h::Write<Omega_h::LO> picpart_offsets_tmp(nents, 0, "picpart_offsets_tmp");
@@ -74,7 +72,7 @@ namespace pumipic {
     };
     Omega_h::parallel_for(nents, renumberBoundaryLids, "renumberBoundaryLids");
 
-    
+
     //Calculate communication array indices
     // Index = rank_lid + picpart_ents_per_rank
     auto calculateCommArrayIndices = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
@@ -106,7 +104,7 @@ namespace pumipic {
     MPI_Request alltoall_request;
     MPI_Ialltoall(boundary_degree_host.data(), 1, MPI_INT,
                   recv_boundary_degree_host.data(), 1, MPI_INT,
-                  MPI_COMM_WORLD, &alltoall_request);
+                  commptr->get_impl(), &alltoall_request);
 
     //Create buffers to collect boundary entity ids
     Omega_h::HostRead<Omega_h::LO> boundary_ent_offsets_host(boundary_ent_offsets);
@@ -162,13 +160,13 @@ namespace pumipic {
         int start = boundary_ent_offsets_host[i];
         int deg = boundary_degree_host[i];
         MPI_Isend(&(boundary_rlids_host[start]), deg, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, send_requests + index++);
+                  commptr->get_impl(), send_requests + index++);
       }
       if (recv_boundary_degree_host[i] > 0) {
         int start = recv_boundary_offset_host[i];
         int deg = recv_boundary_degree_host[i];
         MPI_Irecv(&(recv_rlids[start]), deg, MPI_INT, i, 0,
-                  MPI_COMM_WORLD, recv_requests + index2++);
+                  commptr->get_impl(), recv_requests + index2++);
       }
     }
     if (num_bounded > 0) {
@@ -230,9 +228,10 @@ namespace pumipic {
       fprintf(stderr, "Comm array size does not match the expected size for dimension %d\n",edim);
       return;
     }
-
+    if (commptr->size() == 1)
+      return;
     //If full mesh then perform an allreduce on the array
-    if (isFullMesh()) {
+    if (isFullMesh() && op != BCAST_OP) {
       Omega_h::HostWrite<T> array_host(comm_array);
       MPI_Op mpi_op;
       if (op == SUM_OP)
@@ -247,7 +246,6 @@ namespace pumipic {
       return;
     }
 
-    
     //Shift comm_array indexing to bulk communication ordering
     Omega_h::Read<Omega_h::LO> arr_index = commArrayIndex(edim);
     Omega_h::Write<T> array(length, 0);
@@ -263,7 +261,7 @@ namespace pumipic {
     //Move values to host
     Omega_h::HostWrite<T> host_array(array);
     T* data = host_array.data();
-    
+
     //Prepare sending and receiving data of cores to the owner of that region
     Omega_h::HostRead<Omega_h::LO> ent_offsets(offset_ents_per_rank_per_dim[edim]);
     int my_num_entries = ent_offsets[commptr->rank()+1] - ent_offsets[commptr->rank()];
@@ -275,105 +273,107 @@ namespace pumipic {
     MPI_Request* send_requests = new MPI_Request[num_sends];
     MPI_Request* recv_requests = new MPI_Request[num_recvs];
     int index = 0;
-    for (int i = 0; i < num_cores[edim]; ++i) {
-      int rank = buffered_parts[edim][i];
-      int num_entries = ent_offsets[rank+1] - ent_offsets[rank];
-      if (num_entries > 0) {
-        MPI_Isend(data + ent_offsets[rank]*nvals, num_entries*nvals, MpiTraits<T>::datatype(),
-                  rank, is_complete_part[edim][rank], commptr->get_impl(), send_requests + i);
-        if (is_complete_part[edim][rank] == 2) {
-          T* neighbor_data = neighbor_arrays[index]->data();
-          MPI_Irecv(neighbor_data, my_num_entries*nvals, MpiTraits<T>::datatype(), rank, 2,
-                    commptr->get_impl(), recv_requests + index++);
+    //Fan in is skipped for accept_op
+    if (op != BCAST_OP) {
+      for (int i = 0; i < num_cores[edim]; ++i) {
+        int rank = buffered_parts[edim][i];
+        int num_entries = ent_offsets[rank+1] - ent_offsets[rank];
+        if (num_entries > 0) {
+          MPI_Isend(data + ent_offsets[rank]*nvals, num_entries*nvals, MpiTraits<T>::datatype(),
+                    rank, is_complete_part[edim][rank], commptr->get_impl(), send_requests + i);
+          if (is_complete_part[edim][rank] == 2) {
+            T* neighbor_data = neighbor_arrays[index]->data();
+            MPI_Irecv(neighbor_data, my_num_entries*nvals, MpiTraits<T>::datatype(), rank, 2,
+                      commptr->get_impl(), recv_requests + index++);
+          }
         }
       }
-    }
 
-    //Recv data from bounding parts
-    for (Omega_h::LO i = 0; i < num_boundaries[edim]; ++i) {
-      int rank = boundary_parts[edim][i];
-      T* neighbor_data = neighbor_arrays[index]->data();
-      int size = offset_bounded_per_dim[edim][rank+1] - offset_bounded_per_dim[edim][rank];
-      MPI_Irecv(neighbor_data, size*nvals, MpiTraits<T>::datatype(), rank, 1,
-                commptr->get_impl(), recv_requests + index++);
-    }
-    //Wait for recv completion
-    Omega_h::LOs bounded_ent_ids_local = bounded_ent_ids[edim];
-    for (Omega_h::LO i = 0; i < num_recvs; ++i) {
-      int finished_neighbor = -1;
-      MPI_Status status;
-      MPI_Waitany(num_recvs, recv_requests, &finished_neighbor, &status);
-      //When recv finishes copy data to the device and perform op
-      const Omega_h::LO start_index = ent_offsets[commptr->rank()]*nvals;
-      Omega_h::Write<T> recv_array(*(neighbor_arrays[finished_neighbor]));
-      if (status.MPI_TAG == 2) {
-        if (op == SUM_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            Kokkos::atomic_fetch_add(&(array[start_index + i]),recv_array[i]);
-          };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
-        }
-        else if (op == MAX_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            const T x = array[start_index + i];
-            const T y = recv_array[i];
-            array[start_index + i] = maxReduce(x,y);
-          };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
-        }
-        else if (op == MIN_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            const T x = array[start_index + i];
-            const T y = recv_array[i];
-            array[start_index + i] = minReduce(x,y);
-          };
-          Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
-        }
+      //Recv data from bounding parts
+      for (Omega_h::LO i = 0; i < num_boundaries[edim]; ++i) {
+        int rank = boundary_parts[edim][i];
+        T* neighbor_data = neighbor_arrays[index]->data();
+        int size = offset_bounded_per_dim[edim][rank+1] - offset_bounded_per_dim[edim][rank];
+        MPI_Irecv(neighbor_data, size*nvals, MpiTraits<T>::datatype(), rank, 1,
+                  commptr->get_impl(), recv_requests + index++);
       }
-      else {
-        const int size = offset_bounded_per_dim[edim][finished_neighbor+1] -
-          offset_bounded_per_dim[edim][finished_neighbor];
-        const int start = offset_bounded_per_dim[edim][finished_neighbor];
-        if (op == SUM_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            int index = bounded_ent_ids_local[start+i];
-            for (int j = 0; j < nvals; ++j) {
-              Kokkos::atomic_fetch_add(&(array[start_index + index*nvals + j]),
-                                       recv_array[i*nvals + j]);
-            }
-          };
-          Omega_h::parallel_for(size, reduce_op, "reduce_op");
+      //Wait for recv completion
+      Omega_h::LOs bounded_ent_ids_local = bounded_ent_ids[edim];
+      for (Omega_h::LO i = 0; i < num_recvs; ++i) {
+        int finished_neighbor = -1;
+        MPI_Status status;
+        MPI_Waitany(num_recvs, recv_requests, &finished_neighbor, &status);
+        //When recv finishes copy data to the device and perform op
+        const Omega_h::LO start_index = ent_offsets[commptr->rank()]*nvals;
+        Omega_h::Write<T> recv_array(*(neighbor_arrays[finished_neighbor]));
+        if (status.MPI_TAG == 2) {
+          if (op == SUM_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              Kokkos::atomic_fetch_add(&(array[start_index + i]),recv_array[i]);
+            };
+            Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          }
+          else if (op == MAX_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              const T x = array[start_index + i];
+              const T y = recv_array[i];
+              array[start_index + i] = maxReduce(x,y);
+            };
+            Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          }
+          else if (op == MIN_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              const T x = array[start_index + i];
+              const T y = recv_array[i];
+              array[start_index + i] = minReduce(x,y);
+            };
+            Omega_h::parallel_for(recv_array.size(), reduce_op, "reduce_op");
+          }
         }
-        else if (op == MAX_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            int index = bounded_ent_ids_local[start+i];
-            for (int j = 0; j < nvals; ++j) {
-              const Omega_h::LO k = start_index + index*nvals + j;
-              const T x = array[k];
-              const T y = recv_array[i*nvals + j];
-              array[k] = maxReduce(x,y);
-            }
-          };
-          Omega_h::parallel_for(size, reduce_op, "reduce_op");
+        else {
+          const int size = offset_bounded_per_dim[edim][finished_neighbor+1] -
+            offset_bounded_per_dim[edim][finished_neighbor];
+          const int start = offset_bounded_per_dim[edim][finished_neighbor];
+          if (op == SUM_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              int index = bounded_ent_ids_local[start+i];
+              for (int j = 0; j < nvals; ++j) {
+                Kokkos::atomic_fetch_add(&(array[start_index + index*nvals + j]),
+                                         recv_array[i*nvals + j]);
+              }
+            };
+            Omega_h::parallel_for(size, reduce_op, "reduce_op");
+          }
+          else if (op == MAX_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              int index = bounded_ent_ids_local[start+i];
+              for (int j = 0; j < nvals; ++j) {
+                const Omega_h::LO k = start_index + index*nvals + j;
+                const T x = array[k];
+                const T y = recv_array[i*nvals + j];
+                array[k] = maxReduce(x,y);
+              }
+            };
+            Omega_h::parallel_for(size, reduce_op, "reduce_op");
+          }
+          else if (op == MIN_OP) {
+            auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
+              int index = bounded_ent_ids_local[start+i];
+              for (int j = 0; j < nvals; ++j) {
+                const Omega_h::LO k = start_index + index*nvals + j;
+                const T x = array[k];
+                const T y = recv_array[i*nvals + j];
+                array[k] = minReduce(x,y);
+              }
+            };
+            Omega_h::parallel_for(size, reduce_op, "reduce_op");
+          }
         }
-        else if (op == MIN_OP) {
-          auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
-            int index = bounded_ent_ids_local[start+i];
-            for (int j = 0; j < nvals; ++j) {
-              const Omega_h::LO k = start_index + index*nvals + j;
-              const T x = array[k];
-              const T y = recv_array[i*nvals + j];
-              array[k] = minReduce(x,y);
-            }
-          };
-          Omega_h::parallel_for(size, reduce_op, "reduce_op");
-        }
+        delete neighbor_arrays[finished_neighbor];
       }
-      delete neighbor_arrays[finished_neighbor];
+      MPI_Waitall(num_sends, send_requests,MPI_STATUSES_IGNORE);
+      delete [] neighbor_arrays;
     }
-    MPI_Waitall(num_sends, send_requests,MPI_STATUSES_IGNORE);
-    delete [] neighbor_arrays;
-    
     /***************** Fan Out ******************/
     //Flip the sizes of the request arrays
     MPI_Request* temp = send_requests;
@@ -399,6 +399,7 @@ namespace pumipic {
       }
     }
     //Gather the boundary data to send
+    Omega_h::LOs bounded_ent_ids_local = bounded_ent_ids[edim];
     Omega_h::Write<T> boundary_array(bounded_ent_ids_local.size()*nvals);
     const Omega_h::LO start_index = ent_offsets[commptr->rank()]*nvals;
     auto gatherBoundaryData = OMEGA_H_LAMBDA(const Omega_h::LO id) {
@@ -407,7 +408,7 @@ namespace pumipic {
         boundary_array[id*nvals + i] = array[start_index + index*nvals + i];
     };
     Omega_h::parallel_for(bounded_ent_ids_local.size(),gatherBoundaryData, "gatherBoundaryData");
-    
+
     Omega_h::HostWrite<T> boundary_array_host(boundary_array);
     T* sending_data = boundary_array_host.data();
     for (int i = 0; i < num_boundaries[edim]; ++i) {
@@ -441,7 +442,7 @@ namespace pumipic {
 #define INST(T)                                                         \
   template Omega_h::Write<T> Mesh::createCommArray(int, int, T);        \
   template void Mesh::reduceCommArray(int, Op, Omega_h::Write<T>);
-  
+
   INST(Omega_h::LO)
   INST(Omega_h::Real)
 #undef INST

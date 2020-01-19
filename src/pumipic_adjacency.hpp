@@ -9,8 +9,7 @@
 #include "Omega_h_element.hpp"
 #include "Omega_h_shape.hpp"
 
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
+#include <particle_structs.hpp>
 
 #include "pumipic_utils.hpp"
 #include "pumipic_constants.hpp"
@@ -422,13 +421,11 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       }
     };
     scs->parallel_for(processUndetected, "pumipic_processUndetected");
-
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
       elem_ids[i] = elem_ids_next[i];
     };
     o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
-
     o::LOs ptcl_done_r(ptcl_done);
     auto minFlag = o::get_min(ptcl_done_r);
     if(minFlag == 0)
@@ -489,10 +486,8 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       ptcl_done[pid] = 1;
     }
   };
-
   scs->parallel_for(fill, "searchMesh_fill_elem_ids");
   Kokkos::Profiling::popRegion();
-
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -500,7 +495,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       fprintf(stderr, "------------ %d ------------\n", loops);
     }
     //pid is same for a particle between iterations in this while loop
-    auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = elem_ids[pid];
@@ -638,7 +633,7 @@ bool search_mesh(o::Mesh& mesh, ps::SellCSigma< ParticleType >* scs,
       } //if active particle
     };
 
-    scs->parallel_for(lamb, "adj_search");
+    ps::parallel_for(ptcls, lamb, "adj_search");
 
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
@@ -911,12 +906,11 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
 
 template < class ParticleType>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
-                 ps::SellCSigma< ParticleType >* scs, // (in) particle structure
-                 Segment3d x_scs_d, // (in) starting particle positions
-                 Segment3d xtgt_scs_d, // (in) target particle positions
+                 ps::ParticleStructure< ParticleType >* ptcls, // (in) particle structure
+                 Segment3d x_ps_d, // (in) starting particle positions
+                 Segment3d xtgt_ps_d, // (in) target particle positions
                  SegmentInt pid_d, // (in) particle ids
                  o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
-                 o::Write<o::Real> xpoints_d, // (out) particle-boundary intersection points
                  int looplimit=0) {
   const auto btime = pumipic_prebarrier();
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
@@ -936,15 +930,13 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   const auto faceEdges = faces2edges.ab2b;
   const auto triArea = measure_elements_real(&mesh);
 
-  const auto scsCapacity = scs->capacity();
+  const auto psCapacity = ptcls->capacity();
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
-  o::Write<o::LO> ptcl_done(scsCapacity, 1, "ptcl_done");
-  // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(scsCapacity,-1);
+  o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
   // store the last crossed edge
-  o::Write<o::LO> lastEdge(scsCapacity,-1);
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  o::Write<o::LO> lastEdge(psCapacity,-1);
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
@@ -953,9 +945,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       ptcl_done[pid] = 1;
     }
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb);
 
-  auto checkParent = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     //inactive particle that is still moving to its target position
     if( mask > 0 && !ptcl_done[pid] ) {
       auto searchElm = elem_ids[pid];
@@ -963,7 +955,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       OMEGA_H_CHECK(searchElm >= 0);
       auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
       const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-      auto ptclOrigin = makeVector2(pid, x_scs_d);
+      auto ptclOrigin = makeVector2(pid, x_ps_d);
       Omega_h::Vector<3> faceBcc;
       barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
       if(!all_positive(faceBcc,1e-8)) {
@@ -975,12 +967,12 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       }
     } //if active
   };
-  scs->parallel_for(checkParent);
+  ps::parallel_for(ptcls, checkParent);
 
   bool found = false;
   int loops = 0;
   while(!found) {
-    auto checkCurrentElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto checkCurrentElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //active particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
@@ -989,20 +981,19 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         const auto edges = o::gather_down<3>(faceEdges, searchElm);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-        const auto ptclDest = makeVector2(pid, xtgt_scs_d);
-        const auto ptclOrigin = makeVector2(pid, x_scs_d);
+        const auto ptclDest = makeVector2(pid, xtgt_ps_d);
+        const auto ptclOrigin = makeVector2(pid, x_ps_d);
         Omega_h::Vector<3> faceBcc;
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
         auto isDestInParentElm = all_positive(faceBcc);
         ptcl_done[pid] = isDestInParentElm;
-        elem_ids_next[pid] = elem_ids[pid];
         const int idx = min3(faceBcc);
         lastEdge[pid] = edges[idx];
       }
     };
-    scs->parallel_for(checkCurrentElm);
+    ps::parallel_for(ptcls, checkCurrentElm);
 
-    auto checkExposedEdges = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto checkExposedEdges = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
@@ -1010,14 +1001,14 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
-        elem_ids_next[pid] = -1; //leaves domain if exposed
+        elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
       }
     };
-    scs->parallel_for(checkExposedEdges, "pumipic_checkExposedEdges");
+    ps::parallel_for(ptcls, checkExposedEdges, "pumipic_checkExposedEdges");
 
     auto e2f_vals = edges2faces.ab2b; // CSR value array
     auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh edge ids
-    auto setNextElm = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto setNextElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         auto ptcl = pid_d(pid);
@@ -1031,17 +1022,12 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         assert(faceA != faceB);
         assert(faceA == searchElm || faceB == searchElm);
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
-        elem_ids_next[pid] = nextElm;
+        elem_ids[pid] = nextElm;
       }
     };
-    scs->parallel_for(setNextElm, "pumipic_setNextElm");
+    ps::parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
 
     found = true;
-    auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
-      elem_ids[i] = elem_ids_next[i];
-    };
-    o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
-
     o::LOs ptcl_done_r(ptcl_done);
     auto minFlag = o::get_min(ptcl_done_r);
     if(minFlag == 0)
@@ -1049,12 +1035,12 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     ++loops;
 
     if(looplimit && loops >= looplimit) {
-      auto ptclsNotFound = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      auto ptclsNotFound = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
         if( mask > 0 && !ptcl_done[pid] ) {
           auto searchElm = elem_ids[pid];
           auto ptcl = pid_d(pid);
-          const auto ptclDest = makeVector2(pid, xtgt_scs_d);
-          const auto ptclOrigin = makeVector2(pid, x_scs_d);
+          const auto ptclDest = makeVector2(pid, xtgt_ps_d);
+          const auto ptclOrigin = makeVector2(pid, x_ps_d);
           printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
               rank_d,
               searchElm, ptcl,
@@ -1062,7 +1048,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
               ptclDest[0], ptclDest[1]);
         }
       };
-      scs->parallel_for(ptclsNotFound, "ptclsNotFound");
+      ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
       fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
@@ -1080,7 +1066,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   long int loops_li = loops;
   MPI_Allreduce(&loops_li, &totLoops, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
   int ranksWithPtcls = 0;
-  const int hasPtcls = (scsCapacity > 0);
+  const int hasPtcls = (psCapacity > 0);
   MPI_Allreduce(&hasPtcls, &ranksWithPtcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   const double avgLoops = (double) totLoops / ranksWithPtcls;
   if(maxLoops == loops)
@@ -1095,5 +1081,4 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 }
 
 } //namespace
-
 #endif //define

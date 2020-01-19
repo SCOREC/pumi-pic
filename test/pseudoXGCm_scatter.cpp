@@ -1,20 +1,19 @@
 #include <Omega_h_mesh.hpp>
-#include <SCS_Macros.h>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
 #include <fstream>
 
-void setPtclIds(SCS* scs) {
-  auto pid_d = scs->get<2>();
-  auto setIDs = SCS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+void setPtclIds(PS* ptcls) {
+  auto pid_d = ptcls->get<2>();
+  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
     pid_d(pid) = pid;
   };
-  scs->parallel_for(setIDs);
+  ps::parallel_for(ptcls, setIDs);
 }
 
-void setInitialPtclCoords(p::Mesh& picparts, SCS* scs) {
+void setInitialPtclCoords(p::Mesh& picparts, PS* ptcls) {
   //get centroid of parent element and set the child particle coordinates
   //most of this is copied from Omega_h_overlay.cpp get_cell_center_location
   //It isn't clear why the template parameter for gather_[verts|vectors] was
@@ -24,17 +23,17 @@ void setInitialPtclCoords(p::Mesh& picparts, SCS* scs) {
   auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
   auto nodes2coords = mesh->coords();
   //set particle positions and parent element ids
-  auto x_scs_d = scs->get<0>();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto x_ps_d = ptcls->get<0>();
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
       auto vtxCoords = o::gather_vectors<3,2>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
         for(int i=0; i<2; i++)
-          x_scs_d(pid,i) = center[i];
+          x_ps_d(pid,i) = center[i];
     }
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb);
 }
 
 o::Mesh readMesh(char* meshFile, o::Library& lib) {
@@ -97,16 +96,16 @@ int main(int argc, char** argv) {
   pumipic::Mesh picparts(input);
   for (int i = 0; i <= full_mesh.dim(); ++i)
     assert(picparts.nents(i) == full_mesh.nents(i));
-  
+
   //Create Picparts with the full mesh
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   printf("mesh_element_gids.size() %d picparts.dim() %d\n",
-      mesh_element_gids.size(), picparts.dim()); 
+      mesh_element_gids.size(), picparts.dim());
 
   if (comm_rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(), 
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh->nverts(), mesh->nedges(),
            mesh->nfaces(), mesh->nelems());
 
   //Build gyro avg mappings
@@ -123,15 +122,15 @@ int main(int argc, char** argv) {
   //modify the mappings to only scatter values from the central vertex
   auto fwd_map_centerOnly = modifyMappings(mesh,forward_map);
   auto bkwd_map_centerOnly = modifyMappings(mesh,backward_map);
-  
+
   /* Particle data */
   const auto ne = mesh->nelems();
   const auto numPtcls = 1;
   if (comm_rank == 0)
     fprintf(stderr, "number of elements %d number of particles %d\n",
             ne, numPtcls);
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  SCS::kkGidView element_gids("element_gids", ne);
+  PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  PS::kkGidView element_gids("element_gids", ne);
   //place one particle in element 0
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
@@ -143,10 +142,10 @@ int main(int argc, char** argv) {
   const int V = 32;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-                                                       ptcls_per_elem, element_gids);
-  setInitialPtclCoords(picparts, scs);
-  setPtclIds(scs);
+  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+                                       ptcls_per_elem, element_gids);
+  setInitialPtclCoords(picparts, ptcls);
+  setPtclIds(ptcls);
 
   //define parameters controlling particle motion
   auto fwdTagName = "ptclToMeshScatterFwd";
@@ -154,8 +153,8 @@ int main(int argc, char** argv) {
   mesh->add_tag(o::VERT, fwdTagName, 1, o::Reals(mesh->nverts(), 0));
   mesh->add_tag(o::VERT, bkwdTagName, 1, o::Reals(mesh->nverts(), 0));
 
-  gyroScatter(mesh,scs,fwd_map_centerOnly, fwdTagName);
-  gyroScatter(mesh,scs,bkwd_map_centerOnly, bkwdTagName);
+  gyroScatter(mesh,ptcls,fwd_map_centerOnly, fwdTagName);
+  gyroScatter(mesh,ptcls,bkwd_map_centerOnly, bkwdTagName);
 
   auto fwdTagVals = mesh->get_array<o::Real>(o::VERT, fwdTagName);
   Omega_h::parallel_for(mesh->nverts(), OMEGA_H_LAMBDA(const int& i) {
@@ -175,7 +174,7 @@ int main(int argc, char** argv) {
   });
 
   //cleanup
-  delete scs;
+  delete ptcls;
 
   Omega_h::vtk::write_parallel("pseudoPush_tf", mesh, picparts.dim());
   if (!comm_rank)

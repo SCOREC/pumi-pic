@@ -7,9 +7,9 @@ namespace pumipic {
   class Mesh {
   public:
     //Delete default compilers
-    Mesh() = delete; 
+    Mesh() = delete;
     Mesh(const Mesh&) = delete;
-      Mesh& operator=(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector);
@@ -23,6 +23,8 @@ namespace pumipic {
 
     //Returns true if the full mesh is buffered
     bool isFullMesh() const;
+    //Calls function on the omega_h mesh
+    Omega_h::Mesh* operator->() {return picpart;}
     //Returns a pointer to the underlying omega_h mesh
     Omega_h::Mesh* mesh() const {return picpart;}
     //Returns the dimension of the mesh
@@ -58,18 +60,20 @@ namespace pumipic {
     typename Omega_h::Write<T> createCommArray(int dim, int num_entries_per_entity,
                                                T default_value);
     enum Op {
-      SUM_OP,
-      MAX_OP,
-      MIN_OP
+      SUM_OP, //Sum contributions
+      MAX_OP, //Take max of all contributions
+      MIN_OP, //Take min of all contributions
+      BCAST_OP //Take the owner's value
     };
     //Performs an MPI reduction on a communication array across all picparts
     template <class T>
     void reduceCommArray(int dim, Op op, Omega_h::Write<T> array);
 
-    //Users should not run the following functions. 
+    //Users should not run the following functions.
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
-    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::LOs owner,
+    void constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
+                          Omega_h::LOs owner,
                           Omega_h::Write<Omega_h::LO> has_part,
                           Omega_h::Write<Omega_h::LO> is_safe);
 

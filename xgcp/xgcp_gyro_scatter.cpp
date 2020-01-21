@@ -64,9 +64,9 @@ namespace xgcp {
            num_points, mesh->nelems());
 
     //Adjacency search
-    auto start = gyro_ps->get<0>();
-    auto end = gyro_ps->get<1>();
-    auto pids = gyro_ps->get<2>();
+    auto start = gyro_ps->get<PTCL_COORDS>();
+    auto end = gyro_ps->get<PTCL_TARGET>();
+    auto pids = gyro_ps->get<PTCL_IDS>();
     int maxLoops = 100;
     int psCapacity = gyro_ps->capacity();
     o::Write<o::LO> elem_ids(psCapacity, -1);

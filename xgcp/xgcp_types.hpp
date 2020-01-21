@@ -32,6 +32,13 @@ namespace xgcp {
   */
   typedef ps::MemberTypes<Vector3d, Vector3d, int, float, float> Ion;
 
+  enum ParticleTypeIndices {
+    PTCL_COORDS = 0,
+    PTCL_TARGET = 1,
+    PTCL_IDS = 2,
+    ION_B = 3,
+    ION_PHI = 4
+  };
   //Particle Data Structures for Electrons and Ions
   typedef ps::ParticleStructure<Electron> PS_E;
   typedef ps::ParticleStructure<Ion> PS_I;

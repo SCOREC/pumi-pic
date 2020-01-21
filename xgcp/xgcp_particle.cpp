@@ -57,7 +57,7 @@ namespace xgcp {
     auto cells2nodes = m->get_adj(o::FACE, o::VERT).ab2b;
     auto nodes2coords = m->coords();
     //set particle positions and parent element ids
-    auto x_ps_d = ptcls->get<0>();
+    auto x_ps_d = ptcls->get<PTCL_COORDS>();
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if(mask > 0) {
         auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
@@ -78,7 +78,7 @@ namespace xgcp {
   }
 
   void setPtclIds(PS_I* ptcls) {
-    auto pid_d = ptcls->get<2>();
+    auto pid_d = ptcls->get<PTCL_IDS>();
     auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
       pid_d(pid) = pid;
     };

@@ -44,9 +44,9 @@ namespace xgcp {
     Omega_h::LO maxLoops = 200;
     const auto psCapacity = ptcls->capacity();
     o::Write<o::LO> elem_ids(psCapacity, -1);
-    auto x_ps_d = ptcls->template get<0>();
-    auto xtgt_ps_d = ptcls->template get<1>();
-    auto pid = ptcls->template get<2>();
+    auto x_ps_d = ptcls->template get<PTCL_COORDS>();
+    auto xtgt_ps_d = ptcls->template get<PTCL_TARGET>();
+    auto pid = ptcls->template get<PTCL_IDS>();
     bool isFound = p::search_mesh_2d(*(mesh.omegaMesh()), ptcls, x_ps_d, xtgt_ps_d,
                                      pid, elem_ids, maxLoops);
     assert(isFound);
@@ -55,8 +55,8 @@ namespace xgcp {
 
   template <typename PS>
   void updatePtclPositions(PS* ptcls) {
-    auto x_ps_d = ptcls->template get<0>();
-    auto xtgt_ps_d = ptcls->template get<1>();
+    auto x_ps_d = ptcls->template get<PTCL_COORDS>();
+    auto xtgt_ps_d = ptcls->template get<PTCL_TARGET>();
     auto updatePtclPos = PS_LAMBDA(const int&, const int& pid, const bool&) {
       x_ps_d(pid,0) = xtgt_ps_d(pid,0);
       x_ps_d(pid,1) = xtgt_ps_d(pid,1);
@@ -73,7 +73,7 @@ namespace xgcp {
     p::Mesh* picparts = mesh.pumipicMesh();
     updatePtclPositions(ptcls);
     const int ps_capacity = ptcls->capacity();
-    auto xs = ptcls->template get<0>();
+    auto xs = ptcls->template get<PTCL_COORDS>();
     //Gather new element and new process for migrate/rebuild
     PS_I::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
     PS_I::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
@@ -108,8 +108,8 @@ namespace xgcp {
     //Check to see if particles are all in correct places
     fp_t major_phi = mesh.getMajorPlaneAngle();
     fp_t minor_phi = mesh.getMinorPlaneAngle();
-    auto coords = ptcls->template get<0>();
-    auto pids = ptcls->template get<2>();
+    auto coords = ptcls->template get<PTCL_COORDS>();
+    auto pids = ptcls->template get<PTCL_IDS>();
     auto checkPtcls = PS_LAMBDA(const int& e, const int& p, const bool& m) {
       if (m) {
         auto pid = pids(p);

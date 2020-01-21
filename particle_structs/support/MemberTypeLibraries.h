@@ -255,7 +255,8 @@ namespace particle_structs {
     CopyViewsToViews(MemberTypeViewsConst<MemberTypes<Types...>, Device> dsts,
                          MemberTypeViewsConst<MemberTypes<Types...>, Device> srcs,
                          View ps_indices) {
-      CopyViewsToViewsImpl<View, Types...>(dsts, srcs, ps_indices);
+      if (dsts != NULL && srcs != NULL)
+        CopyViewsToViewsImpl<View, Types...>(dsts, srcs, ps_indices);
     }
   };
 

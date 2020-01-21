@@ -42,6 +42,11 @@ void GitrmSurfaceModel::initSurfaceModelData(std::string ncFile, bool debug) {
 }
 
 
+void GitrmSurfaceModel::test() {
+  printf("nDists %d %d %d \n", nDistEsurfaceModel, nDistEsurfaceModelRef, nDistAsurfaceModel);
+
+}
+
 template<typename T>
 void GitrmSurfaceModel::make2dCDF(const int nX, const int nY, const int nZ, 
    const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf) {
@@ -305,16 +310,16 @@ variables:
         double thetaGrid(nAdistBins) ;
 */
   //see ftrydin.nc file header
-  std::vector<std::string> dataNames{sputtYldStr, reflYldStr, enSputtRefCoeffStr, angSputtRefCoeffStr, 
-   enSputtRefDistInStr, angSputtRefDistInStr, angPhiDistYStr, 
+  std::vector<std::string> dataNames{sputtYldStr, reflYldStr, enSputtRefCoeffStr, 
+    angSputtRefCoeffStr, enSputtRefDistInStr, angSputtRefDistInStr, angPhiDistYStr,
    angThetaDistYStr, angPhiDistRStr, angThetaDistRStr, enDistYStr, enDistRStr, 
    enSputtRefDistOutStr, enSputtRefDistOutRefStr, angPhiSputtRefDistOutStr, 
    angThetaSputtRefDistOutStr};
 
   std::vector<o::Reals> data({sputtYld, reflYld, enSputtRefCoeff, angSputtRefCoeff,
    enSputtRefDistIn, angSputtRefDistIn, angPhiDist_Y, angThetaDist_Y, angPhiDist_R, 
-     angThetaDist_R, enDist_Y, enDist_R, enSputtRefDistOut, enSputtRefDistOutRef, angPhiSputtRefDistOut, 
-   angThetaSputtRefDistOut});
+     angThetaDist_R, enDist_Y, enDist_R, enSputtRefDistOut, enSputtRefDistOutRef, 
+     angPhiSputtRefDistOut, angThetaSputtRefDistOut});
   
   std::vector<std::string> shapeNames{enSputtRefCoeffStr, nAngSputtRefCoeffStr,
    nEnSputtRefDistInStr, nAngSputtRefDistInStr, nEnSputtRefDistOutStr, 
@@ -327,7 +332,8 @@ variables:
   //indices of shapeData, corresponding to entries in data and dataNames
   std::vector<std::vector<int>> shapeVec{{0,1},{0,1},{0},{1},{2},{3},{0,1,6},{0,1,6},
     {0,1,6},{0,1,6},{0,1,4},{0,1,5},{4},{5},{6},{6}};
-  getSurfaceModelDataFromFile(fileString, dataNames, shapeNames, shapeVec, shapeData, data);
+  getSurfaceModelDataFromFile(fileString, dataNames, shapeNames, shapeVec, 
+    shapeData, data);
 
 }
 
@@ -343,7 +349,7 @@ void GitrmSurfaceModel::getSurfaceModelDataFromFile(const std::string fileName,
       shapes.push_back(shapeNames[j]);
     }
     Field3StructInput fs({datName},{},shapes);
-    readInputDataNcFileFS3(fileName, fs);
+    readInputDataNcFileFS3(fileName, fs, true);
     data[i] = o::Reals(fs.data.write());
     for(auto j: shapeInds) {
       shapeData[i] = fs.getIntValueOf(shapeNames[j]);//fs.getNumGrids(j); 

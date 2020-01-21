@@ -4,8 +4,8 @@
 #include <set>
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
-#include "Omega_h_library.hpp"
-#include "pumipic_mesh.hpp"
+//#include "Omega_h_library.hpp"
+//#include "pumipic_mesh.hpp"
 
 #include "GitrmInputOutput.hpp"
 
@@ -13,19 +13,19 @@ int iTimePlusOne = 0;
 
 //TODO remove mesh argument, once Singleton gm is used
 GitrmParticles::GitrmParticles(o::Mesh& m, double dT):
-  scs(nullptr), mesh(m), timeStep(dT)
+  ptcls(nullptr), mesh(m), timeStep(dT)
 {}
 
 GitrmParticles::~GitrmParticles() {
-  delete scs;
+  delete ptcls;
 }
 
 // Initialized in only one element
 void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls, 
   o::LOs& ptclsInElem, int elId) {
   o::Int ne = mesh.nelems();
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  SCS::kkGidView element_gids("element_gids", ne);
+  PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  PS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
@@ -51,7 +51,7 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
       printf("%d , ", np);
   });
   printf("\n");
-  //'sigma', 'V', and the 'policy' control the layout of the SCS structure
+  //'sigma', 'V', and the 'policy' control the layout of the PS structure
   //in memory and can be ignored until performance is being evaluated.  These
   //are reasonable initial settings for OpenMP.
   const int sigma = 1; //INT_MAX; // full sorting
@@ -59,7 +59,7 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   printf("Constructing Particles\n");
   //Create the particle structure
-  scs = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+  ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                    ptcls_per_elem, element_gids);
 }
 
@@ -81,7 +81,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   findElemIdsOfPtclFileCoordsByAdjSearch(readInData_r, elemIdOfPtcls,
     numPtclsInElems, numPtcls, numPtclsRead);
 
-  printf("Constructing SCS particles\n");
+  printf("Constructing PS particles\n");
   defineParticles(picparts, numPtcls, numPtclsInElems, -1);
   
   initPtclCollisionData(numPtcls);
@@ -118,7 +118,7 @@ void GitrmParticles::initPtclCollisionData(int numPtcls) {
 
 // Find elemId of any particle, and start with that elem to search 
 // elem of all particles. Get #particles in each element,
-// for SCS_LAMBDA to fill ptcl data in scs.
+// for PS_LAMBDA to fill ptcl data in ptcls.
 void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch( 
   const o::Reals& data, o::LOs& elemIdOfPtcls, o::LOs& numPtclsInElems,
   o::LO numPtcls, o::LO numPtclsRead) {
@@ -250,8 +250,8 @@ void GitrmParticles::setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem
   const o::LO numPtcls, const o::LO nel) {
   int debug = 1;
   o::Write<o::LO> nextPtclInd(nel, 0);
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
       auto nextInd = Kokkos::atomic_fetch_add(&(nextPtclInd[elem]), 1);
       auto ind = ptclIdPtrsOfElem[elem] + nextInd;
@@ -266,35 +266,35 @@ void GitrmParticles::setPidsOfPtclsLoadedFromFile(const o::LOs& ptclIdPtrsOfElem
       OMEGA_H_CHECK(ip >= 0);
       OMEGA_H_CHECK(ip < numPtcls);
       OMEGA_H_CHECK(elemIdOfPtcls[ip] == elem);
-      pid_scs(pid) = ip;
+      pid_ps(pid) = ip;
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda, "setPidsOfPtcls");
 }
 
-//To use scs, SCS_LAMBDA is required, not parallel_for(#ptcls,OMEGA_H_LAMBDA
-// since ptcls in each element is iterated in groups. Construct SCS with 
+//To use ptcls, PS_LAMBDA is required, not parallel_for(#ptcls,OMEGA_H_LAMBDA
+// since ptcls in each element is iterated in groups. Construct PS with 
 // #particles in each elem passed in, otherwise newly added particles in 
-// originally empty elements won't show up in SCS_LAMBDA iterations. 
+// originally empty elements won't show up in PS_LAMBDA iterations. 
 // ie. their mask will be 0. If mask is not used, invalid particles may 
 // show up from other threads in the launch group.
 void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
   o::LO debug = 0;
   const auto coords = mesh.coords(); 
   const auto mesh2verts = mesh.ask_elem_verts(); 
-  auto next_scs_d = scs->get<PTCL_NEXT_POS>();
-  auto pos_scs_d = scs->get<PTCL_POS>();
-  auto vel_d = scs->get<PTCL_VEL>();
-  auto pid_scs = scs->get<PTCL_ID>();
+  auto next_ps_d = ptcls->get<PTCL_NEXT_POS>();
+  auto pos_ps_d = ptcls->get<PTCL_POS>();
+  auto vel_d = ptcls->get<PTCL_VEL>();
+  auto pid_ps = ptcls->get<PTCL_ID>();
   
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
       auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
       auto M = p::gatherVectors4x3(coords, tetv2v);
       auto bcc = o::zero_vector<4>();
       auto vel = o::zero_vector<3>();
       auto pos = o::zero_vector<3>();
-      auto ip = pid_scs(pid); 
+      auto ip = pid_ps(pid); 
       for(int i=0; i<3; ++i)
         pos[i] = data[i*numPtclsRead+ip];
       for(int i=0; i<3; ++i)
@@ -305,46 +305,46 @@ void GitrmParticles::setPtclInitData(const o::Reals& data, int numPtclsRead) {
       p::find_barycentric_tet(M, pos, bcc);
       OMEGA_H_CHECK(p::all_positive(bcc, 0));
       for(int i=0; i<3; i++) {
-        pos_scs_d(pid,i) = pos[i];
+        pos_ps_d(pid,i) = pos[i];
         vel_d(pid, i) = vel[i];
-        next_scs_d(pid,i) = 0;
+        next_ps_d(pid,i) = 0;
       }
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda, "setPtclInitData");
 }
 
 void GitrmParticles::initPtclChargeIoniRecombData() {
-  auto charge_scs = scs->get<PTCL_CHARGE>();
-  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
-  auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
-  auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
-  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
+  auto charge_ps = ptcls->get<PTCL_CHARGE>();
+  auto first_ionizeZ_ps = ptcls->get<PTCL_FIRST_IONIZEZ>();
+  auto prev_ionize_ps = ptcls->get<PTCL_PREV_IONIZE>();
+  auto first_ionizeT_ps = ptcls->get<PTCL_FIRST_IONIZET>();
+  auto prev_recomb_ps = ptcls->get<PTCL_PREV_RECOMBINE>();
 
-  auto lambda = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+  auto lambda = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask > 0) {
-      charge_scs(pid) = 0;
-      first_ionizeZ_scs(pid) = 0;
-      prev_ionize_scs(pid) = 0;
-      first_ionizeT_scs(pid) = 0;
-      prev_recomb_scs(pid) = 0;
+      charge_ps(pid) = 0;
+      first_ionizeZ_ps(pid) = 0;
+      prev_ionize_ps(pid) = 0;
+      first_ionizeT_ps(pid) = 0;
+      prev_recomb_ps(pid) = 0;
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda, "initPtclChargeIoniRecombData");
 }
 
 void GitrmParticles::initPtclSurfaceModelData() {
-  auto ps_weight = scs->get<PTCL_WEIGHT>();
-  auto ps_hitNum = scs->get<PTCL_HIT_NUM>();
-  auto ps_newVelMag = scs->get<PTCL_VMAG_NEW>();
-  auto lambda = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+  auto ps_weight = ptcls->get<PTCL_WEIGHT>();
+  auto ps_hitNum = ptcls->get<PTCL_HIT_NUM>();
+  auto ps_newVelMag = ptcls->get<PTCL_VMAG_NEW>();
+  auto lambda = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask > 0) {
       ps_weight(pid) = 0;
       ps_hitNum(pid) = 0;
       ps_newVelMag(pid) = 0;
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda, "initPtclSurfaceModelData");
 }
 
 void GitrmParticles::initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls, 
@@ -361,20 +361,19 @@ void GitrmParticles::initPtclsInADirection(p::Mesh& picparts, o::LO numPtcls,
   setPtclInitRndDistribution(elemAndFace);
 }
 
-void GitrmParticles::setPtclInitRndDistribution(
-    o::Write<o::LO> &elemAndFace) {
+void GitrmParticles::setPtclInitRndDistribution(o::Write<o::LO> &elemAndFace) {
   MESHDATA(mesh);
 
   //Set particle coordinates. Initialized only on one face. TODO confirm this ? 
-  auto x_scs_d = scs->get<PTCL_NEXT_POS>();
-  auto x_scs_prev_d = scs->get<PTCL_POS>();
-  auto vel_d = scs->get<PTCL_VEL>();
-  int scsCapacity = scs->capacity();
-  o::HostWrite<o::Real> rnd1(scsCapacity, 0);
-  o::HostWrite<o::Real> rnd2(scsCapacity, 0);
-  o::HostWrite<o::Real> rnd3(scsCapacity, 0);
+  auto x_ps_d = ptcls->get<PTCL_NEXT_POS>();
+  auto x_ps_prev_d = ptcls->get<PTCL_POS>();
+  auto vel_d = ptcls->get<PTCL_VEL>();
+  int psCapacity = ptcls->capacity();
+  o::HostWrite<o::Real> rnd1(psCapacity, 0);
+  o::HostWrite<o::Real> rnd2(psCapacity, 0);
+  o::HostWrite<o::Real> rnd3(psCapacity, 0);
   std::srand(time(NULL));
-  for(auto i=0; i<scsCapacity; ++i) {
+  for(auto i=0; i<psCapacity; ++i) {
     rnd1[i] = (o::Real)(std::rand())/RAND_MAX;
     rnd2[i] = (o::Real)(std::rand())/RAND_MAX;
     rnd3[i] = (o::Real)(std::rand())/RAND_MAX;
@@ -383,8 +382,8 @@ void GitrmParticles::setPtclInitRndDistribution(
   o::Reals rand2 = o::Reals(o::Write<o::Real>(rnd2));
   o::Reals rand3 = o::Reals(o::Write<o::Real>(rnd3));
 
-  o::Write<o::LO> elem_ids(scsCapacity,-1);
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  o::Write<o::LO> elem_ids(psCapacity,-1);
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0) {
     //if(elemAndFace[1] >=0 && elem == elemAndFace[1]) {  
       o::LO verbose =1;
@@ -421,8 +420,8 @@ void GitrmParticles::setPtclInitRndDistribution(
       double energy[] = {4.0, 4, 4}; //TODO actual [4,0,0]
       double vel[] = {0,0,0};
       for(int i=0; i<3; i++) {
-        x_scs_prev_d(pid,i) = pos[i];
-        x_scs_d(pid,i) = pos[i];
+        x_ps_prev_d(pid,i) = pos[i];
+        x_ps_d(pid,i) = pos[i];
         auto en = energy[i];   
         //if(! o::are_close(energy[i], 0))
         vel[i] = std::sqrt(2.0 * abs(en) * 1.60217662e-19 / (amu * 1.6737236e-27));
@@ -436,11 +435,11 @@ void GitrmParticles::setPtclInitRndDistribution(
 
       if(verbose >2)
         printf("elm %d : pos %.4f %.4f %.4f : vel %.1f %.1f %.1f Mask%d\n",
-          elem, x_scs_prev_d(pid,0), x_scs_prev_d(pid,1), x_scs_prev_d(pid,2),
+          elem, x_ps_prev_d(pid,0), x_ps_prev_d(pid,1), x_ps_prev_d(pid,2),
           vel[0], vel[1], vel[2], mask);
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda, "setPtclInitRndDistribution");
 }
 
 // spherical coordinates (wikipedia), radius r=1.5m, inclination theta[0,pi] from the z dir,
@@ -637,12 +636,12 @@ void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
   printf("\n");
 }
 
-void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter, 
+void printStepData(std::ofstream& ofsHistory, PS* ptcls, int iter, 
   int numPtcls, o::Write<o::Real>& ptclsDataAll,
   o::Write<o::LO>& lastFilledTimeSteps, o::Write<o::Real>& data, 
   int dof, bool accum) {
   if(iter ==0)
-    updatePtclStepData(scs, ptclsDataAll,lastFilledTimeSteps, numPtcls, dof);
+    updatePtclStepData(ptcls, ptclsDataAll,lastFilledTimeSteps, numPtcls, dof);
 
   if(accum) {
     o::HostWrite<o::Real> ptclAllHost(ptclsDataAll);
@@ -650,9 +649,9 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
       "ptclHistory_accum", iter);
   } else {
     o::HostWrite<o::Real> dh(data);
-    o::HostWrite<o::Real> dp(scs->nPtcls() * dof);
+    o::HostWrite<o::Real> dp(ptcls->nPtcls() * dof);
     for(int ip=0, n=0; ip< numPtcls; ++ip) {
-      //only ptcls from scs->nptcls have valid ids
+      //only ptcls from ptcls->nptcls have valid ids
       int id = static_cast<int>(dh[ip*dof+6]);
       if(id < 0)
         continue;
@@ -660,7 +659,7 @@ void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
         dp[n*dof+i] = dh[id*dof+i];
       ++n;
     }
-    printPtclHostData(dp, ofsHistory, scs->nPtcls(), dof, "ptclHistory", iter);
+    printPtclHostData(dp, ofsHistory, ptcls->nPtcls(), dof, "ptclHistory", iter);
   }
 }
 
@@ -686,16 +685,16 @@ void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData,
   writeOutputNcFile(ptclsHistoryData, numPtcls, dof, outStruct, outNcFileName);
 }
 
-void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData, 
+void updatePtclStepData(PS* ptcls, o::Write<o::Real>& ptclStepData, 
    o::Write<o::LO>& lastFilledTimeSteps, int numPtcls, int dof, int iHistStep) { 
-  auto vel_scs = scs->get<PTCL_VEL>();
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto step = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+  auto vel_ps = ptcls->get<PTCL_VEL>();
+  auto pos_ps = ptcls->get<PTCL_POS>();
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto step = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
-      auto id = pid_scs(pid);
-      auto vel = p::makeVector3(pid, vel_scs);
-      auto pos = p::makeVector3(pid, pos_scs);
+      auto id = pid_ps(pid);
+      auto vel = p::makeVector3(pid, vel_ps);
+      auto pos = p::makeVector3(pid, pos_ps);
       lastFilledTimeSteps[id] = iHistStep;
       int beg = numPtcls*dof*iHistStep + id*dof; //storage format
       for(int i=0; i<3; ++i) {
@@ -705,6 +704,6 @@ void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData,
       //NOTE: many of device prints go missing
     }// mask
   };
-  scs->parallel_for(step, "updateStepData");
+  ps::parallel_for(ptcls, step, "updateStepData");
 }
 

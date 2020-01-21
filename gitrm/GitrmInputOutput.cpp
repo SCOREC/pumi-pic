@@ -137,6 +137,8 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
   int ncSizePerComp = 1;
   int status = 0;
   verifyNetcdfFile(ncFileName);
+  if(debug)
+    printf("Verified NC file %s\n", ncFileName.c_str());
   try {
     netCDF::NcFile ncf(ncFileName, netCDF::NcFile::read);
     int dimCount = ncf.getDimCount();

@@ -22,7 +22,7 @@ namespace p = pumipic;
 // D3D 0.8 to 2.45 m radial
  
 //TODO put in config class
-const int USE_GITR_RND_NUMS = 1;
+const int USE_GITR_RND_NUMS = 0;
 const bool CREATE_GITR_MESH = false;
 
 const int USE_READIN_CSR_BDRYFACES = 1;

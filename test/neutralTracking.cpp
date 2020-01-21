@@ -22,21 +22,21 @@ void printTimerResolution() {
   fprintf(stderr, "kokkos timer reports 1ms as %f seconds\n", timer.seconds());
 }
 
-void updatePtclPositions(SCS* scs) {
-  auto x_scs_d = scs->get<0>();
-  auto xtgt_scs_d = scs->get<1>();
-  auto updatePtclPos = SCS_LAMBDA(const int&, const int& pid, const bool&) {
-    x_scs_d(pid,0) = xtgt_scs_d(pid,0);
-    x_scs_d(pid,1) = xtgt_scs_d(pid,1);
-    x_scs_d(pid,2) = xtgt_scs_d(pid,2);
-    xtgt_scs_d(pid,0) = 0;
-    xtgt_scs_d(pid,1) = 0;
-    xtgt_scs_d(pid,2) = 0;
+void updatePtclPositions(PS* ptcls) {
+  auto x_ps_d = ptcls->get<0>();
+  auto xtgt_ps_d = ptcls->get<1>();
+  auto updatePtclPos = PS_LAMBDA(const int&, const int& pid, const bool&) {
+    x_ps_d(pid,0) = xtgt_ps_d(pid,0);
+    x_ps_d(pid,1) = xtgt_ps_d(pid,1);
+    x_ps_d(pid,2) = xtgt_ps_d(pid,2);
+    xtgt_ps_d(pid,0) = 0;
+    xtgt_ps_d(pid,1) = 0;
+    xtgt_ps_d(pid,2) = 0;
   };
-  scs->parallel_for(updatePtclPos, "updatePtclPos");
+  ps::parallel_for(ptcls, updatePtclPos, "updatePtclPos");
 }
 
-void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d, 
+void storePiscesDataSeparate(PS* ptcls, o::Mesh* mesh, o::Write<o::LO>& data_d, 
   o::Write<o::Real>& xpoints, o::Write<o::LO>& xface_ids, o::LO iter, 
   bool debug=true) {
   double radMax = 0.05; //m 0.0446+0.005
@@ -45,11 +45,11 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
   auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
-  auto pid_scs = scs->get<PTCL_ID>();
+  auto pid_ps = ptcls->get<PTCL_ID>();
 
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask >0) {
-      auto ptcl = pid_scs(pid);
+      auto ptcl = pid_ps(pid);
       auto fid = xface_ids[ptcl];
       if(fid>=0) {
         xface_ids[ptcl] = -1;
@@ -67,84 +67,84 @@ void storePiscesDataSeparate(SCS* scs, o::Mesh* mesh, o::Write<o::LO>& data_d,
         if(detId >=0) {
           if(debug)
             printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
-              pid_scs(pid), zInd, detId, x, y, z, iter);
+              pid_ps(pid), zInd, detId, x, y, z, iter);
           Kokkos::atomic_increment(&(data_d[detId]));
         }
       }
     }
   };
-  scs->parallel_for(lamb, "storePiscesData");
+  ps::parallel_for(ptcls, lamb, "storePiscesData");
 }
 
 
-void rebuild(p::Mesh& picparts, SCS* scs, o::LOs elem_ids, const bool output) {
-  updatePtclPositions(scs);
-  const int scs_capacity = scs->capacity();
-  auto ids = scs->get<2>();
-  auto printElmIds = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
+  updatePtclPositions(ptcls);
+  const int ps_capacity = ptcls->capacity();
+  auto ids = ptcls->get<2>();
+  auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
       printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
-  scs->parallel_for(printElmIds);
+  ps::parallel_for(ptcls, printElmIds);
 
-  SCS::kkLidView scs_elem_ids("scs_elem_ids", scs_capacity);
-  SCS::kkLidView scs_process_ids("scs_process_ids", scs_capacity);
+  PS::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
+  PS::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
   Omega_h::LOs is_safe = picparts.safeTag();
   Omega_h::LOs elm_owners = picparts.entOwners(picparts.dim());
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask) {
       int new_elem = elem_ids[pid];
-      scs_elem_ids(pid) = new_elem;
-      scs_process_ids(pid) = comm_rank;
+      ps_elem_ids(pid) = new_elem;
+      ps_process_ids(pid) = comm_rank;
       if (new_elem != -1 && is_safe[new_elem] == 0) {
-        scs_process_ids(pid) = elm_owners[new_elem];
+        ps_process_ids(pid) = elm_owners[new_elem];
       }
     }
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb);
   
-  scs->migrate(scs_elem_ids, scs_process_ids);
+  ptcls->migrate(ps_elem_ids, ps_process_ids);
 
-  ids = scs->get<2>();
+  ids = ptcls->get<2>();
   if (output) {
-    auto printElms = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if (mask > 0)
         printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
     };
-    scs->parallel_for(printElms);
+    ps::parallel_for(ptcls, printElms);
   }
 }
 
-void search(p::Mesh& picparts, SCS* scs, GitrmParticles& gp, int iter, 
+void search(p::Mesh& picparts, PS* ptcls, GitrmParticles& gp, int iter, 
   o::Write<o::LO>& data_d, o::Write<o::Real>& xpoints_d, 
   o::Write<o::LO>&xface_ids, bool debug=false ) {
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   if(debug)
-    printf("elems scs %d mesh %d\n", scs->nElems(), mesh->nelems());
-  assert(scs->nElems() == mesh->nelems());
+    printf("elems ps %d mesh %d\n", ptcls->nElems(), mesh->nelems());
+  assert(ptcls->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 20;
-  const auto scsCapacity = scs->capacity();
-  assert(scsCapacity >0);
-  o::Write<o::LO> elem_ids(scsCapacity,-1);
-  auto x_scs = scs->get<0>();
-  auto xtgt_scs = scs->get<1>();
-  auto pid_scs = scs->get<2>();
+  const auto psCapacity = ptcls->capacity();
+  assert(psCapacity >0);
+  o::Write<o::LO> elem_ids(psCapacity,-1);
+  auto x_ps = ptcls->get<0>();
+  auto xtgt_ps = ptcls->get<1>();
+  auto pid_ps = ptcls->get<2>();
 
-  bool isFound = p::search_mesh<Particle>(*mesh, scs, x_scs, xtgt_scs, pid_scs, 
+  bool isFound = p::search_mesh<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
     elem_ids, xpoints_d, xface_ids, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("storePiscesData");
-  storePiscesDataSeparate(scs, mesh, data_d, xpoints_d, xface_ids, iter, true);
+  storePiscesDataSeparate(ptcls, mesh, data_d, xpoints_d, xface_ids, iter, true);
 
   //storePiscesData(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
   Kokkos::Profiling::pushRegion("rebuild");
-  rebuild(picparts, scs, elem_ids, debug);
+  rebuild(picparts, ptcls, elem_ids, debug);
   Kokkos::Profiling::popRegion();
 }
 
@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
   if(!comm_rank)
     printf("Initializing %d Particles\n", numPtcls);
   gp.initPtclsFromFile(picparts, ptclSource, numPtcls, 100, false);
-  auto* scs = gp.scs;
+  auto* ptcls = gp.ptcls;
 
   o::Write<o::Real>xpoints_d(3*numPtcls, 0, "xpoints");
   o::Write<o::LO>xface_ids(numPtcls, -1, "xface_ids");
@@ -301,17 +301,17 @@ int main(int argc, char** argv) {
   int iHistStep = 0;
  
   if(histInterval >0)
-    updatePtclStepData(scs, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
+    updatePtclStepData(ptcls, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
         dofStepData, iHistStep);
  
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int iter;
   int np;
-  int scs_np;
+  int ps_np;
   for(iter=0; iter<NUM_ITERATIONS; iter++) {
-    scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    ps_np = ptcls->nPtcls();
+    MPI_Allreduce(&ps_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -322,31 +322,31 @@ int main(int argc, char** argv) {
     //#if HISTORY > 0
     //o::Write<o::Real> data(numPtcls*dofStepData, -1);
     //if(iter==0 && histInterval >0)
-    //  printStepData(ofsHistory, scs, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
+    //  printStepData(ofsHistory, ptcls, 0, numPtcls, ptclsDataAll, data, dofStepData, true);
     //#endif
 
     Kokkos::Profiling::pushRegion("neutralBorisMove");
-    //neutralBorisMove(scs, dTime);
-    neutralBorisMove_float(scs, dTime);
+    //neutralBorisMove(ptcls, dTime);
+    neutralBorisMove_float(ptcls, dTime);
     Kokkos::Profiling::popRegion();
 
     MPI_Barrier(MPI_COMM_WORLD);
     
-    search(picparts, scs, gp, iter, data_d, xpoints_d, xface_ids, debug);
+    search(picparts, ptcls, gp, iter, data_d, xpoints_d, xface_ids, debug);
     if(histInterval >0) {
-      //updatePtclStepData(scs, ptclsDataAll, numPtcls, iter+1, dofStepData, data); 
+      //updatePtclStepData(ptcls, ptclsDataAll, numPtcls, iter+1, dofStepData, data); 
       if(iter % histInterval == 0)
         ++iHistStep;  
-      updatePtclStepData(scs, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
+      updatePtclStepData(ptcls, ptclHistoryData,lastFilledTimeSteps, numPtcls, 
           dofStepData, iHistStep);
       //if((iter+1)%histInterval == 0)
-        //printStepData(ofsHistory, scs, iter+1, numPtcls, ptclsDataAll, data, 
+        //printStepData(ofsHistory, ptcls, iter+1, numPtcls, ptclsDataAll, data, 
        // dofStepData, true); //last accum
     }
     if(comm_rank == 0 && iter%1000 ==0)
-      fprintf(stderr, "nPtcls %d\n", scs->nPtcls());
-    scs_np = scs->nPtcls();
-    MPI_Allreduce(&scs_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
+      fprintf(stderr, "nPtcls %d\n", ptcls->nPtcls());
+    ps_np = ptcls->nPtcls();
+    MPI_Allreduce(&ps_np, &np, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);  
     if(np == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;

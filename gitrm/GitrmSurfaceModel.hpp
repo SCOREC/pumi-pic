@@ -125,6 +125,8 @@ public:
   template<typename T>
   T interp1dUnstructured(const T samplePoint, const int nx, const T max_x, 
     const T* data, int& lowInd);
+
+  void test();
 };
 
 
@@ -150,7 +152,8 @@ OMEGA_H_DEVICE o::Real stoppingPower (const o::Vector<3>& vel, const o::Real tar
 }
 
 //not used ? 
-inline void surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
+inline void surfaceErosion(PS* ptcls, o::Write<o::Real>& erosionData) {
+  const auto psCapacity = ptcls->capacity();
   int atomZ = gitrm::PARTICLE_Z;
   auto amu = gitrm::PTCL_AMU;
   auto elCharge = gitrm::ELECTRON_CHARGE; //1.60217662e-19
@@ -162,25 +165,25 @@ inline void surfaceErosion(SCS* scs, o::Write<o::Real>& erosionData) {
   o::Real targetZ = 74.0;
   o::Real targetM = 183.84;
 
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto vel_scs = scs->get<PTCL_VEL>();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto ptcl = pid_scs(pid);
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto vel_ps = ptcls->get<PTCL_VEL>();
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    auto ptcl = pid_ps(pid);
     auto screenLength = screeningLength(atomZ, targetZ);
-    auto vel = p::makeVector3(pid, vel_scs);
+    auto vel = p::makeVector3(pid, vel_ps);
     o::Real stopPower = stoppingPower(vel, targetM, targetZ, screenLength);
     o::Real E0 = 0.5*amu*protonMass* 1/elCharge * p::osh_dot(vel, vel);
     o::Real term = pow((E0/Eth - 1), mu);
     o::Real Y0 = q*stopPower*term/(lambda + term);
     erosionData[pid] = Y0;
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb, "surfaceErosion");
 }
 
 
-//Note, elem_ids indexed by pids of scs, not ptcl. Don't rebuild after search_mesh 
-inline void gitrm_surfaceReflection(SCS* scs, GitrmSurfaceModel& sm, GitrmParticles& gp,
-  const GitrmMesh& gm, o::Write<o::LO>& elem_ids, bool debug=false) {
-}
+//Note, elem_ids indexed by pids of ps, not ptcl. Don't rebuild after search_mesh 
 
+inline void gitrm_surfaceReflection_test(PS* ptcls, GitrmSurfaceModel& sm,
+    GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elem_ids) {
+}
 #endif

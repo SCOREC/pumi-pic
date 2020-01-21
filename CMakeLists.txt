@@ -79,6 +79,13 @@ set(ALL_LIBS
   xgcp
   )
 
+#gitrm
+add_subdirectory(gitrm)
+set(ALL_LIBS
+  ${ALL_LIBS}
+  gitrm
+  )
+
 if(IS_TESTING)
   add_subdirectory(test)
 endif()

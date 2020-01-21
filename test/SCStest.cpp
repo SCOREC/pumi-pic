@@ -5,23 +5,22 @@
 #include <Omega_h_mesh.hpp>
 #include "Omega_h_for.hpp"
 #include "pumipic_kktypes.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <Distribute.h>
-#include <Kokkos_Core.hpp>
-#include "pumipic_library.hpp"
-#include "pumipic_mesh.hpp"
 #include "pumipic_adjacency.hpp"
+#include <particle_structs.hpp>
+#include <Kokkos_Core.hpp>
+#include "pumipic_mesh.hpp"
 
-using particle_structs::fp_t;
-using particle_structs::lid_t;
-using particle_structs::Vector3d;
-using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
+//#include "pumipic_library.hpp"
 
 namespace o = Omega_h;
 namespace p = pumipic;
+namespace ps = particle_structs;
+
+using pumipic::fp_t;
+using pumipic::Vector3d;
+using ps::lid_t;
+using ps::SellCSigma;
+using ps::MemberTypes;
 
 typedef MemberTypes < Vector3d, Vector3d, int,  Vector3d, Vector3d, 
    int, fp_t, fp_t, int, fp_t, fp_t, int, fp_t> Particle;
@@ -30,7 +29,7 @@ enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
  PTCL_PREV_RECOMBINE, PTCL_HIT_NUM, PTCL_VMAG_NEW};
 
 //typedef MemberTypes < Vector3d, Vector3d, int> Particle;
-typedef SellCSigma<Particle> SCS;
+typedef ps::ParticleStructure<Particle> PS;
 
 o::Mesh readMesh(char* meshFile, o::Library& lib) {
   const auto rank = lib.world()->rank();
@@ -52,26 +51,26 @@ o::Mesh readMesh(char* meshFile, o::Library& lib) {
   }
 }
 
-void psTestRun(SCS* scs) {
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto next_pos_scs = scs->get<PTCL_NEXT_POS>();
-  auto pos_scs = scs->get<PTCL_POS>();
-  auto vel_scs = scs->get<PTCL_VEL>();
-  auto ps_charge = scs->get<PTCL_CHARGE>();
-  auto ps_weight = scs->get<PTCL_WEIGHT>();
-  auto scs_hitNum = scs->get<PTCL_HIT_NUM>();
-  auto ps_newVelMag = scs->get<PTCL_VMAG_NEW>();
+void psTestRun(PS* ptcls) {
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto next_pos_ps = ptcls->get<PTCL_NEXT_POS>();
+  auto pos_ps = ptcls->get<PTCL_POS>();
+  auto vel_ps = ptcls->get<PTCL_VEL>();
+  auto ps_charge = ptcls->get<PTCL_CHARGE>();
+  auto ps_weight = ptcls->get<PTCL_WEIGHT>();
+  auto ps_hitNum = ptcls->get<PTCL_HIT_NUM>();
+  auto ps_newVelMag = ptcls->get<PTCL_VMAG_NEW>();
 
-  auto lambda = SCS_LAMBDA(const int& elem, const int& pid, const int& mask) {
+  auto lambda = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask >0) {
-      auto ptcl = pid_scs(pid);
+      auto ptcl = pid_ps(pid);
       auto weight = ps_weight(pid);
-      auto vel = p::makeVector3(pid, vel_scs );
+      auto vel = p::makeVector3(pid, vel_ps );
       if(ptcl < 10)
         printf("ptcl %d wt %g vel %g %g %g \n", ptcl, weight, vel[0], vel[1], vel[2]);
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda);
 }
 
 int main(int argc, char** argv) {
@@ -94,8 +93,8 @@ int main(int argc, char** argv) {
      mesh->nverts(), mesh->nedges(), mesh->nfaces(), mesh->nelems());
 
   o::Int ne = mesh->nelems();
-  SCS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  SCS::kkGidView element_gids("element_gids", ne);
+  PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+  PS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i]; 
@@ -110,9 +109,9 @@ int main(int argc, char** argv) {
   const int sigma = INT_MAX; // full sorting
   const int V = 128; //1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  SellCSigma<Particle>* scs = new SellCSigma<Particle>(policy, sigma, V, ne, 
+  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, 
     numPtcls, ptcls_per_elem, element_gids);
-  psTestRun(scs); 
+  psTestRun(ptcls); 
   printf("Done PS test \n");
 
   return 0;

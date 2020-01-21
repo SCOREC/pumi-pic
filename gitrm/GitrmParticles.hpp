@@ -5,22 +5,25 @@
 #include "GitrmMesh.hpp"
 #include <netcdf>
 #include <Kokkos_Core.hpp>
-#include "pumipic_kktypes.hpp"
-#include "pumipic_library.hpp"
+#include <particle_structs.hpp>
+//#include <PS_Types.h>
+//#include "pumipic_kktypes.hpp"
+//#include "pumipic_library.hpp"
 #include "pumipic_mesh.hpp"
-#include <psTypes.h>
-#include <SellCSigma.h>
-#include <SCS_Macros.h>
-#include <Distribute.h>
+//#include <psTypes.h>
+//#include <SellCSigma.h>
+//#include <SCS_Macros.h>
+//#include <Distribute.h>
 
-using particle_structs::fp_t;
+using pumipic::fp_t;
+using pumipic::Vector3d;
 using particle_structs::lid_t;
-using particle_structs::Vector3d;
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
 
 namespace o = Omega_h;
 namespace p = pumipic;
+namespace ps = particle_structs;
 
 namespace gitrm {
 const o::Real ELECTRON_CHARGE = 1.60217662e-19;
@@ -38,7 +41,7 @@ enum {PTCL_POS, PTCL_NEXT_POS, PTCL_ID, PTCL_VEL, PTCL_EFIELD, PTCL_CHARGE,
  PTCL_WEIGHT, PTCL_FIRST_IONIZEZ, PTCL_PREV_IONIZE, PTCL_FIRST_IONIZET, 
  PTCL_PREV_RECOMBINE, PTCL_HIT_NUM, PTCL_VMAG_NEW};
 
-typedef SellCSigma<Particle> SCS;
+typedef ps::ParticleStructure<Particle> PS;
 
 class GitrmParticles {
 public:
@@ -87,7 +90,7 @@ public:
   int& maxNPtcls, int& numPtclsRead, bool debug=false);
 
   o::Real timeStep;
-  SCS* scs;
+  PS* ptcls;
   o::Mesh& mesh;
 
   // particle dist to bdry
@@ -119,12 +122,12 @@ public:
 //timestep +1
 extern int iTimePlusOne;
 // TODO move to class, data is kept as members  
-void updatePtclStepData(SCS* scs, o::Write<o::Real>& ptclStepData,
+void updatePtclStepData(PS* ptcls, o::Write<o::Real>& ptclStepData,
   o::Write<o::LO>& lastFilledTimeSteps, int nP, int dof, int histStep=1); 
 
 void printPtclSource(o::Reals& data, int nPtcls, int nPtclsRead);
 
-void printStepData(std::ofstream& ofsHistory, SCS* scs, int iter,
+void printStepData(std::ofstream& ofsHistory, PS* ptcls, int iter,
   int numPtcls, o::Write<o::Real>& ptclsDataAll, o::Write<o::LO>& lastFilledTimeSteps, 
   o::Write<o::Real>& data, int dof=8, bool accum = false);
 
@@ -139,7 +142,7 @@ void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData,
 inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const GitrmMesh& gm, int debug=0) {
   int tstep = iTimePlusOne;
-  auto* scs = gp.scs;
+  auto* ptcls = gp.ptcls;
   o::Mesh& mesh = gm.mesh;  
   o::LOs modelIdsToSkip = o::LOs(gm.modelIdsToSkipFromD2bdry);
   auto numModelIds = modelIdsToSkip.size();
@@ -160,12 +163,12 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const auto& face_verts = mesh.ask_verts_of(2);
   const auto& bdryFaces = gm.bdryFacesSelectedCsr;
   const auto& bdryFacePtrs = gm.bdryFacePtrsSelected;
-  const auto scsCapacity = scs->capacity();
-  o::Write<o::Real> closestPoints(scsCapacity*3, 0, "closest_points");
-  o::Write<o::LO> closestBdryFaceIds(scsCapacity, -1, "closest_fids");
-  auto pos_d = scs->get<PTCL_POS>();
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  const auto psCapacity = ptcls->capacity();
+  o::Write<o::Real> closestPoints(psCapacity*3, 0, "closest_points");
+  o::Write<o::LO> closestBdryFaceIds(psCapacity, -1, "closest_fids");
+  auto pos_d = ptcls->get<PTCL_POS>();
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if (mask > 0) {
       o::LO beg = 0;
       o::LO nFaces = 0;
@@ -178,7 +181,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
       }
 
       if(nFaces >0) {
-        auto ptcl = pid_scs(pid);
+        auto ptcl = pid_ps(pid);
         double dist = 0;
         double min = 1.0e+30;
         auto point = o::zero_vector<3>();
@@ -229,7 +232,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
       } //if nFaces 
     }
   };
-  scs->parallel_for(lambda);
+  ps::parallel_for(ptcls, lambda);
   gp.closestPoints = o::Reals(closestPoints);
   gp.closestBdryFaceIds = o::LOs(closestBdryFaceIds);
 }
@@ -245,16 +248,16 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
   double zMax = 0.15; //m height max 0.14275
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
-  SCS* scs = gp.scs;
+  PS* ptcls = gp.ptcls;
   auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
-  auto pid_scs = scs->get<PTCL_ID>();
-  //based on ptcl id or scs pid ?
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  //based on ptcl id or ptcls pid ?
   const auto& xpoints = gp.collisionPoints;
   auto& xpointFids = gp.collisionPointFaceIds;
 
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask >0) {
-      auto ptcl = pid_scs(pid);
+      auto ptcl = pid_ps(pid);
       auto fid = xpointFids[ptcl];
       if(fid>=0) {
         xpointFids[ptcl] = -1;
@@ -272,29 +275,29 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
         if(detId > -1) { //TODO
           if(debug)
             printf("ptclID %d zInd %d detId %d pos %.5f %.5f %.5f iter %d\n", 
-              pid_scs(pid), zInd, detId, x, y, z, iter);
+              pid_ps(pid), zInd, detId, x, y, z, iter);
           Kokkos::atomic_increment(&data_d[detId]);
         }
       }
     }
   };
-  scs->parallel_for(lamb, "StorePiscesData");
+  ps::parallel_for(ptcls, lamb, "StorePiscesData");
 }
 
-//storePtclDataInGridsRZ(scs, iter, data_d, 1, 10, true);
+//storePtclDataInGridsRZ(ptcls, iter, data_d, 1, 10, true);
 // gridsR gets preference. If >1 then gridsZ not taken
-inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d, 
+inline void storePtclDataInGridsRZ(PS* ptcls, o::LO iter, o::Write<o::GO> &data_d, 
   int gridsR=1, int gridsZ=10, bool debug=false, double radMax=0.2, 
   double zMax=0.8, double radMin=0, double zMin=0) {
   auto dz = (zMax - zMin)/gridsZ;
   auto dr = (radMax - radMin)/gridsR;
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto tgt_scs = scs->get<PTCL_NEXT_POS>();
-  auto lamb = SCS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto tgt_ps = ptcls->get<PTCL_NEXT_POS>();
+  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask >0) {
-      auto x = tgt_scs(pid, 0);
-      auto y = tgt_scs(pid, 1);
-      auto z = tgt_scs(pid, 2);
+      auto x = tgt_ps(pid, 0);
+      auto y = tgt_ps(pid, 1);
+      auto z = tgt_ps(pid, 2);
       auto rad = sqrt(x*x + y*y);
       int ind = -1;
       if(rad < radMax && radMin >= radMin && z <= zMax && z >= zMin)
@@ -306,12 +309,12 @@ inline void storePtclDataInGridsRZ(SCS* scs, o::LO iter, o::Write<o::GO> &data_d
       if(ind >=0) {
         if(debug)
           printf("grid_ptclID %d ind %d pos %.5f %.5f %.5f iter %d rdir %d\n", 
-            pid_scs(pid), ind, x, y, z, iter, dir);
+            pid_ps(pid), ind, x, y, z, iter, dir);
         Kokkos::atomic_increment(&data_d[ind]);
       }
     } //mask
   };
-  scs->parallel_for(lamb);
+  ps::parallel_for(ptcls, lamb);
 }
 
 // print from host, since missing entries from device print  

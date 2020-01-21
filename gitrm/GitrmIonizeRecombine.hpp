@@ -77,15 +77,16 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   o::Real RClocal = (aT*fx_z1+bT*fx_z2)/abT;
   
   if(debug)
-    printf("  interpRate: t %g n %g gridT0 %g log10(tem) %g indT %d  gridD0 %g log10(dens) %g indN %d "
-     " dT %g dD %g nT %d nD %d charge %d fx_z1 %g fx_z2 %g RClocal(fxz) %g\n", tem,dens,gridT0, log10(tem),
-     indT, gridD0, log10(dens),indN, dT,dD,nT,nD,charge, fx_z1, fx_z2, RClocal);
+    printf("  interpRate: t %g n %g gridT0 %g log10(tem) %g indT %d  gridD0 %g "
+      "log10(dens) %g indN %d dT %g dD %g nT %d nD %d charge %d fx_z1 %g fx_z2 %g "
+      "RClocal(fxz) %g\n", tem,dens,gridT0, log10(tem), indT, gridD0, log10(dens),
+      indN, dT,dD,nT,nD,charge, fx_z1, fx_z2, RClocal);
 
   o::Real rate;
   if(o::are_close(tem,0) || o::are_close(dens, 0))
     rate = 1.0e12;
   else {
-    //double eps = 1e-50; //TODO
+    //double eps = 1e-30; //TODO
     //if(o::are_close(RClocal,0, eps,eps))
     //  debug = 1;
     //OMEGA_H_CHECK(!o::are_close(RClocal,0, eps,eps));
@@ -98,7 +99,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
   return rate;
 }
 
-inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir, 
+inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir, 
   const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
   bool debug = false) {
   auto& mesh = gm.mesh;
@@ -152,29 +153,29 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
 
   //const auto& tIonVtx = gm.tempIonVtx_d;
   //const auto& densVtx = gm.densIonVtx_d;
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto new_pos = scs->get<PTCL_NEXT_POS>();
-  auto charge_scs = scs->get<PTCL_CHARGE>();
-  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
-  auto prev_ionize_scs = scs->get<PTCL_PREV_IONIZE>();
-  auto first_ionizeT_scs = scs->get<PTCL_FIRST_IONIZET>();
-  auto scsCapacity = scs->capacity();
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto new_pos = ptcls->get<PTCL_NEXT_POS>();
+  auto charge_ps = ptcls->get<PTCL_CHARGE>();
+  auto first_ionizeZ_ps = ptcls->get<PTCL_FIRST_IONIZEZ>();
+  auto prev_ionize_ps = ptcls->get<PTCL_PREV_IONIZE>();
+  auto first_ionizeT_ps = ptcls->get<PTCL_FIRST_IONIZET>();
+  auto psCapacity = ptcls->capacity();
 
   //TODO replace by Kokkos random
-  o::HostWrite<o::Real> rnd_h(scsCapacity);
-  for(auto i=0; i<scsCapacity; ++i) {
+  o::HostWrite<o::Real> rnd_h(psCapacity);
+  for(auto i=0; i<psCapacity; ++i) {
     rnd_h[i] = (double)(std::rand())/RAND_MAX;
   }
   auto rands = o::Reals(o::Write<o::Real>(rnd_h));
 
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     // invalid elem_ids init to -1
     if(mask > 0 && elm_ids[pid] >= 0) {
      // element of next_pos
       o::LO el = elm_ids[pid];
-      auto ptcl = pid_scs(pid);
+      auto ptcl = pid_ps(pid);
       auto pos = p::makeVector3(pid, new_pos);
-      auto charge = charge_scs(pid);
+      auto charge = charge_ps(pid);
       o::Real tlocal = 0;
       o::Real nlocal = 0;
       if(!use2DRatesData) {
@@ -216,31 +217,31 @@ inline void gitrm_ionize(SCS* scs, const GitrmIonizeRecombine& gir,
         randn = rands[pid];
       
       auto xfid = xfaces_d[ptcl];
-      auto first_iz = first_ionizeZ_scs(pid);
+      auto first_iz = first_ionizeZ_ps(pid);
       if(xfid < 0) {
         if(randn <= P1)
-          charge_scs(pid) = charge+1;
-      }  prev_ionize_scs(pid) = 1;
+          charge_ps(pid) = charge+1;
+      }  prev_ionize_ps(pid) = 1;
         // Z=0 unitialized or specific z(height) value ? question
       if(o::are_close(first_iz, 0)) {
-          first_ionizeZ_scs(pid) = pos[2]; // z
+          first_ionizeZ_ps(pid) = pos[2]; // z
       } else if(o::are_close(first_iz, 0)) {
-        auto fit = first_ionizeT_scs(pid);
-        first_ionizeT_scs(pid) = fit + dt;
+        auto fit = first_ionizeT_ps(pid);
+        first_ionizeT_ps(pid) = fit + dt;
       } 
       if(useGitrRnd && debug)
         gitrInd = ptcl*testGNT*testGDof + iTimeStep*testGDof+testGIind;
       if(debug)
         printf("ionizable %d ptcl %d charge %d randn %g P1 %g rateIon %g dt %g @ %d\n",
-          xfid<0, ptcl, charge_scs(pid), randn, P1, rateIon, dt, gitrInd);
+          xfid<0, ptcl, charge_ps(pid), randn, P1, rateIon, dt, gitrInd);
       
     } //mask 
   };
-  scs->parallel_for(lambda, "ionizeKernel");
+  ps::parallel_for(ptcls,lambda, "ionizeKernel");
 } 
 
 
-inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir, 
+inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir, 
    const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
    bool debug = false) {
   auto& mesh = gm.mesh;
@@ -290,27 +291,27 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
   const auto densVtx = mesh.get_array<o::Real>(o::VERT, "IonDensityVtx");
   //const auto& tIonVtx = gm.densElVtx_d;
   //const auto& densVtx = gm.tempElVtx_d;
-  auto pid_scs = scs->get<PTCL_ID>();
-  auto new_pos = scs->get<PTCL_NEXT_POS>();
-  auto charge_scs = scs->get<PTCL_CHARGE>();
-  auto first_ionizeZ_scs = scs->get<PTCL_FIRST_IONIZEZ>();
-  auto prev_recomb_scs = scs->get<PTCL_PREV_RECOMBINE>();
-  auto scsCapacity = scs->capacity();
+  auto pid_ps = ptcls->get<PTCL_ID>();
+  auto new_pos = ptcls->get<PTCL_NEXT_POS>();
+  auto charge_ps = ptcls->get<PTCL_CHARGE>();
+  auto first_ionizeZ_ps = ptcls->get<PTCL_FIRST_IONIZEZ>();
+  auto prev_recomb_ps = ptcls->get<PTCL_PREV_RECOMBINE>();
+  auto psCapacity = ptcls->capacity();
 
   //TODO FIXME replace by Kokkos random
-  o::HostWrite<o::Real> rnd_h(scsCapacity);
-  for(auto i=0; i<scsCapacity; ++i) {
+  o::HostWrite<o::Real> rnd_h(psCapacity);
+  for(auto i=0; i<psCapacity; ++i) {
     rnd_h[i] = (double)(std::rand())/RAND_MAX;
   }
   auto rands = o::Reals(o::Write<o::Real>(rnd_h));
 
 
   // is elm_ids[pid] >= 0 make sure ptcl not intersected bdry ?????????
-  auto lambda = SCS_LAMBDA(const int &elem, const int &pid, const int &mask) {
+  auto lambda = PS_LAMBDA(const int &elem, const int &pid, const int &mask) {
     if(mask > 0 && elm_ids[pid] >= 0) {
       auto el = elm_ids[pid];
-      auto ptcl = pid_scs(pid);
-      auto charge = charge_scs(pid);
+      auto ptcl = pid_ps(pid);
+      auto charge = charge_ps(pid);
       auto pos = p::makeVector3(pid, new_pos);
       o::Real rateRecomb = 0;
       o::Real P1 = 0;
@@ -362,10 +363,10 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
           randn = rands[pid];
 
         auto xfid = xfaces_d[ptcl];
-        auto first_iz = first_ionizeZ_scs(pid);
+        auto first_iz = first_ionizeZ_ps(pid);
         if(xfid < 0 && randn <= P1) {
-          charge_scs(pid) = charge-1;
-          prev_recomb_scs(pid) = 1;
+          charge_ps(pid) = charge-1;
+          prev_recomb_ps(pid) = 1;
         }
 
         if(useGitrRnd && debug)
@@ -373,11 +374,11 @@ inline void gitrm_recombine(SCS* scs, const GitrmIonizeRecombine& gir,
         
         if(debug)
           printf("recomb %d ptcl %d charge %d randn %g P1 %g rateRecomb %g @ %d\n", 
-            xfid<0, ptcl, charge_scs(pid), randn, P1, rateRecomb, gitrInd);
+            xfid<0, ptcl, charge_ps(pid), randn, P1, rateRecomb, gitrInd);
       }
     } //mask 
   };
-  scs->parallel_for(lambda, "RecombineKernel");
+  ps::parallel_for(ptcls, lambda, "RecombineKernel");
 } 
 
 #endif

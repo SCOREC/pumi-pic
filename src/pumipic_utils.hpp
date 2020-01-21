@@ -159,16 +159,6 @@ OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1,
   return acos(cos);
 }
 
-OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
-  const o::LOs &mesh2verts,  const o::Reals &coords) {
-  o::Vector<3> pos;
-  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
-  auto M = o::gather_vectors<4, 3>(coords, tetv2v);
-  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
-  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
-  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
-  return pos;
-}
 
 OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
   const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
@@ -470,6 +460,17 @@ OMEGA_H_DEVICE o::Vector<3> face_centroid_of_tet(const o::LO fid,
   return centroid_of_triangle(abc);
 }
 
+OMEGA_H_DEVICE o::Vector<3> centroid_of_tet(const o::LO elem, 
+  const o::LOs &mesh2verts,  const o::Reals &coords) {
+  o::Vector<3> pos;
+  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+  auto M = o::gather_vectors<4, 3>(coords, tetv2v);
+  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
+  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
+  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
+  return pos;
+}
+
 //2,3 nodes of faces. 0,2,1; 0,1,3; 1,2,3; 2,0,3
 OMEGA_H_DEVICE o::LO getFaceMap(const o::LO i) {
   assert(i>=0 && i<8);
@@ -530,17 +531,8 @@ OMEGA_H_DEVICE o::Vector<3> bdry_face_normal_of_tet(const o::LO fid,
   o::Vector<3> c = abc[2];
   o::Vector<3> fnorm = o::cross(b - a, c - a);
   return o::normalize(fnorm);
-
-OMEGA_H_DEVICE Omega_h::Vector<3> centroid_of_tet(const Omega_h::LO elem,
-  const Omega_h::LOs &mesh2verts, const Omega_h::Reals &coords) {
-  Omega_h::Vector<3> pos;
-  auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, elem);
-  auto M = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
-  pos[0]= (M[0][0]+M[1][0]+M[2][0]+M[3][0])/4;
-  pos[1]= (M[0][1]+M[1][1]+M[2][1]+M[3][1])/4;
-  pos[2]= (M[0][2]+M[1][2]+M[2][2]+M[3][2])/4;
-  return pos;
 }
+
 
 OMEGA_H_DEVICE o::LO elem_id_of_bdry_face_of_tet(const o::LO fid, 
   const o::LOs &f2r_ptr, const o::LOs &f2r_elem) { 
@@ -690,11 +682,5 @@ OMEGA_H_DEVICE o::LO get_interior_face_ids_of_tet(const o::LO elem,
   return nf;
 }
 
-void print_array(const double* a, int n=3, std::string name=" ");
-void print_osh_vector(const Omega_h::Vector<3> &v, std::string name=" ", bool line_break=true);
-template< o::LO N>
-void print_osh_vector(const Omega_h::Vector<N> &v, const char* name);
-void print_data(const Omega_h::Matrix<3, 4> &M, const Omega_h::Vector<3> &dest,
-                Omega_h::Write<Omega_h::Real> &bcc);
 } //namespace
 #endif

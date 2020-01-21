@@ -216,9 +216,6 @@ namespace particle_structs {
         particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
       });
 
-    CopyNewParticlesToPS<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, ptcl_data,
-                                                                     particle_info,
-                                                                     given_particles,
-                                                                     particle_indices);
+    CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
   }
 }

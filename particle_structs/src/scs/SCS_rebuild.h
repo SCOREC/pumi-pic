@@ -246,10 +246,7 @@ namespace particle_structs {
       });
 
     if (new_particle_elements.size() > 0)
-      CopyNewParticlesToPS<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, scs_data_swap,
-                                                                       new_particles,
-                                                                       num_new_ptcls,
-                                                                       new_particle_indices);
+      CopyViewsToViews<kkLidView, DataTypes>(scs_data_swap, new_particles, new_particle_indices);
 
     //set scs to point to new values
     C_ = new_C;

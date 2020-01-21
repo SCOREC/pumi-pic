@@ -14,8 +14,7 @@ namespace particle_structs {
   //This type represents an array of views for each type of the given DataTypes
   template <typename DataTypes, typename Device> using MemberTypeViews = void**;
   template <typename DataTypes, typename Device> using MemberTypeViewsConst = void* const*;
-  template <typename T, typename Device> using MemberTypeView =
-    Kokkos::View<T*, Device>;
+  template <typename T, typename Device> using MemberTypeView = Kokkos::View<T*, Device>;
 
   /* Template Fuctions for external usage
        Note: MemorySpace defaults to the default memory space if none is provided
@@ -39,24 +38,59 @@ namespace particle_structs {
   template <typename DataTypes, typename MemSpace = DefaultMemSpace>
     void destroyViews(MemberTypeViews<DataTypes, typename MemSpace::device_type> data);
 
-  /* Template Structs
-     CreateViews<DataTypes, Device> - creates and allocates member views
-     DestryoViews<DataTypes> - deallocates member views
-     CopyParticleToSend<ParticleStructure, DataTypes> - copies particle info to send arrays
-     CopyPSToPS<ParticleStructure, DataTypes> - copies particle info from ps to ps
-     CopyNewParticlesToPS<ParticleStructure, DataTypes> - copies particle info from
-                                                          new particles to ps
-     ShuffleParticles<ParticleStructure, DataTypes> - shuffles particle info within a ps
-     SendViews<DataTypes> - sends views with MPI communications
-     RecvViews<DataTypes> - recvs views from MPI communications
+  /******* Template Structs ******/
+  /* CreateViews<DataTypes, Device> - creates and allocates member views
+       Usage: CreateViews<Device, DataTypes>(MemberTypeViews, size)
    */
   template <typename Device, typename... Types> struct CreateViews;
+  /* DestroyViews<DataTypes> - deallocates member views
+       Usage: DestroyViews<Device, MemberTypes>(MemberTypeViews + 0)
+       Note: The + 0 may be required in order for the compiler to correctly understand the call
+   */
   template <typename Device, typename... Types> struct DestroyViews;
+  /* CopyParticleToSend<ParticleStructure, DataTypes> - copies particle info to send arrays
+       Usage: CopyParticlesToSend<ParticleStructure, DataTypes>(ParticleStructure,
+                                                                DestinationMemberTypeViews,
+                                                                SourceMemberTypeViews,
+                                                                NewProcessPerParticle,
+                                                                MapFromPSToSendArray);
+   */
   template <typename PS, typename... Types> struct CopyParticlesToSend;
+  /* CopyPSToPS<ParticleStructure, DataTypes> - copies particle info from ps to ps
+       Usage: CopyPSToPS<ParticleStructure, MemberTypes>(ParticleStructure,
+                                                         DestionationMemberTypeViews,
+                                                         SourceMemberTypeViews,
+                                                         NewRowIndexForParticle,
+                                                         DestinationIndexForParticle);
+   */
   template <typename PS, typename... Types> struct CopyPSToPS;
-  template <typename PS, typename... Types> struct CopyNewParticlesToPS;
-  template <typename PS, typename... Types> struct ShuffleParticles;
+  /* CopyViewsToViews<ViewType, DataTypes> - copies particle info from one view to specific
+                                             indices in another view
+       Usage: CopyViewsToViews<ViewType, MemberTypes>(DestiationMemberTypeViews,
+                                                      SourceMemberTypeViews,
+                                                      DestionationIndexPerSource);
+  */
+  template <typename PS, typename... Types> struct CopyViewsToViews;
+  /* ShuffleParticles<ParticleStructure, DataTypes> - shuffles particle info within a ps
+                                                      and add new particles
+       Usage: ShuffleParticles<ParticleStructure, MemberTypes>(PSMemberTypeViews,
+                                                               NewPtclMemberTypeViews,
+                                                               SourceIndex,
+                                                               DestinationIndex,
+                                                               IfEntryIsDrawnFromPS);
+   */
+  template <typename Device, typename... Types> struct ShuffleParticles;
+  /* SendViews<Device, DataTypes> - sends views with MPI communications
+       Usage: SendViews<Device, MemberTypes>(MemberTypesViews, offsetFromStart,
+                                             numberOfEntries, destinationRank, initialTag,
+                                             ArrayOfRequests);
+   */
   template <typename Device, typename... Types> struct SendViews;
+  /* RecvViews<Device, DataTypes> - recvs views from MPI communications
+       Usage: RecvViews<Device, MemberTypes>(MemberTypeViews, offsetFromStart,
+                                             numberOfEntries, sendingRank, initialTag,
+                                             ArrayOfRequests);
+   */
   template <typename Device, typename... Types> struct RecvViews;
 
   //Functions
@@ -130,7 +164,7 @@ namespace particle_structs {
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
-      ps->parallel_for(copyPSToArray);
+      parallel_for(ps, copyPSToArray);
       CopyParticlesToSendImpl<PS, Types...>(ps, dsts+1, srcs+1, ps_to_array,
                                             array_indices);
     }
@@ -174,7 +208,7 @@ namespace particle_structs {
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
-      ps->parallel_for(copyPSToPS);
+      parallel_for(ps, copyPSToPS);
       CopyPSToPSImpl<PS, Types...>(ps, dsts+1, srcs+1, new_element, ps_indices);
     }
 
@@ -190,40 +224,38 @@ namespace particle_structs {
   };
 
 
-  template <typename PS, typename... Types> struct CopyNewParticlesToPSImpl;
-  template <typename PS> struct CopyNewParticlesToPSImpl<PS> {
-    typedef typename PS::device_type Device;
-    CopyNewParticlesToPSImpl(PS* ps, MemberTypeViewsConst<MemberTypes<void>, Device>,
-                             MemberTypeViewsConst<MemberTypes<void>, Device>, int,
-                              typename PS::kkLidView) {}
+  template <typename View, typename... Types> struct CopyViewsToViewsImpl;
+  template <typename View> struct CopyViewsToViewsImpl<View> {
+    typedef typename View::device_type Device;
+    CopyViewsToViewsImpl(MemberTypeViewsConst<MemberTypes<void>, Device>,
+                             MemberTypeViewsConst<MemberTypes<void>, Device>,
+                             View) {}
   };
-  template <typename PS, typename T, typename... Types> struct CopyNewParticlesToPSImpl<PS, T,Types...> {
-    typedef typename PS::device_type Device;
-    CopyNewParticlesToPSImpl(PS* ps,
-                             MemberTypeViewsConst<MemberTypes<T, Types...>, Device> dsts,
+  template <typename View, typename T, typename... Types> struct CopyViewsToViewsImpl<View, T,Types...> {
+    typedef typename View::device_type Device;
+    CopyViewsToViewsImpl(MemberTypeViewsConst<MemberTypes<T, Types...>, Device> dsts,
                              MemberTypeViewsConst<MemberTypes<T, Types...>, Device> srcs,
-                             int ne,
-                             typename PS::kkLidView ps_indices) {
-      enclose(ps,dsts,srcs,ne, ps_indices);
+                             View ps_indices) {
+      enclose(dsts,srcs, ps_indices);
     }
-    void enclose(PS* ps, MemberTypeViewsConst<MemberTypes<T, Types...>, Device> dsts,
-                 MemberTypeViewsConst<MemberTypes<T, Types...>, Device> srcs, int ne,
-                 typename PS::kkLidView ps_indices) {
+    void enclose(MemberTypeViewsConst<MemberTypes<T, Types...>, Device> dsts,
+                 MemberTypeViewsConst<MemberTypes<T, Types...>, Device> srcs,
+                 View ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
-      Kokkos::parallel_for(ne, KOKKOS_LAMBDA(const int& i) {
+      Kokkos::parallel_for(ps_indices.size(), KOKKOS_LAMBDA(const int& i) {
         const int index = ps_indices(i);
         CopyViewToView<T,Device>(dst, index, src, i);
       });
-      CopyNewParticlesToPSImpl<PS, Types...>(ps, dsts+1, srcs+1, ne, ps_indices);
+      CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);
     }
   };
-  template <typename PS,typename... Types> struct CopyNewParticlesToPS<PS, MemberTypes<Types...> > {
-    typedef typename PS::device_type Device;
-    CopyNewParticlesToPS(PS* ps, MemberTypeViewsConst<MemberTypes<Types...>, Device> dsts,
-                         MemberTypeViewsConst<MemberTypes<Types...>, Device> srcs, int ne,
-                         typename PS::kkLidView ps_indices) {
-      CopyNewParticlesToPSImpl<PS, Types...>(ps, dsts, srcs, ne, ps_indices);
+  template <typename View, typename... Types> struct CopyViewsToViews<View, MemberTypes<Types...> > {
+    typedef typename View::device_type Device;
+    CopyViewsToViews(MemberTypeViewsConst<MemberTypes<Types...>, Device> dsts,
+                         MemberTypeViewsConst<MemberTypes<Types...>, Device> srcs,
+                         View ps_indices) {
+      CopyViewsToViewsImpl<View, Types...>(dsts, srcs, ps_indices);
     }
   };
 

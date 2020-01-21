@@ -15,7 +15,7 @@ namespace particle_structs {
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
     if (comm_size == 1) {
-      rebuild(new_element);
+      rebuild(new_element, new_particle_elements, new_particle_info);
       if(!comm_rank || comm_rank == comm_size/2)
         fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
       Kokkos::Profiling::popRegion();
@@ -39,7 +39,7 @@ namespace particle_structs {
       }, num_receiving_from);
 
     if (num_sending_to == 0 && num_receiving_from == 0) {
-      rebuild(new_element);
+      rebuild(new_element, new_particle_elements, new_particle_info);
       if(!comm_rank || comm_rank == comm_size/2)
         fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
       Kokkos::Profiling::popRegion();
@@ -90,11 +90,12 @@ namespace particle_structs {
                                                                     send_index);
 
     //Create arrays for particles being received
+    lid_t new_ptcls = new_particle_elements.size();
     lid_t np_recv = offset_recv_particles_host(comm_size);
-    kkLidView recv_element("recv_element", np_recv);
+    kkLidView recv_element("recv_element", np_recv + new_ptcls);
     MTVs recv_particle;
     //Allocate views for each data type into recv_particle[type]
-    CreateViews<device_type, DataTypes>(recv_particle, np_recv);
+    CreateViews<device_type, DataTypes>(recv_particle, np_recv + new_ptcls);
 
     //Get pointers to the data for MPI calls
     lid_t send_num = 0, recv_num = 0;
@@ -135,7 +136,7 @@ namespace particle_structs {
 
     /********** Convert the received element from element gid to element lid *********/
     auto element_gid_to_lid_local = element_gid_to_lid;
-    Kokkos::parallel_for(recv_element.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
         recv_element(i) = element_gid_to_lid_local.value_at(index);
@@ -149,6 +150,14 @@ namespace particle_structs {
       new_element(particle_id) -= (elm + 1) * sent;
     };
     parallel_for(removeSentParticles);
+
+    /********** Add new particles to the migrated particles *********/
+    kkLidView new_ptcl_map("new_ptcl_map", new_ptcls);
+    Kokkos::parallel_for(new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
+        recv_element(np_recv + i) = new_particle_elements(i);
+        new_ptcl_map(i) = np_recv + i;
+    });
+    CopyViewsToViews<kkLidView, DataTypes>(recv_particle, new_particle_info, new_ptcl_map);
 
     /********** Combine and shift particles to their new destination **********/
     rebuild(new_element, recv_element, recv_particle);

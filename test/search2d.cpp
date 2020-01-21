@@ -98,7 +98,7 @@ void search(p::Mesh& picparts, PS* ptcls, bool output=false) {
   auto xtgt = ptcls->get<1>();
   auto pid = ptcls->get<2>();
   o::Write<o::LO> xface_id(psCapacity, "intersection faces");
-  bool isFound = p::search_mesh_2d<Particle>(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
+  bool isFound = p::search_mesh_2d(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
   fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the PS to set the new element-to-particle lists

@@ -25,7 +25,6 @@ void getPtclImbalance(int ptclCnt);
 void printTimerResolution();
 int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
                       const int mdlFace, const int numPtclsPerRank);
-void search(xgcp::Mesh& picparts, PS_I* ptcls, bool output);
 void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop);
 void render(xgcp::Mesh& mesh, int iter, int comm_rank);
 
@@ -167,7 +166,7 @@ int main(int argc, char* argv[]) {
     //Push Particles
     xgcp::ellipticalPush::push(ptcls, *omesh, degPerPush, iter);
     //Perform search and rebuild
-    search(mesh, ptcls, output);
+    xgcp::search(mesh, ptcls);
     totNp = xgcp::getGlobalParticleCount(ptcls);
     if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
@@ -327,76 +326,6 @@ int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
   return np;
 }
 
-
-void updatePtclPositions(PS_I* ptcls) {
-  auto x_ps_d = ptcls->get<0>();
-  auto xtgt_ps_d = ptcls->get<1>();
-  auto updatePtclPos = PS_LAMBDA(const int&, const int& pid, const bool&) {
-    x_ps_d(pid,0) = xtgt_ps_d(pid,0);
-    x_ps_d(pid,1) = xtgt_ps_d(pid,1);
-    x_ps_d(pid,2) = xtgt_ps_d(pid,2);
-    xtgt_ps_d(pid,0) = 0;
-    xtgt_ps_d(pid,1) = 0;
-    xtgt_ps_d(pid,2) = 0;
-  };
-  ps::parallel_for(ptcls, updatePtclPos);
-}
-
-void rebuild(xgcp::Mesh& mesh, PS_I* ptcls, o::LOs elem_ids, const bool output) {
-  p::Mesh* picparts = mesh.pumipicMesh();
-  updatePtclPositions(ptcls);
-  const int ps_capacity = ptcls->capacity();
-  auto ids = ptcls->get<2>();
-  auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(output && mask > 0)
-      printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
-  };
-  ps::parallel_for(ptcls, printElmIds);
-
-  PS_I::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
-  PS_I::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
-  Omega_h::LOs is_safe = picparts->safeTag();
-  Omega_h::LOs elm_owners = picparts->entOwners(picparts->dim());
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if (mask) {
-      int new_elem = elem_ids[pid];
-      ps_elem_ids(pid) = new_elem;
-      ps_process_ids(pid) = comm_rank;
-      if (new_elem != -1 && is_safe[new_elem] == 0) {
-        ps_process_ids(pid) = elm_owners[new_elem];
-      }
-    }
-  };
-  ps::parallel_for(ptcls, lamb);
-
-  ptcls->migrate(ps_elem_ids, ps_process_ids);
-
-  ids = ptcls->get<2>();
-  if (output) {
-    auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if (mask > 0)
-        printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
-    };
-    ps::parallel_for(ptcls, printElms);
-  }
-}
-
-void search(xgcp::Mesh& mesh, PS_I* ptcls, bool output) {
-  o::Mesh* omesh = mesh.omegaMesh();
-  assert(ptcls->nElems() == omesh->nelems());
-  Omega_h::LO maxLoops = 200;
-  const auto psCapacity = ptcls->capacity();
-  o::Write<o::LO> elem_ids(psCapacity,-1);
-  auto x = ptcls->get<0>();
-  auto xtgt = ptcls->get<1>();
-  auto pid = ptcls->get<2>();
-  bool isFound = p::search_mesh_2d<xgcp::Ion>(*omesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
-  assert(isFound);
-  //rebuild the PS to set the new element-to-particle lists
-  rebuild(mesh, ptcls, elem_ids, output);
-}
 
 void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop) {
   //read from the tag

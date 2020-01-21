@@ -29,6 +29,7 @@ template<class DataTypes, typename MemSpace = DefaultMemSpace>
 class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
  public:
 
+  using typename ParticleStructure<DataTypes, MemSpace>::Types;
   using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
   using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
   using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -37,6 +38,8 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkLidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
+  template <std::size_t N>
+  using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;

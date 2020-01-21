@@ -430,9 +430,9 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
   return found;
 }
 
-template < class ParticleType>
+template < class ParticleStruct>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
-                 ps::ParticleStructure< ParticleType >* ptcls, // (in) particle structure
+                 ParticleStruct* ptcls, // (in) particle structure
                  Segment3d x_ps_d, // (in) starting particle positions
                  Segment3d xtgt_ps_d, // (in) target particle positions
                  SegmentInt pid_d, // (in) particle ids

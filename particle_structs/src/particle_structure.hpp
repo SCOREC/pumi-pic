@@ -9,6 +9,7 @@ namespace particle_structs {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class ParticleStructure {
   public:
+    typedef DataTypes Types;
     typedef typename MemSpace::memory_space memory_space;
     typedef typename MemSpace::execution_space execution_space;
     typedef typename MemSpace::device_type device_type;
@@ -18,6 +19,7 @@ namespace particle_structs {
     typedef typename kkGidView::HostMirror kkGidHostMirror;
     template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef MemberTypeViews<DataTypes, device_type> MTVs;
+    template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
     ParticleStructure();
     virtual ~ParticleStructure() {}
@@ -32,12 +34,12 @@ namespace particle_structs {
          dimension of the type.
      */
     template <std::size_t N>
-    Segment<DataType<N>, device_type> get() {
+    Slice<N> get() {
       if (num_ptcls == 0)
-        return Segment<DataType<N>, device_type>();
+        return Slice<N>();
       MemberTypeView<DataType<N>, device_type>* view =
         static_cast<MemberTypeView<DataType<N>, device_type>*>(ptcl_data[N]);
-      return Segment<DataType<N>, device_type>(*view);
+      return Slice<N>(*view);
     }
 
 

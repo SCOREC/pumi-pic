@@ -32,9 +32,9 @@ namespace xgcp {
 
     //Breakup group/torodial partitioning
     int num_cores = input.num_core_regions;
-    int num_planes = input.num_planes;
+    nplanes_ = input.num_planes;
     int group_size = input.num_processes_per_group;
-    partition_communicator(input.library, num_cores, num_planes, group_size,
+    partition_communicator(input.library, num_cores, nplanes_, group_size,
                            mesh_comm, torodial_comm, group_comm);
 
     printf("Rank %d: is Mesh (%d %d) Torodial (%d %d) Group (%d %d)\n",
@@ -64,11 +64,9 @@ namespace xgcp {
     //TODO build electron mapping
 
     //Build plane information
-    fp_t delta_phi = 2* M_PI / num_planes;
+    fp_t delta_phi = 2* M_PI / nplanes_;
     major_phi = delta_phi * (torodial_comm->rank() + 1);
     minor_phi = major_phi - delta_phi;
-    if (torodial_comm->rank() == torodial_comm->size() - 1)
-      major_phi = 0;
     major_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
     minor_plane = GyroField(mesh->nverts(), 0.0, "major_plane_field");
     mesh->add_tag(0, "major_plane", 1, GyroFieldR(major_plane));
@@ -131,6 +129,7 @@ namespace xgcp {
     dir_ptr +=sprintf(dir_ptr, "/piece_g%d_m%d.vtu", groupRank(), meshRank());
     Omega_h::vtk::write_vtu(name, omegaMesh(), dim());
   }
+
 }
 
 

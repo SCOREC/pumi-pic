@@ -69,6 +69,7 @@ namespace xgcp {
     int torodialMajorNeighbor() {return torodialRank() == torodialSize() - 1 ?
         0 : torodialRank() + 1;}
 
+    int nplanes() {return nplanes_;}
     int planeID() {return torodialRank();}
     fp_t getMajorPlaneAngle() {return major_phi;}
     fp_t getMinorPlaneAngle() {return minor_phi;}
@@ -145,6 +146,8 @@ namespace xgcp {
     //Communicators for each partitioning direction
     o::CommPtr mesh_comm, torodial_comm, group_comm;
 
+    //Number of planes
+    int nplanes_;
     //Torodial angle of the plane that this process is not leader of
     fp_t minor_phi;
     //Torodial angle of the plane that this process is leader of
@@ -160,6 +163,18 @@ namespace xgcp {
     GyroField major_plane, minor_plane;
 
   };
+
+  //Calculate world rank based on 3 process dimensions
+  PS_INLINE int getWorldRank(int tr, int mr, int gr, int ts, int, int gs) {
+    return (mr * ts + tr) * gs + gr;
+  }
+
+  //Calculate 3 process dimensions from the world rank
+  PS_INLINE void breakWorldRank(int wr, int ts, int, int gs, int& tr, int& mr, int& gr) {
+    gr = wr % gs;
+    tr = wr / gs % ts;
+    mr = wr / gs / ts;
+  }
 
   //TODO Create methods to distringuish between CUDA_AWARE MPI and non cuda aware
   template <class T>

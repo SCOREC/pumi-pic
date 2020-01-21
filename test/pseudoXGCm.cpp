@@ -163,7 +163,7 @@ void search(p::Mesh& picparts, PS* ptcls, bool output) {
   auto x = ptcls->get<0>();
   auto xtgt = ptcls->get<1>();
   auto pid = ptcls->get<2>();
-  bool isFound = p::search_mesh_2d<Particle>(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
+  bool isFound = p::search_mesh_2d(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
   assert(isFound);
   //rebuild the PS to set the new element-to-particle lists
   rebuild(picparts, ptcls, elem_ids, output);

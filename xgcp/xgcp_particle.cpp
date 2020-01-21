@@ -52,8 +52,6 @@ namespace xgcp {
     //Torodial section bounds
     o::Real majorAngle = m.getMajorPlaneAngle();
     o::Real minorAngle = m.getMinorPlaneAngle();
-    if (m.torodialRank() == m.torodialSize() - 1)
-      majorAngle = 2 * M_PI;
 
     o::Write<o::Real> rand_nums(rand_num_per_ptcl);
     auto cells2nodes = m->get_adj(o::FACE, o::VERT).ab2b;

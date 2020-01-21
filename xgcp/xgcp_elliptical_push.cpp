@@ -37,6 +37,7 @@ namespace xgcp {
       MPI_Comm_rank(MPI_COMM_WORLD,&rank);
       MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
       auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
+      auto x_c = ptcls->get<0>();
       auto x_nm0 = ptcls->get<1>();
       auto ptcl_id = ptcls->get<2>();
       auto ptcl_b = ptcls->get<3>();
@@ -57,6 +58,8 @@ namespace xgcp {
           const auto y = b*std::sin(rad)+k_d;
           x_nm0(pid,0) = x;
           x_nm0(pid,1) = y;
+          x_nm0(pid,2) = x_c(pid, 2) + degP * M_PI/180.0;
+          x_nm0(pid,2) -= (x_nm0(pid,2) > M_PI * 2) * M_PI * 2;
           ptcl_phi(pid) = rad;
         }
       };

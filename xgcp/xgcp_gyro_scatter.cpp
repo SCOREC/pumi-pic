@@ -70,8 +70,8 @@ namespace xgcp {
     int maxLoops = 100;
     int psCapacity = gyro_ps->capacity();
     o::Write<o::LO> elem_ids(psCapacity, -1);
-    bool isFound = p::search_mesh_2d<Point>(*mesh, gyro_ps, start, end, pids,
-                                            elem_ids, maxLoops);
+    bool isFound = p::search_mesh_2d(*mesh, gyro_ps, start, end, pids,
+                                     elem_ids, maxLoops);
     assert(isFound);
 
     const auto numElms = mesh->nelems();

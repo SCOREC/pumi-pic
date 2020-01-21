@@ -6,8 +6,6 @@ set(HEADERS
   pumipic_mesh.hpp
   pumipic_library.hpp
   pumipic_input.hpp
-  #  GitrmInputOutput.hpp
-  #GitrmSurfaceModel.hpp
 )
 
 set(SOURCES
@@ -18,18 +16,13 @@ set(SOURCES
   pumipic_mesh.cpp
   pumipic_library.cpp
   pumipic_profiling.cpp
-  #GitrmMesh.cpp
-  #GitrmParticles.cpp
-  #GitrmIonizeRecombine.cpp
-  #GitrmInputOutput.cpp
-  #GitrmSurfaceModel.cpp
 )
 add_library(pumipic ${SOURCES})
 target_include_directories(pumipic INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(pumipic ${ALL_LIBS} Omega_h::omega_h)# NetCDF::NetCDF)
+target_link_libraries(pumipic ${ALL_LIBS} Omega_h::omega_h)
 pumipic_export_lib(pumipic "${HEADERS}")
 
 #Floating point definition

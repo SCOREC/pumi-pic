@@ -22,7 +22,7 @@ namespace p = pumipic;
 // D3D 0.8 to 2.45 m radial
  
 //TODO put in config class
-const int USE_GITR_RND_NUMS = 0;
+const int USE_GITR_RND_NUMS = 1;
 const bool CREATE_GITR_MESH = false;
 
 const int USE_READIN_CSR_BDRYFACES = 1;
@@ -117,7 +117,7 @@ public:
   void load3DFieldOnVtxFromFile(const std::string, const std::string &,
     Field3StructInput&, o::Reals&, const o::Real shift=0 );
   //TODO delete tags after use/ in destructor
-  bool addTagsAndLoadProfileData(const std::string &, const std::string &);
+  bool addTagsAndLoadProfileData(const std::string &, const std::string &, const std::string &);
   bool initBoundaryFaces(bool init, bool debug=false);
   void loadScalarFieldOnBdryFacesFromFile(const std::string, const std::string &, 
     Field3StructInput &, const o::Real shift=0, int debug=0);
@@ -161,6 +161,16 @@ public:
   o::Reals densEl_d;
   o::Reals temIon_d;
   o::Reals temEl_d;
+
+  //Added for gradient file
+  o::Reals gradTiR_d;
+  o::Reals gradTiT_d;
+  o::Reals gradTiZ_d;
+  o::Reals gradTeR_d;
+  o::Reals gradTeT_d;
+  o::Reals gradTeZ_d;
+  //Till here
+
   o::Real densIonX0 = 0;
   o::Real densIonZ0 = 0;
   o::LO densIonNx = 0;
@@ -187,11 +197,64 @@ public:
   o::Real tempElDx = 0;
   o::Real tempElDz = 0;
 
+  //aDDED FOR GRADIENT FILE
+  o::Real gradTiRX0 = 0;
+  o::Real gradTiRZ0 = 0;
+  o::Real gradTiRNx = 0;
+  o::Real gradTiRNz = 0;
+  o::Real gradTiRDx = 0;
+  o::Real gradTiRDz = 0;
+
+  o::Real gradTiTX0 = 0;
+  o::Real gradTiTZ0 = 0; 
+  o::Real gradTiTNx = 0;
+  o::Real gradTiTNz = 0;
+  o::Real gradTiTDx = 0;
+  o::Real gradTiTDz = 0;
+
+  o::Real gradTiZX0 = 0;
+  o::Real gradTiZZ0 = 0;
+  o::Real gradTiZNx = 0;
+  o::Real gradTiZNz = 0;
+  o::Real gradTiZDx = 0;
+  o::Real gradTiZDz = 0;
+
+  o::Real gradTeRX0 = 0;
+  o::Real gradTeRZ0 = 0;
+  o::Real gradTeRNx = 0;
+  o::Real gradTeRNz = 0;
+  o::Real gradTeRDx = 0;
+  o::Real gradTeRDz = 0;
+
+  o::Real gradTeTX0 = 0;
+  o::Real gradTeTZ0 = 0;
+  o::Real gradTeTNx = 0;
+  o::Real gradTeTNz = 0;
+  o::Real gradTeTDx = 0;
+  o::Real gradTeTDz = 0;
+
+  o::Real gradTeZX0 = 0;
+  o::Real gradTeZZ0 = 0;
+  o::Real gradTeZNx = 0;
+  o::Real gradTeZNz = 0;
+  o::Real gradTeZDx = 0;
+  o::Real gradTeZDz = 0;
+
+  // till here
+
   // to replace tag
   o::Reals densIonVtx_d;
   o::Reals tempIonVtx_d;  
   o::Reals densElVtx_d;
   o::Reals tempElVtx_d;
+  //added for gradient file 
+  o::Reals gradTiR_vtx_d;
+  o::Reals gradTiT_vtx_d;
+  o::Reals gradTiZ_vtx_d;
+  o::Reals gradTeR_vtx_d;
+  o::Reals gradTeT_vtx_d;
+  o::Reals gradTeZ_vtx_d;
+  //till here
  
   //get model Ids by opening mesh/model in Simmodeler
   o::HostWrite<o::LO> piscesBeadCylinderIds;

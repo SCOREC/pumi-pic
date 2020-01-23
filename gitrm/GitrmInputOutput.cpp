@@ -167,7 +167,6 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     if(debug) 
       std::cout << " ncSizePerComp: " << ncSizePerComp << " nComp " << fs.nComp << "\n";
 
-    fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
     for(int i=0; i<fs.nGridRead && i<fs.gridNames.size(); ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.gridNames[i].c_str()));
       if(i==0) {
@@ -189,11 +188,16 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         ncvar.getVar(&(fs.grid3[0]));
       }
     }
-    // TODO use numRead
+    fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
     for(int i=0; i<fs.nComp; ++i) {
+      o::HostWrite<o::Real>temp(ncSizePerComp);
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
-      ncvar.getVar(&(fs.data[i*ncSizePerComp]));
-    }
+      //ncvar.getVar(&(fs.data[i*ncSizePerComp]));
+      ncvar.getVar(&temp[0]);
+      for(int j=0; j<ncSizePerComp; ++j) {
+        fs.data[i*ncSizePerComp+j] = temp[j];
+      }
+    }    
     for(int i=0; i< fs.nVarNames.size(); ++i) {
       netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
       auto unlimit = ncVarName.isUnlimited();

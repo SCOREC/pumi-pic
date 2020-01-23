@@ -14,10 +14,11 @@ const GitrmParticles& gp, double dt)
   auto vel_ps_d = ptcls->get<PTCL_VEL>();
   auto charge_ps_d = ptcls->get<PTCL_CHARGE>();
   printf("Entering Thermal Force Routine\n");
+  
 
+  const auto &gradTi_d = gm.gradTi_d ;
 
   //Mesh data regarding the gradient of temperatures
-   const auto &gradTi_d = gm.gradTi_d ;
 
   auto grTiX0 = gm.gradTiX0;   
   auto grTiZ0 = gm.gradTiZ0; 
@@ -44,9 +45,11 @@ const GitrmParticles& gp, double dt)
         CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
   }
   const o::Real amu = gitrm::PTCL_AMU; 
-  const o::Real background_Z = BACKGROUND_Z;
+  //const o::Real background_Z = BACKGROUND_Z;
   const o::Real background_amu = gitrm::BACKGROUND_AMU;
   const auto MI     = 1.6737236e-27;
+
+  const auto iTimeStep = iTimePlusOne - 1;
 
 
   auto update_thermal = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
@@ -56,7 +59,7 @@ const GitrmParticles& gp, double dt)
         auto ptcl           = pid_ps(pid);
         auto charge         = charge_ps_d(pid);
           if(!charge)
-            return;
+             return;
 
         auto posit_next     = p::makeVector3(pid, xtgt_ps_d);
         auto eField         = p::makeVector3(pid, efield_ps_d);
@@ -78,8 +81,16 @@ const GitrmParticles& gp, double dt)
         auto gradte         = o::zero_vector<3>();
 
     		//find out the gradients of the electron and ion temperatures at that particle poin
-        p::interp2dVector(gradTi_d, grTiX0, grTiZ0, grTiDX, grTiDZ, grTiNX, grTiNX, pos2D, gradti, false);
-        p::interp2dVector(gradTe_d, grTeX0, grTeZ0, grTeDX, grTeDZ, grTeNX, grTeNX, pos2D, gradte, false);
+        p::interp2dVector(gradTi_d, grTiX0, grTiZ0, grTiDX, grTiDZ, grTiNX, grTiNZ, pos2D, gradti, false);
+        p::interp2dVector(gradTe_d, grTeX0, grTeZ0, grTeDX, grTeDZ, grTeNX, grTeNZ, pos2D, gradte, true);
+        if (debug){
+          printf("The gradients for the ion temeratures for particle %d for timestep %d are %g %g %g \n",
+          ptcl,iTimeStep+1, gradti[0], gradti[1], gradti[2]);
+          printf("The gradients for the electron temeratures for particle %d for timestep %d %g %g %g \n",
+          ptcl,iTimeStep+1, gradte[0], gradte[1], gradte[2] );
+          printf("The positions are %g %g %g \n", posit[0], posit[1], posit[2]);
+          printf("The numbers are %g %g %g %g %g %g", grTeX0, grTeZ0, grTeDX, grTeDZ, grTeNX, grTeNZ);         
+        }
 
     		o::Real mu = amu /(background_amu+amu);
         o::Real alpha = 0.71*charge*charge;

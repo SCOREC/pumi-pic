@@ -4,10 +4,9 @@
 
 OMEGA_H_DEVICE void get_drag(const Omega_h::Vector<3> &vel, const Omega_h::Vector<3> &flowVelocity,
 double& nu_friction,double& nu_deflection, double& nu_parallel,double& nu_energy, const double temp,
-const double temp_el, const double dens, const double charge, int ptcl_t, int iTimeStep_t)
+const double temp_el, const double dens, const double charge, int ptcl_t, int iTimeStep_t, int debug)
 {
-  int debug = 1 ;
-
+  
   printf("Working on particle %d\n",ptcl_t);
   const double Q    = 1.60217662e-19;
   const double EPS0 = 8.854187e-12;
@@ -184,7 +183,7 @@ OMEGA_H_DEVICE void get_direc(const Omega_h::Vector<3> &vel, const Omega_h::Vect
 
 inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& gm,
  const GitrmParticles& gp, double dt) {
-  bool debug= 1;
+  bool debug = 0;
   auto pid_ps = ptcls->get<PTCL_ID>();
   auto x_ps_d = ptcls->get<PTCL_POS>();
   auto xtgt_ps_d = ptcls->get<1>();
@@ -193,7 +192,15 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
   auto charge_ps_d = ptcls->get<PTCL_CHARGE>();
   //const auto& BField_2d = gm.Bfield_2d;
   printf("Entering coulomb_collision routine\n");
-  constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
+  //constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
+
+  ///* 
+  o::Reals bFieldConst(3); 
+  if(USE_CONSTANT_BFIELD) {
+    bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
+        CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
+  }
+  //*/
 
   const auto& temIon_d = gm.temIon_d;
   auto x0Temp = gm.tempIonX0;
@@ -242,14 +249,20 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto posit          = p::makeVector3(pid, x_ps_d);
     auto ptcl           = pid_ps(pid);
     auto charge         = charge_ps_d(pid);
+
+
+    Omega_h::Vector<3> b_field;
+    for(auto i=0; i<3; ++i)
+      b_field[i] = bFieldConst[i];
+    
     if(!charge)
-      return;
+      return; 
 
     auto posit_next     = p::makeVector3(pid, xtgt_ps_d);
     auto eField         = p::makeVector3(pid, efield_ps_d);
     auto vel            = p::makeVector3(pid, vel_ps_d);
     //auto bField       = o::zero_vector<3>();
-    auto b_field        = p::makeVector3FromArray (CONSTANT_BFIELD);
+    //auto b_field        = p::makeVector3FromArray (CONSTANT_BFIELD);
     auto flowVelocity   = p::makeVector3FromArray({0, 0, -20000.0});
     auto relvel         = o::zero_vector<3>();
     auto parallel_dir   = o::zero_vector<3>();
@@ -279,9 +292,11 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto nu_parallel   =0.0;
     auto nu_energy     =0.0;
     
-    get_drag(vel, flowVelocity, nu_friction, nu_deflection, nu_parallel, nu_energy, temp,temp_el,dens,charge, ptcl, iTimeStep);
+    get_drag(vel, flowVelocity, nu_friction, nu_deflection, nu_parallel, nu_energy, temp,temp_el,
+      dens,charge, ptcl, iTimeStep, debug);
     get_direc( vel,flowVelocity,b_field, parallel_dir,perp1_dir, perp2_dir,ptcl, iTimeStep, debug);
-   // printf("\n The velocity in %d iteration %d are %g  %g %g %g %d \n",j,pid, vel[0], vel[1], vel[2],nu_friction,charge);
+    // printf("\n The velocity in %d iteration %d are %g  %g %g %g %d \n",j,pid, vel[0], vel[1], 
+    //vel[2],nu_friction,charge);
 
     relvel=vel-flowVelocity;
     auto velocityNorm   = Omega_h::norm(relvel);

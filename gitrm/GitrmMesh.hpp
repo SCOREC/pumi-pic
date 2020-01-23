@@ -163,12 +163,12 @@ public:
   o::Reals temEl_d;
 
   //Added for gradient file
-  o::Reals gradTiR_d;
-  o::Reals gradTiT_d;
-  o::Reals gradTiZ_d;
-  o::Reals gradTeR_d;
-  o::Reals gradTeT_d;
-  o::Reals gradTeZ_d;
+  o::Reals gradTi_d;
+  //o::Reals gradTiT_d;
+  //o::Reals gradTiZ_d;
+  o::Reals gradTe_d;
+  //o::Reals gradTeT_d;
+  //o::Reals gradTeZ_d;
   //Till here
 
   o::Real densIonX0 = 0;
@@ -198,47 +198,21 @@ public:
   o::Real tempElDz = 0;
 
   //aDDED FOR GRADIENT FILE
-  o::Real gradTiRX0 = 0;
-  o::Real gradTiRZ0 = 0;
-  o::Real gradTiRNx = 0;
-  o::Real gradTiRNz = 0;
-  o::Real gradTiRDx = 0;
-  o::Real gradTiRDz = 0;
+  o::Real gradTiX0 = 0;
+  o::Real gradTiZ0 = 0;
+  o::Real gradTiNx = 0;
+  o::Real gradTiNz = 0;
+  o::Real gradTiDx = 0;
+  o::Real gradTiDz = 0;
 
-  o::Real gradTiTX0 = 0;
-  o::Real gradTiTZ0 = 0; 
-  o::Real gradTiTNx = 0;
-  o::Real gradTiTNz = 0;
-  o::Real gradTiTDx = 0;
-  o::Real gradTiTDz = 0;
 
-  o::Real gradTiZX0 = 0;
-  o::Real gradTiZZ0 = 0;
-  o::Real gradTiZNx = 0;
-  o::Real gradTiZNz = 0;
-  o::Real gradTiZDx = 0;
-  o::Real gradTiZDz = 0;
+  o::Real gradTeX0 = 0;
+  o::Real gradTeZ0 = 0;
+  o::Real gradTeNx = 0;
+  o::Real gradTeNz = 0;
+  o::Real gradTeDx = 0;
+  o::Real gradTeDz = 0;
 
-  o::Real gradTeRX0 = 0;
-  o::Real gradTeRZ0 = 0;
-  o::Real gradTeRNx = 0;
-  o::Real gradTeRNz = 0;
-  o::Real gradTeRDx = 0;
-  o::Real gradTeRDz = 0;
-
-  o::Real gradTeTX0 = 0;
-  o::Real gradTeTZ0 = 0;
-  o::Real gradTeTNx = 0;
-  o::Real gradTeTNz = 0;
-  o::Real gradTeTDx = 0;
-  o::Real gradTeTDz = 0;
-
-  o::Real gradTeZX0 = 0;
-  o::Real gradTeZZ0 = 0;
-  o::Real gradTeZNx = 0;
-  o::Real gradTeZNz = 0;
-  o::Real gradTeZDx = 0;
-  o::Real gradTeZDz = 0;
 
   // till here
 
@@ -248,12 +222,12 @@ public:
   o::Reals densElVtx_d;
   o::Reals tempElVtx_d;
   //added for gradient file 
-  o::Reals gradTiR_vtx_d;
-  o::Reals gradTiT_vtx_d;
-  o::Reals gradTiZ_vtx_d;
-  o::Reals gradTeR_vtx_d;
-  o::Reals gradTeT_vtx_d;
-  o::Reals gradTeZ_vtx_d;
+  o::Reals gradTi_vtx_d;
+  //o::Reals gradTiT_vtx_d;
+  //o::Reals gradTiZ_vtx_d;
+  o::Reals gradTe_vtx_d;
+  //o::Reals gradTeT_vtx_d;
+  //o::Reals gradTeZ_vtx_d;
   //till here
  
   //get model Ids by opening mesh/model in Simmodeler

@@ -13,6 +13,7 @@
 #include "GitrmIonizeRecombine.hpp"
 #include "GitrmSurfaceModel.hpp"
 #include "GitrmCoulombCollision.hpp"
+#include "GitrmThermalForce.hpp"
 //#include "GitrmSurfaceModel.hpp"
 
 
@@ -93,7 +94,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
     gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
     //gitrm_surfaceReflection_test(ptcls, sm, gp, gm, elem_ids, false);
     gitrm_coulomb_collision(ptcls, &iter, gm, gp, dt1);
-    //thermal_force(scs,&iter, gm, gp, dt1);
+    gitrm_thermal_force(ptcls, &iter, gm, gp, dt1);
   }
   bool resetFids = true;
   storePiscesData(mesh, gp, data_d, iter, resetFids, false);

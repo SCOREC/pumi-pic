@@ -209,12 +209,12 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
   mesh.add_tag<o::Real>(o::VERT, "IonTempVtx", 1);
   mesh.add_tag<o::Real>(o::VERT, "ElTempVtx", 1);
   //Added for temperature gradients
-  mesh.add_tag<o::Real>(o::VERT, "gradTiRVtx", 1);
-  mesh.add_tag<o::Real>(o::VERT, "gradTiTVtx", 1);
-  mesh.add_tag<o::Real>(o::VERT, "gradTiZVtx", 1);
-  mesh.add_tag<o::Real>(o::VERT, "gradTeRVtx", 1);
-  mesh.add_tag<o::Real>(o::VERT, "gradTeTVtx", 1);
-  mesh.add_tag<o::Real>(o::VERT, "gradTeZVtx", 1);
+  mesh.add_tag<o::Real>(o::VERT, "gradTiVtx", 3);
+  //mesh.add_tag<o::Real>(o::VERT, "gradTiTVtx", 1);
+  //mesh.add_tag<o::Real>(o::VERT, "gradTiZVtx", 1);
+  mesh.add_tag<o::Real>(o::VERT, "gradTeVtx", 3);
+  //mesh.add_tag<o::Real>(o::VERT, "gradTeTVtx", 1);
+  //mesh.add_tag<o::Real>(o::VERT, "gradTeZVtx", 1);
   //Till here
   Field3StructInput fd({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"}); 
   loadScalarFieldOnBdryFacesFromFile("IonDensity", profileDensityFile, fd); 
@@ -269,18 +269,18 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
   
   //Added for gradient file
   //gradTiR
-  Field3StructInput fgTiR({"gradTiR"}, {"gridx_gradTi", "gridz_gradTi"}, {"nX_gradTi", "nZ_gradTi"});   
-  load1DFieldOnVtxFromFile("gradTiRVtx", profileGradientFile, fgTiR, 
-    gradTiR_d, gradTiR_vtx_d, 0, 0);
+  Field3StructInput fgTi({"gradTiR", "gradTiT" , "gradTiZ"}, {"gridx_gradTi", "gridz_gradTi"}, {"nX_gradTi", "nZ_gradTi"});   
+  load3DFieldOnVtxFromFile("gradTiVtx", profileGradientFile, fgTi, 
+    gradTi_d, 0);
   
-  gradTiRX0 = fgTiR.getGridMin(0);
-  gradTiRZ0 = fgTiR.getGridMin(1);
-  gradTiRNx = fgTiR.getNumGrids(0);
-  gradTiRNz = fgTiR.getNumGrids(1);
-  gradTiRDx = fgTiR.getGridDelta(0);
-  gradTiRDz = fgTiR.getGridDelta(1);
+  gradTiX0 = fgTi.getGridMin(0);
+  gradTiZ0 = fgTi.getGridMin(1);
+  gradTiNx = fgTi.getNumGrids(0);
+  gradTiNz = fgTi.getNumGrids(1);
+  gradTiDx = fgTi.getGridDelta(0);
+  gradTiDz = fgTi.getGridDelta(1);
 
-  //gradTiT
+  /*//gradTiT
     Field3StructInput fgTiT({"gradTiT"}, {"gridx_gradTi", "gridz_gradTi"}, {"nX_gradTi", "nZ_gradTi"});   
   load1DFieldOnVtxFromFile("gradTiTVtx", profileGradientFile, fgTiT, 
     gradTiT_d, gradTiT_vtx_d, 0, 0);
@@ -302,21 +302,21 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
   gradTiZNx = fgTiZ.getNumGrids(0);
   gradTiZNz = fgTiZ.getNumGrids(1);
   gradTiZDx = fgTiZ.getGridDelta(0);
-  gradTiZDz = fgTiZ.getGridDelta(1);
+  gradTiZDz = fgTiZ.getGridDelta(1); */
 
    //gradTeR
-  Field3StructInput fgTeR({"gradTeR"}, {"gridx_gradTe", "gridz_gradTe"}, {"nX_gradTe", "nZ_gradTe"});   
-  load1DFieldOnVtxFromFile("gradTeRVtx", profileGradientFile, fgTeR, 
-    gradTeR_d, gradTeR_vtx_d, 0, 0);
+  Field3StructInput fgTe({"gradTeR", "gradTeT", "gradTeZ"}, {"gridx_gradTe", "gridz_gradTe"}, {"nX_gradTe", "nZ_gradTe"});   
+  load3DFieldOnVtxFromFile("gradTeVtx", profileGradientFile, fgTe, 
+    gradTe_d, 0);
   
-  gradTeRX0 = fgTeR.getGridMin(0);
-  gradTeRZ0 = fgTeR.getGridMin(1);
-  gradTeRNx = fgTeR.getNumGrids(0);
-  gradTeRNz = fgTeR.getNumGrids(1);
-  gradTeRDx = fgTeR.getGridDelta(0);
-  gradTeRDz = fgTeR.getGridDelta(1);
+  gradTeX0 = fgTe.getGridMin(0);
+  gradTeZ0 = fgTe.getGridMin(1);
+  gradTeNx = fgTe.getNumGrids(0);
+  gradTeNz = fgTe.getNumGrids(1);
+  gradTeDx = fgTe.getGridDelta(0);
+  gradTeDz = fgTe.getGridDelta(1);
 
-  //gradTeT
+  /*//gradTeT
     Field3StructInput fgTeT({"gradTeT"}, {"gridx_gradTe", "gridz_gradTe"}, {"nX_gradTe", "nZ_gradTe"});   
   load1DFieldOnVtxFromFile("gradTeTVtx", profileGradientFile, fgTeT, 
     gradTeT_d, gradTeT_vtx_d, 0, 0);
@@ -340,7 +340,7 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
   gradTeZDx = fgTeZ.getGridDelta(0);
   gradTeZDz = fgTeZ.getGridDelta(1);
   
-  //Till here
+  //Till here*/
 
 
   return true;

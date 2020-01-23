@@ -199,6 +199,66 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
  *  @param[in] comp, nth component, out of degree of freedom
  *  @return value corresponding to comp
  */
+/*
+  OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
+  const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
+  const o::Real dz, const o::LO nx, const o::LO nz, 
+  const o::Vector<3> &pos, const bool cylSymm = true, 
+  const o::LO nComp = 1, const o::LO comp = 0, bool debug= false) {
+  
+  if(nx*nz == 1) {
+    return data[comp];
+  }  
+  o::Real fxz = 0;
+  o::Real fx_z1 = 0;
+  o::Real fx_z2 = 0; 
+  auto dim1 = pos[0];
+  auto z = pos[2]; 
+  if(cylSymm) {
+      dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+  }
+
+  OMEGA_H_CHECK(dx >0 && dz>0);
+  o::LO i = floor((dim1 - gridx0)/dx);
+  o::LO j = floor((z - gridz0)/dz);
+  
+  if (i < 0) i=0;
+  if (j < 0) j=0;
+  auto gridXi = gridx0 + i * dx;
+  auto gridXip1 = gridx0 + (i+1) * dx;    
+  auto gridZj = gridz0 + j * dz;
+  auto gridZjp1 = gridz0 + (j+1) * dz; 
+
+  if (i >=nx-1 && j>=nz-1) {
+    fxz = data[(nx-1+(nz-1)*nx)+comp*nx*nz];
+  }
+  else if (i >=nx-1) {
+    fx_z1 = data[(nx-1+j*nx)+ comp*nx*nz];
+    fx_z2 = data[(nx-1+(j+1)*nx)+ comp*nx*nz];
+    fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+  }
+  else if (j >=nz-1) {
+    fx_z1 = data[(i+(nz-1)*nx)+comp*nx*nz];
+    fx_z2 = data[(i+(nz-1)*nx)+comp*nx*nz];
+    fxz = ((gridXip1-dim1)*fx_z1+(dim1 - gridXi)*fx_z2)/dx;
+  }
+  else {
+    fx_z1 = ((gridXip1-dim1)*data[(i+j*nx)+comp*nx*nz] + 
+            (dim1 - gridXi)*data[(i+1+j*nx)+comp*nx*nz])/dx;
+    fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)+comp*nx*nz] + 
+            (dim1 - gridXi)*data[(i+1+(j+1)*nx)+comp*nx*nz])/dx; 
+    fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+  }
+
+  //if(debug)
+    printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
+      "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
+      pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
+
+  return fxz;
+}
+*/
+
 OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
@@ -248,15 +308,18 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
     fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*nComp + comp] + 
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+    printf("  fxz1,z2  %g %g  %g dim1 %g: %g %g %g %g \n", fx_z1, fx_z2, gridXip1, dim1, 
+		    data[(i+j*nx)*nComp + comp], data[(i+1+j*nx)*nComp + comp], data[(i+(j+1)*nx)*nComp + comp], data[(i+1+(j+1)*nx)*nComp + comp] ); 
   }
 
-  if(debug)
+ // if(debug)
     printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
       "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
       pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
 
   return fxz;
-}
+} 
+
 /*
 //TODO make unit test interpolate2dField(
 index,data:  418  1.82241e+18 419 1.55216e+18  518 1.82241e+18 519 1.55216e+18  

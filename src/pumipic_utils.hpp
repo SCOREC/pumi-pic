@@ -31,9 +31,6 @@ namespace pumipic {
 NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
 device operator, except for HostWrite, HostRead
 The above is true for all functions using device-only stuff.
-It is safe to define OMEGA_H_DEVICE for functions, unless these are not
-used for host only (openmp) compilation.
-
 */
 
 OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
@@ -249,12 +246,10 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
   }
-
   if(debug)
     printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
       "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
       pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
-
   return fxz;
 }
 /*
@@ -425,17 +420,19 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
 OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0, 
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
-
+  bool debug = false;
   field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
-    nz, pos, cylSymm, 3, 0);
+    nz, pos, cylSymm, 3, 0, debug);
   field[1] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
-    nz, pos, cylSymm, 3, 1);
+    nz, pos, cylSymm, 3, 1, debug);
   field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
-    nz, pos, cylSymm, 3, 2);
+    nz, pos, cylSymm, 3, 2, debug);
   if(cylSymm) {
-    o::Real theta = atan2(pos[1], pos[0]);   
-    field[0] = cos(theta)*field[0] - sin(theta)*field[1];
-    field[1] = sin(theta)*field[0] + cos(theta)*field[1];
+    o::Real theta = atan2(pos[1], pos[0]);  
+    auto field0 = field[0];
+    auto field1 = field[1]; 
+    field[0] = cos(theta)*field0 - sin(theta)*field1;
+    field[1] = sin(theta)*field0 + cos(theta)*field1;
   }
 }
 

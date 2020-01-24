@@ -192,8 +192,16 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     // TODO use numRead
     for(int i=0; i<fs.nComp; ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
-      ncvar.getVar(&(fs.data[i*ncSizePerComp]));
-    }
+      //ncvar.getVar(&(fs.data[i*ncSizePerComp]));
+      ncvar.getVar(&temp[0]);
+      for(int j=0; j<ncSizePerComp; ++j) {
+        fs.data[j*fs.nComp + i] = temp[j];
+        if(debug && j <10)
+          printf(" i,j,dat %d %d %g ", i,j,fs.data[j*fs.nComp+i]);
+        if(debug)
+          printf("\n");
+      }
+    }    
     for(int i=0; i< fs.nVarNames.size(); ++i) {
       netCDF::NcDim ncVarName(ncf.getDim(fs.nVarNames[i]));
       auto unlimit = ncVarName.isUnlimited();

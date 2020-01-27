@@ -89,8 +89,8 @@ void search(o::Mesh& mesh, SCS* scs, int iter=0) {
   bool isFound = p::search_mesh<Particle>(mesh, scs, x_scs, xtgt_scs, pid_scs, 
     elem_ids, xpoints, xface_ids, maxLoops);
   assert(isFound);
-  //gp.collisionPoints = o::Real(xpoints);
-  //gp.collisionPointFaceIds = o::LOs(xface_ids);
+  //gp.wallCollisionPts = o::Real(xpoints);
+  //gp.wallCollisionFaceIds = o::LOs(xface_ids);
   rebuild(scs, elem_ids);
 }
 

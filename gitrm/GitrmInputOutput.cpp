@@ -189,17 +189,16 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
         ncvar.getVar(&(fs.grid3[0]));
       }
     }
-    // TODO use numRead
+    fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
     for(int i=0; i<fs.nComp; ++i) {
+      o::HostWrite<o::Real>temp(ncSizePerComp);
       netCDF::NcVar ncvar(ncf.getVar(fs.compNames[i].c_str()));
       //ncvar.getVar(&(fs.data[i*ncSizePerComp]));
       ncvar.getVar(&temp[0]);
       for(int j=0; j<ncSizePerComp; ++j) {
         fs.data[j*fs.nComp + i] = temp[j];
         if(debug && j <10)
-          printf(" i,j,dat %d %d %g ", i,j,fs.data[j*fs.nComp+i]);
-        if(debug)
-          printf("\n");
+          printf(" i,j,dat %d %d %g \n", i,j,fs.data[j*fs.nComp+i]);
       }
     }    
     for(int i=0; i< fs.nVarNames.size(); ++i) {

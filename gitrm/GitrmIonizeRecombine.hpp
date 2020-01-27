@@ -133,7 +133,7 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
   //#endif
 
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.ionizeTempGridMin;
   auto gridD0 = gir.ionizeDensGridMin;
@@ -274,7 +274,7 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
   //#endif
 
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.recombTempGridMin;
   auto gridD0 = gir.recombDensGridMin;

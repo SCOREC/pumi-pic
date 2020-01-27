@@ -53,7 +53,7 @@ public:
   void defineParticles(p::Mesh& picparts, int numPtcls, o::LOs& ptclsInElem, 
     int elId=-1);
   
-  void initPtclCollisionData(int numPtcls); 
+  void initPtclWallCollisionData(int numPtcls); 
   
   void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
@@ -98,8 +98,8 @@ public:
   o::LOs closestBdryFaceIds;
   
   // wall collision; changed to per ptcl from per pid
-  o::Write<o::Real> collisionPoints;
-  o::Write<o::LO> collisionPointFaceIds;
+  o::Write<o::Real> wallCollisionPts;
+  o::Write<o::LO> wallCollisionFaceIds;
 
   // test GITR step data
   o::Reals testGitrPtclStepData;
@@ -144,7 +144,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   int tstep = iTimePlusOne;
   auto* ptcls = gp.ptcls;
   o::Mesh& mesh = gm.mesh;  
-  o::LOs modelIdsToSkip = o::LOs(gm.modelIdsToSkipFromD2bdry);
+  o::LOs modelIdsToSkip = o::LOs(gm.detectorSurfaceMaterialModelIds);
   auto numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   const auto coords = mesh.coords();
@@ -240,7 +240,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
 
 //TODO dimensions set for pisces to be removed
 //call this before re-building, since mask of exiting ptcl removed from origin elem
-inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp, 
+inline void updateSurfaceDetection(o::Mesh* mesh, GitrmParticles& gp, 
     o::Write<o::LO>& data_d, o::LO iter, bool resetFids=true, bool debug=true) {
   // test TODO move test part to separate unit test
   double radMax = 0.05; //m 0.0446+0.005
@@ -249,11 +249,11 @@ inline void storePiscesData(o::Mesh* mesh, GitrmParticles& gp,
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
   PS* ptcls = gp.ptcls;
-  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
+  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "DetectorSurfaceIndex");
   auto pid_ps = ptcls->get<PTCL_ID>();
   //based on ptcl id or ptcls pid ?
-  const auto& xpoints = gp.collisionPoints;
-  auto& xpointFids = gp.collisionPointFaceIds;
+  const auto& xpoints = gp.wallCollisionPts;
+  auto& xpointFids = gp.wallCollisionFaceIds;
 
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask >0) {

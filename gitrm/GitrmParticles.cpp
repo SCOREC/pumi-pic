@@ -84,7 +84,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   printf("Constructing PS particles\n");
   defineParticles(picparts, numPtcls, numPtclsInElems, -1);
   
-  initPtclCollisionData(numPtcls);
+  initPtclWallCollisionData(numPtcls);
   //note:rebuild to get mask if elem_ids changed
   printf("Setting ImpurityPtcl InitCoords \n");
   o::LOs ptclIdPtrsOfElem;
@@ -110,9 +110,9 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
 }
 
-void GitrmParticles::initPtclCollisionData(int numPtcls) {
-  collisionPoints = o::Write<o::Real>(3*numPtcls, 0, "xpoints");
-  collisionPointFaceIds = o::Write<o::LO>(numPtcls, -1);
+void GitrmParticles::initPtclWallCollisionData(int numPtcls) {
+  wallCollisionPts = o::Write<o::Real>(3*numPtcls, 0, "xpoints");
+  wallCollisionFaceIds = o::Write<o::LO>(numPtcls, -1);
 }
 
 
@@ -339,7 +339,7 @@ void GitrmParticles::initPtclSurfaceModelData() {
   auto ps_newVelMag = ptcls->get<PTCL_VMAG_NEW>();
   auto lambda = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask > 0) {
-      ps_weight(pid) = 0;
+      ps_weight(pid) = 1;
       ps_hitNum(pid) = 0;
       ps_newVelMag(pid) = 0;
     }

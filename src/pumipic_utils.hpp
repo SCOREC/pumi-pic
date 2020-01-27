@@ -120,14 +120,6 @@ Omega_h::LO max_index(const T a, Omega_h::LO n, o::LO beg=0) {
   return ind;
 }
 
-OMEGA_H_DEVICE Omega_h::Real osh_dot(const Omega_h::Vector<3> &a,
-  const Omega_h::Vector<3> &b) {
-  return (a[0]*b[0] + a[1]*b[1] + a[2]*b[2]);
-}
-
-OMEGA_H_DEVICE Omega_h::Real osh_mag(const Omega_h::Vector<3> &v) {
-  return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-}
 
 OMEGA_H_DEVICE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
  const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
@@ -152,7 +144,7 @@ OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<3> &va,
 
 OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
   const o::Vector<3> v2) {
-  o::Real cos = osh_dot(v1, v2)/ (o::norm(v1) * o::norm(v2));
+  o::Real cos = o::inner_product(v1, v2)/ (o::norm(v1) * o::norm(v2));
   return acos(cos);
 }
 
@@ -280,19 +272,23 @@ OMEGA_H_DEVICE o::Real interpolate2d_based(const o::Reals& data, const int di1,
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
-  const o::Real gridXip1,  const o::Real gridZj, const o::Real gridZjp1, 
+  const o::Real gridXip1, const o::Real gridZj, const o::Real gridZjp1, 
   const o::Real x0, const o::Real z, const o::LO nx, const o::LO nz, const int i,
   const int j, const o::Real y, const bool cylSymm = true, const o::LO nComp = 1, 
-  const o::LO comp = 0) {
-  if(nx*nz == 1) {
+  const o::LO comp = 0, bool debug=false) {
+  if(nx*nz == 1)
     return data[comp];
-  }
   auto x = x0; 
   auto dx = gridXip1 - gridXi;
   auto dz = gridZjp1 - gridZj;
   if(cylSymm) {
     x = sqrt(x*x + y*y);
   }
+
+  if(debug)
+    printf("2dpos %g %g %g dx,z %g %g i,j %d %d nx,z %d %d grids %g %g %g %g\n", 
+      x,y,z, dx, dz, i, j, nx, nz, gridXi, gridXip1, gridZj, gridZjp1);
+
   o::Real fxz = 0;
   if (i >=nx-1 && j>=nz-1) {
     fxz = data[(nx-1+(nz-1)*nx)*nComp+comp];
@@ -308,15 +304,19 @@ OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
   else {
     auto fx_z1 = interpolate2d_based(data, (i+j*nx)*nComp + comp,
       (i+1+j*nx)*nComp + comp, x - gridXi, gridXip1-x, x, dx); 
-    //fx_z1 = ((gridXip1-x)*data[(i+j*nx)*nComp + comp] + 
-    //        (x - gridXi)*data[(i+1+j*nx)*nComp + comp])/dx;
     auto fx_z2 = interpolate2d_based(data, (i+(j+1)*nx)*nComp + comp,
       (i+1+(j+1)*nx)*nComp + comp, x - gridXi, gridXip1-x, x, dx);
-
-    //fx_z2 = ((gridXip1-x)*data[(i+(j+1)*nx)*nComp + comp] + 
-    //        (x - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = interpolate2d_base(fx_z1, fx_z2, z - gridZj, gridZjp1-z, z, dz); 
-    //fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
+    if(debug) {
+      auto test1 = ((gridXip1-x)*data[(i+j*nx)*nComp + comp] + 
+              (x - gridXi)*data[(i+1+j*nx)*nComp + comp])/dx;
+      auto test2 = ((gridXip1-x)*data[(i+(j+1)*nx)*nComp + comp] + 
+        (x - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
+      auto val = ((gridZjp1-z)*test1+(z - gridZj)*test2)/dz;
+      printf("fxz %g fx_z1 %g fx_z2 %g test1 %g test2 %g val %g \n", 
+        fxz, fx_z1, fx_z2, test1, test2, val);
+    fxz = val;
+    }
   }
   return fxz;
 }
@@ -337,8 +337,11 @@ OMEGA_H_DEVICE o::Real interpolate2d_field(const o::Reals& data,
   auto gridXip1 = gridx0 + (i+1) * dx;    
   auto gridZj = gridz0 + j * dz;
   auto gridZjp1 = gridz0 + (j+1) * dz; 
+  if(debug)
+    printf("pos %g %g %g dx,z %g %g i,j %d %d grids %d %d %d %d\n", 
+      x,pos[1],z, dx, dz, i, j, gridXi, gridXip1, gridZj, gridZjp1);
   return interpolate2d(data, gridXi, gridXip1, gridZj, gridZjp1, x, z, nx, 
-    nz, i, j, pos[1], cylSymm, nComp, comp);  
+    nz, i, j, pos[1], cylSymm, nComp, comp, debug);  
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data, 
@@ -357,9 +360,12 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
   auto gridXi = gridx[i];
   auto gridXip1 = gridx[i+1];    
   auto gridZj = gridz[j];
-  auto gridZjp1 = gridz[j+1]; 
+  auto gridZjp1 = gridz[j+1];
+  if(debug)
+    printf("pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
+      x,pos[1],z, dx, dz, i, j, gridXi, gridXip1, gridZj, gridZjp1);
   return interpolate2d(data, gridXi, gridXip1, gridZj, gridZjp1, x, z, nx, 
-    nz, i, j, pos[1], cylSymm, nComp, comp);
+    nz, i, j, pos[1], cylSymm, nComp, comp, debug);
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data, 
@@ -370,7 +376,8 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
   pos[0] = x;
   pos[1]= 0;
   pos[2] = z;
-  return interpolate2d_wgrid(data, gridx, gridz, nx, nz, pos, cylSymm, nComp, comp, debug);  
+  return interpolate2d_wgrid(data, gridx, gridz, nx, nz, pos, cylSymm, nComp,
+   comp, debug);  
 }
 
 OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y, 

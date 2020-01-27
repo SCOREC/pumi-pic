@@ -36,7 +36,7 @@ void updatePtclPositions(PS* ptcls) {
   ps::parallel_for(ptcls, updatePtclPos, "updatePtclPos");
 }
 
-void storePiscesDataSeparate(PS* ptcls, o::Mesh* mesh, o::Write<o::LO>& data_d, 
+void updateSurfaceDetectionSeparate(PS* ptcls, o::Mesh* mesh, o::Write<o::LO>& data_d, 
   o::Write<o::Real>& xpoints, o::Write<o::LO>& xface_ids, o::LO iter, 
   bool debug=true) {
   double radMax = 0.05; //m 0.0446+0.005
@@ -44,7 +44,7 @@ void storePiscesDataSeparate(PS* ptcls, o::Mesh* mesh, o::Write<o::LO>& data_d,
   double zMax = 0.15; //m height max 0.14275
   double htBead1 =  0.01275; //m ht of 1st bead
   double dz = 0.01; //m ht of beads 2..14
-  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "piscesBeadCylinder_inds");
+  auto pisces_ids = mesh->get_array<o::LO>(o::FACE, "DetectorSurfaceIndex");
   auto pid_ps = ptcls->get<PTCL_ID>();
 
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -73,7 +73,7 @@ void storePiscesDataSeparate(PS* ptcls, o::Mesh* mesh, o::Write<o::LO>& data_d,
       }
     }
   };
-  ps::parallel_for(ptcls, lamb, "storePiscesData");
+  ps::parallel_for(ptcls, lamb, "updateSurfaceDetection");
 }
 
 
@@ -137,10 +137,10 @@ void search(p::Mesh& picparts, PS* ptcls, GitrmParticles& gp, int iter,
     elem_ids, xpoints_d, xface_ids, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::pushRegion("storePiscesData");
-  storePiscesDataSeparate(ptcls, mesh, data_d, xpoints_d, xface_ids, iter, true);
+  Kokkos::Profiling::pushRegion("updateSurfaceDetection");
+  updateSurfaceDetectionSeparate(ptcls, mesh, data_d, xpoints_d, xface_ids, iter, true);
 
-  //storePiscesData(gp, data_d, iter, debug);
+  //updateSurfaceDetection(gp, data_d, iter, debug);
   Kokkos::Profiling::popRegion();
   //update positions and set the new element-to-particle lists
   Kokkos::Profiling::pushRegion("rebuild");
@@ -268,7 +268,7 @@ int main(int argc, char** argv) {
   // TODO use picparts 
   GitrmMesh gm(*mesh);
   if(piscesRun)
-    gm.markPiscesCylinder(true);
+    gm.markDetectorSurfaces(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   if(!comm_rank)
@@ -361,7 +361,7 @@ int main(int argc, char** argv) {
   if(piscesRun) {
     std::cout << "Pisces detections \n";
     printGridData(data_d);
-    gm.markPiscesCylinderResult(data_d);
+    gm.writeResultAsMeshTag(data_d);
   }
   if(histInterval >0)
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 

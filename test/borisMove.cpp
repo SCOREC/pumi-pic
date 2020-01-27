@@ -80,18 +80,24 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   auto pid_ps = ptcls->get<2>();
 
   bool isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
-    elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, debug);
+    elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("updateGitrmData");
+  //TODO convert elem_ids to Read-only
   
   if(gir.chargedPtclTracking) {
     gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
     gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
-    //gitrm_surfaceReflection_test(ptcls, sm, gp, gm, elem_ids, false);
+    gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, true);
+    //Search again. The particles in ps not yet moved to elem_ids. 
+    //The elem_ids shouldn't be reset between the two search_mesh calls.
+    isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
+      elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
+    assert(isFound);
   }
   bool resetFids = true;
-  storePiscesData(mesh, gp, data_d, iter, resetFids, false);
+  updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
@@ -236,7 +242,7 @@ int main(int argc, char** argv) {
   }
 
   if(piscesRun)
-    gm.markPiscesCylinder(true);
+    gm.markDetectorSurfaces(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   if(!comm_rank)
@@ -376,7 +382,7 @@ int main(int argc, char** argv) {
   if(piscesRun) {
     std::string fname("piscesCounts.txt");
     printGridData(data_d, fname, "piscesDetected");
-    gm.markPiscesCylinderResult(data_d);
+    gm.writeResultAsMeshTag(data_d);
   }
   if(histInterval >0) {
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 

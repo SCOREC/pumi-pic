@@ -256,10 +256,10 @@ int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
   const auto elm_dim = picparts->dim();
   o::Mesh* mesh = picparts->mesh();
   auto face_class_ids = mesh->get_array<o::ClassId>(elm_dim, "class_id");
-  auto face_owners = picparts->entOwners(elm_dim);
+  auto face_safe = picparts->safeTag();
   o::Write<o::LO> isFaceOnClass(face_class_ids.size(), 0);
   o::parallel_for(face_class_ids.size(), OMEGA_H_LAMBDA(const int i) {
-    if( face_class_ids[i] <= mdlFace && face_owners[i] == comm_rank)
+    if( face_class_ids[i] <= mdlFace && face_safe[i])
       isFaceOnClass[i] = 1;
   });
   o::LO numMarked = o::get_sum(o::LOs(isFaceOnClass));

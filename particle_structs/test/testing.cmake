@@ -1,5 +1,7 @@
 add_test(NAME type_test COMMAND ./typeTest)
 
+add_test(NAME view_test COMMAND ./viewTest)
+
 add_test(NAME buildSCS COMMAND ./buildSCSTest)
 
 add_test(NAME initParticles COMMAND ./initParticles)

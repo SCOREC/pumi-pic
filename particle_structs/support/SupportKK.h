@@ -1,22 +1,82 @@
 #pragma once
 
 #include <Kokkos_Core.hpp>
-
+#include "PS_Macros.h"
+#include "psView.h"
 namespace particle_structs {
 
-  template <class View>
-    typename View::HostMirror deviceToHost(View view) {
+  /* Taken from https://stackoverflow.com/questions/31762958/check-if-class-is-a-template-specialization
+     Checks if type is a specialization of a class template
+   */
+  template <class T, template <class...> class Template>
+  struct is_specialization : std::false_type {};
+
+  template <template <class...> class Template, class... Args>
+  struct is_specialization<Template<Args...>, Template> : std::true_type {};
+
+  template <class ViewT>
+  typename std::enable_if<is_specialization<ViewT, Kokkos::View>{}, ViewT>::type::HostMirror
+  deviceToHost(ViewT view) {
     auto hv = Kokkos::create_mirror_view(view);
     Kokkos::deep_copy(hv, view);
     return hv;
   }
 
- template <class T, typename Device> struct HostToDevice;
+  template <class ViewT>
+  typename std::enable_if<is_specialization<ViewT, View>{}, ViewT>::type::HostMirror
+  deviceToHost(ViewT view) {
+    auto hv = create_mirror_view(view);
+    deep_copy(hv, view);
+    return hv;
+  }
 
- template <class T, typename Device>
- void hostToDevice(Kokkos::View<T*, Device> view, T* data) {
-   HostToDevice<T, Device>(view, data);
- }
+  template <class ViewT, class T>
+  typename std::enable_if<ViewT::rank==1>::type
+  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+    for (size_t i = 0; i < hv.extent(0); ++i)
+      hv(i) = data[i];
+  }
+  template <class ViewT, class T>
+  typename std::enable_if<ViewT::rank==2>::type
+  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+    for (size_t i = 0; i < hv.extent(0); ++i)
+      for (size_t j = 0; j < hv.extent(1); ++j)
+        hv(i,j) = data[i][j];
+  }
+  template <class ViewT, class T>
+  typename std::enable_if<ViewT::rank==3>::type
+  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+    for (size_t i = 0; i < hv.extent(0); ++i)
+      for (size_t j = 0; j < hv.extent(1); ++j)
+        for (size_t k = 0; k < hv.extent(2); ++k)
+          hv(i,j,k) = data[i][j][k];
+  }
+  template <class ViewT, class T>
+  typename std::enable_if<ViewT::rank==4>::type
+  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+    for (size_t i = 0; i < hv.extent(0); ++i)
+      for (size_t j = 0; j < hv.extent(1); ++j)
+        for (size_t k = 0; k < hv.extent(2); ++k)
+          for (size_t l = 0; l < hv.extent(3); ++l)
+            hv(i,j,k,l) = data[i][j][k][l];
+  }
+
+  template <class ViewT, class T>
+  typename std::enable_if<is_specialization<ViewT, Kokkos::View>{}>::type
+  hostToDevice(ViewT view, T* data) {
+    auto hv = Kokkos::create_mirror_view(view);
+    hostToDevice(hv,view,data);
+    Kokkos::deep_copy(view, hv);
+  }
+
+  template <class ViewT, class T>
+  typename std::enable_if<is_specialization<ViewT, View>{}>::type
+  hostToDevice(ViewT view, T* data) {
+    auto hv = create_mirror_view(view);
+    hostToDevice(hv,view,data);
+    deep_copy(view, hv);
+  }
+
 
 template <typename T, typename Device>
 T getLastValue(Kokkos::View<T*, Device> view) {
@@ -28,40 +88,32 @@ T getLastValue(Kokkos::View<T*, Device> view) {
   return lastVal;
 }
 
-template <class T, typename Device> struct CopyViewToView {
-  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*, Device> dst, int dst_index,
-                                              Kokkos::View<T*, Device> src, int src_index) {
-    dst(dst_index) = src(src_index);
+  template <typename ViewT>
+  PS_INLINE typename std::enable_if<ViewT::rank == 1>::type copyViewToView(ViewT dst, int dstind,
+                                                                           ViewT src, int srcind){
+    dst(dstind) = src(srcind);
   }
-};
-template <class T, typename Device, int N> struct CopyViewToView<T[N], Device> {
-  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N], Device> dst, int dst_index,
-                                              Kokkos::View<T*[N], Device> src, int src_index) {
-    for (int i = 0; i < N; ++i)
-      dst(dst_index, i) = src(src_index, i);
+  template <typename ViewT>
+  PS_INLINE typename std::enable_if<ViewT::rank == 2>::type copyViewToView(ViewT dst, int dstind,
+                                                                           ViewT src, int srcind){
+    for (int i = 0; i < dst.extent(1); ++i)
+      dst(dstind, i) = src(srcind, i);
   }
-};
-template <class T, typename Device, int N, int M>
-struct CopyViewToView<T[N][M], Device> {
-  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N][M], Device> dst, int dst_index,
-                                              Kokkos::View<T*[N][M], Device> src, int src_index) {
-    for (int i = 0; i < N; ++i)
-      for (int j = 0; j < M; ++j)
-        src(src_index, i, j) = dst(dst_index, i, j);
+  template <typename ViewT>
+  PS_INLINE typename std::enable_if<ViewT::rank == 3>::type copyViewToView(ViewT dst, int dstind,
+                                                                           ViewT src, int srcind){
+    for (int i = 0; i < dst.extent(1); ++i)
+      for (int j = 0; j < dst.extent(2); ++j)
+        dst(dstind, i, j) = src(srcind, i, j);
   }
-};
-template <class T, typename Device, int N, int M, int P>
-  struct CopyViewToView<T[N][M][P], Device> {
-  KOKKOS_INLINE_FUNCTION CopyViewToView(Kokkos::View<T*[N][M][P], Device> dst,
-                                              int dst_index,
-                                              Kokkos::View<T*[N][M][P], Device> src,
-                                              int src_index) {
-    for (int i = 0; i < N; ++i)
-      for (int j = 0; j < M; ++j)
-        for (int k = 0; k < P; ++k)
-          dst(dst_index, i, j, k) = src(src_index, i, j, k);
+  template <typename ViewT>
+  PS_INLINE typename std::enable_if<ViewT::rank == 4>::type copyViewToView(ViewT dst, int dstind,
+                                                                           ViewT src, int srcind){
+    for (int i = 0; i < dst.extent(1); ++i)
+      for (int j = 0; j < dst.extent(2); ++j)
+        for (int k = 0; k < dst.extent(3); ++k)
+          dst(dstind, i, j, k) = src(srcind, i, j, k);
   }
-};
 
   template <typename T> struct Subview {
     template <typename View>
@@ -130,6 +182,4 @@ template <class T, typename Device, int N, int M, int P>
       Kokkos::deep_copy(view, hv);
     }
   };
-
-
 }

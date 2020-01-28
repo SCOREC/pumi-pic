@@ -1,4 +1,5 @@
 #pragma once
+#include <psMemberType.h>
 namespace particle_structs {
   template<class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,

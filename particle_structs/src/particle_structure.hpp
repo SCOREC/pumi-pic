@@ -6,23 +6,31 @@
 
 namespace particle_structs {
 
-  template <class DataTypes, typename MemSpace = DefaultMemSpace>
+  template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {
   public:
     typedef DataTypes Types;
-    typedef typename MemSpace::memory_space memory_space;
-    typedef typename MemSpace::execution_space execution_space;
-    typedef typename MemSpace::device_type device_type;
-    typedef Kokkos::View<lid_t*, device_type> kkLidView;
-    typedef Kokkos::View<gid_t*, device_type> kkGidView;
+    typedef typename Space::memory_space memory_space;
+    typedef typename Space::execution_space execution_space;
+    typedef typename Space::device_type device_type;
+    typedef typename Kokkos::ViewTraits<void, Space>::HostMirrorSpace HostMirrorSpace;
+    typedef ParticleStructure<DataTypes, HostMirrorSpace> HostMirror;
+    template <typename Space2> using Mirror = ParticleStructure<DataTypes, Space2>;
+
+    template <class T> using View = Kokkos::View<T*, device_type>;
+    typedef View<lid_t> kkLidView;
+    typedef View<gid_t> kkGidView;
     typedef typename kkLidView::HostMirror kkLidHostMirror;
     typedef typename kkGidView::HostMirror kkGidHostMirror;
+
     template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
-    typedef MemberTypeViews<DataTypes, device_type> MTVs;
+    typedef MemberTypeViews MTVs;
+    template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
     template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
     ParticleStructure();
     virtual ~ParticleStructure() {}
+
     lid_t nElems() const {return num_elems;}
     lid_t nPtcls() const {return num_ptcls;}
     lid_t capacity() const {return capacity_;}
@@ -37,17 +45,16 @@ namespace particle_structs {
     Slice<N> get() {
       if (num_ptcls == 0)
         return Slice<N>();
-      MemberTypeView<DataType<N>, device_type>* view =
-        static_cast<MemberTypeView<DataType<N>, device_type>*>(ptcl_data[N]);
+      MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);
     }
 
 
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
-                         MemberTypeViews<DataTypes, device_type> new_particle_info = NULL) = 0;
+                         MTVs new_particle_info = NULL) = 0;
     virtual void migrate(kkLidView new_element, kkLidView new_process,
                          kkLidView new_particle_elements = kkLidView(),
-                         MemberTypeViews<DataTypes, device_type> new_particle_info = NULL) = 0;
+                         MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
   protected:
     //Element and particle Counts/capacities
@@ -61,10 +68,32 @@ namespace particle_structs {
 
     //Number of Data types
     static constexpr std::size_t num_types = DataTypes::size;
+
+    /*
+      Copy a particle structure to another memory space
+      Note: if the same memory space is used then a the data is not duplicated
+    */
+    template <class Space2>
+    void copy(Mirror<Space2>* old) {
+      num_elems = old->num_elems;
+      num_ptcls = old->num_ptcls;
+      capacity_ = old->capacity_;
+      num_rows = old->num_rows;
+      if (std::is_same<memory_space, typename Space2::memory_space>::value) {
+        ptcl_data = old->ptcl_data;
+      }
+      else {
+        auto first_data_view = static_cast<MTV<0>*>(old->ptcl_data[0]);
+        int s = first_data_view->size() / BaseType<DataType<0> >::size;
+        ptcl_data = createMemberViews<DataTypes, Space>(s);
+        CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, old->ptcl_data);
+      }
+    }
+    template <typename DT, typename Space2> friend class ParticleStructure;
   };
 
-  template <class DataTypes, typename MemSpace>
-  ParticleStructure<DataTypes, MemSpace>::ParticleStructure() : num_elems(0), num_ptcls(0),
-                                                                capacity_(0), num_rows(0) {
+  template <class DataTypes, typename Space>
+  ParticleStructure<DataTypes, Space>::ParticleStructure() : num_elems(0), num_ptcls(0),
+                                                             capacity_(0), num_rows(0) {
   }
 }

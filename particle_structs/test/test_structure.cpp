@@ -23,6 +23,7 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
 int testRebuild(const char* name, PS* structure);
 int testMigration(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
+int testCopy(const char* name, PS* structure);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -74,6 +75,7 @@ int main(int argc, char* argv[]) {
       fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
       fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
       fails += testMetrics(names[i].c_str(), structures[i]);
+      fails += testCopy(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -219,5 +221,36 @@ int testMetrics(const char* name,PS* structure) {
             name, comm_rank);
     ++fails;
   }
+  return fails;
+}
+
+int testCopy(const char* name, PS* structure) {
+  int fails = 0;
+  //Copy particle structure to the host
+  PS::Mirror<Kokkos::HostSpace>* host_structure = ps::copy<Kokkos::HostSpace>(structure);
+  if (host_structure->nElems() != structure->nElems()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->nPtcls() != structure->nPtcls()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nPtcls() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->capacity() != structure->capacity()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy capacity() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->numRows() != structure->numRows()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy numRows() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  //Copy particle structure back to the device
+
+  //Compare original and new particle structure on the device
+
   return fails;
 }

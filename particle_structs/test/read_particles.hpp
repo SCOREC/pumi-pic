@@ -5,7 +5,6 @@
 #include "test_types.hpp"
 namespace ps=particle_structs;
 
-
 /* File format:
    <num_elems> <num_ptcls>
    //For each element
@@ -18,7 +17,7 @@ namespace ps=particle_structs;
 */
 void readParticles(char* particle_file, int& num_elems, int& num_ptcls,
                    kkLidView& ppe, kkGidView& eGids, kkLidView& pElems,
-                   ps::MemberTypeViews<Types, Device>& pInfo) {
+                   PS::MTVs& pInfo) {
   std::ifstream in_str(particle_file);
   if (!in_str) {
     fprintf(stderr, "[ERROR] Cannot open file %s\n", particle_file);
@@ -53,13 +52,13 @@ void readParticles(char* particle_file, int& num_elems, int& num_ptcls,
   }
 
   //Transfer data to the device
-  ps::hostToDevice<lid_t>(ppe, ppe_h);
-  ps::hostToDevice<ps::gid_t>(eGids, eGids_h);
-  ps::hostToDevice<lid_t>(pElems, pElems_h);
-  ps::hostToDevice<int>(ps::getMemberView<Types, 0>(pInfo), pIds);
-  ps::hostToDevice<Vector3>(ps::getMemberView<Types, 1>(pInfo), val1s);
-  ps::hostToDevice<bool>(ps::getMemberView<Types, 2>(pInfo), val2s);
-  ps::hostToDevice<int>(ps::getMemberView<Types, 3>(pInfo), val3s);
+  ps::hostToDevice(ppe, ppe_h);
+  ps::hostToDevice(eGids, eGids_h);
+  ps::hostToDevice(pElems, pElems_h);
+  ps::hostToDevice(ps::getMemberView<Types, 0>(pInfo), pIds);
+  ps::hostToDevice(ps::getMemberView<Types, 1>(pInfo), val1s);
+  ps::hostToDevice(ps::getMemberView<Types, 2>(pInfo), val2s);
+  ps::hostToDevice(ps::getMemberView<Types, 3>(pInfo), val3s);
 
   //Cleanup
   delete [] ppe_h;
@@ -73,7 +72,7 @@ void readParticles(char* particle_file, int& num_elems, int& num_ptcls,
 
 void writeParticles(char* particle_file, int num_elems, int num_ptcls,
                     kkLidView ppe, kkGidView eGids, kkLidView pElems,
-                    ps::MemberTypeViews<Types, Device> pInfo) {
+                    PS::MTVs pInfo) {
   std::ofstream out_str(particle_file);
   if (!out_str) {
     fprintf(stderr, "[ERROR] Cannot open file %s\n", particle_file);
@@ -83,10 +82,10 @@ void writeParticles(char* particle_file, int num_elems, int num_ptcls,
   kkLidHost ppe_h = ps::deviceToHost(ppe);
   kkGidHost eGids_h = ps::deviceToHost(eGids);
   kkLidHost pElems_h = ps::deviceToHost(pElems);
-  KViewHost<int> pIds = ps::deviceToHost(ps::getMemberView<Types, 0>(pInfo));
-  KViewHost<Vector3> vals1 = ps::deviceToHost(ps::getMemberView<Types, 1>(pInfo));
-  KViewHost<bool> vals2 = ps::deviceToHost(ps::getMemberView<Types, 2>(pInfo));
-  KViewHost<int> vals3 = ps::deviceToHost(ps::getMemberView<Types, 3>(pInfo));
+  auto pIds = ps::deviceToHost(ps::getMemberView<Types, 0>(pInfo));
+  auto vals1 = ps::deviceToHost(ps::getMemberView<Types, 1>(pInfo));
+  auto vals2 = ps::deviceToHost(ps::getMemberView<Types, 2>(pInfo));
+  auto vals3 = ps::deviceToHost(ps::getMemberView<Types, 3>(pInfo));
 
   //Print counts
   out_str << num_elems << ' ' << num_ptcls << '\n';

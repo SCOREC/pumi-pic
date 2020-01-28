@@ -1,5 +1,5 @@
 #pragma once
-
+#include <psMemberType.h>
 namespace particle_structs {
   template<class DataTypes, typename MemSpace>
     bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,

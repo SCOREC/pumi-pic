@@ -249,7 +249,7 @@ inline void gitrm_borisMove(PS* ptcls,
       auto vel0 = vel;
 
       OMEGA_H_CHECK((amu >0) && (dTime>0));
-      o::Real bFieldMag = p::osh_mag(bField);
+      o::Real bFieldMag = o::norm(bField);
       o::Real qPrime = charge*1.60217662e-19/(amu*1.6737236e-27) *dTime*0.5;
       o::Real coeff = 2.0*qPrime/(1.0+(qPrime*bFieldMag)*(qPrime*bFieldMag));
 

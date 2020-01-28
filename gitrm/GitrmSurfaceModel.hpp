@@ -144,7 +144,7 @@ OMEGA_H_DEVICE o::Real stoppingPower (const o::Vector<3>& vel, const o::Real tar
   o::Real amu = gitrm::PTCL_AMU;
   o::Real atomZ = gitrm::PARTICLE_Z;
   auto protonMass = gitrm::PROTON_MASS;
-  o::Real E0 = 0.5*amu*protonMass *1.0/elCharge * p::osh_dot(vel, vel);
+  o::Real E0 = 0.5*amu*protonMass *1.0/elCharge * o::inner_product(vel, vel);
   o::Real reducedEnergy = E0*(targetM/(amu+targetM))* (screenLength/(atomZ*targetZ*ke2));
   o::Real stopPower = 0.5*log(1.0 + 1.2288*reducedEnergy)/(reducedEnergy +
           0.1728*sqrt(reducedEnergy) + 0.008*pow(reducedEnergy, 0.1504));
@@ -172,7 +172,7 @@ inline void surfaceErosion(PS* ptcls, o::Write<o::Real>& erosionData) {
     auto screenLength = screeningLength(atomZ, targetZ);
     auto vel = p::makeVector3(pid, vel_ps);
     o::Real stopPower = stoppingPower(vel, targetM, targetZ, screenLength);
-    o::Real E0 = 0.5*amu*protonMass* 1/elCharge * p::osh_dot(vel, vel);
+    o::Real E0 = 0.5*amu*protonMass* 1/elCharge * o::inner_product(vel, vel);
     o::Real term = pow((E0/Eth - 1), mu);
     o::Real Y0 = q*stopPower*term/(lambda + term);
     erosionData[pid] = Y0;

@@ -346,7 +346,7 @@ bool GitrmMesh::initBoundaryFaces(bool init, bool debug) {
       auto surfNorm = p::bdry_face_normal_of_tet(fid,coords,face_verts);
       o::Real magB = o::norm(B);
       o::Real magSurfNorm = o::norm(surfNorm);
-      o::Real angleBS = p::osh_dot(B, surfNorm);
+      o::Real angleBS = o::inner_product(B, surfNorm);
       o::Real theta = acos(angleBS/(magB*magSurfNorm));
       if (theta > o::PI * 0.5) {
         theta = abs(theta - o::PI);
@@ -1134,7 +1134,7 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
     for(auto i=0; i<3; ++i) {
       abcd_d[fid*4+i] = normalVec[i];
     }
-    abcd_d[fid*4+3] = -(p::osh_dot(normalVec, abc[0]));
+    abcd_d[fid*4+3] = -(o::inner_product(normalVec, abc[0]));
     
     auto elmId = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem);
     auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
@@ -1144,11 +1144,11 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markCylFromBdry) {
     else
       inDir_d[fid] = -1; //TODO test
     planeNorm_d[fid] = o::norm(normalVec);
-    auto val = p::osh_dot(o::cross(bc, ba), normalVec);
+    auto val = o::inner_product(o::cross(bc, ba), normalVec);
     auto sign = (val < 0) ? -1 : 0;
     if(val > 0) sign =1; 
     BCxBA_d[fid] = sign;
-    val = p::osh_dot(o::cross(ca, cb), normalVec);
+    val = o::inner_product(o::cross(ca, cb), normalVec);
     sign = (val < 0) ? -1 : 0;
     if(val > 0) sign = 1;
     CAxCB_d[fid] = sign;

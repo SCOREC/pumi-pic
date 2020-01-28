@@ -76,7 +76,7 @@ OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
     auto vab = abc[1] - abc[0]; //b - a;
     auto vac = abc[2] - abc[0]; //c - a;
     auto vap = pos - abc[0]; // p - a;
-    vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab
+    vals[iface] = o::inner_product(vap, Omega_h::cross(vac, vab)); //ac, ab
   }
   //volume using bottom face=0
   get_face_from_face_index_of_tet(Mat, 0, abc);
@@ -84,7 +84,7 @@ OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
   OMEGA_H_CHECK(3 == vtx3);
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
   auto cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
-  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
+  Omega_h::Real vol6 = o::inner_product(Mat[vtx3]-Mat[0], cross_ac_ab);
   // use o::tet_volume_from_basis()
   if(debug)
     print_few_vectors(abc);
@@ -111,16 +111,16 @@ OMEGA_H_DEVICE bool find_barycentric_tri_simple(
   auto c = abc[2];
   auto cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
   auto norm = Omega_h::normalize(cross);
-  Omega_h::Real area = osh_dot(norm, cross);
+  Omega_h::Real area = o::inner_product(norm, cross);
 
   if(std::abs(area) < 1e-9) { //TODO
     printf("area is too small \n");
     return 0;
   }
   Omega_h::Real fac = 1/(area*2.0);
-  bc[0] = fac * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
-  bc[1] = fac * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
-  bc[2] = fac * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
+  bc[0] = fac * o::inner_product(norm, Omega_h::cross(b-a, xpoint-a));
+  bc[1] = fac * o::inner_product(norm, Omega_h::cross(c-b, xpoint-b));
+  bc[2] = fac * o::inner_product(norm, Omega_h::cross(xpoint-a, c-a));
 
   return 1;
 }
@@ -189,14 +189,14 @@ OMEGA_H_DEVICE bool line_triangle_intx_simple (
       printf("LTintX Surface normal is flipped\n");
   }
   auto snorm_unit = Omega_h::normalize(normv);
-  Omega_h::Real dist2plane = osh_dot(abc[0] - origin, snorm_unit);
+  Omega_h::Real dist2plane = o::inner_product(abc[0] - origin, snorm_unit);
   auto plane2dest = dest - abc[0];
-  Omega_h::Real proj_end = osh_dot(snorm_unit, plane2dest);
+  Omega_h::Real proj_end = o::inner_product(snorm_unit, plane2dest);
   if(debug)
     printf("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
   // equal required if tol=0 is used
   if(dist2plane >= -tol && proj_end >= -tol) {
-    dproj = osh_dot(line, snorm_unit);
+    dproj = o::inner_product(line, snorm_unit);
     Omega_h::Real par_t = (dproj>0) ? dist2plane/dproj : 0; 
     xpoint = origin + par_t * line;
     // line has to make a +ve projection
@@ -731,20 +731,20 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
   o::Vector<3> bc = c - b;
   // Compute parametric position s for projection P’ of P on AB,
   // P’ = A + s*AB, s = snom/(snom+sdenom)
-  float snom = osh_dot(p - a, ab);
-  float sdenom = osh_dot(p - b, a - b);
+  float snom = o::inner_product(p - a, ab);
+  float sdenom = o::inner_product(p - b, a - b);
   // Compute parametric position t for projection P’ of P on AC,
   // P’ = A + t*AC, s = tnom/(tnom+tdenom)
-  float tnom = osh_dot(p - a, ac);
-  float tdenom = osh_dot(p - c, a - c);
+  float tnom = o::inner_product(p - a, ac);
+  float tdenom = o::inner_product(p - c, a - c);
   if (snom <= 0.0 && tnom <= 0.0){
     q = a;
     return VTXA;
   } // Vertex region early out
   // Compute parametric position u for projection P’ of P on BC,
   // P’ = B + u*BC, u = unom/(unom+udenom)
-  float unom = osh_dot(p - b, bc);
-  float  udenom = osh_dot(p - c, b - c);
+  float unom = o::inner_product(p - b, bc);
+  float  udenom = o::inner_product(p - c, b - c);
   if (sdenom <= 0.0 && unom <= 0.0){
     q = b;
     return VTXB; // Vertex region early out
@@ -756,7 +756,7 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
   // P is outside (or on) AB if the triple scalar product [N PA PB] <= 0
   o::Vector<3> n = o::cross(b - a, c - a);
   o::Vector<3> temp = o::cross(a - p, b - p);
-  float vc = osh_dot(n, temp);
+  float vc = o::inner_product(n, temp);
   // If P outside AB and within feature region of AB,
   // return projection of P onto AB
   if (vc <= 0.0 && snom >= 0.0 && sdenom >= 0.0){
@@ -765,7 +765,7 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
   }
   // P is outside (or on) BC if the triple scalar product [N PB PC] <= 0
   o::Vector<3> temp1 = o::cross(b - p, c - p);
-  float va = osh_dot(n, temp1);
+  float va = o::inner_product(n, temp1);
   // If P outside BC and within feature region of BC,
   // return projection of P onto BC
   if (va <= 0.0 && unom >= 0.0 && udenom >= 0.0){
@@ -774,7 +774,7 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
   }
   // P is outside (or on) CA if the triple scalar product [N PC PA] <= 0
   o::Vector<3> temp2 = o::cross(c - p, a - p);
-  float vb = osh_dot(n, temp2);
+  float vb = o::inner_product(n, temp2);
   // If P outside CA and within feature region of CA,
   // return projection of P onto CA
   if (vb <= 0.0 && tnom >= 0.0 && tdenom >= 0.0){
@@ -806,8 +806,8 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
   o::Vector<3> vab = ptb - pta;
   o::Vector<3> vac = ptc - pta;
   o::Vector<3> vap = ptp - pta;
-  o::Real d1 = osh_dot(vab, vap);
-  o::Real d2 = osh_dot(vac, vap);
+  o::Real d1 = o::inner_product(vab, vap);
+  o::Real d2 = o::inner_product(vac, vap);
   if (d1 <= 0 && d2 <= 0) {
     // barycentric coordinates (1,0,0)
     for(int i=0; i<3; ++i)
@@ -820,8 +820,8 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
 
   // Check if P in vertex region outside B
   o::Vector<3> vbp = ptp - ptb;
-  o::Real d3 = osh_dot(vab, vbp);
-  o::Real d4 = osh_dot(vac, vbp);
+  o::Real d3 = o::inner_product(vab, vbp);
+  o::Real d4 = o::inner_product(vac, vbp);
   if(region <0 && d3 >= 0 && d4 <= d3){ 
     // barycentric coordinates (0,1,0)
     for(int i=0; i<3; ++i)
@@ -845,8 +845,8 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
 
   // Check if P in vertex region outside C
   o::Vector<3> vcp = ptp - ptc;
-  o::Real d5 = osh_dot(vab, vcp);
-  o::Real d6 = osh_dot(vac, vcp);
+  o::Real d5 = o::inner_product(vab, vcp);
+  o::Real d6 = o::inner_product(vac, vcp);
   if(region <0 && d6 >= 0 && d5 <= d6) { 
     // barycentric coordinates (0,0,1)
     for(int i=0; i<3; ++i)

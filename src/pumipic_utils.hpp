@@ -27,12 +27,6 @@ namespace o = Omega_h;
 
 namespace pumipic {
 
-/*
-NOTE: Don't use [] in host for o::Write and o::Read, since [] will be a 
-device operator, except for HostWrite, HostRead
-The above is true for all functions using device-only stuff.
-*/
-
 OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
   o::Vector<3> v;
   for(o::LO i=0; i<3; ++i)
@@ -40,43 +34,48 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
   return v;
 }
 
-OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real a, const Omega_h::Real b,
-    Omega_h::Real tol=EPSILON) {
-  return o::are_close(a, b, tol);
+//NOTE: uses absolute magnitude, unlike relative magnitude in o::are_close()
+OMEGA_H_DEVICE bool almost_equal(o::Real a, o::Real b, o::Real tol = EPSILON,
+ o::Real floor = EPSILON) {
+  if(std::abs(a) <= floor && std::abs(b) <= floor)
+    return true;
+  return std::abs(a - b) < tol;
 }
 
+//uses absolute magnitude
 template<o::LO N>
 OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const Omega_h::Real b, 
-  Omega_h::Real tol=EPSILON) {
+  Omega_h::Real tol=EPSILON, Omega_h::Real floor = EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
-    if(!almost_equal(a[i],b, tol)) {
+    if(!almost_equal(a[i],b, tol, floor)) {
       return false;
     }
   }
   return true;
 }
 
+//uses absolute magnitude
 template<o::LO N>
 OMEGA_H_DEVICE bool almost_equal(const o::Vector<N>& a, const o::Vector<N>& b, 
-  Omega_h::Real tol=EPSILON) {
+  Omega_h::Real tol=EPSILON, Omega_h::Real floor = EPSILON) {
   for(Omega_h::LO i=0; i<N; ++i) {
-    if(!almost_equal(a[i],b[i], tol)) {
+    if(!almost_equal(a[i],b[i], tol, floor)) {
       return false;
     }
   }
   return true;
 }
 
+//uses absolute magnitude
 OMEGA_H_DEVICE bool almost_equal(const Omega_h::Real *a, const Omega_h::Real b, 
-  Omega_h::LO n=3, Omega_h::Real tol=EPSILON) {
+  Omega_h::LO n=3, Omega_h::Real tol=EPSILON, Omega_h::Real floor = EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
-    if(!almost_equal(a[i],b, tol)) {
+    if(!almost_equal(a[i],b, tol, floor)) {
       return false;
     }
   }
   return true;
 }
-
 
 template <class Vec>
 OMEGA_H_DEVICE bool all_positive(const Vec a, Omega_h::Real tol=EPSILON) {
@@ -239,9 +238,10 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
   }
   if(debug)
-    printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
-      "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
-      pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
+    printf("interp2dField pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
+      "gridz0 %g grid1 %g grid2 %g i %d j %d dx %g dz %g fxz %g \n",
+      pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, gridXi, 
+      gridXip1, i, j, dx, dz, fxz);
   return fxz;
 }
 /*
@@ -257,7 +257,7 @@ index,data:  418  2.29957 419 1.97687  518 2.29957 519 1.97687
 */
 
 OMEGA_H_DEVICE o::Real interpolate2d_base(const o::Real d1, const o::Real d2,
-  const o::Real grid1, const o::Real grid2, const o::Real v, const o::Real dv) { 
+  const o::Real grid1, const o::Real grid2, const o::Real v, const o::Real dv) {
   return (d1 * (grid2 - v) + d2 * (v - grid1))/dv;
 }
 
@@ -267,28 +267,22 @@ OMEGA_H_DEVICE o::Real interpolate2d_baseg(const o::Reals& data, const int di,
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d_based(const o::Reals& data, const int di1,
-  const int di2, const o::Real grid1, const int grid2, const o::Real v, const o::Real dv) { 
+  const int di2, const o::Real grid1, const o::Real grid2, const o::Real v, const o::Real dv) {
   return interpolate2d_base(data[di1], data[di2], grid1, grid2, v, dv);
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
   const o::Real gridXip1, const o::Real gridZj, const o::Real gridZjp1, 
   const o::Real x0, const o::Real z, const o::LO nx, const o::LO nz, const int i,
-  const int j, const o::Real y, const bool cylSymm = true, const o::LO nComp = 1, 
+  const int j, const o::Real y=0, const bool cylSymm = true, const o::LO nComp = 1, 
   const o::LO comp = 0, bool debug=false) {
-  if(nx*nz == 1)
+  if(nx <= 1 && nz <= 1)
     return data[comp];
   auto x = x0; 
   auto dx = gridXip1 - gridXi;
   auto dz = gridZjp1 - gridZj;
-  if(cylSymm) {
+  if(cylSymm)
     x = sqrt(x*x + y*y);
-  }
-
-  if(debug)
-    printf("2dpos %g %g %g dx,z %g %g i,j %d %d nx,z %d %d grids %g %g %g %g\n", 
-      x,y,z, dx, dz, i, j, nx, nz, gridXi, gridXip1, gridZj, gridZjp1);
-
   o::Real fxz = 0;
   if (i >=nx-1 && j>=nz-1) {
     fxz = data[(nx-1+(nz-1)*nx)*nComp+comp];
@@ -303,21 +297,24 @@ OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
   }
   else {
     auto fx_z1 = interpolate2d_based(data, (i+j*nx)*nComp + comp,
-      (i+1+j*nx)*nComp + comp, x - gridXi, gridXip1-x, x, dx); 
+      (i+1+j*nx)*nComp + comp, gridXi, gridXip1, x, dx); 
     auto fx_z2 = interpolate2d_based(data, (i+(j+1)*nx)*nComp + comp,
-      (i+1+(j+1)*nx)*nComp + comp, x - gridXi, gridXip1-x, x, dx);
-    fxz = interpolate2d_base(fx_z1, fx_z2, z - gridZj, gridZjp1-z, z, dz); 
+      (i+1+(j+1)*nx)*nComp + comp, gridXi, gridXip1, x, dx);
+    fxz = interpolate2d_base(fx_z1, fx_z2, gridZj, gridZjp1, z, dz); 
     if(debug) {
       auto test1 = ((gridXip1-x)*data[(i+j*nx)*nComp + comp] + 
               (x - gridXi)*data[(i+1+j*nx)*nComp + comp])/dx;
       auto test2 = ((gridXip1-x)*data[(i+(j+1)*nx)*nComp + comp] + 
         (x - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
       auto val = ((gridZjp1-z)*test1+(z - gridZj)*test2)/dz;
-      printf("fxz %g fx_z1 %g fx_z2 %g test1 %g test2 %g val %g \n", 
+      printf("int2d fxz %g fx_z1 %g fx_z2 %g test1 %g test2 %g val %g \n", 
         fxz, fx_z1, fx_z2, test1, test2, val);
-    fxz = val;
     }
   }
+  if(debug)
+    printf("int2d: pos %g %g %g dx,dz %g %g i,j %d %d nx,nz %d %d "
+      " grids %g %g %g %g fxz %g\n", x,y,z, dx, dz, i, j, nx, nz, 
+      gridXi, gridXip1, gridZj, gridZjp1, fxz);
   return fxz;
 }
 
@@ -326,11 +323,12 @@ OMEGA_H_DEVICE o::Real interpolate2d_field(const o::Reals& data,
   const o::Real dz, const o::LO nx, const o::LO nz, 
   const o::Vector<3> &pos, const bool cylSymm = true, 
   const o::LO nComp = 1, const o::LO comp = 0, bool debug= false) {
-  if(nx*nz == 1) {
+  if(nx <=1 && nz <= 1)
     return data[comp];
-  }  
   auto x = pos[0];
   auto z = pos[2]; 
+  if(cylSymm)
+    x = sqrt(x*x+pos[1]*pos[1]);
   OMEGA_H_CHECK(dx >0 && dz>0);
   o::LO i = floor((x - gridx0)/dx);
   o::LO j = floor((z - gridz0)/dz);
@@ -341,10 +339,10 @@ OMEGA_H_DEVICE o::Real interpolate2d_field(const o::Reals& data,
   auto gridZj = gridz0 + j * dz;
   auto gridZjp1 = gridz0 + (j+1) * dz; 
   if(debug)
-    printf("pos %g %g %g dx,z %g %g i,j %d %d grids %d %d %d %d\n", 
+    printf("2d_field: pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
       x,pos[1],z, dx, dz, i, j, gridXi, gridXip1, gridZj, gridZjp1);
   return interpolate2d(data, gridXi, gridXip1, gridZj, gridZjp1, x, z, nx, 
-    nz, i, j, pos[1], cylSymm, nComp, comp, debug);  
+    nz, i, j, 0, false, nComp, comp, debug);  
 }
 
 OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data, 
@@ -427,7 +425,7 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     return fxyz;
 }
 
-OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0, 
+OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0, 
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
   bool debug = false;
@@ -437,6 +435,12 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0,
     nz, pos, cylSymm, 3, 1, debug);
   field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 2, debug);
+  auto f1 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0, debug);
+  auto f2 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1, debug);
+  auto f3 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2, debug);
+  if(debug)
+    printf(" %g : %g %g : %g  %g : %g \n", field[0], f1, field[1], f2, field[2], f3);
+
   if(cylSymm) {
     o::Real theta = atan2(pos[1], pos[0]);  
     auto field0 = field[0];

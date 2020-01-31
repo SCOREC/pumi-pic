@@ -119,7 +119,6 @@ Omega_h::LO max_index(const T a, Omega_h::LO n, o::LO beg=0) {
   return ind;
 }
 
-
 OMEGA_H_DEVICE bool compare_array(const Omega_h::Real *a, const Omega_h::Real *b, 
  const Omega_h::LO n, Omega_h::Real tol=EPSILON) {
   for(Omega_h::LO i=0; i<n; ++i) {
@@ -147,7 +146,6 @@ OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1,
   return acos(cos);
 }
 
-
 OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
   const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
   r = sqrt(x*x + y*y + z*z);
@@ -168,7 +166,6 @@ OMEGA_H_DEVICE void print_few_vectors(const o::Few<o::Vector<3>, N> &M) {
   printf("%d: %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
 }
 
-
 OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem, 
     o::Vector<3>& orig, o::Vector<3>& dest, o::Matrix<3, 4>& M) {
   printf("PATH ptcl %d e: %d orig: %g %g %g dest: %g %g %g "
@@ -177,7 +174,6 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
     M[0][0], M[0][1], M[0][2], M[1][0], M[1][1], M[1][2],
     M[2][0], M[2][1], M[2][2], M[3][0], M[3][1], M[3][2]);
 }
-
 
 /** @brief To interpolate field ONE component at atime from 
  *    nComp-component(dof) 2D data
@@ -429,15 +425,15 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
   const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
   bool debug = false;
-  field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx,
+  field[0] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx,
     nz, pos, cylSymm, 3, 0, debug);
-  field[1] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
+  field[1] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 1, debug);
-  field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
+  field[2] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 2, debug);
-  auto f1 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0, debug);
-  auto f2 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1, debug);
-  auto f3 = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2, debug);
+  auto f1 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0, debug);
+  auto f2 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1, debug);
+  auto f3 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2, debug);
   if(debug)
     printf(" %g : %g %g : %g  %g : %g \n", field[0], f1, field[1], f2, field[2], f3);
 

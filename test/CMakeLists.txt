@@ -22,6 +22,7 @@ make_test(XGCp xgcp.cpp)
 make_test(borisMove borisMove.cpp)
 make_test(neutralTracking neutralTracking.cpp)
 make_test(SCStest SCStest.cpp)
+make_test(test_interp2d test_interpolate2d.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

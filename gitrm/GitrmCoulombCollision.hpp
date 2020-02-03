@@ -7,7 +7,6 @@ double& nu_friction,double& nu_deflection, double& nu_parallel,double& nu_energy
 const double temp_el, const double dens, const double charge, int ptcl_t, int iTimeStep_t, int debug)
 {
   
-  printf("Working on particle %d\n",ptcl_t);
   const double Q    = 1.60217662e-19;
   const double EPS0 = 8.854187e-12;
   const double pi   = 3.14159265;
@@ -46,12 +45,12 @@ const double temp_el, const double dens, const double charge, int ptcl_t, int iT
     auto psi_i       = 0.75225278*pow(xx_i,1.5);
     auto psi_prime_i = 1.128379*sqrt(xx_i);
     //auto psi_psiprime_i   = psi_i+psi_prime_i;
-    auto psi_psiprime_psi2x_i = 1.128379*sqrt(xx_i)*expf(-xx_i);
+    auto psi_psiprime_psi2x_i = 1.128379*sqrt(xx_i)*exp(-xx_i);
       
     auto psi_e = 0.75225278*pow(xx_e,1.5); 
     auto psi_prime_e = 1.128379*sqrt(xx_e);
     //auto psi_psiprime_e = psi_e+psi_prime_e;
-    auto psi_psiprime_psi2x_e = 1.128379*sqrt(xx_e)*expf(-xx_e);
+    auto psi_psiprime_psi2x_e = 1.128379*sqrt(xx_e)*exp(-xx_e);
 
     
     
@@ -136,7 +135,6 @@ OMEGA_H_DEVICE void get_direc(const Omega_h::Vector<3> &vel, const Omega_h::Vect
     Omega_h::Vector<3> relvel1 = vel ;// - flowVelocity;
     auto velocityNorm   = Omega_h::norm(relvel1);
     auto velocityNorm1  = p::osh_mag(relvel1);
-    printf("The normal velocities are %g %g \n", velocityNorm, velocityNorm1);
     parallel_dir=relvel1/velocityNorm;
     
     auto s1 = p::osh_dot(parallel_dir, b_unit);
@@ -190,17 +188,13 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
   auto efield_ps_d  = ptcls->get<PTCL_EFIELD>();
   auto vel_ps_d = ptcls->get<PTCL_VEL>();
   auto charge_ps_d = ptcls->get<PTCL_CHARGE>();
-  //const auto& BField_2d = gm.Bfield_2d;
   printf("Entering coulomb_collision routine\n");
-  //constexpr double CONSTANT_BFIELD[] = {0,0,-0.08};
 
-  ///* 
   o::Reals bFieldConst(3); 
   if(USE_CONSTANT_BFIELD) {
     bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
         CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
   }
-  //*/
 
   const auto& temIon_d = gm.temIon_d;
   auto x0Temp = gm.tempIonX0;
@@ -236,8 +230,8 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
   const auto collisionIndex2 = gp.testGitrCollisionRndn2Ind;
   const auto collisionIndex3 = gp.testGitrCollisionRndxsiInd;
 
-  printf("The numbers are %d, %d %d %d %d %d \n", testGDof, testGNT, iTimeStep, collisionIndex1, 
-    collisionIndex2, collisionIndex3);
+  //printf("The numbers are %d, %d %d %d %d %d \n", testGDof, testGNT, iTimeStep, collisionIndex1, 
+  //  collisionIndex2, collisionIndex3);
   //auto  collisionIndex1 = gp.testGitrCollisionRndn1Ind;
   //auto  collisionIndex2 = collisionIndex1 + 1;
   //auto  collisionIndex3 = collisionIndex1 + 2;
@@ -251,14 +245,26 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto charge         = charge_ps_d(pid);
 
 
-    Omega_h::Vector<3> b_field;
-    for(auto i=0; i<3; ++i)
-      b_field[i] = bFieldConst[i];
     
     if(!charge)
       return; 
 
+    
     auto posit_next     = p::makeVector3(pid, xtgt_ps_d);
+    Omega_h::Vector<3> b_field_radial;
+    Omega_h::Vector<3> b_field;
+
+    for(auto i=0; i<3; ++i)
+      b_field_radial[i] = bFieldConst[i];
+
+
+            o::Real theta = atan2(posit_next[1], posit_next[0]);
+            b_field[0] = cos(theta)*b_field_radial[0] - sin(theta)*b_field_radial[1];
+            b_field[1] = sin(theta)*b_field_radial[0] + cos(theta)*b_field_radial[1];
+            b_field[2] = b_field_radial[2];
+
+
+    
     auto eField         = p::makeVector3(pid, efield_ps_d);
     auto vel            = p::makeVector3(pid, vel_ps_d);
     //auto bField       = o::zero_vector<3>();
@@ -269,9 +275,9 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto perp1_dir      = o::zero_vector<3>();
     auto perp2_dir      = o::zero_vector<3>();
     auto pos2D          = o::zero_vector<3>();
-    pos2D[0]            = sqrt(posit[0]*posit[0] + posit[1]*posit[1]);
+    pos2D[0]            = sqrt(posit_next[0]*posit_next[0] + posit_next[1]*posit_next[1]);
     pos2D[1]            = 0;
-    pos2D[2]            = posit[2];
+    pos2D[2]            = posit_next[2];
 
     auto velIn = vel;
 
@@ -302,14 +308,6 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto velocityNorm   = Omega_h::norm(relvel);
     double drag  = -dt*nu_friction*velocityNorm/1.2;
 
-    //Temporary
-    // From IOnization recombination, use of indexing
-    //if(useGitrRnd) {
-    //    randGitr = testGitrPtclStepData[ptcl*testGNT*testGDof + iTimeStep*testGDof + testGIind];
-    //    randn = randGitr;        
-    //} 
-    //else
-    //    randn = rands[pid];
     double n1  = 0.5;
     double n2  = 0.5;
     double xsi = 0.75;
@@ -324,7 +322,12 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     double coeff_perp1 = cosXsi * sqrt(nu_deflection * dt * 0.5);
     double coeff_perp2 = sinXsi * sqrt(nu_deflection * dt * 0.5);
 
-        if(debug && ptcl==6)
+    double nuEdt=nu_energy*dt;
+          if (nuEdt < -1.0)
+              nuEdt = -1.0;
+
+          if(debug && ptcl==6)
+
     {
 
 
@@ -338,15 +341,36 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
 
       
     }
-    double nuEdt=nu_energy*dt;
-          if (nuEdt < -1.0)
-              nuEdt = -1.0;
+
+
+            if(1)
+          
+    {
+     
+      //printf("Position partcle %d for timestep %d is %.15e %.15e %.15e \n",iTimeStep, ptcl, posit[0],posit[1],posit[2]);
+      printf("Position partcle %d timestep %d is %.15e %.15e %.15e \n",ptcl, iTimeStep, posit_next[0],posit_next[1],posit_next[2]);
+      printf("The velocities partcle %d timestep %dare %.15e %.15e %.15e \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
+      //printf("vPartNorm nuEdt partcle %d for timestep %d is %.15e %.15e\n", ptcl, iTimeStep,Omega_h::norm(vel), nuEdt);
+      //printf("coeff_par parallel_direction partcle %d for timestep %d is %.15e %.15e %.15e %.15e\n", ptcl, iTimeStep, coeff_par,parallel_dir[0],parallel_dir[1],parallel_dir[2]);
+      //printf("coeff_perp1 coeff_perp2 partcle %d timestep %d is %.15e %.15e \n", ptcl, iTimeStep, coeff_perp1,coeff_perp2);
+      //printf("Perpendicuar directions1 partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, perp1_dir[0],perp1_dir[1],perp1_dir[2]);      
+      //printf("Perpendicuar directions2 partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, perp2_dir[0],perp2_dir[1],perp2_dir[2]);
+      //printf("velocity Collision partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, drag*relvel[0]/velocityNorm,drag*relvel[1]/velocityNorm,drag*relvel[2]/velocityNorm);
+      //printf("n2 is %.15e\n", n2);
+      
+  
+
+
+      
+    }
+
+
     //vel=Omega_h::norm(vel)*parallel_dir+drag*relvel/velocityNorm;// This was if only drag force is implemented.
     vel=Omega_h::norm(vel)*(1-0.5*nuEdt)*((1+coeff_par)*parallel_dir+abs(n2) * 
       (coeff_perp1 * perp1_dir + coeff_perp2 * perp2_dir))+drag*relvel/velocityNorm;
-    // printf("\n The velocity in %d iteration %d post collision are are %f %f %f \n",
-    //j,pid, vel[0], vel[1], vel[2],nu_friction);
 
+    printf("The velocities after updation from COULOMB collision partcle %d timestep %dare %.15e %.15e %.15e \n", ptcl, iTimeStep, vel[0],vel[1],vel[2]); 
+    
     vel_ps_d(pid,0)=vel[0];
     vel_ps_d(pid,1)=vel[1];
     vel_ps_d(pid,2)=vel[2];  

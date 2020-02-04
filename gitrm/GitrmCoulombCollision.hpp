@@ -358,10 +358,6 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
       //printf("velocity Collision partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, drag*relvel[0]/velocityNorm,drag*relvel[1]/velocityNorm,drag*relvel[2]/velocityNorm);
       //printf("n2 is %.15e\n", n2);
       
-  
-
-
-      
     }
 
 

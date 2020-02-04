@@ -255,7 +255,7 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
   return fxz;
 }
 
-*/
+
 //
 
 

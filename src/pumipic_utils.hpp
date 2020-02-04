@@ -254,8 +254,14 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
 
   return fxz;
 }
+
+*/
+//
+
+
 //*/
 /*
+
 OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
@@ -305,13 +311,11 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
     fx_z2 = ((gridXip1-dim1)*data[(i+(j+1)*nx)*nComp + comp] + 
             (dim1 - gridXi)*data[(i+1+(j+1)*nx)*nComp + comp])/dx; 
     fxz = ((gridZjp1-z)*fx_z1+(z - gridZj)*fx_z2)/dz;
-    printf("  fxz1,z2  %g %g  %g dim1 %g: %g %g %g %g \n", fx_z1, fx_z2, gridXip1, dim1, 
-		    data[(i+j*nx)*nComp + comp], data[(i+1+j*nx)*nComp + comp], data[(i+(j+1)*nx)*nComp + comp], data[(i+1+(j+1)*nx)*nComp + comp] ); 
+     
   }
-<<<<<<< Updated upstream
-=======
+  //printf("fxz1, z2:%g %g  dim1:%g  i, j:%d %d near points: %g %g %g %g \n", fx_z1, fx_z2, dim1, i, j, 
+  //      data[(i+j*nx)*nComp + comp], data[(i+1+j*nx)*nComp + comp], data[(i+(j+1)*nx)*nComp + comp], data[(i+1+(j+1)*nx)*nComp + comp] );
 
->>>>>>> Stashed changes
   if(debug)
     printf(" use2D:interp2D pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
       "gridz0 %g i %d j %d dx %g dz %g fxz %g \n",
@@ -492,7 +496,6 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0,
     nz, pos, cylSymm, 3, 0, debug);
   field[1] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 1, debug);
-
   field[2] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 2, debug);
   if(cylSymm) {

@@ -96,9 +96,9 @@ const GitrmParticles& gp, double dt)
     		//find out the gradients of the electron and ion temperatures at that particle poin
         p::interp2dVector(gradTi_d, grTiX0, grTiZ0, grTiDX, grTiDZ, grTiNX, grTiNZ, posit_next, gradti, true);
         p::interp2dVector(gradTe_d, grTeX0, grTeZ0, grTeDX, grTeDZ, grTeNX, grTeNZ, posit_next, gradte, true);
-        
 
-    
+
+
 
     		o::Real mu = amu /(background_amu+amu);
         o::Real alpha = 0.71*charge*charge;
@@ -110,6 +110,7 @@ const GitrmParticles& gp, double dt)
         dv_ITG[2] =1.602e-19*dt/(amu*MI)*beta*gradti[2]*b_unit[2];
 
         if (debug){
+
           printf("Ion_temp_grad particle %d timestep %d: %.16e %.16e %.16e \n",ptcl,iTimeStep, gradti[0], gradti[1], gradti[2]);
           printf("El_temp_grad particle %d timestep %.d: %.16e %.16e %.16e \n",ptcl,iTimeStep,gradte[0], gradte[1], gradte[2] );
           printf("Deltavs particle %d timestep %d: %.16e %.16e %.16e \n", ptcl,iTimeStep, dv_ITG[0], dv_ITG[1], dv_ITG[2]);
@@ -140,9 +141,6 @@ const GitrmParticles& gp, double dt)
         vel_ps_d(pid,2)=vel[2]+dv_ITG[2];
 
         printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15e %.15e %.15e \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2)); 
-     
-        
-
     	}
     };
     ps::parallel_for(ptcls, update_thermal);

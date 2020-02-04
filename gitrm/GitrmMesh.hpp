@@ -47,8 +47,8 @@ const o::LO BIASED_SURFACE = 1;
 const o::Real CONSTANT_EFIELD0 = 0;
 const o::Real CONSTANT_EFIELD1 = 0;
 const o::Real CONSTANT_EFIELD2 = 0;
-const o::Real CONSTANT_BFIELD0 = 0;
-const o::Real CONSTANT_BFIELD1 = 0;
+const o::Real CONSTANT_BFIELD0 = 5;
+const o::Real CONSTANT_BFIELD1 = 5;
 const o::Real CONSTANT_BFIELD2 = -0.08;
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };

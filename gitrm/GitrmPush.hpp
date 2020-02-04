@@ -203,6 +203,7 @@ inline void gitrm_borisMove(PS* ptcls,
       auto vel = p::makeVector3(pid, vel_ps);
       auto pos = p::makeVector3(pid, pos_ps);
       auto charge = charge_ps(pid);
+      auto bField_radial= o::zero_vector<3>();
       auto bField = o::zero_vector<3>();
       // for neutral tracking skip gitrm_calculateE()
       auto eField = p::makeVector3(pid, efield_ps);
@@ -216,7 +217,12 @@ inline void gitrm_borisMove(PS* ptcls,
       
       if(useConstantBField) {
         for(auto i=0; i<3; ++i)
-          bField[i] = bFieldConst[i];
+          bField_radial[i] = bFieldConst[i];
+          o::Real theta = atan2(pos[1], pos[0]);  
+            bField[0] = cos(theta)*bField_radial[0] - sin(theta)*bField_radial[1];
+            bField[1] = sin(theta)*bField_radial[0] + cos(theta)*bField_radial[1];
+            bField[2] = bField_radial[2];
+            
       } else if(use3dField) {
         auto bcc = o::zero_vector<4>();
         p::findBCCoordsInTet(coords, mesh2verts, pos, elem, bcc);
@@ -230,7 +236,7 @@ inline void gitrm_borisMove(PS* ptcls,
         pos[0] = rad + shiftB; // D3D 1.6955m.
         pos[1] = 0;
         p::interp2dVector(BField_2d,  bxz[0], bxz[1], bxz[2], bxz[3], bGridNx,
-          bGridNz, pos, bField, false);
+          bGridNz, pos, bField, true);
       }
       //TODO move to unit tests
       if(testExample) {
@@ -268,6 +274,14 @@ inline void gitrm_borisMove(PS* ptcls,
       vel = vel + qpE;
 
       // Next position and velocity
+      if (ptcl==7)
+      {
+      printf("Inside push the original position to which increment is t be made ptcl %d is %.15e %.15e %.15e\n",ptcl, pos[0],pos[1],pos[2]);
+      printf("Inside push the velocity increment is to be made ptcl %d is %.15e %.15e %.15e\n", ptcl, vel[0],vel[1],vel[2]);
+      printf("Magnetic field %.15e %.15e %.15e\n",bField[0], bField[1], bField[2]);
+      printf("Electric field %.15e %.15e %.15e\n",eField[0], eField[1], eField[2]);
+      
+      }
       auto tgt = pos + vel * dTime;
       tgt_ps(pid, 0) = tgt[0];
       tgt_ps(pid, 1) = tgt[1];

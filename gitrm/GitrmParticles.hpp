@@ -103,6 +103,12 @@ public:
   int testGitrOptDiffusion = 0;
   int testGitrOptCollision = 0;
   int testGitrOptSurfaceModel = 0;
+
+  bool ranIonization = false;
+  bool ranRecombination = false;
+  bool ranCoulombCollision = false;
+  bool ranDiffusion = false;
+  bool ranSurfaceReflection = false;
 };
 
 namespace gitrm {

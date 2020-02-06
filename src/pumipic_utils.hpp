@@ -1,6 +1,5 @@
 #ifndef PUMIPIC_UTILS_HPP
 #define PUMIPIC_UTILS_HPP
-
 #include <iostream>
 #include <cmath>
 #include <utility>
@@ -423,8 +422,9 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
 
 OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0, 
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
-  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
+  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false, int* ptcl=nullptr) {
   bool debug = false;
+  if(ptcl) debug = true;
   field[0] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx,
     nz, pos, cylSymm, 3, 0, debug);
   field[1] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, 
@@ -434,11 +434,8 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
   auto f1 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0, debug);
   auto f2 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1, debug);
   auto f3 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2, debug);
-  if(debug)
-    printf(" %g : %g %g : %g  %g : %g \n", field[0], f1, field[1], f2, field[2], f3);
-
   if(cylSymm) {
-    o::Real theta = atan2(pos[1], pos[0]);  
+    auto theta = atan2(static_cast<double>(pos[1]), static_cast<double>(pos[0]));  
     auto field0 = field[0];
     auto field1 = field[1]; 
     field[0] = cos(theta)*field0 - sin(theta)*field1;
@@ -449,9 +446,9 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
 OMEGA_H_DEVICE o::Vector<3> centroid_of_triangle(const o::Vector<3>& va,
   const o::Vector<3>& vb, const o::Vector<3>& vc) {
   o::Vector<3> pos;
-  pos[0] = va[0] + 2.0/3.0*(vb[0] + 0.5*(vc[0] - vb[0]) - va[0]);
-  pos[1] = va[1] + 2.0/3.0*(vb[1] + 0.5*(vc[1] - vb[1]) - va[1]);
-  pos[2] = va[2] + 2.0/3.0*(vb[2] + 0.5*(vc[2] - vb[2]) - va[2]);
+  pos[0] = va[0] + 0.666666667*(vb[0] + 0.5*(vc[0] - vb[0]) - va[0]); //2.0/3.0
+  pos[1] = va[1] + 0.666666667*(vb[1] + 0.5*(vc[1] - vb[1]) - va[1]);
+  pos[2] = va[2] + 0.666666667*(vb[2] + 0.5*(vc[2] - vb[2]) - va[2]);
   return pos;  
 }
 

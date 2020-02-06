@@ -38,7 +38,7 @@ void GitrmSurfaceModel::initSurfaceModelData(std::string ncFile, bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "AveSputtYld", 1); 
   mesh.add_tag<o::Int>(o::FACE, "SputtYldCount", 1);
   //mesh.add_tag<o::Int>(o::FACE, "IsSurface", 1);
-  //TODO replace currently used tag "piscesBeadCylinder_inds" 
+  //TODO replace currently used tag "DetectorSurfaceIndex" 
 }
 
 

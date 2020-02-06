@@ -66,6 +66,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
     GitrmIonizeRecombine& gir, GitrmSurfaceModel& sm, int iter, 
     o::Write<o::LO>& data_d, bool debug=false) {
   //auto& picparts = gm.picparts;
+  double dt1=5e-9;
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   PS* ptcls = gp.ptcls;
@@ -80,7 +81,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   auto pid_ps = ptcls->get<2>();
 
   bool isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
-    elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, debug);
+    elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
   assert(isFound);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("updateGitrmData");
@@ -88,10 +89,9 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   if(gir.chargedPtclTracking) {
     gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
     gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
-    //gitrm_surfaceReflection_test(ptcls, sm, gp, gm, elem_ids, false);
   }
   bool resetFids = true;
-  storePiscesData(mesh, gp, data_d, iter, resetFids, false);
+  updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
@@ -137,8 +137,8 @@ int main(int argc, char** argv) {
   {
     if(comm_rank == 0)
       std::cout << "Usage: " << argv[0] 
-        << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file><surf_file>"
-        << " [<nPtcls><nIter> <histInterval> <gitrDataInFileName> ]\n";
+        << " <mesh> <owners_file> <ptcls_file> <prof_file> <rate_file><surf_file>" 
+        << " <thermal_gradient_file> [<nPtcls><nIter> <histInterval> <gitrDataInFileName> ]\n";
     exit(1);
   }
   bool piscesRun = true; // add as argument later
@@ -196,34 +196,37 @@ int main(int argc, char** argv) {
   std::string ptclSource = argv[3];
   std::string profFile = argv[4];
   std::string ionizeRecombFile = argv[5];
-  std::string bFile=""; //TODO
+  std::string bFile="bFile"; //TODO
   std::string surfModelFile = argv[6];
-
+  std::string thermGradientFile = argv[7];
   if (!comm_rank) {
     if(!chargedTracking)
       printf("WARNING: neutral particle tracking is ON \n");
     printf(" Mesh file %s\n", argv[1]);
     printf(" Particle Source file %s\n", ptclSource.c_str());
-    printf(" Profile file %s\n", profFile.c_str());
+    printf(" Temp Density Profile file %s\n", profFile.c_str());
     printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
+    printf(" Gradient profile File %s\n", thermGradientFile.c_str());
+
   }
   int numPtcls = 1;
   int histInterval = 0;
   double dTime = 5e-9; //pisces:5e-9 for 100,000 iterations
   int NUM_ITERATIONS = 1; //higher beads needs >10K
   
-  if(argc > 7)
-    numPtcls = atoi(argv[7]);
   if(argc > 8)
-    NUM_ITERATIONS = atoi(argv[8]);
-  if(argc > 9) {
-    histInterval = atoi(argv[9]);
+    numPtcls = atoi(argv[8]);
+  if(argc > 9)
+    NUM_ITERATIONS = atoi(argv[9]);
+  if(argc > 10) {
+    histInterval = atoi(argv[10]);
     if(histInterval > NUM_ITERATIONS)
       histInterval = NUM_ITERATIONS;
   }
   std::string gitrDataFileName;
-  if(argc > 10)
-    gitrDataFileName = argv[10];
+  if(argc > 11)
+    gitrDataFileName = argv[11];
+
   if (!comm_rank)
     printf(" gitr comparison DataFile %s\n", gitrDataFileName.c_str());
   
@@ -236,7 +239,7 @@ int main(int argc, char** argv) {
   }
 
   if(piscesRun)
-    gm.markPiscesCylinder(true);
+    gm.markDetectorSurfaces(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   if(!comm_rank)
@@ -252,21 +255,12 @@ int main(int argc, char** argv) {
   }
   auto* ptcls = gp.ptcls;
   const auto psCapacity = ptcls->capacity();
+  gm.initBField(bFile); 
 
-  if(!piscesRun) {
-    std::string bFile = "get_from_argv";
-    double shiftB = 0; // non-pisces= 1.6955
-    gm.initBField(bFile, shiftB); 
-  }
-
-  printf("Adding Tags And Loading Profile Data %s\n", profFile.c_str());
-  OMEGA_H_CHECK(!profFile.empty());
   auto initFields = gm.addTagsAndLoadProfileData(profFile, profFile);
-
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile, chargedTracking);
 
-  printf("Initializing Boundary faces\n");
   auto initBdry = gm.initBoundaryFaces(initFields, false);
   printf("Preprocessing: dist-to-boundary faces\n");
   int nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
@@ -376,7 +370,7 @@ int main(int argc, char** argv) {
   if(piscesRun) {
     std::string fname("piscesCounts.txt");
     printGridData(data_d, fname, "piscesDetected");
-    gm.markPiscesCylinderResult(data_d);
+    gm.writeResultAsMeshTag(data_d);
   }
   if(histInterval >0) {
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 

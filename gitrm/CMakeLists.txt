@@ -5,6 +5,8 @@ set(HEADERS
   GitrmParticles.hpp
   GitrmInputOutput.hpp
   GitrmSurfaceModel.hpp
+  # GitrmCoulombCollision.hpp
+  # GitrmThermalForce.hpp
 )
 
 set(SOURCES

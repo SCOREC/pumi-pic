@@ -133,7 +133,7 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
   //#endif
 
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.ionizeTempGridMin;
   auto gridD0 = gir.ionizeDensGridMin;
@@ -274,7 +274,7 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
   //#endif
 
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.recombTempGridMin;
   auto gridD0 = gir.recombDensGridMin;
@@ -329,19 +329,20 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
         if(use2DRatesData) {
           //cylindrical symmetry, height (z) is same.
           // projecting point to y=0 plane, since 2D data is on const-y plane.
+          bool cylSymm = true;
           auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-            dzDens, nxDens, nzDens, pos, false,1,0,false);
+            dzDens, nxDens, nzDens, pos, cylSymm,1,0,false);
           auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
-            dzTemp, nxTemp, nzTemp, pos, false,1,0,false);
+            dzTemp, nxTemp, nzTemp, pos, cylSymm,1,0,false);
 
           if(debug)
             printf("Recomb Dens: ptcl %d x0 %g z0 %g dx %g dz %g nx %d " 
             " nz %d \n", ptcl, x0Dens, z0Dens, dxDens, dzDens, nxDens, nzDens);
           if(debug)
             printf("Recomb Temp: ptcl %d x0 %g z0 %g dx %g dz %g nx %d " 
-            " nz %d \n", x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);  
+            " nz %d \n", ptcl, x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);  
           if(debug)
-            printf("Recomb point: temp2D %g dens2D %g t3D %g d3D %g pos %g %g %g \n", 
+            printf("Recomb point: ptcl %d temp2D %g dens2D %g t3D %g d3D %g pos %g %g %g \n", 
               ptcl, temp, dens, tlocal, nlocal, pos[0], pos[1], pos[2]);
           nlocal = dens;
           tlocal = temp;

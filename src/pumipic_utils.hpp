@@ -196,7 +196,7 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
  *  @param[in] comp, nth component, out of degree of freedom
  *  @return value corresponding to comp
  */
-// /*
+ /*
   OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
   const o::Real dz, const o::LO nx, const o::LO nz, 
@@ -255,12 +255,11 @@ OMEGA_H_DEVICE void printPtclPathEndPointsAndTet(o::LO id, o::LO elem,
   return fxz;
 }
 
-
-//
+*/
 
 
 //*/
-/*
+
 
 OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
   const o::Real gridx0, const o::Real gridz0, const o::Real dx, 
@@ -322,7 +321,7 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
       pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, i, j, dx, dz, fxz);
   return fxz;
 } 
-*/
+
 /*
 //TODO make unit test interpolate2dField(
 index,data:  418  1.82241e+18 419 1.55216e+18  518 1.82241e+18 519 1.55216e+18  
@@ -490,7 +489,7 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
 
 OMEGA_H_DEVICE void interp2dVector (const o::Reals &data3, const o::Real gridx0, 
   const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
-  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false) {
+  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = true) {
   bool debug = false;
   field[0] = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 0, debug);

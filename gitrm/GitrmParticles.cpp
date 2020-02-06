@@ -622,6 +622,31 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   return stat;
 }
 
+//timestep >0
+void GitrmParticles::checkCompatibilityWithGITRflags(int timestep) {
+  if(timestep==0) 
+    printf("ERROR: checkCompatibility is done before variables set\n");
+  OMEGA_H_CHECK(timestep>0);
+  if(ranIonization||ranRecombination)
+    OMEGA_H_CHECK(testGitrOptIoniRec);
+  else
+    OMEGA_H_CHECK(!testGitrOptIoniRec);
+
+  if(ranCoulombCollision)
+    OMEGA_H_CHECK(testGitrOptCollision);
+  else
+    OMEGA_H_CHECK(!testGitrOptCollision);
+
+  if(ranDiffusion)
+    OMEGA_H_CHECK(testGitrOptDiffusion);
+  else
+    OMEGA_H_CHECK(!testGitrOptDiffusion);
+  if(ranSurfaceReflection)
+    OMEGA_H_CHECK(testGitrOptSurfaceModel);
+  else
+    OMEGA_H_CHECK(!testGitrOptSurfaceModel);
+}
+
 void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
   o::HostRead<o::Real>dh(data);
   printf("ParticleSourcePositions: nptcl= %d\n", nPtcls);

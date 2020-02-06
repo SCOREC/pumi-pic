@@ -333,6 +333,10 @@ int main(int argc, char** argv) {
     if(comm_rank == 0)// && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
+
+    if(iter==1)
+      gp.checkCompatibilityWithGITRflags(iter); //TODO debug
+
     if(gir.chargedPtclTracking) {
       gitrm_findDistanceToBdry(gp, gm, 0);
       gitrm_calculateE(gp, *mesh, false, gm);

@@ -73,6 +73,7 @@ public:
   
   int readGITRPtclStepDataNcFile(const std::string& ncFileName, 
   int& maxNPtcls, int& numPtclsRead, bool debug=false);
+  void checkCompatibilityWithGITRflags(int timestep);
 
   o::Real timeStep;
   PS* ptcls;

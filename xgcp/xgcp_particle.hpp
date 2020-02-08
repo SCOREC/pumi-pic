@@ -74,6 +74,7 @@ namespace xgcp {
     updatePtclPositions(ptcls);
     const int ps_capacity = ptcls->capacity();
     auto xs = ptcls->template get<PTCL_COORDS>();
+    auto pids1 = ptcls->template get<PTCL_IDS>();
     //Gather new element and new process for migrate/rebuild
     PS_I::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
     PS_I::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
@@ -94,11 +95,13 @@ namespace xgcp {
         int new_elem = elem_ids[pid];
         ps_elem_ids(pid) = new_elem;
         //Calculate new process by each process dimension
-        const int mesh_rank = new_elem != -1 ? mr_local : elm_owners[new_elem];
+        const int mesh_rank = new_elem == -1 || is_safe[new_elem]
+          ? mr_local : elm_owners[new_elem];
         const int torodial_rank = xs(pid,2) * nplanes / (2 * M_PI);
         const int group_rank = gr_local;
-        ps_process_ids(pid) = getWorldRank(torodial_rank, mesh_rank, group_rank,
-                                           ts_local, ms_local, gs_local);
+        ps_process_ids(pid) = new_elem != -1 ? getWorldRank(torodial_rank, mesh_rank,
+                                                            group_rank, ts_local,
+                                                            ms_local, gs_local) : comm_rank;
       }
     };
     ps::parallel_for(ptcls, lamb);

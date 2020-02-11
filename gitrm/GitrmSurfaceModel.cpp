@@ -3,35 +3,43 @@
 
 GitrmSurfaceModel::GitrmSurfaceModel(GitrmMesh& gm, std::string ncFile):
   gm(gm), mesh(gm.mesh),  ncFile(ncFile) { 
-  detectorSurfaceMaterialModelIds = gm.detectorSurfaceMaterialModelIds;
+  surfaceAndMaterialModelIds = gm.surfaceAndMaterialModelIds;
   initSurfaceModelData(ncFile, true);
 }
 
-GitrmSurfaceModel::~GitrmSurfaceModel() {
-}
-
+//includes only sirfaces to be processed
 void GitrmSurfaceModel::setFaceId2SurfaceIdMap() {
   auto nf = mesh.nfaces();
-  auto surfModelIds = o::LOs(detectorSurfaceMaterialModelIds);
+  auto surfModelIds = o::LOs(surfaceAndMaterialModelIds);
   auto numIds = surfModelIds.size();
-  const auto sideIsExposed = o::mark_exposed_sides(&mesh);
+  const auto side_is_exposed = o::mark_exposed_sides(&mesh);
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
-  o::Write<o::LO> surfInds(nf, -1, "surfaceIndex");
+  o::Write<o::LO> surfMarked(nf, -1, "surfMarked");
   o::Write<o::LO> total(1,0, "total");
   auto lambda = OMEGA_H_LAMBDA(o::LO fid) {
-    if(!sideIsExposed[fid])
-       return;
+    if(!side_is_exposed[fid])
+      return;
+    //if surface to be processed
     for(auto id=0; id < numIds; ++id) {
       if(surfModelIds[id] == faceClassIds[fid]) {
-        auto prev = Kokkos::atomic_fetch_add(&(total[0]), 1);
-        surfInds[fid] = prev;
+        Kokkos::atomic_fetch_add(&(total[0]), 1);
+        surfMarked[fid] = 1;
       }
     }
   };
   o::parallel_for(nf, lambda, "makeSurfaceIndMap");
   auto count_h = o::HostWrite<o::LO>(total);
   numDetectorSurfaceFaces = count_h[0];
-  mesh.add_tag<o::LO>(o::FACE, "SurfaceIndex", 1, o::LOs(surfInds));
+  auto surfInds_h = o::HostWrite<o::LO>(nf);
+  auto surfMarked_h = o::HostRead<o::LO>(surfMarked);
+  int bid = 0;
+  for(int fid=0; fid< mesh.nfaces(); ++fid) {
+    if(surfMarked_h[fid]) {
+      surfInds_h[fid] = bid;
+      ++bid;
+    }
+  }
+  mesh.add_tag<o::LO>(o::FACE, "SurfaceIndex", 1, o::LOs(surfInds_h.write()));
 }
 
 void GitrmSurfaceModel::initSurfaceModelData(std::string ncFile, bool debug) {
@@ -70,6 +78,90 @@ void GitrmSurfaceModel::initSurfaceModelData(std::string ncFile, bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "GrossDeposition", 1, o::Reals(nf));
   mesh.add_tag<o::Real>(o::FACE, "GrossErosion", 1, o::Reals(nf));
   mesh.add_tag<o::Real>(o::FACE, "AveSputtYld", 1, o::Reals(nf)); 
+}
+
+template<typename T>
+void GitrmSurfaceModel::make2dCDF(const int nX, const int nY, const int nZ, 
+   const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf) {
+  assert(distribution.size() == nX*nY*nZ);
+  assert(cdf.size() == nX*nY*nZ);
+  int index = 0;
+  for(int i=0;i<nX;i++) {
+    for(int j=0;j<nY;j++) {
+      for(int k=0;k<nZ;k++) {
+        index = i*nY*nZ + j*nZ + k;
+        if(k==0)
+          cdf[index] = distribution[index];
+        else
+          cdf[index] = cdf[index-1] + distribution[index];
+      }  
+    }  
+  }
+  for(int i=0;i<nX;i++) {
+    for(int j=0;j<nY;j++) {
+      if(cdf[i*nY*nZ + (j+1)*nZ - 1] > 0) {
+        for(int k=0;k<nZ;k++) {  
+          index = i*nY*nZ + j*nZ + k;
+          cdf[index] = cdf[index] / cdf[index-k+nZ-1];
+        }
+      }
+    }
+  }
+}
+
+//TODO make DEVICE
+template<typename T>
+T GitrmSurfaceModel::interp1dUnstructured(const T samplePoint, const int nx, 
+   const T max_x, const T* data, int& lowInd) {
+  int done = 0;
+  int low_index = 0;
+  T value = 0;
+  for(int i=0;i<nx;i++) {
+    if(done == 0) {
+      if(samplePoint < data[i]) {
+        done = 1;
+        low_index = i-1;
+      }   
+    }
+  }
+  value = ((data[low_index+1] - samplePoint)*low_index*max_x/nx
+        + (samplePoint - data[low_index])*(low_index+1)*max_x/nx)/
+          (data[low_index+1]- data[low_index]);
+  lowInd = low_index;
+  if(low_index < 0) {
+    lowInd = 0;
+    if(samplePoint > 0) {
+      value = samplePoint;
+    } else {
+      value = 0;
+    }
+  }
+  if(low_index >= nx) {
+    lowInd = nx-1;
+    value = max_x;
+  }
+  return value;
+}
+
+//TODO convert to device function
+template<typename T>
+void GitrmSurfaceModel::regrid2dCDF(const int nX, const int nY, const int nZ, 
+   const o::HostWrite<T>& xGrid, const int nNew, const T maxNew, 
+   const o::HostWrite<T>& cdf, o::HostWrite<T>& cdf_regrid) {
+  int lowInd = 0;
+  int index = 0;
+  float spline = 0.0;
+  for(int i=0;i<nX;i++) {
+    for(int j=0;j<nY;j++) {
+      for(int k=0;k<nZ;k++) {
+        index = i*nY*nZ + j*nZ + k;
+        spline = interp1dUnstructured(xGrid[k], nNew, maxNew, &(cdf.data()[index-k]), lowInd);
+        if(isnan(spline) || isinf(spline)) 
+          spline = 0.0;
+        cdf_regrid[index] = spline;  
+      }  
+    }
+  }
 }
 
 void GitrmSurfaceModel::prepareSurfaceModelData() {
@@ -192,10 +284,10 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 void GitrmSurfaceModel::getConfigData(std::string ncFileName) {
   //TODO get from config file
   //collect data for analysis/plot
-  nEnDist = 100;
+  nEnDist = 50; //100 //TODO FIXME
   en0Dist = 0.0;
   enDist = 1000.0;
-  nAngDist = 90; 
+  nAngDist = 45; //90
   ang0Dist = 0.0;
   angDist = 90.0; 
   //from NC file ftridynSelf.nc
@@ -285,101 +377,13 @@ void GitrmSurfaceModel::getSurfaceModelData(const std::string fileName,
   }
 }
 
-
-template<typename T>
-void GitrmSurfaceModel::make2dCDF(const int nX, const int nY, const int nZ, 
-   const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf) {
-  bool debug = false;
-  if(debug)
-    printf(" cdf: nx,y,z %d %d %d\n", nX,nY,nZ);
-  assert(distribution.size() == nX*nY*nZ);
-  assert(cdf.size() == nX*nY*nZ);
-  int index = 0;
-  for(int i=0;i<nX;i++) {
-    for(int j=0;j<nY;j++) {
-      for(int k=0;k<nZ;k++) {
-        index = i*nY*nZ + j*nZ + k;
-        if(k==0)
-          cdf[index] = distribution[index];
-        else
-          cdf[index] = cdf[index-1] + distribution[index];
-      }  
-    }  
-  }
-  for(int i=0;i<nX;i++) {
-    for(int j=0;j<nY;j++) {
-      if(cdf[i*nY*nZ + (j+1)*nZ - 1] > 0) {
-        for(int k=0;k<nZ;k++) {  
-          index = i*nY*nZ + j*nZ + k;
-          cdf[index] = cdf[index] / cdf[index-k+nZ-1];
-        }
-      }
-    }
-  }
-}
-
-//TODO make DEVICE
-template<typename T>
-T GitrmSurfaceModel::interp1dUnstructured(const T samplePoint, const int nx, 
-   const T max_x, const T* data, int& lowInd) {
-  int done = 0;
-  int low_index = 0;
-  T value = 0;
-  for(int i=0;i<nx;i++) {
-    if(done == 0) {
-      if(samplePoint < data[i]) {
-        done = 1;
-        low_index = i-1;
-      }   
-    }
-  }
-  value = ((data[low_index+1] - samplePoint)*low_index*max_x/nx
-        + (samplePoint - data[low_index])*(low_index+1)*max_x/nx)/
-          (data[low_index+1]- data[low_index]);
-  lowInd = low_index;
-  if(low_index < 0) {
-    lowInd = 0;
-    if(samplePoint > 0) {
-      value = samplePoint;
-    } else {
-      value = 0;
-    }
-  }
-  if(low_index >= nx) {
-    lowInd = nx-1;
-    value = max_x;
-  }
-  return value;
-}
-
-//TODO convert to device function
-template<typename T>
-void GitrmSurfaceModel::regrid2dCDF(const int nX, const int nY, const int nZ, 
-   const o::HostWrite<T>& xGrid, const int nNew, const T maxNew, 
-   const o::HostWrite<T>& cdf, o::HostWrite<T>& cdf_regrid) {
-  int lowInd = 0;
-  int index = 0;
-  float spline = 0.0;
-  for(int i=0;i<nX;i++) {
-    for(int j=0;j<nY;j++) {
-      for(int k=0;k<nZ;k++) {
-        index = i*nY*nZ + j*nZ + k;
-        spline = interp1dUnstructured(xGrid[k], nNew, maxNew, &(cdf.data()[index-k]), lowInd);
-        if(isnan(spline) || isinf(spline)) 
-          spline = 0.0;
-        cdf_regrid[index] = spline;  
-      }  
-    }
-  }
-}
-
 void GitrmSurfaceModel::writeOutSurfaceData(std::string fileName) {
-
+/*
   OutputNcFileFieldStruct outStruct({"nSurfaces", "nEnergies", "nAngles"}, 
     {"grossDeposition", "grossErosion", "aveSpyl", "spylCounts", "surfaceNumber",
      "sumParticlesStrike", "sumWeightStrike"}, {nSurfaces, nEdist, nAdist});
   writeOutputNcFile(ptclsHistoryData, numPtcls, dof, outStruct, outNcFileName);
- /* 
+  
     NcFile ncFile1(fileName, NcFile::replace);
     NcDim nc_nLines = ncFile1.addDim("nSurfaces", nSurfaces);
     vector<NcDim> dims1;

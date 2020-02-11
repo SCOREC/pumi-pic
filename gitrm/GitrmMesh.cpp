@@ -14,18 +14,36 @@ namespace p = pumipic;
 GitrmMesh::GitrmMesh(o::Mesh& m): 
   mesh(m) {
   //mesh ht 50cm, rad 10cm. Top lid of small sylinder not included
-  //TODO get from config 
   detectorSurfaceModelIds = o::HostWrite<o::LO>{268, 593, 579, 565, 551, 537, 
     523, 509, 495,481, 467,453, 439, 154};
-  detectorSurfaceMaterialModelIds = o::HostWrite<o::LO>{268, 593, 579, 565, 551, 537, 
-    523, 509, 495,481, 467,453, 439, 154, 150};
+  //top of inner cylinder and top lid of tower included
+  surfaceAndMaterialModelIds = o::HostWrite<o::LO>{268, 593, 579, 565, 
+    551, 537, 523, 509, 495,481, 467,453, 439, 154, 150, 138};
   OMEGA_H_CHECK(!exists);
   exists = true;
+  setFaceId2BdryFaceIdMap();
+}
+
+//all boundary faces, ordered
+void GitrmMesh::setFaceId2BdryFaceIdMap() {
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  int bid = 0;
+  auto bdryFaces_h = o::HostWrite<o::LO>(mesh.nfaces());
+  auto exposed = o::HostRead<o::Byte>(side_is_exposed);
+  for(int fid=0; fid< mesh.nfaces(); ++fid) {
+    if(exposed[fid]) {
+      bdryFaces_h[fid] = bid;
+      ++bid;
+    } else {
+      bdryFaces_h[fid] = -1;
+    }
+  };
+  bdryFaceOrderedIds = o::LOs(bdryFaces_h.write());
+  nbdryFaces = bid;
 }
 
 void GitrmMesh::load3DFieldOnVtxFromFile(const std::string tagName, 
-   const std::string &file, Field3StructInput& fs, o::Reals& readInData_d, 
-   const o::Real shift) {
+   const std::string &file, Field3StructInput& fs, o::Reals& readInData_d) {
   o::LO debug = 0;
   std::cout<< "Loading " << tagName << " from " << file << " on vtx\n" ;
   //processFieldFileFS3(file, fs, debug);
@@ -52,15 +70,8 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string tagName,
       pos[j] = coords[3*iv+j];
     if(debug && iv < 5)
       printf(" iv:%d %.5f %.5f  %.5f \n", iv, pos[0], pos[1], pos[2]);
-    
-    //cylindrical symmetry, height (z) is same.
-    auto rad = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
-    // projecting point to y=0 plane, since 2D data is on const-y plane.
-    // meaningless to include non-zero y coord of target plane.
-    pos[0] = rad + shift;
-    pos[1] = 0;
-    // cylindrical symmetry = false, since already projected onto y=0 plane
-    p::interp2dVector(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, fv, false);
+    bool cylSymm = true;
+    p::interp2dVector(readInData_d, rMin, zMin, dr, dz, nR, nZ, pos, fv, cylSymm);
     for(o::LO j=0; j<3; ++j){ //components
       tag_d[3*iv+j] = fv[j]; 
 
@@ -78,23 +89,34 @@ void GitrmMesh::load3DFieldOnVtxFromFile(const std::string tagName,
 
 // TODO Remove Tags after use ?
 // TODO pass parameters in a compact form, libconfig ?
-void GitrmMesh::initBField(const std::string &bFile, const o::Real shiftB) {
-  mesh2Bfield2Dshift = shiftB;
-  mesh.add_tag<o::Real>(o::VERT, "BField", 3);
-  // set bt=0. Pisces BField is perpendicular to W target base plate.
-  Field3StructInput fb({"br", "bt", "bz"}, {"gridR", "gridZ"}, {"nR", "nZ"});
-  load3DFieldOnVtxFromFile("BField", bFile, fb, Bfield_2d, mesh2Bfield2Dshift); 
-  
-  bGridX0 = fb.getGridMin(0);
-  bGridZ0 = fb.getGridMin(1);
-  bGridNx = fb.getNumGrids(0);
-  bGridNz = fb.getNumGrids(1);
-  bGridDx = fb.getGridDelta(0);
-  bGridDz = fb.getGridDelta(1);
+void GitrmMesh::initBField(const std::string &bFile) {
+  if(USE_CONSTANT_BFIELD) {
+    printf("Setting constant BField\n");
+    auto bField_h = o::HostWrite<o::Real>({CONSTANT_BFIELD0,
+     CONSTANT_BFIELD1, CONSTANT_BFIELD2});
+    Bfield_2d = o::Reals(bField_h.write());
+    bGridNx = 1;
+    bGridNz = 1;
+    bGridX0 = 0;
+    bGridZ0 = 0;
+    bGridDx = 0;
+    bGridDz = 0;
+  }else {
+    mesh.add_tag<o::Real>(o::VERT, "BField", 3);
+    // set bt=0. Pisces BField is perpendicular to W target base plate.
+    Field3StructInput fb({"br", "bt", "bz"}, {"gridR", "gridZ"}, {"nR", "nZ"});
+    load3DFieldOnVtxFromFile("BField", bFile, fb, Bfield_2d); 
+    bGridX0 = fb.getGridMin(0);
+    bGridZ0 = fb.getGridMin(1);
+    bGridNx = fb.getNumGrids(0);
+    bGridNz = fb.getNumGrids(1);
+    bGridDx = fb.getGridDelta(0);
+    bGridDz = fb.getGridDelta(1);
+  }
 }
 
 void GitrmMesh::loadScalarFieldOnBdryFacesFromFile(const std::string tagName, 
-  const std::string &file, Field3StructInput& fs, const o::Real shift, int debug) {
+  const std::string &file, Field3StructInput& fs, int debug) {
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -127,19 +149,13 @@ void GitrmMesh::loadScalarFieldOnBdryFacesFromFile(const std::string tagName,
       tag_d[fid] = 0;
       return;
     }
-    // TODO storing fields at centroid may not be best for long tets.
     auto pos = p::face_centroid_of_tet(fid, coords, face_verts);
-    //cylindrical symmetry. Height (z) is same.
-    auto rad = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
-    // projecting point to y=0 plane, since 2D data is on const-y plane.
-    pos[0] = rad + shift; 
-    pos[1] = 0;
     if(debug)
       printf("fill2:: %f %f %f %f %d %d %f %f %f\n", rMin, zMin, dr, dz, 
           nR, nZ, pos[0], pos[1], pos[2]);
-    //Cylindrical symmetry true, in case the above projection is removed.
+    bool cylSymm = true;
     o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
-      nR, nZ, pos, true, 1, 0, debug);
+      nR, nZ, pos, cylSymm, 1, 0, debug);
     tag_d[fid] = val; 
   };
   o::parallel_for(mesh.nfaces(), fill, "Fill_face_tag");
@@ -149,9 +165,8 @@ void GitrmMesh::loadScalarFieldOnBdryFacesFromFile(const std::string tagName,
  
 void GitrmMesh::load1DFieldOnVtxFromFile(const std::string tagName, 
   const std::string& file, Field3StructInput& fs, o::Reals& readInData_d, 
-  o::Reals& tagData, const o::Real shift, int debug) {
+  o::Reals& tagData, int debug) {
   std::cout<< "Loading " << tagName << " from " << file << " on vtx\n" ;
-  //processFieldFileFS3(file, fs, debug);
   readInputDataNcFileFS3(file, fs, debug);
   int nR = fs.getNumGrids(0);
   int nZ = fs.getNumGrids(1);
@@ -181,15 +196,9 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string tagName,
     for(o::LO j=0; j<3; ++j){
       pos[j] = coords[3*iv+j];
     }
-    //NOTE modifying positions in the following
-    //cylindrical symmetry.Height (z) is same.
-    auto rad = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
-    // projecting point to y=0 plane, since 2D data is on const-y plane.
-    // meaningless to include non-zero y coord of target plane.
-    pos[0] = rad + shift;
-    pos[1] = 0;
-        o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
-      nR, nZ, pos, true, 1, 0, false); //last debug
+    bool cylSymm = true;
+    o::Real val = p::interpolate2dField(readInData_d, rMin, zMin, dr, dz, 
+      nR, nZ, pos, cylSymm, 1, 0, false); //last debug
     tag_d[iv] = val; 
   };
   o::parallel_for(mesh.nverts(), fill, "Fill Tag");
@@ -198,7 +207,7 @@ void GitrmMesh::load1DFieldOnVtxFromFile(const std::string tagName,
 }
 
 bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile, 
-  const std::string &profileDensityFile) {
+  const std::string &profileDensityFile, const std::string &profileGradientFile) {
   mesh.add_tag<o::Real>(o::FACE, "ElDensity", 1);
   mesh.add_tag<o::Real>(o::FACE, "IonDensity", 1); //=ni 
   mesh.add_tag<o::Real>(o::FACE, "IonTemp", 1);
@@ -212,7 +221,7 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
 
   Field3StructInput fdv({"ni"}, {"gridR", "gridZ"}, {"nR", "nZ"});   
   load1DFieldOnVtxFromFile("IonDensityVtx", profileDensityFile, fdv, 
-    densIon_d, densIonVtx_d, 0, 0);
+    densIon_d, densIonVtx_d);
   densIonX0 = fdv.getGridMin(0);
   densIonZ0 = fdv.getGridMin(1);
   densIonNx = fdv.getNumGrids(0);
@@ -255,22 +264,13 @@ bool GitrmMesh::addTagsAndLoadProfileData(const std::string &profileFile,
   tempElNz = fte.getNumGrids(1);
   tempElDx = fte.getGridDelta(0);
   tempElDz = fte.getGridDelta(1);
+
   return true;
 }
 
-
-//NOTE: Importance of mesh.size in GITRm over all boundary faces:
-// mesh of size set comp.to GITR: 573742 (GITR) vs 506832 (GITRm)
-// mesh of large face dim: 573742 (GITR) vs 361253 (GITRm)
-// El temperature is different at center of face, compared to GITR
-// when same 1st 2 particles were compared in calcE. For simulation
-// using biased surface, TEl decides DLength and CLDist.
-
-//TODO spli this function
 bool GitrmMesh::initBoundaryFaces(bool init, bool debug) {
   if(!init)
     return false;
-  auto fieldCenter = mesh2Efield2Dshift;
   larmorRadius_d = o::Write<o::Real>(mesh.nfaces(),0);
   childLangmuirDist_d = o::Write<o::Real>(mesh.nfaces(),0);
   const auto coords = mesh.coords();
@@ -308,20 +308,10 @@ bool GitrmMesh::initBoundaryFaces(bool init, bool debug) {
 
   const o::LO background_Z = BACKGROUND_Z;
   const o::Real background_amu = gitrm::BACKGROUND_AMU;
-  //TODO faceId's sequential from 0 ?
   auto fill = OMEGA_H_LAMBDA(o::LO fid) {
-    //TODO if faceId's are not sequential, create a (bdry) faceIds array 
     if(side_is_exposed[fid]) {
       o::Vector<3> B = o::zero_vector<3>();
       auto fcent = p::face_centroid_of_tet(fid, coords, face_verts);
-      //cylindrical symmetry, height (z) is same.
-      auto rad = sqrt(fcent[0]*fcent[0] + fcent[1]*fcent[1]);
-      // projecting point to y=0 plane, since 2D data is on const-y plane.
-      fcent[0] = rad + fieldCenter; // D3D 1.6955m. TODO check unit
-      fcent[1] = 0;
-
-      // TODO angle is between surface normal and magnetic field at center of face
-      // If  face is long, BField is not accurate. Calculate at closest point ?
       if(debug)
         printf(" fid:%d::  %.5f %.5f %.5f \n", fid, fcent[0], fcent[1], fcent[2]);
       if(useConstantBField) {
@@ -344,8 +334,8 @@ bool GitrmMesh::initBoundaryFaces(bool init, bool debug) {
       angle_d[fid] = theta*180.0/o::PI;
       
       if(debug) {
-        printf("fid:%d surfNorm:%g %g %g angleBS=%g theta=%g angle=%g\n", fid, surfNorm[0], 
-          surfNorm[1], surfNorm[2],angleBS,theta,angle_d[fid]);
+        printf("fid:%d surfNorm:%g %g %g angleBS=%g theta=%g angle=%g\n", fid, 
+          surfNorm[0], surfNorm[1], surfNorm[2],angleBS,theta,angle_d[fid]);
       }
       o::Real tion = ti[fid];
       o::Real tel = te[fid];
@@ -412,7 +402,7 @@ void GitrmMesh::preProcessBdryFacesBfs() {
   preprocessStoreBdryFacesBfs(numBdryFaceIdsInElems, bdryFacesCsrW, csrSize);
   bdryFacesCsrBFS = o::LOs(bdryFacesCsrW);
 }
-// This maethod might be needed later
+// This method might be needed later
 void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
   o::Write<o::LO>& bdryFacesCsrW, int csrSize) {
   MESHDATA(mesh);
@@ -425,11 +415,11 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
   }
   constexpr int bfsLocalSize = 100000;
   const double depth = 0.05;
-  constexpr int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
+  constexpr int markFaces = SKIP_MODEL_IDS_FROM_DIST2BDRY;
   o::LOs modelIdsToSkip(1,-1);
   int numModelIds = 0;
-  if(skipGeometricModelIds) {
-    modelIdsToSkip = o::LOs(detectorSurfaceMaterialModelIds);
+  if(markFaces) {
+    modelIdsToSkip = o::LOs(detectorSurfaceModelIds);
     numModelIds = modelIdsToSkip.size();
   }
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
@@ -487,7 +477,8 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
         for(o::LO efi=0; efi < 4 && efi < nExpFaces; ++efi) {
           auto bfid = bdryFids[efi];
           // At least one face is within depth.
-          auto within = p::is_face_within_limit_from_tet(tet, face_verts, coords, bfid, depth);
+          auto within = p::is_face_within_limit_from_tet(tet, face_verts, 
+            coords, bfid, depth);
           if(within) {
             add = true;
             if(step==1)
@@ -506,7 +497,8 @@ void GitrmMesh::preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInEle
         //queue neighbors if parent is within limit
         if(add) {
           o::LO interiorFids[4];
-          auto nIntFaces = p::get_interior_face_ids_of_tet(thisElem, down_r2f, side_is_exposed, interiorFids);
+          auto nIntFaces = p::get_interior_face_ids_of_tet(thisElem, 
+            down_r2f, side_is_exposed, interiorFids);
           //across 1st face, if valid. Otherwise it is not used.
           auto dual_elem_id = dual_faces[thisElem]; // ask_dual().a2ab
           for(o::LO ifi=0; ifi < 4 && ifi < nIntFaces; ++ifi) {
@@ -616,8 +608,8 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll(bool initBdry) {
   int nFaces = mesh.nfaces();
   //no skipping
   constexpr int skipGeometricModelIds = SKIP_MODEL_IDS_FROM_DIST2BDRY;
-  //to skip geometric model faces (should be false)
-  o::LOs modelIdsToSkip = o::LOs(detectorSurfaceMaterialModelIds);
+  //to skip geometric model faces
+  o::LOs modelIdsToSkip = o::LOs(detectorSurfaceModelIds);
   o::LO numModelIds = 0;
   if(skipGeometricModelIds) 
     numModelIds = modelIdsToSkip.size();
@@ -669,7 +661,6 @@ void GitrmMesh::preprocessSelectBdryFacesFromAll(bool initBdry) {
 
   o::Write<o::LO> bdryFaces_nums(mesh.nelems(), 0);
   o::Write<o::LO> bdryFaces_w(mesh.nelems()*NGRID, 0);
-  
   auto lambda2 = OMEGA_H_LAMBDA(o::LO elem) {
     int npts = 1;
     auto grid = grid_points_inside_tet<NGRID>(mesh2verts, coords, elem, NDIV, npts);
@@ -1033,10 +1024,10 @@ void GitrmMesh::writeBdryFacesDataText(int nSubdiv, std::string fileName) {
   outf.close();
 }
 
-// Arr having size() and [] indedxing
+// Arr having size() and [] indexing
 template<typename Arr>
 void outputGitrMeshData(const Arr& data, const o::HostRead<o::Byte>& exposed, 
-  const std::vector<std::string>& vars, FILE* fp, std::string format="%5e") {
+  const std::vector<std::string>& vars, FILE* fp, std::string format="%.15e") {
   auto dsize = data.size();
   auto nComp = vars.size();
   int len = dsize/nComp;
@@ -1058,7 +1049,7 @@ void outputGitrMeshData(const Arr& data, const o::HostRead<o::Byte>& exposed,
   }
 }
 
-void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial) {
+void GitrmMesh::createSurfaceGitrMesh() {
   MESHDATA(mesh);
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
   const auto& f2rElem = mesh.ask_up(o::FACE, o::REGION).ab2b;
@@ -1071,18 +1062,27 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
   }, nbdryFaces);
   printf("Number of boundary faces(including material surfaces) %d total-faces \n", 
     nbdryFaces, nf);
-  int markFaces = markSurfaceMaterial;
-  o::LOs modelIdsToMark(1);
-  if(markFaces && meshVersion==1)
-    modelIdsToMark = o::LOs(o::Write<o::LO>(detectorSurfaceMaterialModelIds.write()));
-  if(markFaces && meshVersion ==2)
-    modelIdsToMark = o::LOs(detectorSurfaceMaterialModelIds);
-  o::LO numModelIds = 0;
-  if(markFaces) 
-    numModelIds = modelIdsToMark.size();
+  //pisces tower has different Z ?
+  auto materialZ = gitrm::surfaceAndMaterialModelZ;
+  o::LOs surfaceAndMaterialIds(1);
+  bool markSurfMatFaces = true;
+  if(markSurfMatFaces)
+    surfaceAndMaterialIds = o::LOs(surfaceAndMaterialModelIds.write());
+  o::LO numSurfMatIds = 0;
+  if(markSurfMatFaces) 
+    numSurfMatIds = surfaceAndMaterialIds.size();
+
+  o::LOs surfaceIds(1);
+  bool markSurfaces = true;
+  if(markSurfaces)
+    surfaceIds = o::LOs(detectorSurfaceModelIds.write());
+  o::LO numSurfIds = 0;
+  if(markSurfaces) 
+    numSurfIds = surfaceIds.size();
+  
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   //TODO use tag : "DetectorSurfaceIndex"
-  // using arrays of all faces, for now
+  //using arrays of all faces, later filtered out
   printf("Creating GITR surface mesh\n");
   o::Write<o::Real> points_d(9*nf, 0);
   o::Write<o::Real> abcd_d(4*nf, 0);
@@ -1091,13 +1091,22 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
   o::Write<o::Real> BCxBA_d(nf, 0);
   o::Write<o::Real> CAxCB_d(nf, 0);
   o::Write<o::LO> surface_d(nf, 0);
-  o::Write<o::LO> material_d(nf, 0);
-  o::Write<o::LO> inDir_d(nf, 1);
+  o::Write<o::Real> materialZ_d(nf, 0);
+  o::Write<o::LO> inDir_d(nf, -1);
 
+  bool clockwise = true;
   auto lambda = OMEGA_H_LAMBDA(o::LO fid) {
     if(!side_is_exposed[fid])
       return;
     auto abc = p::get_face_coords_of_tet(face_verts, coords, fid);
+    if(clockwise) { //order
+      auto B = abc[1];
+      auto C = abc[2];
+      for(int i=0; i<3; ++i) {
+        abc[1][i]= C[i];
+        abc[2][i] = B[i];
+      }
+    }
     for(auto i=0; i<3; ++i) {
       for(auto j=0; j<3; ++j) {
         points_d[fid*9+i*3+j] = abc[i][j];
@@ -1114,12 +1123,14 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
       abcd_d[fid*4+i] = normalVec[i];
     }
     abcd_d[fid*4+3] = -(o::inner_product(normalVec, abc[0]));
+    /*
     auto elmId = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem);
+    //auto surfNorm = p::bdry_face_normal_of_tet(fid, coords, face_verts);
     auto surfNorm = p::face_normal_of_tet(fid, elmId, coords, mesh2verts, 
           face_verts, down_r2fs);
     if(p::compare_vector_directions(surfNorm, normalVec))
       inDir_d[fid] = 1;
-    else
+    else */
       inDir_d[fid] = -1; //TODO test
     planeNorm_d[fid] = o::norm(normalVec);
     auto val = o::inner_product(o::cross(bc, ba), normalVec);
@@ -1135,9 +1146,14 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
     auto norm3 = o::norm(ac);
     auto s = (norm1 + norm2 + norm3)/2.0;
     area_d[fid] = sqrt(s*(s-norm1)*(s-norm2)*(s-norm3));
-    for(auto id=0; id < numModelIds; ++id) {
-      if(modelIdsToMark[id] == faceClassIds[fid]) {
-        material_d[fid] = 1; //Z
+    for(auto id=0; id < numSurfMatIds; ++id) {
+      if(surfaceAndMaterialIds[id] == faceClassIds[fid]) {
+        materialZ_d[fid] = materialZ;
+      }
+    }
+
+    for(auto id=0; id < numSurfIds; ++id) {
+      if(surfaceIds[id] == faceClassIds[fid]) {
         surface_d[fid] = 1;
       }
     }
@@ -1150,7 +1166,7 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
   auto BCxBA = o::HostRead<o::Real>(BCxBA_d);
   auto CAxCB = o::HostRead<o::Real>(CAxCB_d);
   auto area = o::HostRead<o::Real>(area_d);
-  auto material = o::HostRead<o::LO>(material_d);
+  auto materialZ_h = o::HostRead<o::Real>(materialZ_d);
   auto surface = o::HostRead<o::LO>(surface_d);
   auto inDir = o::HostRead<o::LO>(inDir_d);
   auto exposed = o::HostRead<o::Byte>(side_is_exposed);
@@ -1169,7 +1185,7 @@ void GitrmMesh::createSurfaceGitrMesh(int meshVersion, bool markSurfaceMaterial)
   outputGitrMeshData(BCxBA, exposed, {"BCxBA"}, fp);
   outputGitrMeshData(CAxCB, exposed, {"CAxCB"}, fp);
   outputGitrMeshData(area, exposed, {"area"}, fp);
-  outputGitrMeshData(material, exposed, {"Z"}, fp,"%f");
+  outputGitrMeshData(materialZ_h, exposed, {"Z"}, fp,"%f");
   outputGitrMeshData(surface, exposed, {"surface"}, fp, "%d");
   outputGitrMeshData(inDir, exposed, {"inDir"}, fp, "%d");
   fprintf(fp, "periodic = 0;\ntheta0 = 0.0;\ntheta1 = 0.0\n}\n"); 

@@ -167,7 +167,6 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
     if(debug) 
       std::cout << " ncSizePerComp: " << ncSizePerComp << " nComp " << fs.nComp << "\n";
 
-    fs.data = o::HostWrite<o::Real>(ncSizePerComp*fs.nComp);
     for(int i=0; i<fs.nGridRead && i<fs.gridNames.size(); ++i) {
       netCDF::NcVar ncvar(ncf.getVar(fs.gridNames[i].c_str()));
       if(i==0) {
@@ -198,7 +197,9 @@ int readInputDataNcFileFS3(const std::string& ncFileName,
       for(int j=0; j<ncSizePerComp; ++j) {
         fs.data[j*fs.nComp + i] = temp[j];
         if(debug && j <10)
-          printf(" i,j,dat %d %d %g \n", i,j,fs.data[j*fs.nComp+i]);
+          printf(" i,j,dat %d %d %g ", i,j,fs.data[j*fs.nComp+i]);
+        if(debug)
+          printf("\n");
       }
     }    
     for(int i=0; i< fs.nVarNames.size(); ++i) {

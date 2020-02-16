@@ -271,8 +271,8 @@ inline void gitrm_borisMove(PS* ptcls,
       o::Vector<3> cVpxB = coeff*vpxB;
       vel = vMinus + cVpxB;
       //v = v + q_prime*E
-      vel = vel + qpE;
-
+      vel = vel + qpE;   //remove comment later
+      //vel = vel0; // Making Lorentz FOrce 0
       // Next position and velocity
       if (ptcl==7)
       {

@@ -7,6 +7,7 @@ set(HEADERS
   GitrmSurfaceModel.hpp
   GitrmCoulombCollision.hpp
   GitrmThermalForce.hpp
+  GitrmCrossDiffusion.hpp
 )
 
 set(SOURCES

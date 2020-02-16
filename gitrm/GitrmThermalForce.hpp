@@ -124,7 +124,7 @@ const GitrmParticles& gp, double dt)
      
         //printf("Position partcle %d for timestep %d is %.15e %.15e %.15e \n",iTimeStep, ptcl, posit[0],posit[1],posit[2]);
         printf("Position partcle %d timestep %d is %.15e %.15e %.15e \n",ptcl, iTimeStep, posit_next[0],posit_next[1],posit_next[2]);
-        printf("The velocities partcle %d timestep %dare %.15e %.15e %.15e \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
+        printf("The velocities partcle %d timestep %dare %.15f %.15f %.15f \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
         //printf("vPartNorm nuEdt partcle %d for timestep %d is %.15e %.15e\n", ptcl, iTimeStep,Omega_h::norm(vel), nuEdt);
         //printf("coeff_par parallel_direction partcle %d for timestep %d is %.15e %.15e %.15e %.15e\n", ptcl, iTimeStep, coeff_par,parallel_dir[0],parallel_dir[1],parallel_dir[2]);
         //printf("coeff_perp1 coeff_perp2 partcle %d timestep %d is %.15e %.15e \n", ptcl, iTimeStep, coeff_perp1,coeff_perp2);
@@ -140,7 +140,7 @@ const GitrmParticles& gp, double dt)
         vel_ps_d(pid,1)=vel[1]+dv_ITG[1];
         vel_ps_d(pid,2)=vel[2]+dv_ITG[2];
 
-        printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15e %.15e %.15e \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2)); 
+        printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2)); 
     	}
     };
     ps::parallel_for(ptcls, update_thermal);

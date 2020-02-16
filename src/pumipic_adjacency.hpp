@@ -368,6 +368,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           for(o::LO i=0; i<3; ++i)
             xpoints_d[ptcl*3+i] = xpts[i];
           xface_d[ptcl] = face_ids[ind_exp];
+          if(debug)
+            printf("Ptcl %d hit boundary and exiting \n", ptcl);
           elem_ids_next[pid] = -1;
           ptcl_done[pid] = 2; 
         }
@@ -414,6 +416,8 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           for(o::LO i=0; i<3; ++i)
             xpoints_d[ptcl*3+i] = xpoints[max_ind*3+i];            
           xface_d[ptcl] = face_id;
+          if(debug)
+            printf("Ptcl %d hit boundary and exiting \n", ptcl);
           ptcl_done[pid] = 2;        
         } else {
           elem_ids_next[pid] = dual_elems[face_id];

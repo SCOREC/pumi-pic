@@ -397,15 +397,8 @@ int main(int argc, char** argv) {
   mesh->ask_elem_verts(); //caching adjacency info
 
   //Build gyro avg mappings
-  const auto rmax = 0.038;
-  const auto numRings = 3;
-  const auto ptsPerRing = 8;
-  const auto theta = 0.0;
-  setGyroConfig(rmax,numRings,ptsPerRing,theta);
-  if (!comm_rank) printGyroConfig();
   Omega_h::LOs forward_map;
   Omega_h::LOs backward_map;
-  createGyroRingMappings(mesh, forward_map, backward_map);
 
   /* Particle data */
   const long int numPtcls = atol(argv[3]);
@@ -450,14 +443,15 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  const int C = 16;
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, C);
   //Create the particle structure
   ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
                                     ptcls_per_elem, element_gids);
   //Uniformly pad (other choices are PAD_PROPORTIONALLY/PAD_INVERSELY)
   scs_input.padding_strat = ps::PAD_EVENLY;
   //10% padding according to above strat
-  scs_input.shuffle_padding = 0.1;
+  scs_input.shuffle_padding = 0.25;
   //0% padding at the end -> rebuild will need to reallocate if the structure expands
   scs_input.extra_padding = 0;
   ps::ParticleStructure<Particle>* ptcls = new SellCSigma<Particle>(scs_input);
@@ -526,8 +520,6 @@ int main(int argc, char** argv) {
     tagParentElements(picparts,ptcls,iter);
     if(output && !(iter%100))
       render(picparts,iter, comm_rank);
-    gyroScatter(mesh,ptcls,forward_map,fwdTagName);
-    gyroScatter(mesh,ptcls,backward_map,bkwdTagName);
     gyroSync(picparts,fwdTagName,bkwdTagName,syncTagName);
   }
   if (comm_rank == 0)

@@ -447,7 +447,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     }
   } //while
   Kokkos::Profiling::popRegion(); //whole
-  fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
   return found;   
 }
 

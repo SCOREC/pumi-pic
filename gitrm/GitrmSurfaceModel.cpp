@@ -1,3 +1,5 @@
+#include <mpi.h>
+#include <netcdf>
 #include "GitrmSurfaceModel.hpp"
 #include "GitrmInputOutput.hpp"
 
@@ -5,9 +7,16 @@ GitrmSurfaceModel::GitrmSurfaceModel(GitrmMesh& gm, std::string ncFile):
   gm(gm), mesh(gm.mesh),  ncFile(ncFile) { 
   surfaceAndMaterialModelIds = gm.surfaceAndMaterialModelIds;
   initSurfaceModelData(ncFile, true);
+
+  numSurfMaterialFaces = gm.nSurfMaterialFaces;
+  surfaceAndMaterialOrderedIds = gm.surfaceAndMaterialOrderedIds;
+  nDetectSurfaces = gm.nDetectSurfaces;
+  detectorSurfaceOrderedIds = gm.detectorSurfaceOrderedIds;
+  bdryFaceMaterialZs = gm.bdryFaceMaterialZs;
 }
 
-//includes only sirfaces to be processed
+//TODO
+//includes only surfaces to be processed
 void GitrmSurfaceModel::setFaceId2SurfaceIdMap() {
   auto nf = mesh.nfaces();
   auto surfModelIds = o::LOs(surfaceAndMaterialModelIds);
@@ -16,7 +25,7 @@ void GitrmSurfaceModel::setFaceId2SurfaceIdMap() {
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   o::Write<o::LO> surfMarked(nf, -1, "surfMarked");
   o::Write<o::LO> total(1,0, "total");
-  auto lambda = OMEGA_H_LAMBDA(o::LO fid) {
+  auto lambda = OMEGA_H_LAMBDA(const o::LO& fid) {
     if(!side_is_exposed[fid])
       return;
     //if surface to be processed
@@ -80,9 +89,8 @@ void GitrmSurfaceModel::initSurfaceModelData(std::string ncFile, bool debug) {
   mesh.add_tag<o::Real>(o::FACE, "AveSputtYld", 1, o::Reals(nf)); 
 }
 
-template<typename T>
 void GitrmSurfaceModel::make2dCDF(const int nX, const int nY, const int nZ, 
-   const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf) {
+   const o::HostWrite<o::Real>& distribution, o::HostWrite<o::Real>& cdf) {
   assert(distribution.size() == nX*nY*nZ);
   assert(cdf.size() == nX*nY*nZ);
   int index = 0;
@@ -110,12 +118,11 @@ void GitrmSurfaceModel::make2dCDF(const int nX, const int nY, const int nZ,
 }
 
 //TODO make DEVICE
-template<typename T>
-T GitrmSurfaceModel::interp1dUnstructured(const T samplePoint, const int nx, 
-   const T max_x, const T* data, int& lowInd) {
+o::Real GitrmSurfaceModel::interp1dUnstructured(const o::Real samplePoint, 
+  const int nx, const o::Real max_x, const o::Real* data, int& lowInd) {
   int done = 0;
   int low_index = 0;
-  T value = 0;
+  o::Real value = 0;
   for(int i=0;i<nx;i++) {
     if(done == 0) {
       if(samplePoint < data[i]) {
@@ -144,10 +151,9 @@ T GitrmSurfaceModel::interp1dUnstructured(const T samplePoint, const int nx,
 }
 
 //TODO convert to device function
-template<typename T>
 void GitrmSurfaceModel::regrid2dCDF(const int nX, const int nY, const int nZ, 
-   const o::HostWrite<T>& xGrid, const int nNew, const T maxNew, 
-   const o::HostWrite<T>& cdf, o::HostWrite<T>& cdf_regrid) {
+   const o::HostWrite<o::Real>& xGrid, const int nNew, const o::Real maxNew, 
+   const o::HostWrite<o::Real>& cdf, o::HostWrite<o::Real>& cdf_regrid) {
   int lowInd = 0;
   int index = 0;
   float spline = 0.0;
@@ -155,7 +161,8 @@ void GitrmSurfaceModel::regrid2dCDF(const int nX, const int nY, const int nZ,
     for(int j=0;j<nY;j++) {
       for(int k=0;k<nZ;k++) {
         index = i*nY*nZ + j*nZ + k;
-        spline = interp1dUnstructured(xGrid[k], nNew, maxNew, &(cdf.data()[index-k]), lowInd);
+        spline = interp1dUnstructured(xGrid[k], nNew, maxNew, 
+                  &(cdf.data()[index-k]), lowInd);
         if(isnan(spline) || isinf(spline)) 
           spline = 0.0;
         cdf_regrid[index] = spline;  
@@ -168,21 +175,21 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 
   o::Write<o::Real> enLogSputtRefCoef_w(nEnSputtRefCoeff);
   auto enSputtRefCft = enSputtRefCoeff;
-  o::parallel_for(nEnSputtRefCoeff, OMEGA_H_LAMBDA(int i) {
+  o::parallel_for(nEnSputtRefCoeff, OMEGA_H_LAMBDA(const o::LO& i) {
     enLogSputtRefCoef_w[i] = log10(enSputtRefCft[i]);
   });
   enLogSputtRefCoef = o::Reals(enLogSputtRefCoef_w);
   auto enSputtRefDIn = enSputtRefDistIn;
   o::Write<o::Real> enLogSputtRefDistIn_w(nEnSputtRefDistIn);
-  o::parallel_for(nEnSputtRefDistIn, OMEGA_H_LAMBDA(int i) {
+  o::parallel_for(nEnSputtRefDistIn, OMEGA_H_LAMBDA(const o::LO& i) {
     enLogSputtRefDistIn_w[i] = log10(enSputtRefDIn[i]);
   });
-  //enLogSputtRefDistIn = new o::Reals(enLogSputtRefDistIn_w);
+  enLogSputtRefDistIn = o::Reals(enLogSputtRefDistIn_w);
   o::HostWrite<o::Real>enLogSputtRefDistIn_h(enLogSputtRefDistIn_w);
   
   o::Write<o::Real> energyDistGrid01_w(nEnSputtRefDistOut);
   auto nEnSputtRefDOut = nEnSputtRefDistOut;
-  o::parallel_for(nEnSputtRefDOut, OMEGA_H_LAMBDA(int i) {
+  o::parallel_for(nEnSputtRefDOut, OMEGA_H_LAMBDA(const o::LO& i) {
     energyDistGrid01_w[i] = i * 1.0 / nEnSputtRefDOut;
   });
   energyDistGrid01 = o::Reals(energyDistGrid01_w);
@@ -190,7 +197,7 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 
   auto nEnSputtRefDORef = nEnSputtRefDistOutRef;
   o::Write<o::Real> energyDistGrid01Ref_w(nEnSputtRefDORef);
-  o::parallel_for(nEnSputtRefDORef, OMEGA_H_LAMBDA(int i) {
+  o::parallel_for(nEnSputtRefDORef, OMEGA_H_LAMBDA(const o::LO& i) {
     energyDistGrid01Ref_w[i] = i * 1.0 / nEnSputtRefDORef;
   });
   energyDistGrid01Ref = o::Reals(energyDistGrid01Ref_w);
@@ -198,7 +205,7 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 
   auto nAngSputtRefDOut = nAngSputtRefDistOut;
   o::Write<o::Real> angleDistGrid01_w(nAngSputtRefDOut);
-  o::parallel_for(nAngSputtRefDOut, OMEGA_H_LAMBDA(int i) {
+  o::parallel_for(nAngSputtRefDOut, OMEGA_H_LAMBDA(const o::LO& i) {
     angleDistGrid01_w[i] = i * 1.0 / nAngSputtRefDOut;
   });
   angleDistGrid01 = o::Reals(angleDistGrid01_w);
@@ -207,38 +214,38 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
   printf("Making CDFs\n"); 
   o::HostWrite<o::Real>enDist_CDF_Y(enDist_Y.size());
   o::HostWrite<o::Real>enDist_Y_h(o::deep_copy(enDist_Y));
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOut,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOut,
    enDist_Y_h, enDist_CDF_Y);
 
   o::HostWrite<o::Real>angPhiDist_Y_h(o::deep_copy(angPhiDist_Y));
   o::HostWrite<o::Real>angPhiDist_CDF_Y(angPhiDist_Y.size());
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angPhiDist_Y_h, angPhiDist_CDF_Y);
 
   o::HostWrite<o::Real>angThetaDist_Y_h(o::deep_copy(angThetaDist_Y));
   o::HostWrite<o::Real>angThetaDist_CDF_Y(angThetaDist_Y.size());
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angThetaDist_Y_h, angThetaDist_CDF_Y);
 
   o::HostWrite<o::Real>enDist_R_h(o::deep_copy(enDist_R));
   o::HostWrite<o::Real>enDist_CDF_R(enDist_R.size());
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOutRef,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOutRef,
    enDist_R_h, enDist_CDF_R);
 
   o::HostWrite<o::Real>angPhiDist_R_h(o::deep_copy(angPhiDist_R));
   o::HostWrite<o::Real>angPhiDist_CDF_R(angPhiDist_R.size());
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angPhiDist_R_h, angPhiDist_CDF_R);
 
   o::HostWrite<o::Real>angThetaDist_R_h(o::deep_copy(angThetaDist_R));
   o::HostWrite<o::Real>angThetaDist_CDF_R(angThetaDist_R.size());
-  make2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  make2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angThetaDist_R_h, angThetaDist_CDF_R);
   
   printf("Making regrid CDFs\n"); 
   o::HostRead<o::Real> angPhiSputtRefDistOut_h(o::deep_copy(angPhiSputtRefDistOut));
   o::HostWrite<o::Real>angPhiDist_CDF_Y_regrid_h(angPhiDist_CDF_Y.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angleDistGrid01_h, nAngSputtRefDistOut,
    angPhiSputtRefDistOut_h[nAngSputtRefDistOut - 1],
    angPhiDist_CDF_Y, angPhiDist_CDF_Y_regrid_h);
@@ -246,27 +253,27 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 
   o::HostRead<o::Real> angThetaSputtRefDistOut_h(o::deep_copy(angThetaSputtRefDistOut));
   o::HostWrite<o::Real>angThetaDist_CDF_Y_regrid_h(angThetaDist_CDF_Y.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angleDistGrid01_h, nAngSputtRefDistOut, angThetaSputtRefDistOut_h[nAngSputtRefDistOut - 1],
    angThetaDist_CDF_Y, angThetaDist_CDF_Y_regrid_h);
   angThetaDist_CDF_Y_regrid = o::Reals(angThetaDist_CDF_Y_regrid_h.write());
 
   o::HostRead<o::Real> enSputtRefDistOut_h(o::deep_copy(enSputtRefDistOut));
   o::HostWrite<o::Real>enDist_CDF_Y_regrid_h(enDist_CDF_Y.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOut,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOut,
    energyDistGrid01_h, nEnSputtRefDistOut, enSputtRefDistOut_h[nEnSputtRefDistOut - 1],
    enDist_CDF_Y, enDist_CDF_Y_regrid_h);
   enDist_CDF_Y_regrid = o::Reals(enDist_CDF_Y_regrid_h);
 
   o::HostWrite<o::Real>angPhiDist_CDF_R_regrid_h(angPhiDist_CDF_R.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angleDistGrid01_h, nAngSputtRefDistOut,
    angPhiSputtRefDistOut_h[nAngSputtRefDistOut - 1],
    angPhiDist_CDF_R, angPhiDist_CDF_R_regrid_h);
   angPhiDist_CDF_R_regrid = o::Reals(angPhiDist_CDF_R_regrid_h);
 
   o::HostWrite<o::Real>angThetaDist_CDF_R_regrid_h(angThetaDist_CDF_R.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nAngSputtRefDistOut,
    angleDistGrid01_h, nAngSputtRefDistOut,
    angThetaSputtRefDistOut_h[nAngSputtRefDistOut - 1],
    angThetaDist_CDF_R, angThetaDist_CDF_R_regrid_h);
@@ -274,7 +281,7 @@ void GitrmSurfaceModel::prepareSurfaceModelData() {
 
   o::HostRead<o::Real>enSputtRefDistOutRef_h(o::deep_copy(enSputtRefDistOutRef));
   o::HostWrite<o::Real>enDist_CDF_R_regrid_h(enDist_CDF_R.size());
-  regrid2dCDF<o::Real>(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOutRef,
+  regrid2dCDF(nEnSputtRefDistIn, nAngSputtRefDistIn, nEnSputtRefDistOutRef,
    energyDistGrid01Ref_h, nEnSputtRefDistOutRef,
    enSputtRefDistOutRef_h[nEnSputtRefDistOutRef - 1],
    enDist_CDF_R, enDist_CDF_R_regrid_h);
@@ -353,10 +360,9 @@ void GitrmSurfaceModel::getConfigData(std::string ncFileName) {
     angThetaSputtRefDistOut, &nAngSputtRefDistOut);
 }
 
-template<typename T>
 void GitrmSurfaceModel::getSurfaceModelData(const std::string fileName,
    const std::string dataName, const std::vector<std::string>& shapeNames,
-   const std::vector<int> shapeInds, o::Read<T>& data, int* size) {
+   const std::vector<int> shapeInds, o::Reals& data, int* size) {
   bool debug = true;
   if(debug)
     std::cout << " reading " << dataName << " \n";
@@ -366,9 +372,8 @@ void GitrmSurfaceModel::getSurfaceModelData(const std::string fileName,
   }
   //grid not read along with data
   Field3StructInput fs({dataName},{},shapes);
-  //TODO pass T
   readInputDataNcFileFS3(fileName, fs, false);
-  data = o::Read<T>(fs.data.write());
+  data = o::Reals(fs.data.write());
   //only first
   if(size) {
     *size = fs.getIntValueOf(shapeNames[shapeInds[0]]);//fs.getNumGrids(j); 
@@ -377,46 +382,71 @@ void GitrmSurfaceModel::getSurfaceModelData(const std::string fileName,
   }
 }
 
+//This won't work for partitioned mesh of non-full-buffer
+//TODO move to IO file
+//Call at the end of simulation
 void GitrmSurfaceModel::writeOutSurfaceData(std::string fileName) {
-/*
-  OutputNcFileFieldStruct outStruct({"nSurfaces", "nEnergies", "nAngles"}, 
-    {"grossDeposition", "grossErosion", "aveSpyl", "spylCounts", "surfaceNumber",
-     "sumParticlesStrike", "sumWeightStrike"}, {nSurfaces, nEdist, nAdist});
-  writeOutputNcFile(ptclsHistoryData, numPtcls, dof, outStruct, outNcFileName);
-  
-    NcFile ncFile1(fileName, NcFile::replace);
-    NcDim nc_nLines = ncFile1.addDim("nSurfaces", nSurfaces);
-    vector<NcDim> dims1;
-    dims1.push_back(nc_nLines);
-
-    vector<NcDim> dimsSurfE;
-    dimsSurfE.push_back(nc_nLines);
-    NcDim nc_nEnergies = ncFile1.addDim("nEnergies", nEdist);
-    NcDim nc_nAngles = ncFile1.addDim("nAngles", nAdist);
-    dimsSurfE.push_back(nc_nAngles);
-    dimsSurfE.push_back(nc_nEnergies);
-    NcVar nc_grossDep = ncFile1.addVar("grossDeposition", ncFloat, nc_nLines);
-    NcVar nc_grossEro = ncFile1.addVar("grossErosion", ncFloat, nc_nLines);
-    NcVar nc_aveSpyl = ncFile1.addVar("aveSpyl", ncFloat, nc_nLines);
-    NcVar nc_spylCounts = ncFile1.addVar("spylCounts", ncInt, nc_nLines);
-    NcVar nc_surfNum = ncFile1.addVar("surfaceNumber", ncInt, nc_nLines);
-    NcVar nc_sumParticlesStrike =
-        ncFile1.addVar("sumParticlesStrike", ncInt, nc_nLines);
-    NcVar nc_sumWeightStrike =
-        ncFile1.addVar("sumWeightStrike", ncFloat, nc_nLines);
-    nc_grossDep.putVar(&grossDeposition[0]);
-    nc_surfNum.putVar(&surfaceNumbers[0]);
-    nc_grossEro.putVar(&grossErosion[0]);
-    nc_aveSpyl.putVar(&aveSputtYld[0]);
-    nc_spylCounts.putVar(&sputtYldCount[0]);
-    nc_sumParticlesStrike.putVar(&sumParticlesStrike[0]);
-    nc_sumWeightStrike.putVar(&sumWeightStrike[0]);
-    NcVar nc_surfEDist = ncFile1.addVar("surfEDist", ncFloat, dimsSurfE);
-    NcVar nc_surfReflDist = ncFile1.addVar("surfReflDist", ncFloat, dimsSurfE);
-    NcVar nc_surfSputtDist =
-        ncFile1.addVar("surfSputtDist", ncFloat, dimsSurfE);
-    nc_surfEDist.putVar(&energyDistribution[0]);
-    nc_surfReflDist.putVar(&reflDistribution[0]);
-    nc_surfSputtDist.putVar(&sputtDistribution[0]);
-  */
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  if(comm_rank!=0) {
+    printf("Skipped call to collect and write surface-model data from rank %d\n", comm_rank);
+    return;
+  }
+  // mesh synchronized at the end of run 
+  auto sumPtclStrike = o::HostRead<int>(mesh.get_array<o::Int>(o::FACE, 
+    "SumParticlesStrike"));
+  auto sputtYldCount = o::HostRead<int>(mesh.get_array<o::Int>(o::FACE, 
+    "SputtYldCount")); 
+  auto sumWtStrike = o::HostRead<double>(mesh.get_array<o::Real>(o::FACE, 
+    "SumWeightStrike"));
+  auto grossDeposition = o::HostRead<double>(mesh.get_array<o::Real>(o::FACE, 
+    "GrossDeposition"));
+  auto grossErosion = o::HostRead<double>(mesh.get_array<o::Real>(o::FACE, 
+    "GrossErosion"));
+  auto aveSputtYld = o::HostRead<double>(mesh.get_array<o::Real>(o::FACE, 
+    "AveSputtYld")); 
+  auto nDist = numDetectorSurfaceFaces * nEnDist * nAngDist;
+  o::HostWrite<double> totEnDistribution(nDist);
+  o::HostWrite<double> totReflDistribution(nDist);
+  o::HostWrite<double> totSputtDistribution(nDist);
+  o::HostWrite<o::Real> energyDistribution_h(energyDistribution);
+  o::HostWrite<o::Real> reflDistribution_h(reflDistribution);
+  o::HostWrite<o::Real> sputtDistribution_h(sputtDistribution);
+  //FIXME size can be different across ranks
+  //MPI_IN_PLACE  wont work, use MPI GATHERV 
+  MPI_Reduce(&totEnDistribution[0], &energyDistribution_h[0], 
+    numDetectorSurfaceFaces, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&totReflDistribution[0], &reflDistribution_h[0], 
+    numDetectorSurfaceFaces, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&totSputtDistribution[0], &sputtDistribution_h[0],
+    numDetectorSurfaceFaces, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+ 
+  netCDF::NcFile ncf(fileName, netCDF::NcFile::replace);
+  netCDF::NcDim ncs = ncf.addDim("nSurfaces", numDetectorSurfaceFaces);
+  std::vector<netCDF::NcDim> dims;
+  dims.push_back(ncs);
+  netCDF::NcDim nEn = ncf.addDim("nEnergies", nEnDist);
+  dims.push_back(nEn);
+  netCDF::NcDim nAng = ncf.addDim("nAngles", nAngDist);
+  dims.push_back(nAng);
+  netCDF::NcVar grossDep = ncf.addVar("grossDeposition", netCDF::ncDouble, ncs);
+  grossDep.putVar(&grossDeposition[0]);
+  netCDF::NcVar grossEro = ncf.addVar("grossErosion", netCDF::ncDouble, ncs);
+  grossEro.putVar(&grossErosion[0]);
+  netCDF::NcVar aveSpyl = ncf.addVar("aveSpyl", netCDF::ncDouble, ncs);
+  aveSpyl.putVar(&aveSputtYld[0]);
+  netCDF::NcVar spylCounts = ncf.addVar("spylCounts", netCDF::ncInt, ncs);
+  spylCounts.putVar(&sputtYldCount[0]);
+  //NcVar surfNum = ncf.addVar("surfaceNumber", ncInt, ncs);
+  //surfNum.putVar(&surfIds[0]);
+  netCDF::NcVar nPtlcsStrike = ncf.addVar("sumParticlesStrike", netCDF::ncInt, ncs);
+  nPtlcsStrike.putVar(&sumPtclStrike[0]);
+  netCDF::NcVar nWtStrike =  ncf.addVar("sumWeightStrike", netCDF::ncDouble, ncs);
+  nWtStrike.putVar(&sumWtStrike[0]);
+  netCDF::NcVar surfEDist = ncf.addVar("surfEDist", netCDF::ncDouble, dims);
+  surfEDist.putVar(&totEnDistribution[0]);
+  netCDF::NcVar surfReflDist = ncf.addVar("surfReflDist", netCDF::ncDouble, dims);
+  surfReflDist.putVar(&totReflDistribution[0]);
+  netCDF::NcVar surfSputtDist = ncf.addVar("surfSputtDist", netCDF::ncDouble, dims);
+  surfSputtDist.putVar(&totSputtDistribution[0]);
 }

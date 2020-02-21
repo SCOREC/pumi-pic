@@ -15,6 +15,7 @@ const int SURFACE_FLUX_EA = 0;
 const int BOUNDARY_ATOM_Z = surfaceAndMaterialModelZ;
 const o::Real DELTA_SHIFT_BDRY_REFL = 1.0e-4; 
 const int SURFACE_ID_MAX = 260;
+
 }
 
 class GitrmSurfaceModel {
@@ -26,16 +27,20 @@ public:
   void setFaceId2SurfaceIdMap();
   void writeOutSurfaceData(std::string fileName="surface.nc");
 
-  template<typename T>
   void getSurfaceModelData(const std::string fileName,
    const std::string dataName, const std::vector<std::string>& shapeNames,
-   const std::vector<int> shapeInds, o::Read<T>& data, int* size=nullptr);
+   const std::vector<int> shapeInds, o::Reals& data, int* size=nullptr);
 
   GitrmMesh& gm;
   o::Mesh& mesh;
   std::string ncFile;
   int numDetectorSurfaceFaces = 0;
   o::HostWrite<o::LO> surfaceAndMaterialModelIds;
+  int numSurfMaterialFaces = 0;
+  o::LOs surfaceAndMaterialOrderedIds;
+  int nDetectSurfaces = 0;
+  o::LOs detectorSurfaceOrderedIds;
+  o::Reals bdryFaceMaterialZs;
 
   //from NC file
   std::string fileString{};
@@ -73,30 +78,30 @@ public:
 
   //input surface model data
   // shapes are given as comments
-  o::Read<o::Real> enSputtRefCoeff; //nEnSputtRefCoeff
-  o::Read<o::Real> angSputtRefCoeff; // nAngSputtRefCoeff
-  o::Read<o::Real> enSputtRefDistIn; //nEnSputtRefDistIn
-  o::Read<o::Real> angSputtRefDistIn; //nAngSputtRefDistIn
-  o::Read<o::Real> enSputtRefDistOut; // nEnSputtRefDistOut
-  o::Read<o::Real> enSputtRefDistOutRef; //nEnSputtRefDistOutRef
-  o::Read<o::Real> angPhiSputtRefDistOut; //nAngSputtRefDistOut
-  o::Read<o::Real> angThetaSputtRefDistOut; //nAngSputtRefDistOut
-  o::Read<o::Real> sputtYld; // nEnSputtRefCoeff X nAngSputtRefCoeff
-  o::Read<o::Real> reflYld; //  nEnSputtRefCoeff X nAngSputtRefCoeff
+  o::Reals enSputtRefCoeff; //nEnSputtRefCoeff
+  o::Reals angSputtRefCoeff; // nAngSputtRefCoeff
+  o::Reals enSputtRefDistIn; //nEnSputtRefDistIn
+  o::Reals angSputtRefDistIn; //nAngSputtRefDistIn
+  o::Reals enSputtRefDistOut; // nEnSputtRefDistOut
+  o::Reals enSputtRefDistOutRef; //nEnSputtRefDistOutRef
+  o::Reals angPhiSputtRefDistOut; //nAngSputtRefDistOut
+  o::Reals angThetaSputtRefDistOut; //nAngSputtRefDistOut
+  o::Reals sputtYld; // nEnSputtRefCoeff X nAngSputtRefCoeff
+  o::Reals reflYld; //  nEnSputtRefCoeff X nAngSputtRefCoeff
   // nEnSputtRefCoeff X nAngSputtRefCoeff X nEnSputtRefDistOut
-  o::Read<o::Real> enDist_Y;
+  o::Reals enDist_Y;
   // nEnSputtRefCoeff X nAngSputtRefCoeff X nEnSputtRefDistOutRef 
-  o::Read<o::Real> enDist_R;
+  o::Reals enDist_R;
   //nEnSputtRefCoeff X nAngSputtRefCoeff X nAngSputtRefDistOut
-  o::Read<o::Real> angPhiDist_Y;
-  o::Read<o::Real> angThetaDist_Y; // ""
-  o::Read<o::Real> angPhiDist_R; // ""
-  o::Read<o::Real> angThetaDist_R; // ""
-  o::Read<o::Real> enLogSputtRefCoef; // nEnSputtRefCoeff
-  o::Read<o::Real> enLogSputtRefDistIn; //nEnSputtRefDistIn
-  o::Read<o::Real> energyDistGrid01; //nEnSputtRefDistOut
-  o::Read<o::Real> energyDistGrid01Ref; //nEnSputtRefDistOutRef
-  o::Read<o::Real> angleDistGrid01; //nAngSputtRefDistOut
+  o::Reals angPhiDist_Y;
+  o::Reals angThetaDist_Y; // ""
+  o::Reals angPhiDist_R; // ""
+  o::Reals angThetaDist_R; // ""
+  o::Reals enLogSputtRefCoef; // nEnSputtRefCoeff
+  o::Reals enLogSputtRefDistIn; //nEnSputtRefDistIn
+  o::Reals energyDistGrid01; //nEnSputtRefDistOut
+  o::Reals energyDistGrid01Ref; //nEnSputtRefDistOutRef
+  o::Reals angleDistGrid01; //nAngSputtRefDistOut
   o::Reals enDist_CDF_Y_regrid; //EDist_CDF_Y_regrid(nDistE_surfaceModel)
   o::Reals angPhiDist_CDF_Y_regrid;  //AphiDist_CDF_R_regrid(nDistA_surfaceModel)
   o::Reals angPhiDist_CDF_R_regrid;  //APhiDist_CDF_R_regrid(nDistA_surfaceModel)
@@ -119,18 +124,15 @@ public:
   o::Write<o::Real> sputtDistribution;
   o::Write<o::Real> reflDistribution;
 
-  template<typename T>
   void regrid2dCDF(const int nX, const int nY, const int nZ, 
-    const o::HostWrite<T>& xGrid, const int nNew, const T maxNew, 
-    const o::HostWrite<T>& cdf, o::HostWrite<T>& cdf_regrid);
+    const o::HostWrite<o::Real>& xGrid, const int nNew, const o::Real maxNew, 
+    const o::HostWrite<o::Real>& cdf, o::HostWrite<o::Real>& cdf_regrid);
 
-  template<typename T>
   void make2dCDF(const int nX, const int nY, const int nZ, 
-    const o::HostWrite<T>& distribution, o::HostWrite<T>& cdf);
+    const o::HostWrite<o::Real>& distribution, o::HostWrite<o::Real>& cdf);
 
-  template<typename T>
-  T interp1dUnstructured(const T samplePoint, const int nx, const T max_x, 
-    const T* data, int& lowInd);
+  o::Real interp1dUnstructured(const o::Real samplePoint, const int nx, 
+    const o::Real max_x, const o::Real* data, int& lowInd);
 };
 
 
@@ -208,10 +210,9 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
   o::Real pi = o::PI;
   o::Real shiftRefl = gitrm::DELTA_SHIFT_BDRY_REFL;
   o::LO fluxEA = gitrm::SURFACE_FLUX_EA;
-  o::LO bdryAtomZ = gitrm::BOUNDARY_ATOM_Z;
   auto amu = gitrm::PTCL_AMU;
-  auto elCharge = gitrm::ELECTRON_CHARGE; //1.60217662e-19
-  auto protonMass = gitrm::PROTON_MASS; //1.6737236e-27
+  auto elCharge = gitrm::ELECTRON_CHARGE;
+  auto protonMass = gitrm::PROTON_MASS;
   auto mesh = sm.mesh;
   const auto coords = mesh.coords();
   const auto face_verts = mesh.ask_verts_of(2);
@@ -236,7 +237,7 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
     auto lam = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
       if(mask >0 && pid_ps_test(pid)<5 ) {
         for(int i=0; i<2; ++i)
-          printf("test sputt %g \n", sputtDist_test[i]);
+          printf("test sputt %.15e \n", sputtDist_test[i]);
       }
     };
     ps::parallel_for(ptcls,lam, "testLambda");
@@ -278,7 +279,7 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
   const auto dAdist = sm.dAdist; 
 
   //data collection
-  auto surfaces = mesh.get_array<o::LO>(o::FACE, "SurfaceIndex");
+  //auto surfaces = mesh.get_array<o::LO>(o::FACE, "SurfaceIndex");
   auto sumPtclStrike = o::deep_copy(mesh.get_array<o::Int>(o::FACE, "SumParticlesStrike"));
   auto sputtYldCount = o::deep_copy(mesh.get_array<o::Int>(o::FACE, "SputtYldCount")); 
   auto sumWtStrike = o::deep_copy(mesh.get_array<o::Real>(o::FACE, "SumWeightStrike"));
@@ -290,7 +291,8 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
   auto energyDist = sm.energyDistribution;
   auto sputtDist = sm.sputtDistribution;
   auto reflDist = sm.reflDistribution;
-  auto surfMaterialIDs = surfaceAndMaterialModelIds;
+  auto surfaceIds = sm.surfaceAndMaterialOrderedIds;
+  auto materials = sm.bdryFaceMaterialZs;
 
   auto pid_ps = ptcls->get<PTCL_ID>();
   auto next_pos_ps = ptcls->get<PTCL_NEXT_POS>();
@@ -305,20 +307,16 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
       auto elemId = elem;
       auto ptcl = pid_ps(pid);
       auto fid = xfaces[ptcl];
+      if(debug) 
+        printf("surface model fid %d\n",fid);
       if(fid >= 0) {
         if(debug && side_is_exposed[fid])
-          printf("surf0 timestep %d ptcl %d fid %d exp %d \n", iTimeStep, ptcl, fid, 
-            side_is_exposed[fid] );
+          printf("surf0 timestep %d ptcl %d fid %d\n", iTimeStep, ptcl, fid);
         OMEGA_H_CHECK(side_is_exposed[fid]);
         auto weight = ps_weight(pid);
         auto newWeight = weight; 
-        auto surfId = surfMaterialIDs[fid]; //surfaces[fid]; //ids 0..
-       // if(surfId > surfIdMax)
-       //   surfId = surfIdMax;
-        //if(surfId<0) surfId=0; //TODO FIXME
+        auto surfId = surfaceIds[fid]; //surfaces[fid]; //ids 0..
         auto gridId = fid;
-        //if(fid > surfIdMax)
-        //  gridId = surfIdMax; // TODO FIXME
         auto pelem = p::elem_id_of_bdry_face_of_tet(fid, f2r_ptr, f2r_elem);
         if(elemId != pelem)
           elemId = pelem;
@@ -336,30 +334,34 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
             fid, face1[0][0], face1[0][1], face1[0][2],
             face1[1][0], face1[1][1], face1[1][2], face1[2][0], face1[2][1], face1[2][2]);
         }
+         
         if(debug)
-          printf("surf2 timestep %d ptcl %d xpoint= pos  %g %g  %g elemId %d "
-            "vel %g %g %g amu %g  weight %g mag %g E0 %g\n", 
+          printf("surf2 timestep %d ptcl %d xpoint= pos  %.15e %.15e  %.15e elemId %d "
+            "vel %.15e %.15e %.15e amu %.15e  weight %.15e mag %.15e E0 %.15e nEnDist %d\n", 
             iTimeStep, ptcl, xpoint[0],xpoint[1], xpoint[2], 
-            elemId, vel[0], vel[1], vel[2], amu, weight, magPath, E0);
+            elemId, vel[0], vel[1], vel[2], amu, weight, magPath, E0, nEnDist);
+
+        OMEGA_H_CHECK(nEnDist > 0);
         if(E0 > enDist) //1000 
-          E0 = enDist - enDist/nEnDist; // 990;
-     
-        auto surfNorm = p::face_normal_of_tet(fid, elemId, coords, mesh2verts, 
-          face_verts, down_r2fs); //inwards TODO 
+          E0 = enDist - enDist/nEnDist; // 990;   
+        //boundary normal points outwards
+        auto surfNormOut = p::face_normal_of_tet(fid, elemId, coords, mesh2verts, 
+          face_verts, down_r2fs); 
+        auto surfNormIn = -surfNormOut;
         //debug only
         auto bFaceNorm = p::bdry_face_normal_of_tet(fid, coords, face_verts);
         auto abc = p::get_face_coords_of_tet(face_verts, coords, fid);
          if(debug)
-          printf("surf3 timestep %d ptcl %d surfNorm %g %g %g bfaceNorm %g %g %g "
-            " bdry %g %g %g : %g %g %g : %g %g %g \n",iTimeStep, ptcl,
-            surfNorm[0], surfNorm[1], surfNorm[2], bFaceNorm[0], bFaceNorm[1], bFaceNorm[2],
-            abc[0][0], abc[0][1], abc[0][2], abc[1][0], abc[1][1], abc[1][2], 
-            abc[2][0], abc[2][1], abc[2][2]);
+          printf("surf3 timestep %d ptcl %d surfNormOut %.15e %.15e %.15e bfaceNorm "
+            "%.15e %.15e %.15e bdry %g %g %g : %g %g %g : %g %g %g \n",iTimeStep, ptcl,
+            surfNormOut[0], surfNormOut[1], surfNormOut[2], bFaceNorm[0], bFaceNorm[1],
+            bFaceNorm[2], abc[0][0], abc[0][1], abc[0][2], abc[1][0], abc[1][1], 
+            abc[1][2], abc[2][0], abc[2][1], abc[2][2]);
         //end debug
 
-        auto magSurfNorm = o::norm(surfNorm);
+        auto magSurfNorm = o::norm(surfNormIn);
         auto normVel = o::normalize(vel);
-        auto ptclProj = o::inner_product(normVel, surfNorm);
+        auto ptclProj = o::inner_product(normVel, surfNormIn);
         auto thetaImpact = acos(ptclProj);
         if(thetaImpact > pi*0.5)
            thetaImpact = abs(thetaImpact - pi);
@@ -371,16 +373,19 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
         o::Real Y0 = 0;
         o::Real R0 = 0;
 
-        if(bdryAtomZ > 0) {
+        auto materialZ = materials[fid];
+        if(materialZ > 0) {
           Y0 = p::interpolate2d_wgrid(sputtYld, angSputtRefCoeff, enLogSputtRefCoef,
              nAngSputtRefCoeff, nEnSputtRefCoeff, thetaImpact, log10(E0), true,1,0,1);
           R0 = p::interpolate2d_wgrid(reflYld, angSputtRefCoeff, enLogSputtRefCoef,
             nAngSputtRefCoeff, nEnSputtRefCoeff, thetaImpact, log10(E0), true,1,0,1);
         }
         if(debug)
-          printf("surf4 timestep %d ptcl %d interpolated Y0 %g R0 %g normVel %g %g %g"
-            " surfNorm %g %g %g thetaImpact %g \n",  iTimeStep, ptcl, Y0, R0, 
-            normVel[0], normVel[1], normVel[2], surfNorm[0], surfNorm[1], surfNorm[2], thetaImpact);
+          printf("surf4 timestep %d ptcl %d interpolated Y0 %.15e R0 %.15e normVel "
+            "%.15e %.15e %.15e surfNormOut %.15e %.15e %.15e thetaImpact %.15e "
+            " materialZ %g \n", iTimeStep, ptcl, Y0, R0, normVel[0], normVel[1],
+            normVel[2], surfNormOut[0], surfNormOut[1], surfNormOut[2], thetaImpact,
+            materialZ);
         auto totalYR = Y0 + R0;
         //particle either reflects or deposits
         auto sputtProb = (totalYR >0) ? Y0/totalYR : 0;
@@ -408,8 +413,8 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
         o::Real addSumWtStk = 0;
         o::Int addSumPtclStk = 0;
         if(debug)
-          printf("surf5 timestep %d ptcl %d totalYR %g surfId %d gridId %d "
-            "sputtProb %g rand7 %g bdry %d\n", 
+          printf("surf5 timestep %d ptcl %d totalYR %.15e surfId %d gridId %d "
+            "sputtProb %.15e rand7 %.15e bdry %d \n", 
             iTimeStep, ptcl, totalYR, surfId, gridId, sputtProb, rand7, bdrys[fid]);
         if(totalYR > 0) {
           if(rand7 > sputtProb) { //reflect
@@ -418,25 +423,27 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
             // for next push
             if(debug)
               printf(" surf51 timestep %d ptcl %d nA %d nASOut %d nESIn %d "
-                " nE %d nASIn %d nESIn %d\n", 
-                iTimeStep, ptcl, nAngSputtRefDistOut, 
-                nAngSputtRefDistIn, nEnSputtRefDistIn,
-                nEnSputtRefDistOutRef, nAngSputtRefDistIn, nEnSputtRefDistIn); 
+                " nE %d nASIn %d nESIn %d rand8 %.15e thetaImpact %.15e log10(E0) %.15e \n", 
+                iTimeStep, ptcl, nAngSputtRefDistOut, nAngSputtRefDistIn, 
+                nEnSputtRefDistIn, nEnSputtRefDistOutRef, nAngSputtRefDistIn, 
+                nEnSputtRefDistIn, rand8, thetaImpact, log10(E0)); 
 
             didReflect = 1;
             aInterpVal = p::interpolate3d_field(rand8, thetaImpact, log10(E0),
                nAngSputtRefDistOut, nAngSputtRefDistIn, nEnSputtRefDistIn, 
-               angleDistGrid01, angSputtRefDistIn, enSputtRefDistIn, 
+               angleDistGrid01, angSputtRefDistIn, enLogSputtRefDistIn, 
                angPhiDist_CDF_R_regrid);
             eInterpVal = p::interpolate3d_field(rand9, thetaImpact, log10(E0),
                nEnSputtRefDistOutRef, nAngSputtRefDistIn, nEnSputtRefDistIn, 
-               energyDistGrid01Ref, angSputtRefDistIn, enSputtRefDistIn, 
+               energyDistGrid01Ref, angSputtRefDistIn, enLogSputtRefDistIn, 
                enDist_CDF_R_regrid);
             //newWeight=(R0/(1.0f-sputtProb))*weight;
             newWeight = weight*totalYR;
             if(debug)
-              printf("surf6 reflects timestep %d ptcl %d  weight %g newWeight %g totalYR %g"
-                " fluxEA %d\n", iTimeStep, ptcl, weight, newWeight,  totalYR, fluxEA);
+              printf("surf6 reflects timestep %d ptcl %d  weight %.15e newWeight %.15e "
+                "totalYR %.15e fluxEA %d aInterpVal %.15e  eInterpVal %.15e \n", 
+                iTimeStep, ptcl, weight, newWeight,  totalYR, fluxEA, aInterpVal,
+                eInterpVal);
             if(fluxEA > 0) {
               auto eDistInd = floor((eInterpVal-en0Dist)/dEdist);
               auto aDistInd = floor((aInterpVal-ang0Dist)/dAdist);
@@ -444,35 +451,44 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
                  aDistInd >= 0 && aDistInd < nAngDist) {
                 auto idx = surfId*nEnDist*nAngDist + eDistInd*nAngDist + aDistInd;
                 if(debug)
-                  printf("surf6 timestep %d ptcl %d reflDist @ %d newWeight %g  prev %g \n", 
-                    iTimeStep, ptcl, idx, newWeight, reflDist[idx]);
+                  printf("surf61 timestep %d ptcl %d reflDist @ %d newWeight %.15e"
+                    " prev %.15e \n", iTimeStep, ptcl, idx, newWeight, reflDist[idx]);
                 Kokkos::atomic_fetch_add(&(reflDist[idx]), newWeight);
               }
             } 
             if(surfId >= 0) { //id 0..
               if(debug)
-                printf("surf7 surfId %d GrossDep+ %g addGrossDep %g  \n", 
+                printf("surf7 surfId %d GrossDep+ %.15e addGrossDep %.15e  \n", 
                     surfId, weight*(1.0-R0), addGrossDep);
               addGrossDep += weight*(1.0-R0);
             }
-          } else {//sputters                
+          } else {//sputters
+            if(debug) {
+              printf("surf8 timestep %d ptcl %d interpolate3d E0 %.15e\n", iTimeStep, ptcl, E0);
+              printf("rand81 %.15e thetaImpact %.15e log10(E0) %.15e nAngSputtRefDistOut %d "
+                "nAngSputtRefDistIn %d nEnSputtRefDistIn %d\n", rand8, thetaImpact, log10(E0), 
+                nAngSputtRefDistOut, nAngSputtRefDistIn, nEnSputtRefDistIn);              
+            }
+            //TODO merge with the above same 
             aInterpVal = p::interpolate3d_field(rand8, thetaImpact, log10(E0),
               nAngSputtRefDistOut, nAngSputtRefDistIn, nEnSputtRefDistIn,
               angleDistGrid01, angSputtRefDistIn, enLogSputtRefDistIn, angPhiDist_CDF_Y_regrid);
+            if(debug)
+              printf(" surf82 timestep %d ptcl %d interpolate3d \n", iTimeStep, ptcl);            
             eInterpVal = p::interpolate3d_field(rand9,thetaImpact, log10(E0),
               nEnSputtRefDistOut, nAngSputtRefDistIn, nEnSputtRefDistIn,
-              energyDistGrid01, angSputtRefDistIn, enSputtRefDistIn, enDist_CDF_Y_regrid);
+              energyDistGrid01, angSputtRefDistIn, enLogSputtRefDistIn, enDist_CDF_Y_regrid);
             newWeight = weight*totalYR;
 
             if(debug)
-              printf(" surf71 timestep %d ptcl %d nA %d nASOut %d nESIn %d "
+              printf(" surf83 timestep %d ptcl %d nA %d nASOut %d nESIn %d "
                 " nE %d nASIn %d nESIn %d\n", 
                 iTimeStep, ptcl, nAngSputtRefDistOut, 
                 nAngSputtRefDistIn, nEnSputtRefDistIn,
                 nEnSputtRefDistOutRef, nAngSputtRefDistIn, nEnSputtRefDistIn); 
             if(debug)
-               printf("surf8 sputters timestep %d ptcl %d weight %g newWeight %g "
-                " sputtProb %g aInterpVal %g eInterpVal %g\n", iTimeStep, ptcl, weight,
+               printf("surf8 sputters timestep %d ptcl %d weight %.15e newWeight %.15e "
+                " sputtProb %.15e aInterpVal %.15e eInterpVal %.15e\n", iTimeStep, ptcl, weight,
                 newWeight, sputtProb, aInterpVal, eInterpVal);
             if(fluxEA > 0) {
               auto eDistInd = floor((eInterpVal-en0Dist)/dEdist);
@@ -481,7 +497,7 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
                  aDistInd >= 0 && aDistInd < nAngDist) {
                 auto idx = surfId*nEnDist*nAngDist + eDistInd*nAngDist + aDistInd;
                 if(debug)
-                  printf("surf9 timestep %d ptcl %d sputtDist idx  %d newWeight %g prev %g %g \n", 
+                  printf("surf9 timestep %d ptcl %d sputtDist idx  %d newWeight %.15e prev %.15e %.15e \n", 
                     iTimeStep, ptcl, idx, newWeight, sputtDist[idx], sputtDist[10]);
                 Kokkos::atomic_fetch_add(&(sputtDist[idx]), newWeight);
               }
@@ -497,8 +513,8 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
               }
             }
             if(debug)
-              printf("surf10 surfId %d timestep %d ptcl %d newWeight %g GrossDep %g "
-                " GrossEros %g AveSput %g weight %g SpYCount %d \n", surfId, iTimeStep,
+              printf("surf10 surfId %d timestep %d ptcl %d newWeight %.15e GrossDep %.15e "
+                " GrossEros %.15e AveSput %.15e weight %.15e SpYCount %d \n", surfId, iTimeStep,
                 ptcl, newWeight, addGrossDep, addGrossEros, addSpYCount);
           }
         } else { // totalYR
@@ -510,15 +526,15 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
             grossDep_ = weight;
           }
           if(debug)
-            printf("surf11 totalYR timestep %d ptcl %d weight %g surfId %d "
-              " newWeight %g grossDep+ %g totalGrossDep %g \n", iTimeStep, ptcl,
+            printf("surf11 totalYR timestep %d ptcl %d weight %.15e surfId %d "
+              " newWeight %.15e grossDep+ %.15e totalGrossDep %.15e \n", iTimeStep, ptcl,
               weight,surfId, newWeight, grossDep_, addGrossDep);
         }
 
         if(eInterpVal <= 0) {
           if(debug)
             printf("surf11+ eInterpVal <= 0 timestep %d ptcl %d didReflect %d "
-              " weight %g \n", iTimeStep, ptcl, didReflect, weight );
+              " weight %.15e \n", iTimeStep, ptcl, didReflect, weight );
           newWeight = 0;
           scs_hitNum(pid) = 2;
           if(surfId >= 0 && didReflect) {
@@ -536,7 +552,7 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
                 aDistInd >= 0 && aDistInd < nAngDist) {
               auto idx = surfId*nEnDist*nAngDist + eDistInd*nAngDist + aDistInd;
               if(debug)
-                printf("surf12 timestep %d ptcl %d energyDist @ %d prev %g\n", 
+                printf("surf12 timestep %d ptcl %d energyDist @ %d prev %.15e\n", 
                   iTimeStep, ptcl, idx, energyDist[idx]);
               Kokkos::atomic_fetch_add(&(energyDist[idx]), weight);
             }
@@ -544,8 +560,8 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
         } //surface
 
         if(debug)
-          printf("surf13 timestep %d ptcl %d Atomics @id %d dep %g erosion %g "
-           "avesput %g spYld %d wtStrike %g ptclStrike %d\n", iTimeStep, ptcl, 
+          printf("surf13 timestep %d ptcl %d Atomics @id %d dep %.15e erosion %.15e "
+           "avesput %.15e spYld %d wtStrike %.15e ptclStrike %d\n", iTimeStep, ptcl, 
            gridId, addGrossDep, addGrossEros, addAveSput, addSpYCount, 
            addSumWtStk, addSumPtclStk); 
         Kokkos::atomic_fetch_add(&(grossDeposition[gridId]), addGrossDep); 
@@ -555,42 +571,54 @@ inline void gitrm_surfaceReflection(PS* ptcls, GitrmSurfaceModel& sm,
         Kokkos::atomic_fetch_add(&(sumWtStrike[gridId]), addSumWtStk);
         Kokkos::atomic_fetch_add(&(sumPtclStrike[gridId]), addSumPtclStk);
         if(debug)
-          printf("surf14 timestep %d ptcl %d bdryAtomZ %d newWeight %g \n", 
-            iTimeStep, ptcl, bdryAtomZ, newWeight);
-        if(bdryAtomZ > 0 && newWeight > 0) {
+          printf("surf14 timestep %d ptcl %d materialZ %d newWeight %.15e elCharge %.15e "
+            "protonMass %.15e\n",iTimeStep, ptcl, materialZ, newWeight, elCharge, protonMass);
+        if(materialZ > 0 && newWeight > 0) {
           ps_weight(pid) = newWeight;
           scs_hitNum(pid) = 0;
           ps_charge(pid) = 0;
+          o::Real elCharge = 1.602e-19; //FIXME  
+          o::Real protonMass = 1.66e-27;//FIXME
           auto v0 = sqrt(2*eInterpVal*elCharge/(amu*protonMass));
           ps_newVelMag(pid) = v0;
           auto vSampled = o::zero_vector<3>(); 
+          o::Real pi = 3.1415;//FIXME
           vSampled[0] = v0*sin(aInterpVal*pi/180)*cos(2.0*pi*rand10);
           vSampled[1] = v0*sin(aInterpVal*pi/180)*sin(2.0*pi*rand10);
           vSampled[2] = v0*cos(aInterpVal*pi/180);
-          auto surfNorm = p::bdry_face_normal_of_tet(fid,coords,face_verts);
+          //done on top auto surfNormOut = p::bdry_face_normal_of_tet(fid,coords,face_verts);
           auto face = p::get_face_coords_of_tet(face_verts, coords, fid);
-          auto surfPar = o::normalize(face[0] - face[1]); // bdry face vtx
-          auto vecY = o::cross(surfNorm, surfPar);
-          auto trfV = vSampled[0]*surfPar + vSampled[1]*vecY + vSampled[2]*surfNorm;
-          vSampled = trfV;
+          auto surfPar = o::normalize(face[1] - face[0]); // bdry face vtx
+          auto vecY = o::cross(surfNormIn, surfPar);
+          if(debug)
+            printf("surf15 timestep %d ptcl %d V0 %.15e rand10 %.15e vSampled %.15e %.15e %.15e "
+              "norm %.15e %.15e %.15e surfPar %.15e %.15e %.15e  vecY %.15e %.15e %.15e \n", 
+              iTimeStep, ptcl,v0, rand10, vSampled[0], vSampled[1], vSampled[2], 
+              surfNormOut[0], surfNormOut[1], surfNormOut[2], surfPar[0], surfPar[1], 
+              surfPar[2], vecY[0], vecY[1],vecY[2]);
+
+          auto v = vSampled[0]*surfPar + vSampled[1]*vecY + vSampled[2]*surfNormIn;
+          vSampled = v;
           for(int i=0; i<3; ++i)
-            vel_ps(pid, i) = -1.0*vSampled[i]*surfNorm[i];
+            vel_ps(pid, i) = vSampled[i]*surfNormIn[i];
           //move reflected particle inwards
           //TODO for all particles, not only reflected ?
-          auto newPos =  xpoint - shiftRefl*surfNorm; //-1.0e-4*surfNorm GITR
+          auto newPos =  xpoint + shiftRefl*surfNormIn; //-1.0e-4*surfNorm GITR
           //updating next position of only intersecting ptcls. For others, add up.
           for(o::LO i=0; i<3; ++i)
             next_pos_ps(pid,i) = newPos[i]; //TODO other updates ?
 
           if(debug)
-            printf("surf15 timestep %d ptcl %d xpt= pos %.15e %.15e %.15e => "
-              " %.15e %.15e %.15e vel  %.15e %.15e %.15e =>  %.15e %.15e %.15e \n", 
+            printf("surf16 timestep %d ptcl %d xpt= pos %.15e %.15e %.15e => "
+              " %.15e %.15e %.15e vel  %.15e %.15e %.15e =>  %.15e %.15e %.15e "
+              " vsampled final  %.15e %.15e %.15e\n", 
               iTimeStep, ptcl, xpoint[0], xpoint[1], xpoint[2], newPos[0], newPos[1], 
               newPos[2], vel[0], vel[1], vel[2], vel_ps(pid, 0), vel_ps(pid, 1),
-              vel_ps(pid, 2)); 
-        } else { //bdryAtomZ, newWeight
+              vel_ps(pid, 2), vSampled[0], vSampled[1], vSampled[2]); 
+        } else { //materialZ, newWeight
           scs_hitNum(pid) = 2;
-        } 
+        }
+
       } //fid
     } //mask
   }; //lambda

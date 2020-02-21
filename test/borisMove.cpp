@@ -12,8 +12,6 @@
 #include "GitrmPush.hpp"
 #include "GitrmIonizeRecombine.hpp"
 #include "GitrmSurfaceModel.hpp"
-//#include "GitrmCoulombCollision.hpp"
-//#include "GitrmThermalForce.hpp"
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -65,9 +63,10 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids,
 
 void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
     GitrmIonizeRecombine& gir, GitrmSurfaceModel& sm, int iter, 
-    o::Write<o::LO>& data_d, bool debug=false) {
+    o::Write<o::LO>& data_d, o::Write<o::Real>& ptclHistoryData, 
+    o::Write<o::LO>& lastFilledTimeSteps, int& iHistStep, int histInterval,
+    int numPtcls, int dofStepData, bool debug=false) {
   //auto& picparts = gm.picparts;
-  double dt1=5e-9;
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   PS* ptcls = gp.ptcls;
@@ -89,9 +88,8 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   //TODO convert elem_ids to Read-only
   
   if(gir.chargedPtclTracking) {
-    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, true);
-    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, true);
-    //gitrm_coulomb_collision(ptcls, &iter, gm, gp, 5e-9);
+    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
+    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
     gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, true);
     //Search again. The particles in ps not yet moved to elem_ids. 
     //The elem_ids shouldn't be reset between the two search_mesh calls.
@@ -101,6 +99,12 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   }
   bool resetFids = true;
   updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
+  if(histInterval >0) {
+    updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+      dofStepData, iHistStep);
+    if(iter % histInterval == 0)
+      ++iHistStep;
+  }
   Kokkos::Profiling::popRegion();
   Kokkos::Profiling::pushRegion("rebuild");
   //update positions and set the new element-to-particle lists
@@ -295,6 +299,7 @@ int main(int argc, char** argv) {
     gm.writeDist2BdryFacesData(bdryOutName, nD2BdryTetSubDiv);
   }
 
+  bool surfaceModel = true;
   GitrmSurfaceModel sm(gm, surfModelFile);
 
   if(debug)
@@ -320,10 +325,6 @@ int main(int argc, char** argv) {
   o::Write<o::LO> lastFilledTimeSteps(numPtcls, 0);
   o::Write<o::Real> ptclHistoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
-  if(histInterval >0)
-    updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
-      dofStepData, iHistStep);
-  
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int np;
@@ -347,8 +348,8 @@ int main(int argc, char** argv) {
       gp.checkCompatibilityWithGITRflags(iter); //to debug
 
     if(gir.chargedPtclTracking) {
-      gitrm_findDistanceToBdry(gp, gm, 1);
-      gitrm_calculateE(gp, *mesh, true, gm);
+      gitrm_findDistanceToBdry(gp, gm, 0);
+      gitrm_calculateE(gp, *mesh, false, gm);
       gitrm_borisMove(ptcls, gm, dTime, true);
     }
     else
@@ -356,15 +357,17 @@ int main(int argc, char** argv) {
     Kokkos::Profiling::popRegion();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    search(picparts, gp, gm, gir, sm, iter, data_d, debug);
-    
-    if(histInterval >0) {
+    //search(picparts, gp, gm, gir, sm, iter, data_d, debug);
+    search(picparts, gp, gm, gir, sm, iter, data_d, ptclHistoryData,
+     lastFilledTimeSteps, iHistStep, histInterval, numPtcls, dofStepData, debug);
+    /* if(histInterval >0) {
       // move-over if. 0th step(above) kept; last step available at the end.
       if(iter % histInterval == 0)
         ++iHistStep;        
       updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls,
         dofStepData, iHistStep);
-    }
+    }*/
+
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", ptcls->nPtcls());
     ps_np = ptcls->nPtcls();
@@ -389,7 +392,8 @@ int main(int argc, char** argv) {
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }
-  
+  if(surfaceModel && comm_rank == 0)
+    sm.writeOutSurfaceData("surfaces.nc");  
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
 
   fprintf(stderr, "Done\n");

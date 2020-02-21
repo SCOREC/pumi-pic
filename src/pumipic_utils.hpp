@@ -384,7 +384,7 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     auto nz = gridz.size(); */
     bool debug = false;
     if(debug)
-      for(int i=0; i<10; ++i) printf(" %d %g \n", i, gridz[i]);
+      for(int i=0; i<5; ++i) printf(" %d %.15e \n", i, gridz[i]);
     o::Real fxyz = 0;
     o::Real dx = gridx[1] - gridx[0];
     o::Real dy = gridy[1] - gridy[0];
@@ -408,17 +408,17 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     auto fxz1 = interpolate2d_base(fxy_z0, fxy_z1, gridz[k], gridz[k+1], z, dz);
     fxyz = interpolate2d_base(fxz0, fxz1, gridy[j], gridy[j+1], y, dy);
     if(debug) {
-      printf("fx_z0 %g fx_z1 %g \n", fx_z0, fx_z1);
-      printf("fxy_z0 %g fxy_z1 %g fxz0 %g fxz1 %g fxyz %g\n",
+      printf("fx_z0 %.15e fx_z1 %.15e \n", fx_z0, fx_z1);
+      printf("fxy_z0 %.15e fxy_z1 %.15e fxz0 %.15e fxz1 %.15e fxyz %.15e\n",
         fxy_z0, fxy_z1, fxz0, fxz1, fxyz);
 
-      printf("x %g y %g z %g i %d j %d k %d dx %g dy %g dz %g \n", 
+      printf("x %.15e y %.15e z %.15e i %d j %d k %d dx %.15e dy %.15e dz %.15e \n", 
         x, y, z, i, j, k, dx, dy, dz);
       auto fx_z0_test = (data[i + j*nx + k*nx*ny]*(gridx[i+1]-x) + 
         data[i +1 + j*nx + k*nx*ny]*(x-gridx[i]))/dx;
       auto fx_z1_test = (data[i + j*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
         data[i +1 + j*nx + (k+1)*nx*ny]*(x-gridx[i]))/dx;
-      printf("fx_z0_test %g fx_z1_test %g \n", fx_z0_test, fx_z1_test);
+      printf("fx_z0_test %.15e fx_z1_test %.15e \n", fx_z0_test, fx_z1_test);
       auto fxy_z0_test = (data[i + (j+1)*nx + k*nx*ny]*(gridx[i+1]-x) + 
         data[i +1 + (j+1)*nx + k*nx*ny]*(x-gridx[i]))/dx;
       auto fxy_z1_test = (data[i + (j+1)*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
@@ -426,17 +426,17 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
       auto fxz0_test = (fx_z0*(gridz[k+1] - z) + fx_z1*(z-gridz[k]))/dz;
       auto fxz1_test = (fxy_z0*(gridz[k+1] - z) + fxy_z1*(z-gridz[k]))/dz;
       auto fxyz_test = (fxz0*(gridy[j+1] - y) + fxz1*(y-gridy[j]))/dy;
-      printf("fxy_z0_test %g fxy_z1_test %g fxz0_test %g fxz1_test %g fxyz_test %g\n",
+      printf("fxy_z0_test %.15e fxy_z1_test %.15e fxz0_test %.15e fxz1_test %.15e fxyz_test %.15e\n",
         fxy_z0_test, fxy_z1_test, fxz0_test, fxz1_test, fxyz_test);
       fxyz_test = (ny <= 1) ? fxz0: fxyz_test;
       fxyz_test = (nz <= 1) ? fx_z0: fxyz_test;
-      printf(" fxy_test %g\n", fxyz_test);
+      printf(" fxy_test %.15e\n", fxyz_test);
 
     }
     fxyz = (ny <= 1) ? fxz0: fxyz;
     fxyz = (nz <= 1) ? fx_z0: fxyz;
     if(debug)
-      printf("fxy %g\n", fxyz);
+      printf("fxy %.15e\n", fxyz);
     return fxyz;
 }
 

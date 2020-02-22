@@ -118,21 +118,8 @@ const GitrmParticles& gp, double dt)
           printf("Mu Beta Magnetic_fields particle %d timestep %d: %.16e %.16e %.16e %.16e %.16e\n", ptcl,iTimeStep, mu, beta, b_unit[0], b_unit[1],b_unit[2]);
           printf("amu background_amu particle %d timestep %d: %.16e %.16e \n",ptcl,iTimeStep, amu, background_amu);
           printf("Charge particle %d timestep %d: %d \n", ptcl,iTimeStep, charge);
-        }
-
-        if(1){
-     
-        //printf("Position partcle %d for timestep %d is %.15e %.15e %.15e \n",iTimeStep, ptcl, posit[0],posit[1],posit[2]);
-        printf("Position partcle %d timestep %d is %.15e %.15e %.15e \n",ptcl, iTimeStep, posit_next[0],posit_next[1],posit_next[2]);
-        printf("The velocities partcle %d timestep %dare %.15f %.15f %.15f \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
-        //printf("vPartNorm nuEdt partcle %d for timestep %d is %.15e %.15e\n", ptcl, iTimeStep,Omega_h::norm(vel), nuEdt);
-        //printf("coeff_par parallel_direction partcle %d for timestep %d is %.15e %.15e %.15e %.15e\n", ptcl, iTimeStep, coeff_par,parallel_dir[0],parallel_dir[1],parallel_dir[2]);
-        //printf("coeff_perp1 coeff_perp2 partcle %d timestep %d is %.15e %.15e \n", ptcl, iTimeStep, coeff_perp1,coeff_perp2);
-        //printf("Perpendicuar directions1 partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, perp1_dir[0],perp1_dir[1],perp1_dir[2]);      
-        //printf("Perpendicuar directions2 partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, perp2_dir[0],perp2_dir[1],perp2_dir[2]);
-        //printf("velocity Collision partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, drag*relvel[0]/velocityNorm,drag*relvel[1]/velocityNorm,drag*relvel[2]/velocityNorm);
-        //printf("n2 is %.15e\n", n2);
-      
+          printf("Position partcle %d timestep %d is %.15e %.15e %.15e \n",ptcl, iTimeStep, posit_next[0],posit_next[1],posit_next[2]);
+          printf("The velocities partcle %d timestep %dare %.15f %.15f %.15f \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
         }
 
 

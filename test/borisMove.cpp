@@ -92,16 +92,16 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   
   if(gir.chargedPtclTracking) {
     bool flag = (iter > 4060) ? true: false;
-    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, flag);
-    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, flag);
-    /*gitrm_cross_diffusion(ptcls, &iter, gm, gp, dt1);
+    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
+    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
+    gitrm_cross_diffusion(ptcls, &iter, gm, gp, dt1);
     isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps,
       elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, true);
     assert(isFound);
-
+    
     //gitrm_surfaceReflection_test(ptcls, sm, gp, gm, elem_ids, false);
     gitrm_coulomb_collision(ptcls, &iter, gm, gp, dt1);
-    gitrm_thermal_force(ptcls, &iter, gm, gp, dt1);*/
+    gitrm_thermal_force(ptcls, &iter, gm, gp, dt1);
   }
   bool resetFids = true;
   storePiscesData(mesh, gp, data_d, iter, resetFids, false);

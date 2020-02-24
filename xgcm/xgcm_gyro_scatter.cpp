@@ -1,8 +1,8 @@
-#include "xgcp_gyro_scatter.hpp"
+#include "xgcm_gyro_scatter.hpp"
 #include <pumipic_adjacency.hpp>
 #include <Omega_h_for.hpp>
 
-namespace xgcp {
+namespace xgcm {
   using GyroField=Mesh::GyroField;
   using GyroFieldR=Mesh::GyroFieldR;
 

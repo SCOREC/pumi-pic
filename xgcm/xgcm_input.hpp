@@ -1,11 +1,11 @@
 #pragma once
-#include "xgcp_types.hpp"
+#include "xgcm_types.hpp"
 #include <pumipic_input.hpp>
-namespace xgcp {
+namespace xgcm {
 
   class Mesh;
   /*
-    This class will store all necessary input to construct an XGCp Mesh
+    This class will store all necessary input to construct an XGCm Mesh
    */
   class Input {
   public:

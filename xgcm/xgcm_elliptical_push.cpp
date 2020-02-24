@@ -1,8 +1,8 @@
-#include "xgcp_push.hpp"
+#include "xgcm_push.hpp"
 #include <PS_Macros.h>
 #include "pumipic_profiling.hpp"
 
-namespace xgcp {
+namespace xgcm {
   namespace ellipticalPush {
     double h,k,d;
     void setup(PS_I* ptcls, const double h_, const double k_, const double d_) {

@@ -2,10 +2,10 @@
 #include <random>
 #include <chrono>
 #include <thread>
-#include <xgcp_mesh.hpp>
-#include <xgcp_push.hpp>
-#include <xgcp_gyro_scatter.hpp>
-#include <xgcp_particle.hpp>
+#include <xgcm_mesh.hpp>
+#include <xgcm_push.hpp>
+#include <xgcm_gyro_scatter.hpp>
+#include <xgcm_particle.hpp>
 #include <particle_structs.hpp>
 #include <Omega_h_for.hpp>
 #include "pumipic_adjacency.hpp"
@@ -13,8 +13,8 @@
 
 #define ELEMENT_SEED 1024*1024
 
-using xgcp::fp_t;
-using xgcp::PS_I;
+using xgcm::fp_t;
+using xgcm::PS_I;
 
 namespace p = pumipic;
 namespace ps = particle_structs;
@@ -25,8 +25,8 @@ void getPtclImbalance(int ptclCnt);
 void printTimerResolution();
 int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
                       const int mdlFace, const int numPtclsPerRank);
-void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop);
-void render(xgcp::Mesh& mesh, int iter, int comm_rank);
+void tagParentElements(xgcm::Mesh& mesh, PS_I* ptcls, int loop);
+void render(xgcm::Mesh& mesh, int iter, int comm_rank);
 
 int main(int argc, char* argv[]) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -70,9 +70,9 @@ int main(int argc, char* argv[]) {
   assert(safeMethod>=0);
   int num_planes = atoi(argv[4]);
   int num_processes_per_group = atoi(argv[5]);
-  xgcp::Input input(lib, mesh_file, partition_file, num_planes, num_processes_per_group,
+  xgcm::Input input(lib, mesh_file, partition_file, num_planes, num_processes_per_group,
                     bufferMethod, safeMethod);
-  xgcp::Mesh mesh(input);
+  xgcm::Mesh mesh(input);
   p::Mesh* picparts = mesh.pumipicMesh();
   o::Mesh* omesh = mesh.omegaMesh();
 
@@ -113,13 +113,13 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "max iterations: %d\n", maxIter);
 
   //Create and initialize Ions
-  PS_I* ptcls = xgcp::initializeIons(mesh, actualParticles, ptcls_per_elem, element_gids);
+  PS_I* ptcls = xgcm::initializeIons(mesh, actualParticles, ptcls_per_elem, element_gids);
 
   //Setup push
   const double h = 1.72479370-.08;
   const auto k = .020558260;
   const auto d = 0.6;
-  xgcp::ellipticalPush::setup(ptcls, h, k, d);
+  xgcm::ellipticalPush::setup(ptcls, h, k, d);
   const auto degPerPush = atof(argv[10]);
   if (!comm_rank)
     fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
     if(!comm_rank || (comm_rank == comm_size/2))
       ptcls->printMetrics();
     //Stop if there are no more particles
-    totNp = xgcp::getGlobalParticleCount(ptcls);
+    totNp = xgcm::getGlobalParticleCount(ptcls);
     if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -164,10 +164,10 @@ int main(int argc, char* argv[]) {
     getPtclImbalance(ps_np);
     timer.reset();
     //Push Particles
-    xgcp::ellipticalPush::push(ptcls, *omesh, degPerPush, iter);
+    xgcm::ellipticalPush::push(ptcls, *omesh, degPerPush, iter);
     //Perform search and rebuild
-    xgcp::search(mesh, ptcls);
-    totNp = xgcp::getGlobalParticleCount(ptcls);
+    xgcm::search(mesh, ptcls);
+    totNp = xgcm::getGlobalParticleCount(ptcls);
     if(totNp == 0) {
       fprintf(stderr, "No particles remain... exiting push loop\n");
       break;
@@ -175,7 +175,7 @@ int main(int argc, char* argv[]) {
     tagParentElements(mesh,ptcls,iter);
 
     //Perform gyro scatter
-    xgcp::gyroScatter(mesh, ptcls);
+    xgcm::gyroScatter(mesh, ptcls);
   }
   if (comm_rank == 0)
     fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
@@ -327,7 +327,7 @@ int setSourceElements(p::Mesh* picparts, PS_I::kkLidView ppe,
 }
 
 
-void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop) {
+void tagParentElements(xgcm::Mesh& mesh, PS_I* ptcls, int loop) {
   //read from the tag
   o::LOs ehp_nm1 = mesh->get_array<o::LO>(mesh.dim(), "has_particles");
   o::Write<o::LO> ehp_nm0(ehp_nm1.size());
@@ -347,7 +347,7 @@ void tagParentElements(xgcp::Mesh& mesh, PS_I* ptcls, int loop) {
   mesh->set_tag(o::FACE, "has_particles", ehp_nm0_r);
 }
 
-void render(xgcp::Mesh& mesh, int iter, int comm_rank) {
+void render(xgcm::Mesh& mesh, int iter, int comm_rank) {
   std::stringstream ss;
   ss << "pseudoPush_r" << comm_rank<<"_t"<<iter;
   std::string s = ss.str();

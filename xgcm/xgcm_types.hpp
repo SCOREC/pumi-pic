@@ -5,7 +5,7 @@
 #include <pumipic_mesh.hpp>
 
 
-namespace xgcp {
+namespace xgcm {
   namespace o = Omega_h;
   namespace p = pumipic;
   namespace ps = particle_structs;

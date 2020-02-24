@@ -1,11 +1,11 @@
-#include "xgcp_particle.hpp"
+#include "xgcm_particle.hpp"
 #include <random>
 #include <chrono>
 
 //TODO: decide how to handle this
 #define PARTICLE_SEED 512*512
 
-namespace xgcp {
+namespace xgcm {
   void setInitialPtclCoords(Mesh& m, PS_I* ptcls);
   void setPtclIds(PS_I* ptcls);
 

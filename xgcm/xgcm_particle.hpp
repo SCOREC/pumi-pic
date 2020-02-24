@@ -1,14 +1,14 @@
 #pragma once
-#include "xgcp_types.hpp"
-#include "xgcp_mesh.hpp"
+#include "xgcm_types.hpp"
+#include "xgcm_mesh.hpp"
 #include <pumipic_adjacency.hpp>
-namespace xgcp {
+namespace xgcm {
   //Get the total number of particles across all processes
   template <class PS>
   ps::gid_t getGlobalParticleCount(PS* ptcls);
 
   /* Create the particle structure of ions and set initial values
-     m - the XGCp mesh
+     m - the XGCm mesh
      nPtcls - number of particles
      ptcls_per_elem - number of particles in each mesh elements
      element_gids - global IDs of mesh elements

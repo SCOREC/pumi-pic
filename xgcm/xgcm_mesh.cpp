@@ -1,5 +1,5 @@
-#include "xgcp_mesh.hpp"
-#include "xgcp_gyro_scatter.hpp"
+#include "xgcm_mesh.hpp"
+#include "xgcm_gyro_scatter.hpp"
 #include <Omega_h_file.hpp>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -20,8 +20,8 @@ namespace {
                               o::CommPtr& mesh_comm, o::CommPtr& torodial_comm,
                               o::CommPtr& group_comm);
 }
-namespace xgcp {
-  Mesh::Mesh(xgcp::Input& input) {
+namespace xgcm {
+  Mesh::Mesh(xgcm::Input& input) {
     //Read the full mesh on every process
     full_mesh = new o::Mesh(o::read_mesh_file(input.mesh_file, input.library.self()));
 

@@ -1,13 +1,13 @@
 #pragma once
-#include "xgcp_types.hpp"
-#include "xgcp_input.hpp"
+#include "xgcm_types.hpp"
+#include "xgcm_input.hpp"
 #include <pumipic_mesh.hpp>
 #include <Omega_h_comm.hpp>
 
 using Omega_h::MpiTraits;
 
 /*
-  XGCp Mesh encapsulates the partitioning of the mesh, torodial planes, and groups
+  XGCm Mesh encapsulates the partitioning of the mesh, torodial planes, and groups
 
   Partition Description:
     Mesh is partitioned into picparts based on pumipic::Mesh rules
@@ -23,10 +23,10 @@ using Omega_h::MpiTraits;
       back to the members.
  */
 
-namespace xgcp {
+namespace xgcm {
   class Mesh {
   public:
-    Mesh(xgcp::Input&);
+    Mesh(xgcm::Input&);
     ~Mesh();
     //Delete default compilers
     Mesh() = delete;

@@ -55,13 +55,13 @@ mpi_test(pseudoXGCm_120kElms_4 4
   ${TEST_DATA_DIR}/xgc/120k.osh ${TEST_DATA_DIR}/xgc/120k_4.cpn
   10000 141 10 full bfs 0.5 0)
 
-mpi_test(XGCp_24kElms_1m_2p_2g 4
-  ./XGCp --kokkos-threads=1
+mpi_test(XGCm_24kElms_1m_2p_2g 4
+  ./XGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/24k.osh ${TEST_DATA_DIR}/xgc/24k_4.cpn
   1000 2 2 51 100 full bfs 0.5 0 0)
 
-mpi_test(XGCp_24kElms_4m_2p_1g 8
-  ./XGCp --kokkos-threads=1
+mpi_test(XGCm_24kElms_4m_2p_1g 8
+  ./XGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/24k.osh ${TEST_DATA_DIR}/xgc/24k_4.cpn
   1000 2 1 51 100 full bfs 0.5 0 0)
 

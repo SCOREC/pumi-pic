@@ -1,7 +1,7 @@
 #pragma once
-#include "xgcp_types.hpp"
+#include "xgcm_types.hpp"
 
-namespace xgcp {
+namespace xgcm {
   //Nonphysical elliptical push that pushes particles in an ellipse shape
   namespace ellipticalPush {
     /*

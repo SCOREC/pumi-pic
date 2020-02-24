@@ -1,7 +1,7 @@
 #pragma once
-#include "xgcp_mesh.hpp"
+#include "xgcm_mesh.hpp"
 
-namespace xgcp {
+namespace xgcm {
 
   void setGyroConfig(Input& input);
   void printGyroConfig();

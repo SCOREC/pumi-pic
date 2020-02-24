@@ -73,11 +73,11 @@ set(ALL_LIBS
   pumipic
   )
 
-#xgcp
-add_subdirectory(xgcp)
+#xgcm
+add_subdirectory(xgcm)
 set(ALL_LIBS
   ${ALL_LIBS}
-  xgcp
+  xgcm
   )
 
 if(IS_TESTING)

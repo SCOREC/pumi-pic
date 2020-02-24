@@ -1,6 +1,6 @@
-#include "xgcp_input.hpp"
+#include "xgcm_input.hpp"
 
-namespace xgcp {
+namespace xgcm {
 
   Input::Input(o::Library& lib, char* mesh_filename, char* partition_filename,
                int nplanes, int nppg,

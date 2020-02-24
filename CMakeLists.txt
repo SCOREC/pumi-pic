@@ -54,12 +54,18 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
+
 #particle structures
 add_subdirectory(particle_structs)
 set(ALL_LIBS
   support
   particleStructs
   )
+if (PP_ENABLE_DEBUG_MODE)
+   add_definitions(-DPP_DEBUG)
+   target_compile_definitions(support INTERFACE -DPP_DEBUG)
+endif()
+
 #pumipic
 add_subdirectory(src)
 set(ALL_LIBS

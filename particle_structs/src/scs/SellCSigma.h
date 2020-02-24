@@ -268,6 +268,9 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   //If particle info is provided then enter the information
   lid_t given_particles = particle_elements.size();
   if (given_particles > 0 && particle_info != NULL) {
+#ifdef PP_DEBUG
+    assert(given_particles == num_ptcls);
+#endif
     initSCSData(chunk_widths, particle_elements, particle_info);
   }
   Kokkos::Profiling::popRegion();

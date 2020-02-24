@@ -584,6 +584,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         rank, timer.seconds(), btime);
     fprintf(stderr, "%d pumipic search_2d loops %d\n", rank, loops);
   }
+#ifdef PP_DEBUG
+  return found;
+#endif
   int maxLoops = 0;
   MPI_Allreduce(&loops, &maxLoops, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
   int minLoops = 0;

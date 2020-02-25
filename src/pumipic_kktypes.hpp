@@ -8,8 +8,6 @@
 #include <PS_Types.h>
 
 namespace pumipic {
-  using particle_structs::lid_t;
-
 #ifdef FP64
   typedef double fp_t;
 #endif
@@ -20,8 +18,8 @@ namespace pumipic {
 
   typedef Kokkos::DefaultExecutionSpace exe_space;
   typedef exe_space::device_type device_type;
-  typedef particle_structs::Segment<int, device_type> SegmentInt;
-  typedef particle_structs::Segment<Vector3d, device_type> Segment3d;
+  typedef Segment<int, device_type> SegmentInt;
+  typedef Segment<Vector3d, device_type> Segment3d;
 
   typedef Kokkos::View<lid_t*, device_type> kkLidView;
   void hostToDeviceLid(kkLidView d, lid_t *h);

@@ -1,6 +1,7 @@
-#include <psView.h>
+#include <ppView.h>
 #include <cmath>
-namespace ps = particle_structs;
+
+namespace pp = pumipic;
 
 int constructTypes();
 int parallelFor();
@@ -27,12 +28,12 @@ int main(int argc,char* argv[]) {
 typedef double Vector3f[3];
 int constructTypes() {
   int fails = 0;
-  ps::View<int*> intView(10);
+  pp::View<int*> intView(10);
   if (intView.size() != 10 || intView->size() != 10) {
     fprintf(stderr, "[ERROR] Incorrect size on view of ints [(view) %d != %d (actual)]\n", intView.size(), 10);
     ++fails;
   }
-  ps::View<Vector3f*> dblView("dblView", 20);
+  pp::View<Vector3f*> dblView("dblView", 20);
   if (dblView.size() != 3 * 20 || dblView->size() != 3 * 20) {
     fprintf(stderr, "[ERROR] Incorrect size on view of doubles\n");
     ++fails;
@@ -42,11 +43,11 @@ int constructTypes() {
 
 int parallelFor() {
   int fails = 0;
-  ps::View<int*> intView(10);
+  pp::View<int*> intView(10);
   Kokkos::parallel_for(10, KOKKOS_LAMBDA(const int& i) {
       intView(i) = i;
     });
-  ps::View<Vector3f*> dblView("dblView", 20);
+  pp::View<Vector3f*> dblView("dblView", 20);
   Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int& i) {
     for (int j = 0; j < 3; ++j)
       dblView(i, j) = intView(i/2) * j * M_PI;
@@ -57,7 +58,7 @@ int parallelFor() {
 
 int parallelReduce() {
   int fails = 0;
-  ps::View<int*> intView(10);
+  pp::View<int*> intView(10);
   Kokkos::parallel_for(10, KOKKOS_LAMBDA(const int& i) {
       intView(i) = i;
     });
@@ -71,7 +72,7 @@ int parallelReduce() {
             "[(view) %d != %d (actual)]\n", total, res);
     ++fails;
   }
-  ps::View<Vector3f*> dblView("dblView", 20);
+  pp::View<Vector3f*> dblView("dblView", 20);
   Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int& i) {
     for (int j = 0; j < 3; ++j)
       dblView(i, j) = 1.0/3;

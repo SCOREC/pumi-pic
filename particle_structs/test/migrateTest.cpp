@@ -4,7 +4,6 @@
 #include <MemberTypes.h>
 #include <SellCSigma.h>
 
-#include <psAssert.h>
 #include "Distribute.h"
 #include <mpi.h>
 

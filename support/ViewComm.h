@@ -2,7 +2,6 @@
 
 #include <Kokkos_Core.hpp>
 #include "SupportKK.h"
-#include "MemberTypes.h"
 #include <unordered_map>
 #include <mpi.h>
 namespace pumipic {

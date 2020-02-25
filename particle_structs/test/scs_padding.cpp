@@ -4,7 +4,6 @@
 #include <MemberTypes.h>
 #include <SellCSigma.h>
 #include <particle_structs.hpp>
-#include <psAssert.h>
 #include "Distribute.h"
 
 namespace ps=particle_structs;

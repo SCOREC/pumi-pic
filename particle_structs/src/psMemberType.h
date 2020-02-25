@@ -1,7 +1,6 @@
 #pragma once
 #include "ps_for.hpp"
 #include <MemberTypeLibraries.h>
-
 namespace pumipic {
 /* CopyParticleToSend<ParticleStructure, DataTypes> - copies particle info to send arrays
      Usage: CopyParticlesToSend<ParticleStructure, DataTypes>(ParticleStructure,

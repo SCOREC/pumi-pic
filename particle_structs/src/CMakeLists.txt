@@ -1,4 +1,5 @@
 include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/support
   ${CMAKE_CURRENT_SOURCE_DIR}/scs
   ${CMAKE_CURRENT_SOURCE_DIR}/csr
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -6,6 +7,11 @@ include_directories(
   )
 
 set(HEADERS
+  support/MemberTypes.h
+  support/MemberTypeArray.h
+  support/MemberTypeLibraries.h
+  support/PS_Macros.h
+  support/Segment.h
   particle_structure.hpp
   ps_for.hpp
   scs/SCS_Macros.h
@@ -29,6 +35,9 @@ add_library(particleStructs ${SOURCES})
 target_link_libraries(particleStructs support)
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>)
+target_include_directories(particleStructs INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
   $<INSTALL_INTERFACE:include>)
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/scs>

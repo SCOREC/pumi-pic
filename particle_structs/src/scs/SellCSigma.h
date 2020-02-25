@@ -1,3 +1,4 @@
+
 #ifndef SELL_C_SIGMA_H_
 #define SELL_C_SIGMA_H_
 #include <vector>
@@ -8,7 +9,7 @@
 #include <unordered_map>
 #include <climits>
 #include <particle_structure.hpp>
-#include <psAssert.h>
+#include <ppAssert.h>
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Sort.hpp>

@@ -59,27 +59,6 @@ struct MemberTypeAtIndex<N,MemberTypes<Types...> > {
   using type = typename MemberTypeAtIndexImpl<N, Types...>::type;
 };
 
-//Get the type with array lengths stripped off
-template <class T>
-struct BaseType {
-  using type=T;
-  static constexpr int size = 1;
-  static constexpr int rank = 0;
-};
-template <class T, int N>
-struct BaseType<T[N]> {
-  using type = typename BaseType<T>::type;
-  static constexpr int size = N * BaseType<T>::size;
-  static constexpr int rank = 1 + BaseType<T>::rank;
-};
-template <class T>
-struct BaseType<T*> {
-  using type = typename BaseType<T>::type;
-  static constexpr int size = 1 * BaseType<T>::size;
-  static constexpr int rank = 1 + BaseType<T>::rank;
-};
-
-
 }
 
 namespace particle_structs = pumipic;

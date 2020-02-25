@@ -4,7 +4,7 @@
 #include <MemberTypes.h>
 #include <SellCSigma.h>
 
-#include <psAssert.h>
+#include <ppAssert.h>
 #include "Distribute.h"
 
 using particle_structs::SellCSigma;

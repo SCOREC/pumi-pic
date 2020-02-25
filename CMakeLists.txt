@@ -39,6 +39,7 @@ set(MPIRUN_PROCFLAG "-np" CACHE STRING
 find_package(Omega_h 9 REQUIRED)
 set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
+set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
 
 set(debug_flag)
@@ -57,10 +58,6 @@ message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 #particle structures
 add_subdirectory(particle_structs)
-set(ALL_LIBS
-  support
-  particleStructs
-  )
 if (PP_ENABLE_DEBUG_MODE)
    add_definitions(-DPP_DEBUG)
    target_compile_definitions(support INTERFACE -DPP_DEBUG)
@@ -68,17 +65,6 @@ endif()
 
 #pumipic
 add_subdirectory(src)
-set(ALL_LIBS
-  ${ALL_LIBS}
-  pumipic
-  )
-
-#xgcm
-add_subdirectory(xgcm)
-set(ALL_LIBS
-  ${ALL_LIBS}
-  xgcm
-  )
 
 if(IS_TESTING)
   add_subdirectory(test)

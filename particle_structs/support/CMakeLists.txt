@@ -8,6 +8,7 @@ set(HEADERS
   MemberTypeLibraries.h
   Segment.h
   psAssert.h
+  psView.h
 )
 
 set(SOURCES

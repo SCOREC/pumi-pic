@@ -8,6 +8,7 @@ include_directories(
 set(HEADERS
   particle_structure.hpp
   ps_for.hpp
+  psMemberType.h
   scs/SCS_Macros.h
   scs/SCS_Types.h
   scs/SCSPair.h
@@ -32,6 +33,9 @@ target_include_directories(particleStructs INTERFACE
   $<INSTALL_INTERFACE:include>)
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/scs>
+  $<INSTALL_INTERFACE:include>)
+target_include_directories(particleStructs INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/csr>
   $<INSTALL_INTERFACE:include>)
 
 pumipic_export_lib(particleStructs "${HEADERS}")

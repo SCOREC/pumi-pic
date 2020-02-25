@@ -2,7 +2,7 @@
 
 #include "particle_structure.hpp"
 #include <SellCSigma.h>
-#include <csr/CSR.hpp>
+#include <CSR.hpp>
 namespace particle_structs {
   template <typename FunctionType, typename DataTypes, typename MemSpace>
   void parallel_for(ParticleStructure<DataTypes, MemSpace>* ps, FunctionType& fn,

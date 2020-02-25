@@ -27,11 +27,11 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
   PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
   PS::kkGidView element_gids("element_gids", ne);
   Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const o::LO& i) {
     element_gids(i) = mesh_element_gids[i];
   });
   if(elId>=0) {
-    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const o::LO& i) {
       ptcls_per_elem(i) = 0;
       if (i == elId) {
         ptcls_per_elem(i) = numPtcls;
@@ -39,13 +39,13 @@ void GitrmParticles::defineParticles(p::Mesh& picparts, int numPtcls,
       }
     });
   } else {
-    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const o::LO& i) {
       ptcls_per_elem(i) = ptclsInElem[i];
     });
   }
 
   printf(" ptcls/elem: \n");
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const o::LO& i) {
     const int np = ptcls_per_elem(i);
     if (np > 0)
       printf("%d , ", np);
@@ -84,7 +84,7 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
   printf("Constructing PS particles\n");
   defineParticles(picparts, numPtcls, numPtclsInElems, -1);
   
-  initPtclCollisionData(numPtcls);
+  initPtclWallCollisionData(numPtcls);
   //note:rebuild to get mask if elem_ids changed
   printf("Setting ImpurityPtcl InitCoords \n");
   o::LOs ptclIdPtrsOfElem;
@@ -110,11 +110,10 @@ void GitrmParticles::initPtclsFromFile(p::Mesh& picparts,
     printPtclSource(readInData_r, numPtcls, 6); //nptcl=0(all), dof=6
 }
 
-void GitrmParticles::initPtclCollisionData(int numPtcls) {
-  collisionPoints = o::Write<o::Real>(3*numPtcls, 0, "xpoints");
-  collisionPointFaceIds = o::Write<o::LO>(numPtcls, -1);
+void GitrmParticles::initPtclWallCollisionData(int numPtcls) {
+  wallCollisionPts = o::Write<o::Real>(3*numPtcls, 0, "xpoints");
+  wallCollisionFaceIds = o::Write<o::LO>(numPtcls, -1);
 }
-
 
 // Find elemId of any particle, and start with that elem to search 
 // elem of all particles. Get #particles in each element,
@@ -130,7 +129,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
   o::LO elmBeg=-1, ii=0;
   bool found = false;
   while(!found) {
-    auto lamb = OMEGA_H_LAMBDA(const int elem) {
+    auto lamb = OMEGA_H_LAMBDA(const o::LO& elem) {
       auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
       auto M = p::gatherVectors4x3(coords, tetv2v);
       auto pos = o::zero_vector<3>();
@@ -158,7 +157,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
   o::Write<o::LO> ptcl_done(numPtcls, 0);
   o::LO maxSearch = 100;
   //search all particles starting with this element
-  auto lamb2 = OMEGA_H_LAMBDA(const int ip) {
+  auto lamb2 = OMEGA_H_LAMBDA(const o::LO& ip) {
     bool found = false;
     auto pos = o::zero_vector<3>();
     auto bcc = o::zero_vector<4>();
@@ -198,7 +197,7 @@ void GitrmParticles::findElemIdsOfPtclFileCoordsByAdjSearch(
   o::LOs ptcl_done_r(ptcl_done);
   auto minFlag = o::get_min(ptcl_done_r);
   if(!minFlag) {
-    o::parallel_for(numPtcls, OMEGA_H_LAMBDA(const int i) {
+    o::parallel_for(numPtcls, OMEGA_H_LAMBDA(const o::LO& i) {
       if(!ptcl_done[i]) {
         double v[6];
         for(int j=0; j<6; ++j)
@@ -223,7 +222,7 @@ void GitrmParticles::convertInitPtclElemIdsToCSR(const o::LOs& numPtclsInElems,
   // csr data
   o::Write<o::LO> ptclIdsInElem_w(numPtcls, -1);
   o::Write<o::LO> ptclsFilledInElem(nel, 0); 
-  auto lambda = OMEGA_H_LAMBDA(const o::LO id) {
+  auto lambda = OMEGA_H_LAMBDA(const o::LO& id) {
     auto el = elemIdOfPtcls[id];
     auto old = Kokkos::atomic_fetch_add(&(ptclsFilledInElem[el]), 1);
     //TODO FIXME invalid device function error with OMEGA_H_CHECK in lambda
@@ -339,7 +338,7 @@ void GitrmParticles::initPtclSurfaceModelData() {
   auto ps_newVelMag = ptcls->get<PTCL_VMAG_NEW>();
   auto lambda = PS_LAMBDA(const int& elem, const int& pid, const int& mask) {
     if(mask > 0) {
-      ps_weight(pid) = 0;
+      ps_weight(pid) = 1;
       ps_hitNum(pid) = 0;
       ps_newVelMag(pid) = 0;
     }
@@ -465,7 +464,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
   printf("\nDirection:x,y,z: %f %f %f\n xe,ye,ze: %f %f %f\n", x,y,z, xe,ye,ze);
 
   // Beginning element id of this x,y,z
-  auto lamb = OMEGA_H_LAMBDA(const int elem) {
+  auto lamb = OMEGA_H_LAMBDA(const o::LO& elem) {
     auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
     auto M = p::gatherVectors4x3(coords, tetv2v);
 
@@ -491,7 +490,7 @@ void GitrmParticles::findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::
 
   // Search final elemAndFace on bdry, on 1 thread on device(issue [] on host) 
   o::Write<o::Real> xpt(3, -1); 
-  auto lamb2 = OMEGA_H_LAMBDA(const int e) {
+  auto lamb2 = OMEGA_H_LAMBDA(const o::LO& e) {
     auto elem = elemAndFace[0];
     o::Vector<3> dest;
     dest[0] = xe;
@@ -622,6 +621,31 @@ int GitrmParticles::readGITRPtclStepDataNcFile(const std::string& ncFileName,
   return stat;
 }
 
+//timestep >0
+void GitrmParticles::checkCompatibilityWithGITRflags(int timestep) {
+  if(timestep==0) 
+    printf("ERROR: checkCompatibility is done before variables set\n");
+  OMEGA_H_CHECK(timestep>0);
+  if(ranIonization||ranRecombination)
+    OMEGA_H_CHECK(testGitrOptIoniRec);
+  else
+    OMEGA_H_CHECK(!testGitrOptIoniRec);
+
+  if(ranCoulombCollision)
+    OMEGA_H_CHECK(testGitrOptCollision);
+  else
+    OMEGA_H_CHECK(!testGitrOptCollision);
+
+  if(ranDiffusion)
+    OMEGA_H_CHECK(testGitrOptDiffusion);
+  else
+    OMEGA_H_CHECK(!testGitrOptDiffusion);
+  if(ranSurfaceReflection)
+    OMEGA_H_CHECK(testGitrOptSurfaceModel);
+  else
+    OMEGA_H_CHECK(!testGitrOptSurfaceModel);
+}
+
 void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
   o::HostRead<o::Real>dh(data);
   printf("ParticleSourcePositions: nptcl= %d\n", nPtcls);
@@ -668,7 +692,7 @@ void writePtclStepHistoryFile(o::Write<o::Real>& ptclsHistoryData,
   int nTHistory, std::string outNcFileName) {
   
   //fill empty elements with last filled values
-  auto lambda = OMEGA_H_LAMBDA(const int& pid) {
+  auto lambda = OMEGA_H_LAMBDA(const o::LO& pid) {
     auto ts = lastFilledTimeSteps[pid];
     for(int idof=0; idof<dof; ++idof) { 
       auto ref = ts*numPtcls*dof + pid*dof + idof;

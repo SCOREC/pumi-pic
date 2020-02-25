@@ -9,6 +9,7 @@ cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
       -DCMAKE_CXX_COMPILER=mpicxx \
       -DCMAKE_BUILD_TYPE=Release \
       -DIS_TESTING=ON \
+      -DPS_IS_TESTING=OFF \
       -DTEST_DATA_DIR=$src/pumipic-data \
       $src
 

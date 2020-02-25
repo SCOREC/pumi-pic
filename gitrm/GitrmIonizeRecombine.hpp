@@ -100,7 +100,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
 }
 
 inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir, 
-  const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
+  GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
   bool debug = false) {
   auto& mesh = gm.mesh;
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
@@ -121,6 +121,8 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
   bool useGitrRnd = USE_GITR_RND_NUMS;
   //#ifdef USE_GITR_RND_NUMS
+  if(!gp.ranIonization)
+    gp.ranIonization = true;
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
@@ -133,7 +135,7 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
   //#endif
 
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.ionizeTempGridMin;
   auto gridD0 = gir.ionizeDensGridMin;
@@ -250,7 +252,7 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
 
 inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir, 
-   const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
+   GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
    bool debug = false) {
   auto& mesh = gm.mesh;
   auto& densIon_d = gm.densIon_d;
@@ -269,6 +271,8 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
   auto dzTemp = gm.tempIonDz;
 
   auto useGitrRnd = USE_GITR_RND_NUMS;
+  if(!gp.ranRecombination)
+    gp.ranRecombination = true;
   //#ifdef USE_GITR_RND_NUMS
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
@@ -282,7 +286,7 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
   //#endif
 
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
-  auto& xfaces_d = gp.collisionPointFaceIds;
+  auto& xfaces_d = gp.wallCollisionFaceIds;
   auto dt = gp.timeStep;
   auto gridT0 = gir.recombTempGridMin;
   auto gridD0 = gir.recombDensGridMin;
@@ -337,19 +341,20 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
         if(use2DRatesData) {
           //cylindrical symmetry, height (z) is same.
           // projecting point to y=0 plane, since 2D data is on const-y plane.
+          bool cylSymm = true;
           auto dens = p::interpolate2dField(densIon_d, x0Dens, z0Dens, dxDens, 
-            dzDens, nxDens, nzDens, pos, true,1,0,false);
+            dzDens, nxDens, nzDens, pos, cylSymm,1,0,false);
           auto temp = p::interpolate2dField(temIon_d, x0Temp, z0Temp, dxTemp,
-            dzTemp, nxTemp, nzTemp, pos, true,1,0,false);
-
+            dzTemp, nxTemp, nzTemp, pos, cylSymm,1,0,false);
+          
           if(debug)
             printf("Recomb Dens: ptcl %d x0 %g z0 %g dx %g dz %g nx %d " 
             " nz %d \n", ptcl, x0Dens, z0Dens, dxDens, dzDens, nxDens, nzDens);
           if(debug)
             printf("Recomb Temp: ptcl %d x0 %g z0 %g dx %g dz %g nx %d " 
-            " nz %d \n", x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);  
+            " nz %d \n", ptcl, x0Temp, z0Temp, dxTemp,dzTemp, nxTemp, nzTemp);  
           if(debug)
-            printf("Recomb point: temp2D %g dens2D %g t3D %g d3D %g pos %g %g %g \n", 
+            printf("Recomb point: ptcl %d temp2D %g dens2D %g t3D %g d3D %g pos %g %g %g \n", 
               ptcl, temp, dens, tlocal, nlocal, pos[0], pos[1], pos[2]);
           nlocal = dens;
           tlocal = temp;

@@ -134,10 +134,9 @@ OMEGA_H_DEVICE void get_direc(const Omega_h::Vector<3> &vel, const Omega_h::Vect
 
     Omega_h::Vector<3> relvel1 = vel ;// - flowVelocity;
     auto velocityNorm   = Omega_h::norm(relvel1);
-    auto velocityNorm1  = p::osh_mag(relvel1);
     parallel_dir=relvel1/velocityNorm;
     
-    auto s1 = p::osh_dot(parallel_dir, b_unit);
+    auto s1 = Omega_h::inner_product(parallel_dir, b_unit);
     auto s2 = sqrt(1.0-s1*s1);
     if(abs(s1) >=1.0) s2=0;
     perp1_dir=1.0/s2*(s1*parallel_dir-b_unit);
@@ -171,7 +170,7 @@ OMEGA_H_DEVICE void get_direc(const Omega_h::Vector<3> &vel, const Omega_h::Vect
                 perp2_dir[2] = parallel_dir[1];
 
                 
-                s1 = p::osh_dot(parallel_dir, perp2_dir);
+                s1 = Omega_h::inner_product(parallel_dir, perp2_dir);
                 s2 = sqrt(1.0-s1*s1);
                 perp1_dir = -1.0/s2*Omega_h::cross(parallel_dir,perp2_dir);
                
@@ -229,6 +228,8 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
   const auto collisionIndex1 = gp.testGitrCollisionRndn1Ind;
   const auto collisionIndex2 = gp.testGitrCollisionRndn2Ind;
   const auto collisionIndex3 = gp.testGitrCollisionRndxsiInd;
+  auto& xfaces =gp.wallCollisionFaceIds;
+
 
   //printf("The numbers are %d, %d %d %d %d %d \n", testGDof, testGNT, iTimeStep, collisionIndex1, 
   //  collisionIndex2, collisionIndex3);
@@ -243,10 +244,10 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto posit          = p::makeVector3(pid, x_ps_d);
     auto ptcl           = pid_ps(pid);
     auto charge         = charge_ps_d(pid);
-
+    auto fid            = xfaces[ptcl];
 
     
-    if(!charge)
+    if(!charge && fid >=0)
       return; 
 
     

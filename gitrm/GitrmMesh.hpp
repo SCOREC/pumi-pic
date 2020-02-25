@@ -20,18 +20,21 @@ namespace p = pumipic;
 // gitrm_calculateE for neutrals.
 
 // D3D 0.8 to 2.45 m radial
- 
+
+namespace gitrm {
+  const double surfaceAndMaterialModelZ = 74.0;
+
+}
+
 //TODO put in config class
 const int USE_GITR_RND_NUMS = 1;
 const bool CREATE_GITR_MESH = false;
-
 const int USE_READIN_CSR_BDRYFACES = 1;
 const int WRITE_OUT_BDRY_FACES_FILE = 0;
 const bool WRITE_TEXT_D2BDRY_FACES = false;
 const bool WRITE_BDRY_FACE_COORDS_NC = false;
 const bool WRITE_MESH_FACE_COORDS_NC = false;
-//TODO enable runtime
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 15;// if csr bdry not re-used
+const o::LO D2BDRY_GRIDS_PER_TET = 15;// if csr bdry not re-used
 
 const int USE_2DREADIN_IONI_REC_RATES = 1;
 const int USE3D_BFIELD = 0;
@@ -47,8 +50,9 @@ const o::LO BIASED_SURFACE = 1;
 const o::Real CONSTANT_EFIELD0 = 0;
 const o::Real CONSTANT_EFIELD1 = 0;
 const o::Real CONSTANT_EFIELD2 = 0;
-const o::Real CONSTANT_BFIELD0 = 5;
-const o::Real CONSTANT_BFIELD1 = 5;
+
+const o::Real CONSTANT_BFIELD0 = 5;  //TODO FIXME
+const o::Real CONSTANT_BFIELD1 = 5;  //TODO FIXME
 const o::Real CONSTANT_BFIELD2 = -0.08;
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
@@ -78,7 +82,7 @@ public:
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
 
-  void createSurfaceGitrMesh(int meshVersion=2, bool markCylFromBdry=true);  
+  void createSurfaceGitrMesh();  
   void printBdryFaceIds(bool printIds=true, o::LO minNums=0);
   void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
   void test_preProcessDistToBdry();
@@ -96,7 +100,7 @@ public:
   void preProcessBdryFacesBfs();
   o::Write<o::LO> makeCsrPtrs(o::Write<o::LO>& data, int tot, int& sum);
   void preprocessStoreBdryFacesBfs(o::Write<o::LO>& numBdryFaceIdsInElems,
-  o::Write<o::LO>& bdryFacesCsrW, int csrSize);
+    o::Write<o::LO>& bdryFacesCsrW, int csrSize);
 
   void writeDist2BdryFacesData(const std::string outFileName="d2bdryFaces.nc", 
     int nD2BdryTetSubDiv=0);
@@ -113,18 +117,31 @@ public:
   o::LOs bdryCsrReadInDataPtrs;
   o::LOs bdryCsrReadInData;
   
-  void initBField(const std::string &, const o::Real shiftB=0);
+  void setFaceId2BdryFaceIdMap();
+  o::LOs bdryFaceOrderedIds;
+  int nbdryFaces = 0;
+  
+  void setFaceId2SurfaceAndMaterialIdMap();
+  int nSurfMaterialFaces = 0;
+  o::LOs surfaceAndMaterialOrderedIds;
+  int nDetectSurfaces = 0;
+  o::LOs detectorSurfaceOrderedIds;
+
+  void setFaceId2BdryFaceMaterialsZmap();
+  o::Reals bdryFaceMaterialZs;
+
+  void initBField(const std::string &f="bFile");
   void load3DFieldOnVtxFromFile(const std::string, const std::string &,
-    Field3StructInput&, o::Reals&, const o::Real shift=0 );
-  //TODO delete tags after use/ in destructor
-  bool addTagsAndLoadProfileData(const std::string &, const std::string &, const std::string &);
+    Field3StructInput&, o::Reals&);
+  bool addTagsAndLoadProfileData(const std::string &, const std::string &, 
+    const std::string &f="gradfile");
   bool initBoundaryFaces(bool init, bool debug=false);
   void loadScalarFieldOnBdryFacesFromFile(const std::string, const std::string &, 
-    Field3StructInput &, const o::Real shift=0, int debug=0);
+    Field3StructInput &, int debug=0);
   void load1DFieldOnVtxFromFile(const std::string, const std::string &, 
-    Field3StructInput &, o::Reals&, o::Reals&, const o::Real shift=0, int debug=0);
-  int markPiscesCylinder(bool render=false);
-  void markPiscesCylinderResult(o::Write<o::LO>& data_d);
+    Field3StructInput &, o::Reals&, o::Reals&, int debug=0);
+  int markDetectorSurfaces(bool render=false);
+  void writeResultAsMeshTag(o::Write<o::LO>& data_d);
   void test_interpolateFields(bool debug=false);
   void printDensityTempProfile(double rmax=0.2, int gridsR=20, 
     double zmax=0.5, int gridsZ=10);
@@ -150,13 +167,8 @@ public:
   //D3D_major rad =1.6955m; https://github.com/SCOREC/Fusion_Public/blob/master/
   // samples/D-g096333.03337/g096333.03337#L1033
   // field2D center may not coincide with mesh center
-  o::Real mesh2Efield2Dshift = 0;
-  o::Real mesh2Bfield2Dshift = 0;
-
-  //testing
   o::Reals Efield_2d;
   o::Reals Bfield_2d;
-  
   o::Reals densIon_d;
   o::Reals densEl_d;
   o::Reals temIon_d;
@@ -205,14 +217,12 @@ public:
   o::Real gradTiDx = 0;
   o::Real gradTiDz = 0;
 
-
   o::Real gradTeX0 = 0;
   o::Real gradTeZ0 = 0;
   o::Real gradTeNx = 0;
   o::Real gradTeNz = 0;
   o::Real gradTeDx = 0;
   o::Real gradTeDz = 0;
-
 
   // till here
 
@@ -231,9 +241,10 @@ public:
   //till here
  
   //get model Ids by opening mesh/model in Simmodeler
-  o::HostWrite<o::LO> piscesBeadCylinderIds;
-  o::HostWrite<o::LO> modelIdsToSkipFromD2bdry;
-
+  o::HostWrite<o::LO> detectorSurfaceModelIds;
+  o::HostWrite<o::LO> bdryMaterialModelIds;
+  o::HostWrite<o::Real> bdryMaterialModelIdsZ;
+  o::HostWrite<o::LO> surfaceAndMaterialModelIds;
   o::Write<o::Real> larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d;
 private:

@@ -17,7 +17,6 @@
 #include "GitrmCrossDiffusion.hpp"
 //#include "GitrmSurfaceModel.hpp"
 
-
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
 }
@@ -66,49 +65,22 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids,
   ptcls->migrate(ps_elem_ids, ps_process_ids);
 }
 
-void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
-    GitrmIonizeRecombine& gir, GitrmSurfaceModel& sm, int iter, 
-    o::Write<o::LO>& data_d, bool debug=false) {
-  //auto& picparts = gm.picparts;
-  double dt1=5e-9;
+
+void search(p::Mesh& picparts, GitrmParticles& gp,  o::Write<o::LO>& elem_ids,
+    bool debug=false) {
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   PS* ptcls = gp.ptcls;
   assert(ptcls->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 200;
-  const auto psCapacity = ptcls->capacity();
-  assert(psCapacity > 0);
-  o::Write<o::LO> elem_ids(psCapacity,-1);
-
   auto x_ps = ptcls->get<0>();
   auto xtgt_ps = ptcls->get<1>();
   auto pid_ps = ptcls->get<2>();
 
   bool isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
-    elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, debug);
+    elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
   assert(isFound);
-  Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::pushRegion("updateGitrmData");
   
-  if(gir.chargedPtclTracking) {
-    bool flag = (iter > 4060) ? true: false;
-    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
-    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
-    gitrm_cross_diffusion(ptcls, &iter, gm, gp, dt1);
-    isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps,
-      elem_ids, gp.collisionPoints, gp.collisionPointFaceIds, maxLoops, true);
-    assert(isFound);
-    
-    //gitrm_surfaceReflection_test(ptcls, sm, gp, gm, elem_ids, false);
-    gitrm_coulomb_collision(ptcls, &iter, gm, gp, dt1);
-    gitrm_thermal_force(ptcls, &iter, gm, gp, dt1);
-  }
-  bool resetFids = true;
-  storePiscesData(mesh, gp, data_d, iter, resetFids, false);
-  Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::pushRegion("rebuild");
-  //update positions and set the new element-to-particle lists
-  rebuild(picparts, ptcls, elem_ids, debug);
   Kokkos::Profiling::popRegion();
 }
 
@@ -209,7 +181,7 @@ int main(int argc, char** argv) {
   std::string ptclSource = argv[3];
   std::string profFile = argv[4];
   std::string ionizeRecombFile = argv[5];
-  std::string bFile=""; //TODO
+  std::string bFile="bFile"; //TODO
   std::string surfModelFile = argv[6];
   std::string thermGradientFile = argv[7];
   if (!comm_rank) {
@@ -220,7 +192,8 @@ int main(int argc, char** argv) {
     printf(" Temp Density Profile file %s\n", profFile.c_str());
     printf(" IonizeRecomb File %s\n", ionizeRecombFile.c_str());
     printf(" Gradient profile File %s\n", thermGradientFile.c_str());
-
+    printf(" SurfModel File %s\n", surfModelFile.c_str());
+    printf(" Gradient profile File %s\n", thermGradientFile.c_str());
   }
   int numPtcls = 1;
   int histInterval = 0;
@@ -252,7 +225,7 @@ int main(int argc, char** argv) {
   }
 
   if(piscesRun)
-    gm.markPiscesCylinder(true);
+    gm.markDetectorSurfaces(true);
   //current extruded mesh has Y, Z switched
   // ramp: 330, 90, 1.5, 200,10; tgt 324, 90...; upper: 110, 0
   if(!comm_rank)
@@ -268,28 +241,11 @@ int main(int argc, char** argv) {
   }
   auto* ptcls = gp.ptcls;
   const auto psCapacity = ptcls->capacity();
-
-  if(!piscesRun) {
-    std::string bFile = "get_from_argv";
-    double shiftB = 0; // non-pisces= 1.6955
-    gm.initBField(bFile, shiftB); 
-  }
-
-  printf("Adding Tags And Loading Profile Data %s\n", profFile.c_str());
-  OMEGA_H_CHECK(!profFile.empty());
-  OMEGA_H_CHECK(!thermGradientFile.empty());
-
+  gm.initBField(bFile); 
   auto initFields = gm.addTagsAndLoadProfileData(profFile, profFile, thermGradientFile);
-
-  //printf("Adding Tags And Loading Profile Data NUmber 2 %s\n", thermGradientFile.c_str());// added for gradient terms
-  //OMEGA_H_CHECK(!thermGradientFile.empty());
-  //auto initFields = gm.addTagsAndLoadProfileData(thermGradientFile, thermGradientFile);
-
-
   OMEGA_H_CHECK(!ionizeRecombFile.empty());
   GitrmIonizeRecombine gir(ionizeRecombFile, chargedTracking);
 
-  printf("Initializing Boundary faces\n");
   auto initBdry = gm.initBoundaryFaces(initFields, false);
   printf("Preprocessing: dist-to-boundary faces\n");
   int nD2BdryTetSubDiv = D2BDRY_GRIDS_PER_TET;
@@ -315,6 +271,7 @@ int main(int argc, char** argv) {
     gm.writeDist2BdryFacesData(bdryOutName, nD2BdryTetSubDiv);
   }
 
+  bool surfaceModel = true;
   GitrmSurfaceModel sm(gm, surfModelFile);
 
   if(debug)
@@ -340,10 +297,6 @@ int main(int argc, char** argv) {
   o::Write<o::LO> lastFilledTimeSteps(numPtcls, 0);
   o::Write<o::Real> ptclHistoryData(numPtcls*dofStepData*nTHistory);
   int iHistStep = 0;
-  if(histInterval >0)
-    updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
-      dofStepData, iHistStep);
-  
   fprintf(stderr, "\n*********Main Loop**********\n");
   auto end_init = std::chrono::system_clock::now();
   int np;
@@ -362,28 +315,57 @@ int main(int argc, char** argv) {
     if(comm_rank == 0)// && (debug || iter%1000 ==0))
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
+
+    //if(iter==1)
+    //  gp.checkCompatibilityWithGITRflags(iter); //TODO debug
+
     if(gir.chargedPtclTracking) {
-      bool flag = (iter >4060) ? true: false;
+      bool flag = (iter >4000) ? true: false;
       gitrm_findDistanceToBdry(gp, gm, flag);
       gitrm_calculateE(gp, *mesh, flag, gm);
       printf("Entering the boris routine \n");
       gitrm_borisMove(ptcls, gm, dTime, flag);
     }
     else
+      neutralBorisMove(ptcls,dTime);
 
-    neutralBorisMove(ptcls,dTime);
     Kokkos::Profiling::popRegion();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    search(picparts, gp, gm, gir, sm, iter, data_d, debug);
+    const auto psCapacity = ptcls->capacity();
+    assert(psCapacity > 0);
+    o::Write<o::LO> elem_ids(psCapacity,-1);
+    search(picparts, gp, elem_ids, debug);
     
-    if(histInterval >0) {
-      // move-over if. 0th step(above) kept; last step available at the end.
-      if(iter % histInterval == 0)
-        ++iHistStep;        
-      updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls,
-        dofStepData, iHistStep);
+    Kokkos::Profiling::pushRegion("otherRoutines");
+    //TODO convert elem_ids to Read-only
+    if(gir.chargedPtclTracking) {
+      gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
+      gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
+      //bool flag = (iter > 4060) ? true: false;
+      gitrm_cross_diffusion(ptcls, &iter, gm, gp,dTime);
+      search(picparts, gp, elem_ids, debug);
+      gitrm_coulomb_collision(ptcls, &iter, gm, gp, dTime);
+      gitrm_thermal_force(ptcls, &iter, gm, gp, dTime);
+      gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, false);
+      //The elem_ids shouldn't be reset between the two search_mesh calls.
+      search(picparts, gp, elem_ids, debug);
     }
+    
+    Kokkos::Profiling::popRegion();
+    bool resetFids = true;
+    updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
+    if(histInterval >0) {
+      updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
+        dofStepData, iHistStep);
+      if(iter % histInterval == 0)
+        ++iHistStep;
+    }
+    Kokkos::Profiling::pushRegion("rebuild");
+    //update positions and set the new element-to-particle lists
+    rebuild(picparts, ptcls, elem_ids, debug);
+    Kokkos::Profiling::popRegion();
+
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", ptcls->nPtcls());
     ps_np = ptcls->nPtcls();
@@ -399,16 +381,17 @@ int main(int argc, char** argv) {
   std::chrono::duration<double> dur_steps = end_sim - end_init;
   std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
   
-  if(piscesRun) {
+  if(!comm_rank && piscesRun) {
     std::string fname("piscesCounts.txt");
     printGridData(data_d, fname, "piscesDetected");
-    gm.markPiscesCylinderResult(data_d);
+    gm.writeResultAsMeshTag(data_d);
   }
-  if(histInterval >0) {
+  if(!comm_rank && histInterval >0) {
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }
-  
+  if(false && !comm_rank && surfaceModel)
+    sm.writeOutSurfaceData("surfaces.nc");  
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
 
   fprintf(stderr, "Done\n");

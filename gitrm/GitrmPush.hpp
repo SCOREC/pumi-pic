@@ -211,6 +211,7 @@ inline void gitrm_borisMove(PS* ptcls, const GitrmMesh &gm, const o::Real dTime,
       vel = vMinus + cVpxB;
       auto vel_ = vel;
       vel = vel + qpE;
+      //vel=vel0;  //Making Lorentz force to be zero.
       
       if (false && ptcl==7)  {
         printf("Inside push the original position to which increment is t be made ptcl %d is %.15e %.15e %.15e\n",ptcl, pos[0],pos[1],pos[2]);

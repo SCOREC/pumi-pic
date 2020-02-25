@@ -247,7 +247,7 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
     auto fid            = xfaces[ptcl];
 
     
-    if(!charge && fid >=0)
+    if(!charge || fid >=0)
       return; 
 
     
@@ -338,16 +338,6 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
       printf("coeff_perp1  for timestep %d is %g \n",iTimeStep, coeff_perp1);
       printf("coeff_perp2  for timestep %d is %g \n",iTimeStep, coeff_perp2);
       printf("n2  for timestep %d is %g \n",iTimeStep, n2);
-      
-
-      
-    }
-
-
-            if(1)
-          
-    {
-     
       //printf("Position partcle %d for timestep %d is %.15e %.15e %.15e \n",iTimeStep, ptcl, posit[0],posit[1],posit[2]);
       printf("Position partcle %d timestep %d is %.15e %.15e %.15e \n",ptcl, iTimeStep, posit_next[0],posit_next[1],posit_next[2]);
       printf("The velocities partcle %d timestep %dare %.15e %.15e %.15e \n", iTimeStep, ptcl, vel[0],vel[1],vel[2]); 
@@ -358,16 +348,20 @@ inline void gitrm_coulomb_collision(PS* ptcls, int *iteration, const GitrmMesh& 
       //printf("Perpendicuar directions2 partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, perp2_dir[0],perp2_dir[1],perp2_dir[2]);
       //printf("velocity Collision partcle %d timestep %d is %.15e %.15e %.15e \n", ptcl, iTimeStep, drag*relvel[0]/velocityNorm,drag*relvel[1]/velocityNorm,drag*relvel[2]/velocityNorm);
       //printf("n2 is %.15e\n", n2);
+
       
     }
+
 
 
     //vel=Omega_h::norm(vel)*parallel_dir+drag*relvel/velocityNorm;// This was if only drag force is implemented.
     vel=Omega_h::norm(vel)*(1-0.5*nuEdt)*((1+coeff_par)*parallel_dir+abs(n2) * 
       (coeff_perp1 * perp1_dir + coeff_perp2 * perp2_dir))+drag*relvel/velocityNorm;
 
-    printf("The velocities after updation from COULOMB collision partcle %d timestep %dare %.15e %.15e %.15e \n", ptcl, iTimeStep, vel[0],vel[1],vel[2]); 
-    
+    if (debug)
+    {  
+      printf("The velocities after updation from COULOMB collision partcle %d timestep %dare %.15e %.15e %.15e \n", ptcl, iTimeStep, vel[0],vel[1],vel[2]); 
+    }
     vel_ps_d(pid,0)=vel[0];
     vel_ps_d(pid,1)=vel[1];
     vel_ps_d(pid,2)=vel[2];  

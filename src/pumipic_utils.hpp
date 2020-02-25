@@ -529,10 +529,14 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
     pos, cylSymm, 3, 1, debug);
   auto f3 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, 
     pos, cylSymm, 3, 2, debug);
+  //printf("F123 are %.15f %.15f %.15f \n", f1,f2,f3);
+  //printf("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
+
   if(cylSymm) {
-    auto theta = atan2(static_cast<double>(pos[1]), static_cast<double>(pos[0]));  
-    auto field0 = field[0];
-    auto field1 = field[1]; 
+    //auto theta = atan2(static_cast<double>(pos[1]), static_cast<double>(pos[0]));
+    o::Real theta = atan2(pos[1], pos[0]);
+    auto field0 = f1;
+    auto field1 = f2; 
     field[0] = cos(theta)*field0 - sin(theta)*field1;
     field[1] = sin(theta)*field0 + cos(theta)*field1;
   }

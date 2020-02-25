@@ -52,7 +52,7 @@ const GitrmParticles& gp, double dt)
   const auto MI     = 1.6737236e-27;
 
   const auto iTimeStep = iTimePlusOne - 1;
-
+  auto& xfaces =gp.wallCollisionFaceIds;
 
   auto update_thermal = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
 	{ if(mask > 0 )
@@ -60,7 +60,8 @@ const GitrmParticles& gp, double dt)
     		auto posit          = p::makeVector3(pid, x_ps_d);
         auto ptcl           = pid_ps(pid);
         auto charge         = charge_ps_d(pid);
-          if(!charge)
+        auto fid            = xfaces[ptcl];
+          if(!charge || fid >=0)
              return;
 
         auto posit_next     = p::makeVector3(pid, xtgt_ps_d);
@@ -101,7 +102,7 @@ const GitrmParticles& gp, double dt)
 
 
     		o::Real mu = amu /(background_amu+amu);
-        o::Real alpha = 0.71*charge*charge;
+        //o::Real alpha = 0.71*charge*charge;
         o::Real beta = 3 * (mu + 5*sqrt(2.0)*charge*charge*(1.1*pow(mu, (5 / 2))-0.35*pow(mu,(3/2)))-1)/
         (2.6 - 2*mu + 5.4*pow(mu, 2));
         auto dv_ITG= o::zero_vector<3>();
@@ -109,7 +110,7 @@ const GitrmParticles& gp, double dt)
         dv_ITG[1] =1.602e-19*dt/(amu*MI)*beta*gradti[1]*b_unit[1];
         dv_ITG[2] =1.602e-19*dt/(amu*MI)*beta*gradti[2]*b_unit[2];
 
-        if (debug){
+        if (debug && ptcl==4){
 
           printf("Ion_temp_grad particle %d timestep %d: %.16e %.16e %.16e \n",ptcl,iTimeStep, gradti[0], gradti[1], gradti[2]);
           printf("El_temp_grad particle %d timestep %.d: %.16e %.16e %.16e \n",ptcl,iTimeStep,gradte[0], gradte[1], gradte[2] );
@@ -126,8 +127,9 @@ const GitrmParticles& gp, double dt)
         vel_ps_d(pid,0)=vel[0]+dv_ITG[0];
         vel_ps_d(pid,1)=vel[1]+dv_ITG[1];
         vel_ps_d(pid,2)=vel[2]+dv_ITG[2];
-
-        printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2)); 
+        if (debug && ptcl==4){
+        printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2));
+        } 
     	}
     };
     ps::parallel_for(ptcls, update_thermal);

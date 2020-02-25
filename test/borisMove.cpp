@@ -316,11 +316,13 @@ int main(int argc, char** argv) {
       fprintf(stderr, "=================iter %d===============\n", iter);
     Kokkos::Profiling::pushRegion("BorisMove");
 
-    //if(iter==1)
-    //  gp.checkCompatibilityWithGITRflags(iter); //TODO debug
+    /*if(iter==1)
+      gp.checkCompatibilityWithGITRflags(iter); //TODO debug
+    */
 
     if(gir.chargedPtclTracking) {
-      bool flag = (iter >4000) ? true: false;
+      //bool flag = (iter >4000) ? true: false;
+      bool flag=false;
       gitrm_findDistanceToBdry(gp, gm, flag);
       gitrm_calculateE(gp, *mesh, flag, gm);
       printf("Entering the boris routine \n");
@@ -347,7 +349,7 @@ int main(int argc, char** argv) {
       search(picparts, gp, elem_ids, debug);
       gitrm_coulomb_collision(ptcls, &iter, gm, gp, dTime);
       gitrm_thermal_force(ptcls, &iter, gm, gp, dTime);
-      gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, false);
+      //gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, false);
       //The elem_ids shouldn't be reset between the two search_mesh calls.
       search(picparts, gp, elem_ids, debug);
     }

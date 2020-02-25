@@ -8,7 +8,7 @@ void gitrm_cross_diffusion(PS* ptcls, int *iteration, const GitrmMesh& gm,
 const GitrmParticles& gp, double dt)
 {
 
-  bool debug= 1;
+  bool debug= 0;
   auto pid_ps = ptcls->get<PTCL_ID>();
   auto x_ps_d = ptcls->get<PTCL_POS>();
   auto xtgt_ps_d = ptcls->get<PTCL_NEXT_POS>();
@@ -31,7 +31,7 @@ const GitrmParticles& gp, double dt)
   const auto testGNT = gp.testGitrStepDataNumTsteps;
   const auto iTimeStep = iTimePlusOne - 1;
   const auto diff_rnd1 = gp.testGitrCrossFieldDiffRndInd;
- 
+  auto& xfaces =gp.wallCollisionFaceIds;
 
   auto update_diffusion = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
 	{ if(mask > 0 )
@@ -39,11 +39,9 @@ const GitrmParticles& gp, double dt)
 
         auto ptcl           = pid_ps(pid);
         auto charge         = charge_ps_d(pid);
-        printf("The charge of particle %d timestep %d is %d\n",ptcl, iTimeStep ,charge );
-
-          if(!charge)
-          return;
-
+        auto fid            = xfaces[ptcl];
+          if(!charge || fid >=0)
+             return;
         
         auto posit          = p::makeVector3(pid, x_ps_d);
         auto posit_next     = p::makeVector3(pid, xtgt_ps_d);

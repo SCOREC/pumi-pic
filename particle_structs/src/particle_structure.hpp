@@ -4,7 +4,7 @@
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
 
-namespace particle_structs {
+namespace pumipic {
 
   template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {

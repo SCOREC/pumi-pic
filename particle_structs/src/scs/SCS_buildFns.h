@@ -1,5 +1,5 @@
 #pragma once
-namespace particle_structs {
+namespace pumipic {
   template<class DataTypes, typename MemSpace>
   int SellCSigma<DataTypes, MemSpace>::chooseChunkHeight(int maxC,
                                                          kkLidView ptcls_per_elem) {

@@ -1,6 +1,6 @@
 #pragma once
 #include <psMemberType.h>
-namespace particle_structs {
+namespace pumipic {
   template<class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
                                                   kkLidView new_particle_elements,

@@ -9,8 +9,6 @@
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_elements;
-using particle_structs::distribute_particles;
 
 
 typedef MemberTypes<int> Type;

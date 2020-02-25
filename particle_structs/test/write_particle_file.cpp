@@ -27,11 +27,11 @@ int main(int argc, char* argv[]) {
 
   {
     ps::gid_t* gids = new ps::gid_t[num_elems];
-    ps::distribute_elements(num_elems, elem_strat, comm_rank, comm_size, gids);
+    distribute_elements(num_elems, elem_strat, comm_rank, comm_size, gids);
 
     int* ppe = new int[num_elems];
     std::vector<int>* ids = new std::vector<int>[num_elems];
-    ps::distribute_particles(num_elems, num_ptcls, ptcl_strat, ppe, ids);
+    distribute_particles(num_elems, num_ptcls, ptcl_strat, ppe, ids);
 
     int* pElems = new int[num_ptcls];
     for (int i = 0; i < num_elems; ++i)

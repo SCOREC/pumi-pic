@@ -1,6 +1,6 @@
 #pragma once
 
-namespace particle_structs {
+namespace pumipic {
 struct MyPair {
   KOKKOS_FORCEINLINE_FUNCTION constexpr MyPair() : first(0), second(0) {}
   KOKKOS_FORCEINLINE_FUNCTION constexpr MyPair(int i) : first(i), second(0) {}
@@ -26,7 +26,7 @@ struct MyPair {
 
 }
 namespace Kokkos {
-  using particle_structs::MyPair;
+  using pumipic::MyPair;
   PS_DEVICE_VAR MyPair ma = MyPair(10000000);
   PS_DEVICE_VAR MyPair mi = MyPair(0);
   template <>

@@ -10,7 +10,7 @@
 #include <mpi.h>
 #include <cstdlib>
 
-namespace particle_structs {
+namespace pumipic {
 
   //This type represents an array of views for each type of the given DataTypes
   using MemberTypeViews = void**;

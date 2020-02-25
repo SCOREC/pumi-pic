@@ -10,8 +10,6 @@
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
-using particle_structs::distribute_particles;
-using particle_structs::distribute_elements;
 
 typedef MemberTypes<int, double[3]> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;

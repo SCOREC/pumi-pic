@@ -1,6 +1,6 @@
 #include "SellCSigma.h"
 #include <Kokkos_Core.hpp>
-namespace particle_structs {
+namespace pumipic {
   namespace {
     static bool ps_prebarrier_enabled = false;
   };

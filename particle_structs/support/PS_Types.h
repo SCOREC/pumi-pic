@@ -2,7 +2,7 @@
 
 #include <Kokkos_Core.hpp>
 
-namespace particle_structs {
+namespace pumipic {
   typedef int lid_t;
   typedef long int gid_t;
 

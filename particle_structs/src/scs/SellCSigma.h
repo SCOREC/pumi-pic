@@ -19,7 +19,7 @@
 #include <thrust/device_ptr.h>
 #endif
 
-namespace particle_structs {
+namespace pumipic {
 
 void enable_prebarrier();
 double prebarrier();
@@ -502,7 +502,7 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
   });
 }
 
-} // end namespace particle_structs
+} // end namespace pumipic
 
 //Seperate files with SCS member function implementations
 #include "SCS_sort.h"

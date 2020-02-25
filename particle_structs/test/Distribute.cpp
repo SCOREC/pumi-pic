@@ -115,12 +115,10 @@ dist_name names[num_dist_funcs] = {
 void distribute_help() {
   printf("\nUnknown distribution strategy. Avaible distributions:\n");
   for(int i=0; i<num_dist_funcs; i++)
-    printf("%d - %s\n", i, particle_structs::distribute_name(i));
+    printf("%d - %s\n", i, distribute_name(i));
 }
 
 } //end unnamed namespace
-
-namespace particle_structs {
 
 const char* distribute_name(int strat) {
   if(strat >= 0 && strat < num_dist_funcs) {
@@ -131,7 +129,7 @@ const char* distribute_name(int strat) {
   }
 }
 
-bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, gid_t* gids) {
+bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipic::gid_t* gids) {
   //For now only building a ring of elements
   //Assumes the number of elements on each process is the same
   int starting_index = (ne-1) * comm_rank;
@@ -151,5 +149,3 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::v
   }
   return true;
 }
-
-} // end particle_structs namespace

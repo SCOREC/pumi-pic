@@ -3,7 +3,7 @@
 #include "PS_Macros.h"
 #include "MemberTypes.h"
 #include <type_traits>
-namespace particle_structs {
+namespace pumipic {
 
   template <class T, typename Space = Kokkos::DefaultExecutionSpace, typename ArrayLayout = Kokkos::LayoutLeft>
   class View {

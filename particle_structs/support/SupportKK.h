@@ -3,7 +3,7 @@
 #include <Kokkos_Core.hpp>
 #include "PS_Macros.h"
 #include "psView.h"
-namespace particle_structs {
+namespace pumipic {
 
   /* Taken from https://stackoverflow.com/questions/31762958/check-if-class-is-a-template-specialization
      Checks if type is a specialization of a class template

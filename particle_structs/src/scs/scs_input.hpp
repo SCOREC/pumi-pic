@@ -1,6 +1,6 @@
 #pragma once
 #include <particle_structure.hpp>
-namespace particle_structs {
+namespace pumipic {
     enum PaddingStrategy {
       //Divide all padding evenly to each element [Default]
       PAD_EVENLY,

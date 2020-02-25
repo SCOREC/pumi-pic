@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 #include "MemberTypes.h"
-namespace particle_structs {
+namespace pumipic {
 
   //This type represents an array of arrays for each type of the given DataTypes
   template <class DataTypes> using MemberTypeArray = void*[DataTypes::size];
@@ -67,11 +67,11 @@ namespace particle_structs {
   //Implementation of copying entries from one MT array to another at different indices
   template <typename... Types> struct CopyEntriesImpl;
   template <> struct CopyEntriesImpl<> {
-    CopyEntriesImpl(MemberTypeArray<MemberTypes<void> >, int, 
+    CopyEntriesImpl(MemberTypeArray<MemberTypes<void> >, int,
                     MemberTypeArray<MemberTypes<void> >, int) {}
   };
   template <class T, typename... Types> struct CopyEntriesImpl<T, Types...> {
-    CopyEntriesImpl(MemberTypeArray<MemberTypes<T, Types...> > new_data, int new_index, 
+    CopyEntriesImpl(MemberTypeArray<MemberTypes<T, Types...> > new_data, int new_index,
                     MemberTypeArray<MemberTypes<T, Types...> > old_data, int old_index) {
       CopyType<T>(static_cast<T*>(new_data[0])[new_index],
                   static_cast<T*>(old_data[0])[old_index]);
@@ -82,7 +82,7 @@ namespace particle_structs {
   //Call to copy entries from one MT array to another at different indices
   template <typename... Types> struct CopyEntries;
   template <typename... Types> struct CopyEntries<MemberTypes<Types...> > {
-    CopyEntries(MemberTypeArray<MemberTypes<Types...> > new_data, int new_index, 
+    CopyEntries(MemberTypeArray<MemberTypes<Types...> > new_data, int new_index,
                 MemberTypeArray<MemberTypes<Types...> > old_data, int old_index) {
       CopyEntriesImpl<Types...>(new_data, new_index, old_data, old_index);
     }

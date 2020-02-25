@@ -10,11 +10,11 @@
       char omsg[2048];                            \
       sprintf(omsg, "%s failed at %s + %d \n",    \
               #cond, __FILE__, __LINE__);         \
-      particle_structs::Assert_Fail(omsg);        \
+      pumipic::Assert_Fail(omsg);        \
     }                                             \
   } while (0)
 
-namespace particle_structs {
+namespace pumipic {
 
 void Assert_Fail(const char* msg);
 

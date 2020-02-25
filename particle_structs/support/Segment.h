@@ -2,7 +2,7 @@
 
 #include "MemberTypeLibraries.h"
 #include <type_traits>
-namespace particle_structs {
+namespace pumipic {
 
 template <typename Type, typename Device>
 class Segment {

@@ -5,7 +5,7 @@
 #include "MemberTypes.h"
 #include <unordered_map>
 #include <mpi.h>
-namespace particle_structs {
+namespace pumipic {
   template <typename T> struct MpiType;
 #define CREATE_MPITYPE(type, mpi_type)                  \
   template <> struct MpiType<type> {                    \

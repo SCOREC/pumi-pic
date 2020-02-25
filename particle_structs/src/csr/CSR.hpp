@@ -1,7 +1,7 @@
 #pragma once
 
 #include <particle_structure.hpp>
-namespace particle_structs {
+namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CSR : public ParticleStructure<DataTypes, MemSpace> {
   public:

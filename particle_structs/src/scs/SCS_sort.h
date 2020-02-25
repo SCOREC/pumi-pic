@@ -1,5 +1,5 @@
 #pragma once
-namespace particle_structs {
+namespace pumipic {
   template <class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::sigmaSort(PairView& ptcl_pairs,
                                                     lid_t num_elems,

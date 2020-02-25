@@ -3,7 +3,7 @@
 
 #include <cstdlib>
 
-namespace particle_structs {
+namespace pumipic {
 
 template<std::size_t N, typename T, typename... Types>
 struct MemberSize;
@@ -81,5 +81,7 @@ struct BaseType<T*> {
 
 
 }
+
+namespace particle_structs = pumipic;
 
 #endif

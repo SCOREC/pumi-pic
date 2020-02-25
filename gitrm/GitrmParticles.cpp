@@ -647,7 +647,6 @@ void GitrmParticles::checkCompatibilityWithGITRflags(int timestep) {
     OMEGA_H_CHECK(!testGitrOptSurfaceModel);
 }
 
-
 void printPtclSource(o::Reals& data, int nPtcls, int numPtclsRead) {
   o::HostRead<o::Real>dh(data);
   printf("ParticleSourcePositions: nptcl= %d\n", nPtcls);

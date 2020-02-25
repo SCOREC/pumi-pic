@@ -61,22 +61,13 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids,
   ptcls->migrate(ps_elem_ids, ps_process_ids);
 }
 
-void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
-    GitrmIonizeRecombine& gir, GitrmSurfaceModel& sm, int iter, 
-    o::Write<o::LO>& data_d, o::Write<o::Real>& ptclHistoryData, 
-    o::Write<o::LO>& lastFilledTimeSteps, int& iHistStep, int histInterval,
-    int numPtcls, int dofStepData, bool debug=false) {
-  //auto& picparts = gm.picparts;
-  double dt1=5e-9;
+void search(p::Mesh& picparts, GitrmParticles& gp,  o::Write<o::LO>& elem_ids,
+    bool debug=false) {
   o::Mesh* mesh = picparts.mesh();
   Kokkos::Profiling::pushRegion("gitrm_search");
   PS* ptcls = gp.ptcls;
   assert(ptcls->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 200;
-  const auto psCapacity = ptcls->capacity();
-  assert(psCapacity > 0);
-  o::Write<o::LO> elem_ids(psCapacity,-1);
-
   auto x_ps = ptcls->get<0>();
   auto xtgt_ps = ptcls->get<1>();
   auto pid_ps = ptcls->get<2>();
@@ -84,32 +75,7 @@ void search(p::Mesh& picparts, GitrmParticles& gp, GitrmMesh& gm,
   bool isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
     elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
   assert(isFound);
-  Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::pushRegion("updateGitrmData");
-  //TODO convert elem_ids to Read-only
   
-  if(gir.chargedPtclTracking) {
-    gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
-    gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
-    gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, true);
-    //Search again. The particles in ps not yet moved to elem_ids. 
-    //The elem_ids shouldn't be reset between the two search_mesh calls.
-    isFound = p::search_mesh_3d<Particle>(*mesh, ptcls, x_ps, xtgt_ps, pid_ps, 
-      elem_ids, gp.wallCollisionPts, gp.wallCollisionFaceIds, maxLoops, debug);
-    assert(isFound);
-  }
-  bool resetFids = true;
-  updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
-  if(histInterval >0) {
-    updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
-      dofStepData, iHistStep);
-    if(iter % histInterval == 0)
-      ++iHistStep;
-  }
-  Kokkos::Profiling::popRegion();
-  Kokkos::Profiling::pushRegion("rebuild");
-  //update positions and set the new element-to-particle lists
-  rebuild(picparts, ptcls, elem_ids, debug);
   Kokkos::Profiling::popRegion();
 }
 
@@ -351,23 +317,42 @@ int main(int argc, char** argv) {
     if(gir.chargedPtclTracking) {
       gitrm_findDistanceToBdry(gp, gm, 0);
       gitrm_calculateE(gp, *mesh, false, gm);
-      gitrm_borisMove(ptcls, gm, dTime, true);
+      gitrm_borisMove(ptcls, gm, dTime, false);
     }
     else
       neutralBorisMove(ptcls,dTime);
     Kokkos::Profiling::popRegion();
     MPI_Barrier(MPI_COMM_WORLD);
 
-    //search(picparts, gp, gm, gir, sm, iter, data_d, debug);
-    search(picparts, gp, gm, gir, sm, iter, data_d, ptclHistoryData,
-     lastFilledTimeSteps, iHistStep, histInterval, numPtcls, dofStepData, debug);
-    /* if(histInterval >0) {
-      // move-over if. 0th step(above) kept; last step available at the end.
-      if(iter % histInterval == 0)
-        ++iHistStep;        
-      updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls,
+    const auto psCapacity = ptcls->capacity();
+    assert(psCapacity > 0);
+    o::Write<o::LO> elem_ids(psCapacity,-1);
+    search(picparts, gp, elem_ids, debug);
+    
+    Kokkos::Profiling::pushRegion("otherRoutines");
+    //TODO convert elem_ids to Read-only
+    if(gir.chargedPtclTracking) {
+      gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
+      gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
+      gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, false);
+      //Search again. The particles in ps not yet moved to elem_ids. 
+      //The elem_ids shouldn't be reset between the two search_mesh calls.
+      search(picparts, gp, elem_ids, debug);
+    }
+    
+    Kokkos::Profiling::popRegion();
+    bool resetFids = true;
+    updateSurfaceDetection(mesh, gp, data_d, iter, resetFids, false);
+    if(histInterval >0) {
+      updatePtclStepData(ptcls, ptclHistoryData, lastFilledTimeSteps, numPtcls, 
         dofStepData, iHistStep);
-    }*/
+      if(iter % histInterval == 0)
+        ++iHistStep;
+    }
+    Kokkos::Profiling::pushRegion("rebuild");
+    //update positions and set the new element-to-particle lists
+    rebuild(picparts, ptcls, elem_ids, debug);
+    Kokkos::Profiling::popRegion();
 
     if(comm_rank == 0 && iter%1000 ==0)
       fprintf(stderr, "nPtcls %d\n", ptcls->nPtcls());
@@ -384,16 +369,16 @@ int main(int argc, char** argv) {
   std::chrono::duration<double> dur_steps = end_sim - end_init;
   std::cout << "Total Main Loop duration " << dur_steps.count()/60 << " min.\n";
   
-  if(piscesRun) {
+  if(!comm_rank && piscesRun) {
     std::string fname("piscesCounts.txt");
     printGridData(data_d, fname, "piscesDetected");
     gm.writeResultAsMeshTag(data_d);
   }
-  if(histInterval >0) {
+  if(!comm_rank && histInterval >0) {
     writePtclStepHistoryFile(ptclHistoryData, lastFilledTimeSteps, numPtcls, 
       dofStepData, nTHistory, "gitrm-history.nc");
   }
-  if(surfaceModel && comm_rank == 0)
+  if(false && !comm_rank && surfaceModel)
     sm.writeOutSurfaceData("surfaces.nc");  
   Omega_h::vtk::write_parallel("meshvtk", mesh, mesh->dim());
 

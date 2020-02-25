@@ -38,8 +38,6 @@ public:
   void defineParticles(p::Mesh& picparts, int numPtcls, o::LOs& ptclsInElem, 
     int elId=-1);
   
-  void initPtclWallCollisionData(int numPtcls); 
-  
   void findInitialBdryElemIdInADir(o::Real theta, o::Real phi, o::Real r,
     o::LO &initEl, o::Write<o::LO> &elemAndFace, 
     o::LO maxLoops=100, o::Real outer=2);
@@ -83,6 +81,7 @@ public:
   o::Reals closestPoints;
   o::LOs closestBdryFaceIds;
   
+  void initPtclWallCollisionData(int numPtcls);
   // wall collision; changed to per ptcl from per pid
   o::Write<o::Real> wallCollisionPts;
   o::Write<o::LO> wallCollisionFaceIds;

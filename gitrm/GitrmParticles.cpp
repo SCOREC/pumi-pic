@@ -115,7 +115,6 @@ void GitrmParticles::initPtclWallCollisionData(int numPtcls) {
   wallCollisionFaceIds = o::Write<o::LO>(numPtcls, -1);
 }
 
-
 // Find elemId of any particle, and start with that elem to search 
 // elem of all particles. Get #particles in each element,
 // for PS_LAMBDA to fill ptcl data in ptcls.

@@ -382,47 +382,68 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     /*auto nx = gridx.size(); 
     auto ny = gridy.size();
     auto nz = gridz.size(); */
-    o::Real fxyz = 0.0;
+    bool debug = false;
+    if(debug)
+      for(int i=0; i<5; ++i) printf(" %d %.15e \n", i, gridz[i]);
+    o::Real fxyz = 0;
     o::Real dx = gridx[1] - gridx[0];
     o::Real dy = gridy[1] - gridy[0];
     o::Real dz = gridz[1] - gridz[0];
     OMEGA_H_CHECK(!(o::are_close(dx, 0) || o::are_close(dy, 0) || o::are_close(dz, 0)));
-    int i = std::floor((x - gridx[0])/dx);
-    int j = std::floor((y - gridy[0])/dy);
-    int k = std::floor((z - gridz[0])/dz);
+    int i = floor((x - gridx[0])/dx);
+    int j = floor((y - gridy[0])/dy);
+    int k = floor((z - gridz[0])/dz);
     i = (i < 0) ? 0 : ((i >= nx-1) ? (nx-2) : i);
     j = (j < 0 || ny <= 1) ? 0 : ((j >= ny-1) ? (ny-2) : j);
     k = (k < 0 || nz <= 1) ? 0 : ((k >= nz-1) ? (nz-2) : k);
-    
-    auto fx_z0_test = (data[i + j*nx + k*nx*ny]*(gridx[i+1]-x) + 
-      data[i +1 + j*nx + k*nx*ny]*(x-gridx[i]))/dx;
+
     auto fx_z0 = interpolate2d_baseg(data, i + j*nx + k*nx*ny, gridx, i, x, dx);
-    auto fx_z1_test = (data[i + j*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
-      data[i +1 + j*nx + (k+1)*nx*ny]*(x-gridx[i]))/dx;
     auto fx_z1 = interpolate2d_baseg(data, i + j*nx + (k+1)*nx*ny, 
       gridx, i, x, dx);
-    auto fxy_z0_test = (data[i + (j+1)*nx + k*nx*ny]*(gridx[i+1]-x) + 
-      data[i +1 + (j+1)*nx + k*nx*ny]*(x-gridx[i]))/dx;
     auto fxy_z0 = interpolate2d_baseg(data, i + (j+1)*nx + k*nx*ny,
       gridx, i, x, dx);
-    auto fxy_z1_test = (data[i + (j+1)*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
-      data[i +1 + (j+1)*nx + (k+1)*nx*ny]*(x-gridx[i]))/dx;
     auto fxy_z1 = interpolate2d_baseg(data,i + (j+1)*nx + (k+1)*nx*ny,
       gridx, i, x, dx);
-    auto fxz0_test = (fx_z0*(gridz[k+1] - z) + fx_z1*(z-gridz[k]))/dz;
     auto fxz0 = interpolate2d_base(fx_z0, fx_z1, gridz[k], gridz[k+1], z, dz);
-    auto fxz1_test = (fxy_z0*(gridz[k+1] - z) + fxy_z1*(z-gridz[k]))/dz;
     auto fxz1 = interpolate2d_base(fxy_z0, fxy_z1, gridz[k], gridz[k+1], z, dz);
-    auto fxyz_test = (fxz0*(gridy[j+1] - y) + fxz1*(y-gridy[j]))/dy;
     fxyz = interpolate2d_base(fxz0, fxz1, gridy[j], gridy[j+1], y, dy);
+    if(debug) {
+      printf("fx_z0 %.15e fx_z1 %.15e \n", fx_z0, fx_z1);
+      printf("fxy_z0 %.15e fxy_z1 %.15e fxz0 %.15e fxz1 %.15e fxyz %.15e\n",
+        fxy_z0, fxy_z1, fxz0, fxz1, fxyz);
+
+      printf("x %.15e y %.15e z %.15e i %d j %d k %d dx %.15e dy %.15e dz %.15e \n", 
+        x, y, z, i, j, k, dx, dy, dz);
+      auto fx_z0_test = (data[i + j*nx + k*nx*ny]*(gridx[i+1]-x) + 
+        data[i +1 + j*nx + k*nx*ny]*(x-gridx[i]))/dx;
+      auto fx_z1_test = (data[i + j*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
+        data[i +1 + j*nx + (k+1)*nx*ny]*(x-gridx[i]))/dx;
+      printf("fx_z0_test %.15e fx_z1_test %.15e \n", fx_z0_test, fx_z1_test);
+      auto fxy_z0_test = (data[i + (j+1)*nx + k*nx*ny]*(gridx[i+1]-x) + 
+        data[i +1 + (j+1)*nx + k*nx*ny]*(x-gridx[i]))/dx;
+      auto fxy_z1_test = (data[i + (j+1)*nx + (k+1)*nx*ny]*(gridx[i+1]-x) + 
+        data[i +1 + (j+1)*nx + (k+1)*nx*ny]*(x-gridx[i]))/dx;
+      auto fxz0_test = (fx_z0*(gridz[k+1] - z) + fx_z1*(z-gridz[k]))/dz;
+      auto fxz1_test = (fxy_z0*(gridz[k+1] - z) + fxy_z1*(z-gridz[k]))/dz;
+      auto fxyz_test = (fxz0*(gridy[j+1] - y) + fxz1*(y-gridy[j]))/dy;
+      printf("fxy_z0_test %.15e fxy_z1_test %.15e fxz0_test %.15e fxz1_test %.15e fxyz_test %.15e\n",
+        fxy_z0_test, fxy_z1_test, fxz0_test, fxz1_test, fxyz_test);
+      fxyz_test = (ny <= 1) ? fxz0: fxyz_test;
+      fxyz_test = (nz <= 1) ? fx_z0: fxyz_test;
+      printf(" fxy_test %.15e\n", fxyz_test);
+
+    }
     fxyz = (ny <= 1) ? fxz0: fxyz;
     fxyz = (nz <= 1) ? fx_z0: fxyz;
+    if(debug)
+      printf("fxy %.15e\n", fxyz);
     return fxyz;
 }
 
 OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0, 
-  const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, const o::LO nz,
-  const o::Vector<3> &pos, o::Vector<3> &field, const bool cylSymm = false, int* ptcl=nullptr) {
+  const o::Real gridz0, const o::Real dx, const o::Real dz, const o::LO nx, 
+  const o::LO nz, const o::Vector<3> &pos, o::Vector<3> &field, 
+  const bool cylSymm = false, int* ptcl=nullptr) {
   bool debug = false;
   if(ptcl) debug = true;
   field[0] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx,
@@ -431,9 +452,12 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
     nz, pos, cylSymm, 3, 1, debug);
   field[2] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, 
     nz, pos, cylSymm, 3, 2, debug);
-  auto f1 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 0, debug);
-  auto f2 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 1, debug);
-  auto f3 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, pos, cylSymm, 3, 2, debug);
+  auto f1 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, 
+    pos, cylSymm, 3, 0, debug);
+  auto f2 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, 
+    pos, cylSymm, 3, 1, debug);
+  auto f3 = interpolate2dField(data3, gridx0, gridz0, dx, dz, nx, nz, 
+    pos, cylSymm, 3, 2, debug);
   if(cylSymm) {
     auto theta = atan2(static_cast<double>(pos[1]), static_cast<double>(pos[0]));  
     auto field0 = field[0];
@@ -492,11 +516,11 @@ OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v,
   return flip;       
 }
 
+//TODO: this is not tested ?
 //face normal can point either way
 OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmId,
   const o::Reals &coords, const o::LOs& mesh2verts,  const o::LOs &face_verts, 
   const o::LOs &elem2faces) {
-
   const auto fv2v = o::gather_verts<3>(face_verts, fid);
   const auto abc = Omega_h::gather_vectors<3, 3>(coords, fv2v);
   const auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
@@ -511,7 +535,8 @@ OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmI
     ++find;
   }
   if(findex <0 || findex >3) {
-    printf("face_normal_of_tet:getFaceMap:: faceid not found");
+    printf("face_normal_of_tet:getFaceMap:: faceid not found fid %d elmId %d \n",
+        fid, elmId);
     OMEGA_H_CHECK(false);
   }
   auto a = abc[0];

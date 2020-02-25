@@ -20,18 +20,22 @@ namespace p = pumipic;
 // gitrm_calculateE for neutrals.
 
 // D3D 0.8 to 2.45 m radial
- 
+
+namespace gitrm {
+  const double surfaceAndMaterialModelZ = 74.0;
+
+}
+
 //TODO put in config class
 const int USE_GITR_RND_NUMS = 1;
-const bool CREATE_GITR_MESH = false;
+const bool CREATE_GITR_MESH = true;
 
 const int USE_READIN_CSR_BDRYFACES = 1;
 const int WRITE_OUT_BDRY_FACES_FILE = 0;
 const bool WRITE_TEXT_D2BDRY_FACES = false;
 const bool WRITE_BDRY_FACE_COORDS_NC = false;
 const bool WRITE_MESH_FACE_COORDS_NC = false;
-//TODO enable runtime
-constexpr o::LO D2BDRY_GRIDS_PER_TET = 15;// if csr bdry not re-used
+const o::LO D2BDRY_GRIDS_PER_TET = 15;// if csr bdry not re-used
 
 const int USE_2DREADIN_IONI_REC_RATES = 1;
 const int USE3D_BFIELD = 0;
@@ -47,8 +51,8 @@ const o::LO BIASED_SURFACE = 1;
 const o::Real CONSTANT_EFIELD0 = 0;
 const o::Real CONSTANT_EFIELD1 = 0;
 const o::Real CONSTANT_EFIELD2 = 0;
-const o::Real CONSTANT_BFIELD0 = 5;
-const o::Real CONSTANT_BFIELD1 = 5;
+const o::Real CONSTANT_BFIELD0 = 5;  //TODO FIXME
+const o::Real CONSTANT_BFIELD1 = 5;  //TODO FIXME
 const o::Real CONSTANT_BFIELD2 = -0.08;
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
@@ -78,7 +82,7 @@ public:
   GitrmMesh(GitrmMesh const&) = delete;
   void operator =(GitrmMesh const&) = delete;
 
-  void createSurfaceGitrMesh(int meshVersion=2, bool markSurfaceMaterial=true);  
+  void createSurfaceGitrMesh();  
   void printBdryFaceIds(bool printIds=true, o::LO minNums=0);
   void printBdryFacesCSR(bool printIds=true, o::LO minNums=0);
   void test_preProcessDistToBdry();
@@ -113,6 +117,19 @@ public:
   o::LOs bdryCsrReadInDataPtrs;
   o::LOs bdryCsrReadInData;
   
+  void setFaceId2BdryFaceIdMap();
+  o::LOs bdryFaceOrderedIds;
+  int nbdryFaces = 0;
+  
+  void setFaceId2SurfaceAndMaterialIdMap();
+  int nSurfMaterialFaces = 0;
+  o::LOs surfaceAndMaterialOrderedIds;
+  int nDetectSurfaces = 0;
+  o::LOs detectorSurfaceOrderedIds;
+
+  void setFaceId2BdryFaceMaterialsZmap();
+  o::Reals bdryFaceMaterialZs;
+
   void initBField(const std::string &f="bFile");
   void load3DFieldOnVtxFromFile(const std::string, const std::string &,
     Field3StructInput&, o::Reals&);
@@ -199,15 +216,12 @@ public:
   o::Real gradTiDx = 0;
   o::Real gradTiDz = 0;
 
-
   o::Real gradTeX0 = 0;
   o::Real gradTeZ0 = 0;
   o::Real gradTeNx = 0;
   o::Real gradTeNz = 0;
   o::Real gradTeDx = 0;
   o::Real gradTeDz = 0;
-
-
   // till here
 
   // to replace tag
@@ -226,8 +240,9 @@ public:
  
   //get model Ids by opening mesh/model in Simmodeler
   o::HostWrite<o::LO> detectorSurfaceModelIds;
-  o::HostWrite<o::LO> detectorSurfaceMaterialModelIds;
-
+  o::HostWrite<o::LO> bdryMaterialModelIds;
+  o::HostWrite<o::Real> bdryMaterialModelIdsZ;
+  o::HostWrite<o::LO> surfaceAndMaterialModelIds;
   o::Write<o::Real> larmorRadius_d;
   o::Write<o::Real> childLangmuirDist_d;
 private:

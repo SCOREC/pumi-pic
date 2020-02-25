@@ -72,7 +72,8 @@ public:
     o::LO numPtcls);
   
   int readGITRPtclStepDataNcFile(const std::string& ncFileName, 
-  int& maxNPtcls, int& numPtclsRead, bool debug=false);
+    int& maxNPtcls, int& numPtclsRead, bool debug=false);
+  void checkCompatibilityWithGITRflags(int timestep);
 
   o::Real timeStep;
   PS* ptcls;
@@ -102,6 +103,12 @@ public:
   int testGitrOptDiffusion = 0;
   int testGitrOptCollision = 0;
   int testGitrOptSurfaceModel = 0;
+
+  bool ranIonization = false;
+  bool ranRecombination = false;
+  bool ranCoulombCollision = false;
+  bool ranDiffusion = false;
+  bool ranSurfaceReflection = false;
 };
 
 namespace gitrm {
@@ -145,7 +152,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   int tstep = iTimePlusOne;
   auto* ptcls = gp.ptcls;
   o::Mesh& mesh = gm.mesh;  
-  o::LOs modelIdsToSkip = o::LOs(gm.detectorSurfaceMaterialModelIds);
+  o::LOs modelIdsToSkip = o::LOs(gm.surfaceAndMaterialModelIds);
   auto numModelIds = modelIdsToSkip.size();
   auto faceClassIds = mesh.get_array<o::ClassId>(2, "class_id");
   const auto coords = mesh.coords();
@@ -157,6 +164,7 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
   const int useReadInCsr = USE_READIN_CSR_BDRYFACES;
   const auto& bdryCsrReadInDataPtrs = gm.bdryCsrReadInDataPtrs;
   const auto& bdryCsrReadInData = gm.bdryCsrReadInData;
+  const auto& bdryFaceOrderedIds = gm.bdryFaceOrderedIds;
 
   const auto nel = mesh.nelems();
   const auto& f2rPtr = mesh.ask_up(o::FACE, o::REGION).a2ab;
@@ -219,10 +227,12 @@ inline void gitrm_findDistanceToBdry(GitrmParticles& gp,
         if(debug) {
           auto fel = p::elem_id_of_bdry_face_of_tet(fid, f2rPtr, f2rElem);
           auto f = p::get_face_coords_of_tet(face_verts, coords, fid);
+          auto bdryOrd = bdryFaceOrderedIds[fid]; 
           printf("dist: ptcl %d tstep %d el %d MINdist %.15e nFaces %d fid %d " 
-            "face_el %d reg %d pos %.15e %.15e %.15e nearest_pt %.15e %.15e %.15e "
-            " face %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e \n", 
-            ptcl, tstep, elem, min, nFaces, fid, fel, minRegion, ref[0], 
+            "face_el %d bdry-ordered-id %d reg %d pos %.15e %.15e %.15e "
+            "nearest_pt %.15e %.15e %.15e face %.15e %.15e %.15e %.15e %.15e"
+            "%.15e %.15e %.15e %.15e \n", 
+            ptcl, tstep, elem, min, nFaces, fid, fel, bdryOrd, minRegion, ref[0], 
             ref[1], ref[2], point[0], point[1], point[2], f[0][0], f[0][1],
             f[0][2], f[1][0],f[1][1], f[1][2],f[2][0], f[2][1],f[2][2]);
         }

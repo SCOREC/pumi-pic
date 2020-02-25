@@ -100,7 +100,7 @@ OMEGA_H_DEVICE o::Real interpolateRateCoeff(const o::Reals &data,
 }
 
 inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir, 
-  const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
+  GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
   bool debug = false) {
   auto& mesh = gm.mesh;
   auto use2DRatesData = USE_2DREADIN_IONI_REC_RATES;
@@ -121,6 +121,8 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
   bool useGitrRnd = USE_GITR_RND_NUMS;
   //#ifdef USE_GITR_RND_NUMS
+  if(!gp.ranIonization)
+    gp.ranIonization = true;
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
   const auto testGNT = gp.testGitrStepDataNumTsteps;
@@ -242,7 +244,7 @@ inline void gitrm_ionize(PS* ptcls, const GitrmIonizeRecombine& gir,
 
 
 inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir, 
-   const GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
+   GitrmParticles& gp, const GitrmMesh& gm, o::Write<o::LO>& elm_ids, 
    bool debug = false) {
   auto& mesh = gm.mesh;
   auto& densIon_d = gm.densIon_d;
@@ -261,6 +263,8 @@ inline void gitrm_recombine(PS* ptcls, const GitrmIonizeRecombine& gir,
   auto dzTemp = gm.tempIonDz;
 
   auto useGitrRnd = USE_GITR_RND_NUMS;
+  if(!gp.ranRecombination)
+    gp.ranRecombination = true;
   //#ifdef USE_GITR_RND_NUMS
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;

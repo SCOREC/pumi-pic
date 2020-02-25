@@ -447,7 +447,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     }
   } //while
   Kokkos::Profiling::popRegion(); //whole
-  fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
   return found;   
 }
 
@@ -717,18 +717,18 @@ enum TriRegion {
 };
 
 //TODO test this function, is this needed ?
-OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
+OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle_wnormal(
   const o::Few< o::Vector<3>, 3> &abc,
-  const o::Vector<3> &p, o::Vector<3> &q, o::LO verbose = 0) {
-
+  const o::Vector<3> &p, o::LO* reg=nullptr) {
   // Check if P in vertex region outside A
-  o::Vector<3> a = abc[0];
-  o::Vector<3> b = abc[1];
-  o::Vector<3> c = abc[2];
+  auto q = o::zero_vector<3>();
+  auto a = abc[0];
+  auto b = abc[1];
+  auto c = abc[2];
 
-  o::Vector<3> ab = b - a;
-  o::Vector<3> ac = c - a;
-  o::Vector<3> bc = c - b;
+  auto ab = b - a;
+  auto ac = c - a;
+  auto bc = c - b;
   // Compute parametric position s for projection P’ of P on AB,
   // P’ = A + s*AB, s = snom/(snom+sdenom)
   float snom = o::inner_product(p - a, ab);
@@ -737,78 +737,88 @@ OMEGA_H_DEVICE o::LO find_closest_point_on_triangle_with_normal(
   // P’ = A + t*AC, s = tnom/(tnom+tdenom)
   float tnom = o::inner_product(p - a, ac);
   float tdenom = o::inner_product(p - c, a - c);
-  if (snom <= 0.0 && tnom <= 0.0){
-    q = a;
-    return VTXA;
+  if(snom <= 0.0 && tnom <= 0.0){
+    if(reg)
+      *reg = VTXA;
+    return a;
   } // Vertex region early out
   // Compute parametric position u for projection P’ of P on BC,
   // P’ = B + u*BC, u = unom/(unom+udenom)
   float unom = o::inner_product(p - b, bc);
-  float  udenom = o::inner_product(p - c, b - c);
+  float udenom = o::inner_product(p - c, b - c);
   if (sdenom <= 0.0 && unom <= 0.0){
-    q = b;
-    return VTXB; // Vertex region early out
+    if(reg)
+      *reg = VTXB; // Vertex region early out
+    return b;
   }
-  if (tdenom <= 0.0 && udenom <= 0.0){
-    q = c;
-    return VTXC; // Vertex region early out
+  if(tdenom <= 0.0 && udenom <= 0.0){
+    if(reg)
+     *reg = VTXC; // Vertex region early out
+    return c;
   }
   // P is outside (or on) AB if the triple scalar product [N PA PB] <= 0
-  o::Vector<3> n = o::cross(b - a, c - a);
-  o::Vector<3> temp = o::cross(a - p, b - p);
+  auto n = o::cross(b - a, c - a);
+  auto temp = o::cross(a - p, b - p);
   float vc = o::inner_product(n, temp);
   // If P outside AB and within feature region of AB,
   // return projection of P onto AB
   if (vc <= 0.0 && snom >= 0.0 && sdenom >= 0.0){
     q = a + snom / (snom + sdenom) * ab;
-    return EDGEAB;
+    if(reg)
+     *reg = EDGEAB;
+    return q;
   }
   // P is outside (or on) BC if the triple scalar product [N PB PC] <= 0
-  o::Vector<3> temp1 = o::cross(b - p, c - p);
+  auto temp1 = o::cross(b - p, c - p);
   float va = o::inner_product(n, temp1);
   // If P outside BC and within feature region of BC,
   // return projection of P onto BC
   if (va <= 0.0 && unom >= 0.0 && udenom >= 0.0){
     q = b + unom / (unom + udenom) * bc;
-    return EDGEBC;
+    if(reg)
+     *reg = EDGEBC;
+    return q;
   }
   // P is outside (or on) CA if the triple scalar product [N PC PA] <= 0
-  o::Vector<3> temp2 = o::cross(c - p, a - p);
+  auto temp2 = o::cross(c - p, a - p);
   float vb = o::inner_product(n, temp2);
   // If P outside CA and within feature region of CA,
   // return projection of P onto CA
   if (vb <= 0.0 && tnom >= 0.0 && tdenom >= 0.0){
     q =  a + tnom / (tnom + tdenom) * ac;
-    return EDGEAC;
+    if(reg)
+     *reg = EDGEAC;
+    return q;
   }
   // P must project inside face region. Compute Q using barycentric coordinates
   float u = va / (va + vb + vc);
   float v = vb / (va + vb + vc);
   float w = 1.0 - u - v; // = vc / (va + vb + vc)
   q = u * a + v * b + w * c;
-  return TRIFACE;
-
+  if(reg)
+   *reg = TRIFACE;
+  return q;
 }
 
 
 //Ref: Real-time Collision Detection by Christer Ericson, 2005.
 //ptp = ref point; ptq = nearest point on triangle; abc = triangle
-OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3>, 3> &abc, 
+OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( 
+   const o::Few< o::Vector<3>, 3> &abc, 
    const o::Vector<3> &ptp, o::LO* reg=nullptr) {
   o::LO debug = 0;
   o::LO region = -1;
   auto ptq = o::zero_vector<3>();
   // Check if P in vertex region outside A
-  o::Vector<3> pta = abc[0];
-  o::Vector<3> ptb = abc[1];
-  o::Vector<3> ptc = abc[2];
-
-  o::Vector<3> vab = ptb - pta;
-  o::Vector<3> vac = ptc - pta;
-  o::Vector<3> vap = ptp - pta;
-  o::Real d1 = o::inner_product(vab, vap);
-  o::Real d2 = o::inner_product(vac, vap);
-  if (d1 <= 0 && d2 <= 0) {
+  auto pta = abc[0];
+  auto ptb = abc[1];
+  auto ptc = abc[2];
+  auto vab = ptb - pta;
+  auto vac = ptc - pta;
+  auto vap = ptp - pta;
+  auto d1 = o::inner_product(vab, vap);
+  auto d2 = o::inner_product(vac, vap);
+  if(d1 <= 0 && d2 <= 0) {
     // barycentric coordinates (1,0,0)
     for(int i=0; i<3; ++i)
       ptq[i] = pta[i];
@@ -817,11 +827,10 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
       *reg = region;
     return ptq; 
   }
-
   // Check if P in vertex region outside B
-  o::Vector<3> vbp = ptp - ptb;
-  o::Real d3 = o::inner_product(vab, vbp);
-  o::Real d4 = o::inner_product(vac, vbp);
+  auto vbp = ptp - ptb;
+  auto d3 = o::inner_product(vab, vbp);
+  auto d4 = o::inner_product(vac, vbp);
   if(region <0 && d3 >= 0 && d4 <= d3){ 
     // barycentric coordinates (0,1,0)
     for(int i=0; i<3; ++i)
@@ -831,22 +840,20 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
       *reg = region;
     return ptq; 
   }
-
   // Check if P in edge region of AB, if so return projection of P onto AB
-  o::Real vc = d1*d4 - d3*d2;
+  auto vc = d1*d4 - d3*d2;
   if(region <0 && vc <= 0 && d1 >= 0 && d3 <= 0) {
-    o::Real v = d1 / (d1 - d3);
+    auto v = d1 / (d1 - d3);
     // barycentric coordinates (1-v,v,0)
     ptq = v*vab;
     ptq = ptq + pta; 
     region = EDGEAB;
     return ptq;
   }
-
   // Check if P in vertex region outside C
-  o::Vector<3> vcp = ptp - ptc;
-  o::Real d5 = o::inner_product(vab, vcp);
-  o::Real d6 = o::inner_product(vac, vcp);
+  auto vcp = ptp - ptc;
+  auto d5 = o::inner_product(vab, vcp);
+  auto d6 = o::inner_product(vac, vcp);
   if(region <0 && d6 >= 0 && d5 <= d6) { 
     // barycentric coordinates (0,0,1)
     for(int i=0; i<3; ++i)
@@ -856,7 +863,6 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
       *reg = region;
     return ptq;
   }
-
   // Check if P in edge region of AC, if so return projection of P onto AC
   auto vb = d5*d2 - d1*d6;
   if(region <0 && vb <= 0 && d2 >= 0 && d6 <= 0) {
@@ -869,11 +875,10 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
       *reg = region;
     return ptq;
   }
-
   // Check if P in edge region of BC, if so return projection of P onto BC
-  o::Real va = d3*d6 - d5*d4;
+  auto va = d3*d6 - d5*d4;
   if(region <0 && va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
-    o::Real w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+    auto w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
     // barycentric coordinates (0,1-w,w)
     ptq =  ptb + w * (ptc - ptb); 
     region = EDGEBC;
@@ -881,12 +886,11 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( const o::Few< o::Vector<3
       *reg = region;
     return ptq;
   }
-
   // P inside face region. Compute Q through its barycentric coordinates (u,v,w)
   if(region <0) {
-    o::Real inv = 1 / (va + vb + vc);
-    o::Real v = vb * inv;
-    o::Real w = vc * inv;
+    auto inv = 1.0/(va + vb + vc);
+    auto v = vb * inv;
+    auto w = vc * inv;
     // u*a + v*b + w*c, u = va * inv = 1 - v - w
     ptq =  pta + v * vab+ w * vac;
     region = TRIFACE;

@@ -106,6 +106,11 @@ inline void gitrm_calculateE(GitrmParticles& gp, o::Mesh &mesh, bool debug,
         }
         if(isnan(emag))
           emag = 0;
+        if(debug)
+          printf("calcE1- ptcl %d  distVec %.15e %.15e %.15e dirUnitVec %.15e %.15e %.15e\n",
+           ptcl, distVector[0], distVector[1], distVector[2], dirUnitVector[0],
+           dirUnitVector[1], dirUnitVector[2]);
+
         if(o::are_close(d2bdry, 0.0) || o::are_close(larmorRadius, 0.0)) {
           emag = 0.0;
           dirUnitVector[0] = dirUnitVector[1] = dirUnitVector[2] = 0;

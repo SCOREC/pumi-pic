@@ -40,6 +40,7 @@ set(MPIRUN_PROCFLAG "-np" CACHE STRING
 find_package(Omega_h 9 REQUIRED)
 set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
+set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
 
 # Find Kokkos

@@ -6,6 +6,8 @@ set(HEADERS
   pumipic_mesh.hpp
   pumipic_library.hpp
   pumipic_input.hpp
+  pumipic_kktypes.hpp
+  pumipic_profiling.hpp
 )
 
 set(SOURCES
@@ -18,13 +20,21 @@ set(SOURCES
   pumipic_library.cpp
   pumipic_profiling.cpp
 )
-add_library(pumipic ${SOURCES})
-target_include_directories(pumipic INTERFACE
+add_library(pumipic-core ${SOURCES})
+target_include_directories(pumipic-core INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(pumipic ${ALL_LIBS} Omega_h::omega_h)
-pumipic_export_lib(pumipic "${HEADERS}")
+target_link_libraries(pumipic-core
+  support
+  particleStructs
+  Omega_h::omega_h)
+pumipic_export_lib(pumipic-core "${HEADERS}")
+
+# this INTERFACE target bundles all the enabled libraries together
+add_library(pumipic INTERFACE)
+target_link_libraries(pumipic INTERFACE ${pumipic_EXPORTED_TARGETS})
+bob_export_target(pumipic)
 
 #Floating point definition
 option(FP64 "Use 64bits for floating point values" ON)

@@ -5,7 +5,7 @@
 #include <particle_structs.hpp>
 #include <chrono>
 #include <thread>
-#include <PS_Types.h>
+#include <ppTypes.h>
 
 namespace pumipic {
 #ifdef FP64

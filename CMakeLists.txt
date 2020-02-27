@@ -91,6 +91,9 @@ set(ALL_LIBS
   particleStructs
   )
 
+# Reset cxx flags since they are picked up from omega-h
+set(CMAKE_CXX_FLAGS "${debug_flag} ${opt_flag}")
+
 # pumipic
 add_subdirectory(src)
 set(ALL_LIBS

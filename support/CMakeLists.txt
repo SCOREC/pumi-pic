@@ -1,5 +1,7 @@
 set(HEADERS
   ppTypes.h
+  ppMacros.h
+  ppView.h
   SupportKK.h
   ViewComm.h
   ppAssert.h

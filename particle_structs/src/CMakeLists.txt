@@ -10,7 +10,6 @@ set(HEADERS
   support/MemberTypes.h
   support/MemberTypeArray.h
   support/MemberTypeLibraries.h
-  support/PS_Macros.h
   support/Segment.h
   particle_structure.hpp
   ps_for.hpp

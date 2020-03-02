@@ -3,7 +3,7 @@
 #include "GitrmMesh.hpp"
 #include "GitrmParticles.hpp"
 void gitrm_thermal_force(PS* ptcls, int *iteration, const GitrmMesh& gm,
-const GitrmParticles& gp, double dt)
+const GitrmParticles& gp, double dt, o::Write<o::LO>& elm_ids)
 {
 
   bool debug= 0;
@@ -16,10 +16,9 @@ const GitrmParticles& gp, double dt)
   printf("Entering Thermal Force Routine\n");
   
 
-  const auto &gradTi_d = gm.gradTi_d ;
-
   //Mesh data regarding the gradient of temperatures
 
+  const auto &gradTi_d = gm.gradTi_d ;
   auto grTiX0 = gm.gradTiX0;   
   auto grTiZ0 = gm.gradTiZ0; 
   auto grTiNX = gm.gradTiNx; 
@@ -27,9 +26,7 @@ const GitrmParticles& gp, double dt)
   auto grTiDX = gm.gradTiDx;
   auto grTiDZ = gm.gradTiDz;
 
-  
   const auto &gradTe_d = gm.gradTe_d;
-
   auto grTeX0 = gm.gradTeX0;   
   auto grTeZ0 = gm.gradTeZ0; 
   auto grTeNX = gm.gradTeNx; 
@@ -37,12 +34,20 @@ const GitrmParticles& gp, double dt)
   auto grTeDX = gm.gradTeDx;
   auto grTeDZ = gm.gradTeDz;
 
+  auto& mesh = gm.mesh;
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto gradTionVtx = mesh.get_array<o::Real>(o::VERT, "gradTiVtx");
+  const auto gradTelVtx   = mesh.get_array<o::Real>(o::VERT, "gradTeVtx");
 
 
 
+  auto useConstantBField = USE_CONSTANT_BFIELD;
+  auto use2dInputFields = USE2D_INPUTFIELDS;
+  auto use3dField = USE3D_BFIELD;
 
   o::Reals bFieldConst(3); 
-  if(USE_CONSTANT_BFIELD) {
+  if(useConstantBField) {
     bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
         CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
   }
@@ -55,9 +60,10 @@ const GitrmParticles& gp, double dt)
   auto& xfaces =gp.wallCollisionFaceIds;
 
   auto update_thermal = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
-	{ if(mask > 0 )
+	{ if(mask > 0 && elm_ids[pid] >= 0)
     	{	
-    		auto posit          = p::makeVector3(pid, x_ps_d);
+    		o::LO el = elm_ids[pid];
+        auto posit          = p::makeVector3(pid, x_ps_d);
         auto ptcl           = pid_ps(pid);
         auto charge         = charge_ps_d(pid);
         auto fid            = xfaces[ptcl];
@@ -94,13 +100,22 @@ const GitrmParticles& gp, double dt)
         auto gradti         = o::zero_vector<3>();
         auto gradte         = o::zero_vector<3>();
 
-    		//find out the gradients of the electron and ion temperatures at that particle poin
+
+        //find out the gradients of the electron and ion temperatures at that particle poin
+
+        if (use2dInputFields){
         p::interp2dVector(gradTi_d, grTiX0, grTiZ0, grTiDX, grTiDZ, grTiNX, grTiNZ, posit_next, gradti, true);
         p::interp2dVector(gradTe_d, grTeX0, grTeZ0, grTeDX, grTeDZ, grTeNX, grTeNZ, posit_next, gradte, true);
+        }
+  
+        else if (use3dField){
+          auto bcc = o::zero_vector<4>();
+          p::findBCCoordsInTet(coords, mesh2verts, posit_next, el, bcc);
+          p::interpolate3dFieldTet(mesh2verts, gradTionVtx, el, bcc, gradti);
+          p::interpolate3dFieldTet(mesh2verts, gradTelVtx, el, bcc, gradte);
+        }  
 
-
-
-
+        
     		o::Real mu = amu /(background_amu+amu);
         //o::Real alpha = 0.71*charge*charge;
         o::Real beta = 3 * (mu + 5*sqrt(2.0)*charge*charge*(1.1*pow(mu, (5 / 2))-0.35*pow(mu,(3/2)))-1)/
@@ -127,6 +142,7 @@ const GitrmParticles& gp, double dt)
         vel_ps_d(pid,0)=vel[0]+dv_ITG[0];
         vel_ps_d(pid,1)=vel[1]+dv_ITG[1];
         vel_ps_d(pid,2)=vel[2]+dv_ITG[2];
+        
         if (debug && ptcl==4){
         printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2));
         } 

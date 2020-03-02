@@ -674,13 +674,17 @@ OMEGA_H_DEVICE Omega_h::Real interpolateTetVtx(const Omega_h::LOs& mesh2verts,
   for(Omega_h::LO fi=0; fi<4; ++fi) {//faces
     auto d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
     auto fd = d*dof + comp;
+    printf("Barycentric co-ord is %.18f \n", bcc[fi]);
+    printf("Field value is %.15f \n", fv4[fd][0]);
     val = val + bcc[fi]*fv4[fd][0];
+    printf("Value is %.15f \n",val);
     if(debug)
       printf("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
         bcc[fi], fv4[fd][0]);
   }
   return val;
 }
+
 
 OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::LOs& mesh2verts,
   const Omega_h::Reals &field, o::LO elem, const Omega_h::Vector<4> &bcc, 
@@ -707,6 +711,34 @@ OMEGA_H_DEVICE void findBCCoordsInTet(const Omega_h::Reals &coords,
   OMEGA_H_CHECK(all_positive(bcc)==1);
 }
 
+
+OMEGA_H_DEVICE void test3Dinterpfunction(const Omega_h::Reals& coords,
+const Omega_h::LOs& mesh2verts, o::LO elem_test, const Omega_h::Reals& field){
+
+  Omega_h::Vector<3> pos_test;
+  //Omega_h::Vector<4> bcc;
+  auto bcc = o::zero_vector<4>();
+  //Find the vertex indeices and thus calculate the stored field values at the vertices of the tet using those indices
+  auto tet2v_test = o::gather_verts<4>(mesh2verts, elem_test);  
+  //printf("The 4 vertex_ids of the tet are %d %d %d %d \n", tet2v_test[0],tet2v_test[1],tet2v_test[2],tet2v_test[3]);
+  auto fv_test = o::gather_vectors<4, 1>(field, tet2v_test);
+  printf("The field at the 4 vertices of element id %d %.15f %.15f %.15f %.15f \n", elem_test, fv_test[0],fv_test[1],fv_test[2],fv_test[3]);
+
+  //Find the x,y,z co-ordinates of the vertices of the tet with a certain element id.
+  Omega_h::Matrix<3, 4> mat_test;
+  findTetCoords(mesh2verts, coords, elem_test, mat_test);
+  //printf("One coordinates of the vertex of a tet is %g %g %g \n", mat_test[0][0], mat_test[1][0], mat_test[2][0]);
+  for (int k=0; k<4; k++){ //4 because of the number of vertices of a tetra 
+
+    for (int i=0; i<3; i++){
+      pos_test[i]=mat_test[k][i]; 
+    } 
+    findBCCoordsInTet(coords, mesh2verts, pos_test, elem_test, bcc);
+    printf("The barycentric coords of element id %d %.15f %.15f %.15f %.15f \n", elem_test, bcc[0], bcc[1], bcc[2], bcc[3]);
+    auto temp = interpolateTetVtx(mesh2verts, field, elem_test, bcc, 1);
+    printf("The interpolated value at that vertex is %.15f \n", temp);
+  }
+}
 
 // Voronoi regions of triangle, to find nearest point on triangle
 enum TriRegion {

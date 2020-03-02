@@ -345,10 +345,10 @@ int main(int argc, char** argv) {
       gitrm_ionize(ptcls, gir, gp, gm, elem_ids, false);
       gitrm_recombine(ptcls, gir, gp, gm, elem_ids, false);
       //bool flag = (iter > 4060) ? true: false;
-      gitrm_cross_diffusion(ptcls, &iter, gm, gp,dTime);
-      search(picparts, gp, elem_ids, debug);
-      gitrm_coulomb_collision(ptcls, &iter, gm, gp, dTime);
-      gitrm_thermal_force(ptcls, &iter, gm, gp, dTime);
+      //gitrm_cross_diffusion(ptcls, &iter, gm, gp,dTime);
+      //search(picparts, gp, elem_ids, debug);
+      gitrm_coulomb_collision(ptcls, &iter, gm, gp, dTime,elem_ids);
+      //gitrm_thermal_force(ptcls, &iter, gm, gp, dTime);
       //gitrm_surfaceReflection(ptcls, sm, gp, gm, elem_ids, false);
       //The elem_ids shouldn't be reset between the two search_mesh calls.
       search(picparts, gp, elem_ids, debug);

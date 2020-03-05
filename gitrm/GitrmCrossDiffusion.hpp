@@ -5,7 +5,7 @@
 
 
 void gitrm_cross_diffusion(PS* ptcls, int *iteration, const GitrmMesh& gm,
-const GitrmParticles& gp, double dt)
+const GitrmParticles& gp, double dt, o::Write<o::LO>& elm_ids)
 {
 
   bool debug= 0;
@@ -17,14 +17,27 @@ const GitrmParticles& gp, double dt)
 
   printf("Entering CROSS DIFFUSION Routine\n");
   
-  o::Reals bFieldConst(3); 
-  if(USE_CONSTANT_BFIELD) {
-    bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
-        CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
-  }
+  //Setting up of 2D magnetic field data 
+  const auto& BField_2d = gm.Bfield_2d;
+  const auto bX0 = gm.bGridX0;
+  const auto bZ0 = gm.bGridZ0;
+  const auto bDx = gm.bGridDx;
+  const auto bDz = gm.bGridDz;
+  const auto bGridNx = gm.bGridNx;
+  const auto bGridNz = gm.bGridNz;
+
 
   const int USEPERPDIFFUSION = 1;
   const double diffusionCoefficient=1;
+  auto useConstantBField = USE_CONSTANT_BFIELD;
+  auto use2dInputFields = USE2D_INPUTFIELDS;
+  auto use3dField = USE3D_BFIELD;
+  bool cylSymm = true;
+
+  auto& mesh = gm.mesh;
+  const auto coords = mesh.coords();
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto BField = o::Reals(); //o::Reals(mesh.get_array<o::Real>(o::VERT, "BField"));
 
   const auto& testGitrPtclStepData = gp.testGitrPtclStepData;
   const auto testGDof = gp.testGitrStepDataDof;
@@ -33,10 +46,17 @@ const GitrmParticles& gp, double dt)
   const auto diff_rnd1 = gp.testGitrCrossFieldDiffRndInd;
   auto& xfaces =gp.wallCollisionFaceIds;
 
-  auto update_diffusion = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
-	{ if(mask > 0 )
-    	{	
+  o::Reals bFieldConst(3); 
+  if(useConstantBField) {
+    bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
+        CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
+  }
 
+
+  auto update_diffusion = PS_LAMBDA(const int& e, const int& pid, const bool& mask) 
+	{ if(mask > 0  && elm_ids[pid] >= 0)
+    	{	
+        o::LO el            = elm_ids[pid];
         auto ptcl           = pid_ps(pid);
         auto charge         = charge_ps_d(pid);
         auto fid            = xfaces[ptcl];
@@ -61,6 +81,23 @@ const GitrmParticles& gp, double dt)
         bField[0] = cos(theta)*bField_radial[0] - sin(theta)*bField_radial[1];
         bField[1] = sin(theta)*bField_radial[0] + cos(theta)*bField_radial[1];
         bField[2] = bField_radial[2];
+
+        if (use2dInputFields || useConstantBField){
+
+            p::interp2dVector(BField_2d, bX0, bZ0, bDx, bDz, bGridNx, bGridNz, posit_next, bField, cylSymm, &ptcl);
+
+            
+        }
+
+        else if (use3dField){
+
+            auto bcc = o::zero_vector<4>();
+            p::findBCCoordsInTet(coords, mesh2verts, posit_next, el, bcc);
+            p::interpolate3dFieldTet(mesh2verts, BField, el, bcc, bField); 
+
+        }
+
+
 
         auto perpVector         = o::zero_vector<3>();
 

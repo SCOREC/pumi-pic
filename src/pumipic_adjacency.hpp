@@ -711,6 +711,7 @@ OMEGA_H_DEVICE void findBCCoordsInTet(const Omega_h::Reals &coords,
   OMEGA_H_CHECK(all_positive(bcc)==1);
 }
 
+/*
 
 OMEGA_H_DEVICE void test3Dinterpfunction(const Omega_h::Reals& coords,
 const Omega_h::LOs& mesh2verts, o::LO elem_test, const Omega_h::Reals& field){
@@ -740,6 +741,7 @@ const Omega_h::LOs& mesh2verts, o::LO elem_test, const Omega_h::Reals& field){
   }
 }
 
+*/
 // Voronoi regions of triangle, to find nearest point on triangle
 enum TriRegion {
   VTXA, 

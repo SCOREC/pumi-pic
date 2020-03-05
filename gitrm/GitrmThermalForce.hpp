@@ -34,23 +34,29 @@ const GitrmParticles& gp, double dt, o::Write<o::LO>& elm_ids)
   auto grTeDX = gm.gradTeDx;
   auto grTeDZ = gm.gradTeDz;
 
+  //Setting up of 2D magnetic field data 
+  const auto& BField_2d = gm.Bfield_2d;
+  const auto bX0 = gm.bGridX0;
+  const auto bZ0 = gm.bGridZ0;
+  const auto bDx = gm.bGridDx;
+  const auto bDz = gm.bGridDz;
+  const auto bGridNx = gm.bGridNx;
+  const auto bGridNz = gm.bGridNz;
+
   auto& mesh = gm.mesh;
   const auto coords = mesh.coords();
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto gradTionVtx = mesh.get_array<o::Real>(o::VERT, "gradTiVtx");
   const auto gradTelVtx   = mesh.get_array<o::Real>(o::VERT, "gradTeVtx");
+  const auto BField = o::Reals(); //o::Reals(mesh.get_array<o::Real>(o::VERT, "BField"));
 
 
 
   auto useConstantBField = USE_CONSTANT_BFIELD;
   auto use2dInputFields = USE2D_INPUTFIELDS;
   auto use3dField = USE3D_BFIELD;
+  bool cylSymm = true;
 
-  o::Reals bFieldConst(3); 
-  if(useConstantBField) {
-    bFieldConst = o::Reals(o::HostWrite<o::Real>({CONSTANT_BFIELD0,
-        CONSTANT_BFIELD1, CONSTANT_BFIELD2}).write());
-  }
   const double amu = 184; 
   //const o::Real background_Z = BACKGROUND_Z;
   const double background_amu = 4;
@@ -73,19 +79,22 @@ const GitrmParticles& gp, double dt, o::Write<o::LO>& elm_ids)
         auto posit_next     = p::makeVector3(pid, xtgt_ps_d);
         auto eField         = p::makeVector3(pid, efield_ps_d);
         auto vel            = p::makeVector3(pid, vel_ps_d);
-        auto bField_radial  = o::zero_vector<3>();
         auto bField         = o::zero_vector<3>();
 
         
-        for(auto i=0; i<3; ++i)
-            bField_radial[i] = bFieldConst[i];
+        if (use2dInputFields || useConstantBField){
 
-          //Transformation of B field from cylindrical to cartesian
+            p::interp2dVector(BField_2d, bX0, bZ0, bDx, bDz, bGridNx, bGridNz, posit_next, bField, cylSymm, &ptcl);
+            
+        }
 
-            o::Real theta = atan2(posit_next[1], posit_next[0]);  
-            bField[0] = cos(theta)*bField_radial[0] - sin(theta)*bField_radial[1];
-            bField[1] = sin(theta)*bField_radial[0] + cos(theta)*bField_radial[1];
-            bField[2] = bField_radial[2];
+        else if (use3dField){
+
+            auto bcc = o::zero_vector<4>();
+            p::findBCCoordsInTet(coords, mesh2verts, posit_next, el, bcc);
+            p::interpolate3dFieldTet(mesh2verts, BField, el, bcc, bField); 
+
+        }
 
 
 
@@ -144,7 +153,7 @@ const GitrmParticles& gp, double dt, o::Write<o::LO>& elm_ids)
         vel_ps_d(pid,2)=vel[2]+dv_ITG[2];
         
         if (debug && ptcl==4){
-        printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2));
+          printf("The velocities after updation THERMAL_COLSN partcle %d timestep %d are %.15f %.15f %.15f \n", ptcl, iTimeStep, vel_ps_d(pid,0),vel_ps_d(pid,1),vel_ps_d(pid,2));
         } 
     	}
     };

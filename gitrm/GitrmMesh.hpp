@@ -41,6 +41,7 @@ const int USE3D_BFIELD = 0;
 const int USE2D_INPUTFIELDS = 1;
 
 // in GITR only constant EField is used.
+const int USE_CONSTANT_FLOW_VELOCITY=1;
 const int USE_CONSTANT_BFIELD = 1; //used for pisces
 const int USE_CYL_SYMMETRY = 1;
 const int PISCESRUN  = 1;
@@ -54,6 +55,10 @@ const o::Real CONSTANT_EFIELD2 = 0;
 const o::Real CONSTANT_BFIELD0 = 5;  //TODO FIXME
 const o::Real CONSTANT_BFIELD1 = 5;  //TODO FIXME
 const o::Real CONSTANT_BFIELD2 = -0.08;
+
+const o::Real CONSTANT_FLOW_VELOCITY0 = 0;  //TODO FIXME
+const o::Real CONSTANT_FLOW_VELOCITY1 = 0;  //TODO FIXME
+const o::Real CONSTANT_FLOW_VELOCITY2 = -20000;
 // 3 vtx, 1 bdry faceId & 1 bdry elId as Reals. 
 enum { BDRY_FACE_STORAGE_SIZE_PER_FACE = 1, BDRY_FACE_STORAGE_IDS=0 };
 const int BDRY_STORAGE_SIZE_PER_FACE = 1;

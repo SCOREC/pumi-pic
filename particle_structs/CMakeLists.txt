@@ -10,8 +10,6 @@ endif()
 option(PS_IS_TESTING "Build for CTest" OFF)
 message(STATUS "PS_IS_TESTING: ${PS_IS_TESTING}")
 
-#add_subdirectory(support)
-#include_directories(support)
 add_subdirectory(src)
 include_directories(src)
 

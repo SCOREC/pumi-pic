@@ -102,15 +102,8 @@ set(ALL_LIBS
   pumipic
   )
 
-#xgcm
-#add_subdirectory(xgcm)
-#set(ALL_LIBS
-#  ${ALL_LIBS}
-#  xgcm
-#  )
-
-#if(IS_TESTING)
-#  add_subdirectory(test)
-#endif()
+if(IS_TESTING)
+  add_subdirectory(test)
+endif()
 
 bob_end_package()

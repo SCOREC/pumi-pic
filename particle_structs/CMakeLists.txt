@@ -22,7 +22,7 @@ string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
 message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 # bob package creation {
-set(particle_structures_USE_Kokkos_DEFAULT ON)
+set(pumipic_USE_Kokkos_DEFAULT ON)
 get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY)
 set(Kokkos_PREFIX_DEFAULT ${Kokkos_PREFIX}/lib/CMake)
 bob_public_dep(Kokkos)

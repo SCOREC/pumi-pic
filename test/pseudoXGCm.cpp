@@ -12,7 +12,7 @@
 #define PARTICLE_SEED 512*512
 
 void getMemImbalance(int hasptcls) {
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);

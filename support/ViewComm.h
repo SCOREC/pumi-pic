@@ -95,7 +95,7 @@ namespace pumipic {
   }
 
   /************** Cuda Communication functions **************/
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
 
   //TODO change to check if the memory space is not accessible from host and accessible from cuda
   //Return type check to see if the memory space is not the host space

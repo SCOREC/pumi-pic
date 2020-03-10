@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ppMacros.h>
 namespace pumipic {
 struct MyPair {
   KOKKOS_FORCEINLINE_FUNCTION constexpr MyPair() : first(0), second(0) {}

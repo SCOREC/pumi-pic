@@ -15,7 +15,7 @@
 #include <Kokkos_Sort.hpp>
 #include "SCSPair.h"
 #include "scs_input.hpp"
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #endif
@@ -472,7 +472,7 @@ template <class DataTypes, typename MemSpace>
 template <typename FunctionType>
 void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
   FunctionType* fn_d;
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
   cudaMalloc(&fn_d, sizeof(FunctionType));
   cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
 #else

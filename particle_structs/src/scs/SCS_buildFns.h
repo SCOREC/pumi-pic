@@ -197,30 +197,42 @@ namespace pumipic {
                                                       kkLidView particle_elements,
                                                       MTVs particle_info) {
     lid_t given_particles = particle_elements.size();
+    assert(given_particles == num_ptcls);
     kkLidView element_to_row_local = element_to_row;
     //Setup starting point for each row
     lid_t C_local = C_;
     kkLidView row_index("row_index", numRows());
+    lid_t nr_local = numRows();
+#ifdef PP_USE_CUDA //Kokkos scan failing on Summit/Aimos, replacing with thrust
+    kkLidView row_index_val("row_index_val", numRows());
+    //Set values for each row for an exclusive scan
+    Kokkos::parallel_for(num_chunks, KOKKOS_LAMBDA(const lid_t& i) {
+      for (lid_t j = 0; j < C_local - 1; ++j) {
+        row_index_val(i*C_local + j) = 1;
+      }
+      row_index_val((i+1) * C_local - 1) = chunk_widths(i) * C_local - (C_local - 1);
+    });
+    //Perform scan using thrust
+    thrust::exclusive_scan(thrust::device, row_index_val.data(),
+                           row_index_val.data() + row_index_val.size(),
+                           row_index.data(), 0);
+    printf("THRUSTED\n");
+#else
     Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& sum, const bool& final) {
         if (final) {
-          for (lid_t j = 0; j < C_local; ++j)
+          for (lid_t j = 0; j < C_local; ++j) {
             row_index(i*C_local+j) = sum + j;
+          }
         }
         sum += chunk_widths(i) * C_local;
       });
-    //Determine index for each particle
-#ifdef PP_DEBUG
-    auto ptcl_mask_local = particle_mask;
 #endif
     kkLidView particle_indices("new_particle_scs_indices", given_particles);
     Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
-        lid_t new_elem = particle_elements(i);
-        lid_t new_row = element_to_row_local(new_elem);
-        particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
-#ifdef PP_DEBUG
-        assert(ptcl_mask_local(particle_indices(i)) != 0);
-#endif
-      });
+      lid_t new_elem = particle_elements(i);
+      lid_t new_row = element_to_row_local(new_elem);
+       particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
+    });
 
     CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
   }

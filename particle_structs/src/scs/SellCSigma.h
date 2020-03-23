@@ -147,7 +147,8 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths,
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(kkLidView mask, PairView ptcls, kkLidView chunk_widths);
+  void setupParticleMask(kkLidView mask, PairView ptcls, kkLidView chunk_widths,
+                         kkLidView& chunk_starts);
   void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
                    MTVs particle_info);
 
@@ -255,7 +256,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk,capacity_);
 
   //Allocate the SCS and backup with 10% extra space
-  lid_t cap = getLastValue<lid_t>(offsets);
+  lid_t cap = capacity_;
   particle_mask = kkLidView("particle_mask", cap);
   if (extra_padding > 0)
     cap *= (1 + extra_padding);
@@ -263,16 +264,14 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   CreateViews<device_type, DataTypes>(scs_data_swap, cap);
   swap_size = current_size = cap;
 
+  kkLidView chunk_starts;
   if (num_ptcls > 0)
-    setupParticleMask(particle_mask, ptcls, chunk_widths);
+    setupParticleMask(particle_mask, ptcls, chunk_widths, chunk_starts);
 
   //If particle info is provided then enter the information
   lid_t given_particles = particle_elements.size();
   if (given_particles > 0 && particle_info != NULL) {
-#ifdef PP_DEBUG
-    assert(given_particles == num_ptcls);
-#endif
-    initSCSData(chunk_widths, particle_elements, particle_info);
+    initSCSData(chunk_starts, particle_elements, particle_info);
   }
   Kokkos::Profiling::popRegion();
 }

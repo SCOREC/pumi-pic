@@ -1,5 +1,5 @@
 #pragma once
-
+#include <cassert>
 #include <ViewComm.h>
 #include <SupportKK.h>
 #include "MemberTypeArray.h"
@@ -106,21 +106,23 @@ namespace pumipic {
   //Create Views Templated Struct
   template <typename Device, typename... Types> struct CreateViewsImpl;
   template <typename Device> struct CreateViewsImpl<Device> {
-    CreateViewsImpl(MemberTypeViews, int) {}
+    CreateViewsImpl(MemberTypeViews, int, int) {}
   };
   template <typename Device, typename T, typename... Types> struct CreateViewsImpl<Device, T, Types...> {
-    CreateViewsImpl(MemberTypeViews views, int size) {
+    CreateViewsImpl(MemberTypeViews views, int size, int num) {
 
-      views[0] = new MemberTypeView<T, Device>("datatype_view", size);
+      char name[100];
+      sprintf(name, "datatype_view_%d", num);
+      views[0] = new MemberTypeView<T, Device>(name, size);
       MemberTypeView<T, Device> view = *static_cast<MemberTypeView<T, Device>*>(views[0]);
-      CreateViewsImpl<Device, Types...>(views+1, size);
+      CreateViewsImpl<Device, Types...>(views+1, size, num+1);
     }
   };
 
   template <typename Device, typename... Types> struct CreateViews<Device, MemberTypes<Types...> > {
     CreateViews(MemberTypeViews& views, int size) {
       views = new void*[MemberTypes<Types...>::size];
-      CreateViewsImpl<Device, Types...>(views, size);
+      CreateViewsImpl<Device, Types...>(views, size, 0);
     }
   };
 
@@ -147,8 +149,12 @@ namespace pumipic {
                  View ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
+      int size = dst.extent(0);
       Kokkos::parallel_for(ps_indices.size(), KOKKOS_LAMBDA(const int& i) {
         const int index = ps_indices(i);
+        if (index >= size || index < 0) {
+          printf("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
+        }
         CopyViewToView<T,Device>(dst, index, src, i);
       });
       CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);

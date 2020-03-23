@@ -246,8 +246,15 @@ namespace {
                                 Omega_h::Write<Omega_h::LO> owns) {
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
     Omega_h::Write<Omega_h::LO> selfcount(1,0,"selfcount");
+    int max_cids = class_owners.size();
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
+      if (c_id < 0)
+        printf("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
+      else if (c_id >= max_cids)
+        printf("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
       owns[id] = class_owners[c_id];
       const auto hasElm = (class_owners[c_id] == self);
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);

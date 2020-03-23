@@ -56,20 +56,34 @@ namespace pumipic {
       }
       else if (strcmp(extension, "cpn") == 0) {
         ownership_rule=CLASSIFICATION;
-        std::ifstream in_str(partition_filename);
-        if (!in_str) {
-          if (!comm_rank)
-            fprintf(stderr,"Cannot open file %s\n", partition_filename);
-          throw std::runtime_error("Cannot open file");
-        }
-        int size;
-        in_str>>size;
-        Omega_h::HostWrite<Omega_h::LO> host_owners(size+1, "host_owners");
-        int cid, own;
-        while(in_str >> cid >> own)
-          host_owners[cid] = own;
+        int root = 0;
+        if (comm_rank == root) {
+          std::ifstream in_str(partition_filename);
+          if (!in_str) {
+            if (!comm_rank)
+              fprintf(stderr,"Cannot open file %s\n", partition_filename);
+            throw std::runtime_error("Cannot open file");
+          }
+          int size;
+          in_str>>size;
+          Omega_h::HostWrite<Omega_h::LO> host_owners(size+1, "host_owners");
+          int cid, own;
+          while(in_str >> cid >> own)
+            host_owners[cid] = own;
+          int length = host_owners.size();
+          MPI_Bcast(&length, 1, MPI_INT, root, comm->get_impl());
+          MPI_Bcast(host_owners.data(), length, MPI_INT, root, comm->get_impl());
+          partition = Omega_h::LOs(Omega_h::Write<Omega_h::LO>(host_owners));
 
-        partition = Omega_h::LOs(Omega_h::Write<Omega_h::LO>(host_owners));
+        }
+        else {
+          int length;
+          MPI_Bcast(&length, 1, MPI_INT, root, comm->get_impl());
+          Omega_h::HostWrite<Omega_h::LO> host_owners(length, "host_owners");
+          MPI_Bcast(host_owners.data(), length, MPI_INT, root, comm->get_impl());
+          partition = Omega_h::LOs(Omega_h::Write<Omega_h::LO>(host_owners));
+
+        }
 
       }
       else {

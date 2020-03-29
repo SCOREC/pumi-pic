@@ -112,7 +112,7 @@ namespace pumipic {
                                                            kkLidView chunk_widths,
                                                            kkLidView& offs,
                                                            kkLidView& s2c, lid_t& cap) {
-    kkLidView slices_per_chunk("slices_per_chunk", nChunks);
+    kkLidView slices_per_chunk("slices_per_chunk", nChunks + 1);
     const lid_t V_local = V_;
     Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t width = chunk_widths(i);
@@ -122,11 +122,7 @@ namespace pumipic {
         slices_per_chunk(i) = val1 + val3;
       });
     kkLidView offset_nslices("offset_nslices",nChunks+1);
-    Kokkos::parallel_scan(nChunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
-        cur += slices_per_chunk(i);
-        if (final)
-          offset_nslices(i+1) += cur;
-      });
+    exclusive_scan(slices_per_chunk, offset_nslices);
 
     nSlices = getLastValue<lid_t>(offset_nslices);
     offs = kkLidView("SCS offset", nSlices + 1);
@@ -147,17 +143,7 @@ namespace pumipic {
       }
     });
 
-#ifdef PP_USE_CUDA //Kokkos scans on Aimos/Summit fail occassionally, so we use thrust
-    thrust::exclusive_scan(thrust::device, slice_size.data(), slice_size.data() + nSlices + 1,
-                           offs.data(), 0);
-#else
-    Kokkos::parallel_scan(nSlices + 1, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
-      if (final) {
-        offs(i) = cur;
-      }
-      cur += slice_size(i);
-    });
-#endif
+    exclusive_scan(slice_size, offs);
     cap = getLastValue<lid_t>(offs);
   }
   template<class DataTypes, typename MemSpace>

@@ -46,20 +46,9 @@ namespace pumipic {
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
     kkLidView counting_offset_index("counting_offset_index", numRows() + 1);
-#ifdef PP_USE_CUDA
-    thrust::exclusive_scan(thrust::device, new_particles_per_row.data(),
-                           new_particles_per_row.data() + numRows() + 1,
-                           offset_new_particles.data(), 0);
+    exclusive_scan(new_particles_per_row, offset_new_particles);
     Kokkos::deep_copy(counting_offset_index, offset_new_particles);
-#else
-    Kokkos::parallel_scan(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
-      cur += new_particles_per_row(i);
-      if (final) {
-        offset_new_particles(i+1) = cur;
-        counting_offset_index(i+1) = cur;
-      }
-    });
-#endif
+
     int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
     if (num_moving_ptcls == 0) {
       Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {

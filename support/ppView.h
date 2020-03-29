@@ -8,6 +8,10 @@ namespace pumipic {
   class View {
   public:
     typedef Kokkos::View<T, ArrayLayout, Space> KView;
+    typedef typename KView::execution_space execution_space;
+    typedef typename KView::memory_space memory_space;
+    typedef typename KView::device_type device_type;
+    typedef typename KView::value_type value_type;
     typedef View<T, typename KView::host_mirror_space, ArrayLayout> HostMirror;
     View() : view_() {}
     View(lid_t size) : view_("ppView", size) {}

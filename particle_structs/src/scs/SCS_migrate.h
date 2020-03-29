@@ -22,13 +22,13 @@ namespace pumipic {
       Kokkos::Profiling::popRegion();
       return;
     }
-    kkLidView num_send_particles("num_send_particles", comm_size);
+    kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
       const lid_t process = new_process(particle_id);
       Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask * (process != comm_rank));
     };
     parallel_for(count_sending_particles);
-    kkLidView num_recv_particles("num_recv_particles", comm_size);
+    kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
     PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, MPI_COMM_WORLD);
 
     lid_t num_sending_to = 0, num_receiving_from = 0;
@@ -51,18 +51,10 @@ namespace pumipic {
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
     kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
-    Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
-        num += num_send_particles(i);
-        if (final) {
-          offset_send_particles(i+1) += num;
-          offset_send_particles_temp(i+1) += num;
-        }
-      });
-    Kokkos::parallel_scan(comm_size, KOKKOS_LAMBDA(const lid_t& i, lid_t& num, const bool& final) {
-        num += num_recv_particles(i);
-        if (final)
-          offset_recv_particles(i+1) += num;
-      });
+    exclusive_scan(num_send_particles, offset_send_particles);
+    Kokkos::deep_copy(offset_send_particles_temp, offset_send_particles);
+
+    exclusive_scan(num_recv_particles, offset_recv_particles);
     kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
     kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 

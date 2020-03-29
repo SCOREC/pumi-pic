@@ -264,14 +264,15 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   CreateViews<device_type, DataTypes>(scs_data_swap, cap);
   swap_size = current_size = cap;
 
-  kkLidView chunk_starts;
-  if (num_ptcls > 0)
+  if (num_ptcls > 0) {
+    kkLidView chunk_starts;
     setupParticleMask(particle_mask, ptcls, chunk_widths, chunk_starts);
 
-  //If particle info is provided then enter the information
-  lid_t given_particles = particle_elements.size();
-  if (given_particles > 0 && particle_info != NULL) {
-    initSCSData(chunk_starts, particle_elements, particle_info);
+    //If particle info is provided then enter the information
+    lid_t given_particles = particle_elements.size();
+    if (given_particles > 0 && particle_info != NULL) {
+      initSCSData(chunk_starts, particle_elements, particle_info);
+    }
   }
   Kokkos::Profiling::popRegion();
 }

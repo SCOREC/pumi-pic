@@ -147,7 +147,7 @@ namespace pumipic {
       }
     });
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_CUDA //Kokkos scans on Aimos/Summit fail occassionally, so we use thrust
     thrust::exclusive_scan(thrust::device, slice_size.data(), slice_size.data() + nSlices + 1,
                            offs.data(), 0);
 #else
@@ -167,12 +167,6 @@ namespace pumipic {
                                                           kkLidView& chunk_starts) {
     //Get start of each chunk
     auto offsets_cpy = offsets;
-    //Check that offset is growing
-    Kokkos::parallel_for(Kokkos::RangePolicy<>(1, num_slices), KOKKOS_LAMBDA(const lid_t& i) {
-      if (offsets(i-1) > offsets(i)) {
-        printf("[ERROR] Offsets is not increasing from slice %d to %d (%d > %d)\n",  i-1, i, offsets(i-1), offsets(i));
-      }
-    });
     auto slice_to_chunk_cpy = slice_to_chunk;
     chunk_starts = kkLidView("chunk_starts", num_chunks);
     lid_t cap_local = capacity_;
@@ -185,13 +179,6 @@ namespace pumipic {
       if (my_chunk != next_chunk) {
         for (int j = my_chunk + 1; j <= next_chunk; ++j)
           chunk_starts(j) = offsets_cpy(i+1);
-      }
-    });
-
-    //Check that chunk_starts is growing
-    Kokkos::parallel_for(Kokkos::RangePolicy<>(1, num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
-      if (chunk_starts(i-1) > chunk_starts(i)) {
-        printf("[ERROR] Chunk starts is not increasing from chunk %d to %d (%d > %d)\n",  i-1, i, chunk_starts(i-1), chunk_starts(i));
       }
     });
 
@@ -212,9 +199,6 @@ namespace pumipic {
           const lid_t element_id = row_to_element_cpy(row);
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
               const lid_t particle_id = start+(p*team_size);
-              if (particle_id >= cap) {
-                printf("[ERROR] Particle is over capacity %d > %d in element %d on row %d in chunk %d\n", particle_id, cap, element_id, row, chunk);
-              }
               if (element_id < ne)
                 mask(particle_id) =  p < ptcls(row).first;
             });
@@ -241,15 +225,6 @@ namespace pumipic {
       int chunk = i / C_local;
       int row_of_chunk = i % C_local;
       row_index(i) = chunk_starts(chunk) + row_of_chunk;
-      row_starts(i) = row_index(i);
-      if (i < nr_local - C_local - 1)
-        row_ends(i) = chunk_starts(chunk + 1) + row_of_chunk;
-      else {
-        row_ends(i) = cap_local + row_of_chunk;
-      }
-      if (row_ends(i) < row_starts(i)) {
-        printf("[ERROR] Row ends before row starts on row %d/%d on chunk %d/%d [%d < %d] (cap: %d)\n", i, nr_local, chunk, num_chunk, row_ends(i), row_starts(i), cap_local);
-      }
     });
 
     kkLidView particle_indices("new_particle_scs_indices", given_particles);
@@ -257,55 +232,8 @@ namespace pumipic {
       lid_t new_elem = particle_elements(i);
       lid_t new_row = element_to_row_local(new_elem);
       particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
-      if (particle_indices(i) > row_ends(new_row))
-        printf("[ERROR] Particle %d exceeds row length on row %d/%d which is element %d\n",
-               i, new_row, nr_local, new_elem);
-
     });
-
-    kkLidView checks("index_checks", capacity_);
-    Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
-      const int index = particle_indices(i);
-      Kokkos::atomic_add(&(checks(index)), 1);
-    });
-
-    kkLidView check_fails("check fails", 3);
-    auto checkChecks = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-      int nc = checks(p);
-      if (nc > 1 && mask)
-        Kokkos::atomic_add(&(check_fails(0)), 1);
-      if (nc > 0 && !mask)
-        Kokkos::atomic_add(&(check_fails(1)), 1);
-      if (nc == 0 && mask)
-        Kokkos::atomic_add(&(check_fails(2)), 1);
-
-    };
-    parallel_for(checkChecks);
-    kkLidHostMirror fail_host = deviceToHost(check_fails);
-
-    if(fail_host(0) != 0)
-      fprintf(stderr, "[ERROR] %d/%d particles are set multiple times\n",
-              fail_host(0), num_ptcls);
-    if(fail_host(1) != 0)
-      fprintf(stderr, "[ERROR] %d/%d padded cells are set\n", fail_host(1), num_ptcls);
-    if(fail_host(2) != 0)
-      fprintf(stderr, "[ERROR] %d/%d particles are not set\n", fail_host(2), num_ptcls);
 
     CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
-
-    kkLidView fails("fails",1);
-    auto ids = this->template get<2>();
-    auto checkIDsSet = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-      if (mask) {
-        if (ids(p) == 0)
-          Kokkos::atomic_add(&(fails(0)), 1);
-      }
-    };
-    parallel_for(checkIDsSet);
-
-    int f = getLastValue<lid_t>(fails) - 1;
-    if (f > 0) {
-      fprintf(stderr, "[ERROR] %d/%d points did not set the id\n", f, num_ptcls);
-    }
   }
 }

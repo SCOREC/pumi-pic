@@ -131,28 +131,33 @@ namespace pumipic {
     nSlices = getLastValue<lid_t>(offset_nslices);
     offs = kkLidView("SCS offset", nSlices + 1);
     s2c = kkLidView("slice to chunk", nSlices);
-    kkLidView slice_size("slice_size", nSlices);
+    kkLidView slice_size("slice_size", nSlices + 1);
     const lid_t nat_size = V_*C_;
     const lid_t C_local = C_;
     Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
-        const lid_t start = offset_nslices(i);
-        const lid_t end = offset_nslices(i+1);
-        for (lid_t j = start; j < end; ++j) {
-          s2c(j) = i;
-          const lid_t rem = chunk_widths(i) % V_local;
-          const lid_t val = rem + (rem==0)*V_local;
-          const bool is_last = (j == end-1);
-          slice_size(j) = (!is_last) * nat_size;
-          slice_size(j) += (is_last) * (val) * C_local;
-        }
-      });
-    Kokkos::parallel_scan(nSlices, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
-        cur += slice_size(i);
-        if (final) {
-          const lid_t index = i+1;
-          offs(index) += cur;
-        }
-      });
+      const lid_t start = offset_nslices(i);
+      const lid_t end = offset_nslices(i+1);
+      for (lid_t j = start; j < end; ++j) {
+        s2c(j) = i;
+        const lid_t rem = chunk_widths(i) % V_local;
+        const lid_t val = rem + (rem==0)*V_local;
+        const bool is_last = (j == end-1);
+        slice_size(j) = (!is_last) * nat_size;
+        slice_size(j) += (is_last) * (val) * C_local;
+      }
+    });
+
+#ifdef PP_USE_CUDA
+    thrust::exclusive_scan(thrust::device, slice_size.data(), slice_size.data() + nSlices + 1,
+                           offs.data(), 0);
+#else
+    Kokkos::parallel_scan(nSlices + 1, KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool final) {
+      if (final) {
+        offs(i) = cur;
+      }
+      cur += slice_size(i);
+    });
+#endif
     cap = getLastValue<lid_t>(offs);
   }
   template<class DataTypes, typename MemSpace>
@@ -162,15 +167,34 @@ namespace pumipic {
                                                           kkLidView& chunk_starts) {
     //Get start of each chunk
     auto offsets_cpy = offsets;
+    //Check that offset is growing
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(1, num_slices), KOKKOS_LAMBDA(const lid_t& i) {
+      if (offsets(i-1) > offsets(i)) {
+        printf("[ERROR] Offsets is not increasing from slice %d to %d (%d > %d)\n",  i-1, i, offsets(i-1), offsets(i));
+      }
+    });
     auto slice_to_chunk_cpy = slice_to_chunk;
     chunk_starts = kkLidView("chunk_starts", num_chunks);
+    lid_t cap_local = capacity_;
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(1,num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
+      chunk_starts[i] = cap_local;
+    });
     Kokkos::parallel_for(num_slices-1, KOKKOS_LAMBDA(const lid_t& i) {
-        const lid_t my_chunk = slice_to_chunk_cpy(i);
-        const lid_t next_chunk = slice_to_chunk_cpy(i+1);
-        if (my_chunk != next_chunk) {
-          chunk_starts(next_chunk) = offsets_cpy(i+1);
-        }
-      });
+      const lid_t my_chunk = slice_to_chunk_cpy(i);
+      const lid_t next_chunk = slice_to_chunk_cpy(i+1);
+      if (my_chunk != next_chunk) {
+        for (int j = my_chunk + 1; j <= next_chunk; ++j)
+          chunk_starts(j) = offsets_cpy(i+1);
+      }
+    });
+
+    //Check that chunk_starts is growing
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(1, num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
+      if (chunk_starts(i-1) > chunk_starts(i)) {
+        printf("[ERROR] Chunk starts is not increasing from chunk %d to %d (%d > %d)\n",  i-1, i, chunk_starts(i-1), chunk_starts(i));
+      }
+    });
+
     //Fill the SCS
     const lid_t league_size = num_chunks;
     const lid_t team_size = C_;
@@ -207,69 +231,65 @@ namespace pumipic {
     kkLidView element_to_row_local = element_to_row;
     //Setup starting point for each row
     lid_t C_local = C_;
+    kkLidView row_starts("row_starts", numRows());
     kkLidView row_index("row_index", numRows());
+    kkLidView row_ends("row_ends", numRows());
     lid_t nr_local = numRows();
+    lid_t cap_local = capacity_;
+    lid_t num_chunk = num_chunks;
     Kokkos::parallel_for(nr_local, KOKKOS_LAMBDA(const int& i) {
       int chunk = i / C_local;
       int row_of_chunk = i % C_local;
       row_index(i) = chunk_starts(chunk) + row_of_chunk;
-    });
-/* #ifdef PP_USE_CUDA //Kokkos scan failing on Summit/Aimos, replacing with thrust */
-/*     kkLidView row_index_val("row_index_val", numRows()); */
-/*     //Set values for each row for an exclusive scan */
-/*     Kokkos::parallel_for(num_chunks, KOKKOS_LAMBDA(const lid_t& i) { */
-/*       const int start = i*C_local; */
-/*       for (lid_t j = 0; j < C_local - 1; ++j) { */
-/*         row_index_val(start + j) = 1; */
-/*       } */
-/*       row_index_val(start + C_local - 1) = chunk_widths(i) * C_local - (C_local - 1); */
-/*     }); */
-/*     //Perform scan using thrust */
-/*     thrust::exclusive_scan(thrust::device, row_index_val.data(), */
-/*                            row_index_val.data() + row_index_val.size(), */
-/*                            row_index.data(), 0); */
-/* #else */
-/*     Kokkos::parallel_scan(num_chunks, KOKKOS_LAMBDA(const lid_t& i, lid_t& sum, */
-/*                                                     const bool& final) { */
-/*       if (final) { */
-/*         for (lid_t j = 0; j < C_local; ++j) { */
-/*           row_index(i*C_local+j) = sum + j; */
-/*         } */
-/*       } */
-/*       sum += chunk_widths(i) * C_local; */
-/*     }); */
-/* #endif */
-
-    auto cap_local = capacity_;
-    auto ne = num_elems;
-    kkLidView fails3("fails", 1);
-    //Check to see if the scan is within the bounds
-    Kokkos::parallel_for(nr_local, KOKKOS_LAMBDA(const lid_t& i) {
-        if (row_index(i) > cap_local + C_local)
-          Kokkos::atomic_add(&(fails3[0]), 1);
+      row_starts(i) = row_index(i);
+      if (i < nr_local - C_local - 1)
+        row_ends(i) = chunk_starts(chunk + 1) + row_of_chunk;
+      else {
+        row_ends(i) = cap_local + row_of_chunk;
+      }
+      if (row_ends(i) < row_starts(i)) {
+        printf("[ERROR] Row ends before row starts on row %d/%d on chunk %d/%d [%d < %d] (cap: %d)\n", i, nr_local, chunk, num_chunk, row_ends(i), row_starts(i), cap_local);
+      }
     });
 
-    int f3 = getLastValue<lid_t>(fails3);
-    if (f3 > 0) {
-      fprintf(stderr, "[ERROR] %d/%d rows start outside the capacity.\n", f3, nr_local);
-    }
-
-    kkLidView fails2("fails",1);
-    auto ptcl_mask_temp = particle_mask;
     kkLidView particle_indices("new_particle_scs_indices", given_particles);
     Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
       lid_t new_elem = particle_elements(i);
       lid_t new_row = element_to_row_local(new_elem);
       particle_indices(i) = Kokkos::atomic_fetch_add(&row_index(new_row), C_local);
-      if (!particle_mask(particle_indices(i))) {
-        Kokkos::atomic_add(&(fails2[0]),1);
-      }
+      if (particle_indices(i) > row_ends(new_row))
+        printf("[ERROR] Particle %d exceeds row length on row %d/%d which is element %d\n",
+               i, new_row, nr_local, new_elem);
+
     });
 
-    int f2 = getLastValue<lid_t>(fails2);
-    if (f2 > 0) {
-      fprintf(stderr, "[ERROR] %d/%d ptcls are set to false particles.\n", f2, num_ptcls);
-    }
+    kkLidView checks("index_checks", capacity_);
+    Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
+      const int index = particle_indices(i);
+      Kokkos::atomic_add(&(checks(index)), 1);
+    });
+
+    kkLidView check_fails("check fails", 3);
+    auto checkChecks = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+      int nc = checks(p);
+      if (nc > 1 && mask)
+        Kokkos::atomic_add(&(check_fails(0)), 1);
+      if (nc > 0 && !mask)
+        Kokkos::atomic_add(&(check_fails(1)), 1);
+      if (nc == 0 && mask)
+        Kokkos::atomic_add(&(check_fails(2)), 1);
+
+    };
+    parallel_for(checkChecks);
+    kkLidHostMirror fail_host = deviceToHost(check_fails);
+
+    if(fail_host(0) != 0)
+      fprintf(stderr, "[ERROR] %d/%d particles are set multiple times\n",
+              fail_host(0), num_ptcls);
+    if(fail_host(1) != 0)
+      fprintf(stderr, "[ERROR] %d/%d padded cells are set\n", fail_host(1), num_ptcls);
+    if(fail_host(2) != 0)
+      fprintf(stderr, "[ERROR] %d/%d particles are not set\n", fail_host(2), num_ptcls);
 
     CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
 

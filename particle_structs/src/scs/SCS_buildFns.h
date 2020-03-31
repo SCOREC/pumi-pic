@@ -174,7 +174,6 @@ namespace pumipic {
     const lid_t ne = num_elems;
     const PolicyType policy(league_size, team_size);
     auto row_to_element_cpy = row_to_element;
-    lid_t cap = capacity_;
     Kokkos::parallel_for(policy, KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
       const lid_t chunk = thread.league_rank();
       const lid_t chunk_row = thread.team_rank();
@@ -204,10 +203,7 @@ namespace pumipic {
     kkLidView row_starts("row_starts", numRows());
     kkLidView row_index("row_index", numRows());
     kkLidView row_ends("row_ends", numRows());
-    lid_t nr_local = numRows();
-    lid_t cap_local = capacity_;
-    lid_t num_chunk = num_chunks;
-    Kokkos::parallel_for(nr_local, KOKKOS_LAMBDA(const int& i) {
+    Kokkos::parallel_for(numRows(), KOKKOS_LAMBDA(const int& i) {
       int chunk = i / C_local;
       int row_of_chunk = i % C_local;
       row_index(i) = chunk_starts(chunk) + row_of_chunk;

@@ -41,8 +41,13 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
+#ifdef PP_USE_CUDA
   template <std::size_t N>
   using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+#else
+  template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
+template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
+#endif
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;

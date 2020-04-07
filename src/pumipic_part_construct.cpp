@@ -175,6 +175,7 @@ namespace pumipic {
         setupComm(i, rank_offset_nents[i], picpart_offset_nents, owner_dim[i]);
 
       }
+      delete [] num_ents;
       return;
     }
 

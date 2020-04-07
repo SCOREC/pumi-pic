@@ -26,6 +26,8 @@ struct MyPair {
 };
 
 }
+
+#ifdef PP_USE_CUDA
 namespace Kokkos {
   using pumipic::MyPair;
   PP_DEVICE_VAR MyPair ma = MyPair(10000000);
@@ -36,3 +38,4 @@ namespace Kokkos {
     KOKKOS_FORCEINLINE_FUNCTION constexpr static const  MyPair& min() {return mi;}
   };
 }
+#endif

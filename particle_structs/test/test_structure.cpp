@@ -1,6 +1,11 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 
+#ifdef PP_USE_CUDA
+typedef Kokkos::CudaSpace DeviceSpace;
+#else
+typedef Kokkos::HostSpace DeviceSpace;
+#endif
 void finalize() {
   Kokkos::finalize();
   MPI_Finalize();
@@ -277,7 +282,7 @@ int testCopy(const char* name, PS* structure) {
     ++fails;
   }
   //Copy particle structure back to the device
-  PS* device_structure = ps::copy<Kokkos::CudaSpace>(host_structure);
+  PS* device_structure = ps::copy<DeviceSpace>(host_structure);
   if (device_structure->nElems() != structure->nElems()) {
     fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() back to device on rank %d\n",
             name, comm_rank);

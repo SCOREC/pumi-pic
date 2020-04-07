@@ -28,7 +28,7 @@ namespace pumipic {
     thrust::exclusive_scan(thrust::device /*ThrustSpace<ViewT::memory_space>::space */,
                            entries.data(), entries.data() + entries.size(), result.data(), 0);
 #else
-    auto exclusive_sum = KOKKOS_LAMBDA(const int index, ViewT::value_type& cur, const bool final) {
+    auto exclusive_sum = KOKKOS_LAMBDA(const int index, typename ViewT::value_type& cur, const bool final) {
       if (final) {
         result(index) = cur;
       }
@@ -43,7 +43,7 @@ namespace pumipic {
     thrust::inclusive_scan(thrust::device /*ThrustSpace<ViewT::memory_space>::space */,
                            entries.data(), entries.data() + entries.size(), result.data(), 0);
 #else
-    auto inclusive_sum = KOKKOS_LAMBDA(const int index, ViewT::value_type& cur, const bool final) {
+    auto inclusive_sum = KOKKOS_LAMBDA(const int index, typename ViewT::value_type& cur, const bool final) {
       cur += entries(index);
       if (final) {
         result(index) = cur;

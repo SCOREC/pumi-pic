@@ -267,14 +267,15 @@ namespace pumipic {
     int my_num_entries = ent_offsets[commptr->rank()+1] - ent_offsets[commptr->rank()];
     int num_recvs = num_cores[edim] - num_bounds[edim] + num_boundaries[edim];
     int num_sends = num_cores[edim];
-    Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[num_recvs];
-    for (int i = 0; i < num_recvs; ++i)
-      neighbor_arrays[i] = new Omega_h::HostWrite<T>(my_num_entries*nvals);
     MPI_Request* send_requests = new MPI_Request[num_sends];
     MPI_Request* recv_requests = new MPI_Request[num_recvs];
     int index = 0;
     //Fan in is skipped for accept_op
     if (op != BCAST_OP) {
+      Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[num_recvs];
+      for (int i = 0; i < num_recvs; ++i)
+        neighbor_arrays[i] = new Omega_h::HostWrite<T>(my_num_entries*nvals);
+
       for (int i = 0; i < num_cores[edim]; ++i) {
         int rank = buffered_parts[edim][i];
         int num_entries = ent_offsets[rank+1] - ent_offsets[rank];

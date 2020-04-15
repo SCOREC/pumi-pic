@@ -12,7 +12,7 @@ namespace pumipic {
   }
   CREATE_MPITYPE(char, MPI_CHAR);
   CREATE_MPITYPE(short, MPI_SHORT);
-  CREATE_MPITYPE(bool, MPI_INT);
+  CREATE_MPITYPE(bool, MPI::BOOL);
   CREATE_MPITYPE(int, MPI_INT);
   CREATE_MPITYPE(long, MPI_LONG);
   CREATE_MPITYPE(unsigned char, MPI_UNSIGNED_CHAR);

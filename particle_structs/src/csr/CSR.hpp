@@ -31,6 +31,7 @@ namespace pumipic {
 
 
     void migrate(kkLidView new_element, kkLidView new_process,
+                 Distributor<MemSpace> dist = Distributor<MemSpace>(),
                  kkLidView new_particle_elements = kkLidView(),
                  MTVs new_particle_info = NULL);
 
@@ -71,8 +72,9 @@ namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-               kkLidView new_particle_elements,
-               MTVs new_particle_info) {
+                                         Distributor<MemSpace> dist,
+                                         kkLidView new_particle_elements,
+                                         MTVs new_particle_info) {
     fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
   }
 

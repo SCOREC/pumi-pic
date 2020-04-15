@@ -11,6 +11,7 @@ set(HEADERS
   support/MemberTypeArray.h
   support/MemberTypeLibraries.h
   support/Segment.h
+  support/psDistributor.hpp
   particle_structure.hpp
   ps_for.hpp
   psMemberType.h

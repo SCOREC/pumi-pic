@@ -1,19 +1,19 @@
 #pragma once
 #include <psMemberType.h>
 namespace pumipic {
+
   template<class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
+                                                  Distributor<MemSpace> dist,
                                                   kkLidView new_particle_elements,
                                                   MTVs new_particle_info) {
-    //TODO use new_particle_elements, new_particle_info
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_migrate");
     Kokkos::Timer timer;
     /********* Send # of particles being sent to each process *********/
-    int comm_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    int comm_size = dist.num_ranks();
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(dist.mpi_comm(), &comm_rank);
 
     if (comm_size == 1) {
       rebuild(new_element, new_particle_elements, new_particle_info);
@@ -25,12 +25,17 @@ namespace pumipic {
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
       const lid_t process = new_process(particle_id);
-      Kokkos::atomic_fetch_add(&(num_send_particles(process)), mask * (process != comm_rank));
+      const lid_t process_index = dist.index(process);
+      Kokkos::atomic_fetch_add(&(num_send_particles(process_index)),
+                               mask * (process != comm_rank));
     };
     parallel_for(count_sending_particles);
     kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
-    PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, MPI_COMM_WORLD);
-
+    if (dist.isWorld())
+      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
+    else {
+      //TODO perform isends and irecvs to get particle counts
+    }
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
         lsum += (num_send_particles(i) > 0);
@@ -68,9 +73,10 @@ namespace pumipic {
     auto element_to_gid_local = element_to_gid;
     auto gatherParticlesToSend = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
       const lid_t process = new_process(particle_id);
+      const lid_t process_index = dist.index(process);
       if (mask && process != comm_rank) {
         send_index(particle_id) =
-          Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process)),1);
+          Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process_index)),1);
         const lid_t index = send_index(particle_id);
         send_element(index) = element_to_gid_local(new_element(particle_id));
       }
@@ -100,15 +106,16 @@ namespace pumipic {
     for (lid_t i = 0; i < comm_size; ++i) {
       if (i == comm_rank)
         continue;
-
+      int rank = dist.rank_host(i);
       //Sending
       lid_t num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
       if (num_send > 0) {
         lid_t start_index = offset_send_particles_host(i);
-        PS_Comm_Isend(send_element, start_index, num_send, i, 0, MPI_COMM_WORLD,
+        PS_Comm_Isend(send_element, start_index, num_send, rank, 0, dist.mpi_comm(),
                       send_requests +send_num);
         send_num++;
-        SendViews<device_type, DataTypes>(send_particle, start_index, num_send, i, 1,
+        //TODO add mpi_comm to arg list
+        SendViews<device_type, DataTypes>(send_particle, start_index, num_send, rank, 1,
                                           send_requests + send_num);
         send_num+=num_types;
       }
@@ -116,10 +123,11 @@ namespace pumipic {
       lid_t num_recv = offset_recv_particles_host(i+1) - offset_recv_particles_host(i);
       if (num_recv > 0) {
         lid_t start_index = offset_recv_particles_host(i);
-        PS_Comm_Irecv(recv_element, start_index, num_recv, i, 0, MPI_COMM_WORLD,
+        PS_Comm_Irecv(recv_element, start_index, num_recv, rank, 0, dist.mpi_comm(),
                       recv_requests + recv_num);
         recv_num++;
-        RecvViews<device_type, DataTypes>(recv_particle,start_index, num_recv, i, 1,
+        //TODO add mpi_comm to arg list
+        RecvViews<device_type, DataTypes>(recv_particle,start_index, num_recv, rank, 1,
                                           recv_requests + recv_num);
         recv_num+=num_types;
       }

@@ -100,6 +100,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
      new_process - array sized scs->capacity with the new process for each particle
   */
   void migrate(kkLidView new_element, kkLidView new_process,
+               Distributor<MemSpace> dist = Distributor<MemSpace>(),
                kkLidView new_particle_elements = kkLidView(),
                MTVs new_particle_info = NULL);
 
@@ -334,6 +335,9 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
   mirror_copy->pad_strat = pad_strat;
   mirror_copy->tryShuffling = tryShuffling;
   mirror_copy->num_empty_elements = num_empty_elements;
+
+  //Create the swap space
+  mirror_copy->scs_data_swap = createMemberViews<DataTypes, memory_space>(swap_size);
   //Deep copy each view
   mirror_copy->slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
                                                                    slice_to_chunk.size());

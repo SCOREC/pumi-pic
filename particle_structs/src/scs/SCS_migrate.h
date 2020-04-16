@@ -34,7 +34,23 @@ namespace pumipic {
     if (dist.isWorld())
       PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
     else {
-      //TODO perform isends and irecvs to get particle counts
+      MPI_Request* count_send_requests = new MPI_Request[comm_size - 1];
+      MPI_Request* count_recv_requests = new MPI_Request[comm_size - 1];
+      int request_index = 0;
+      for (int i = 0; i < comm_size; ++i) {
+        int rank = dist.rank_host(i);
+        if (rank != comm_rank) {
+          PS_Comm_Isend(num_send_particles, i, 1, rank, 0, dist.mpi_comm(),
+                        count_send_requests + request_index);
+          PS_Comm_Irecv(num_recv_particles, i, 1, rank, 0, dist.mpi_comm(),
+                        count_recv_requests + request_index);
+          ++request_index;
+        }
+      }
+      PS_Comm_Waitall<device_type>(comm_size - 1, count_send_requests, MPI_STATUSES_IGNORE);
+      PS_Comm_Waitall<device_type>(comm_size - 1, count_recv_requests, MPI_STATUSES_IGNORE);
+      delete [] count_send_requests;
+      delete [] count_recv_requests;
     }
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
@@ -104,9 +120,10 @@ namespace pumipic {
     MPI_Request* recv_requests = new MPI_Request[num_recvs];
     //Send the particles to each neighbor
     for (lid_t i = 0; i < comm_size; ++i) {
-      if (i == comm_rank)
-        continue;
       int rank = dist.rank_host(i);
+      if (rank == comm_rank)
+        continue;
+
       //Sending
       lid_t num_send = offset_send_particles_host(i+1) - offset_send_particles_host(i);
       if (num_send > 0) {
@@ -114,9 +131,8 @@ namespace pumipic {
         PS_Comm_Isend(send_element, start_index, num_send, rank, 0, dist.mpi_comm(),
                       send_requests +send_num);
         send_num++;
-        //TODO add mpi_comm to arg list
         SendViews<device_type, DataTypes>(send_particle, start_index, num_send, rank, 1,
-                                          send_requests + send_num);
+                                          dist.mpi_comm(), send_requests + send_num);
         send_num+=num_types;
       }
       //Receiving
@@ -126,9 +142,8 @@ namespace pumipic {
         PS_Comm_Irecv(recv_element, start_index, num_recv, rank, 0, dist.mpi_comm(),
                       recv_requests + recv_num);
         recv_num++;
-        //TODO add mpi_comm to arg list
         RecvViews<device_type, DataTypes>(recv_particle,start_index, num_recv, rank, 1,
-                                          recv_requests + recv_num);
+                                          dist.mpi_comm(), recv_requests + recv_num);
         recv_num+=num_types;
       }
     }

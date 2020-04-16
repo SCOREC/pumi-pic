@@ -20,7 +20,7 @@ namespace pumipic {
     void setRanks(ViewT rnks);
     void buildMap();
 
-    PP_INLINE MPI_Comm mpi_comm() const {return comm;}
+    MPI_Comm mpi_comm() const {return comm;}
     PP_INLINE bool isWorld() const {return ranks_d.size() == 0;}
     int num_ranks() const;
     int rank_host(int i) const;
@@ -36,15 +36,16 @@ namespace pumipic {
     typename IndexView::HostMirror ranks_h;
 
     //Unordered map from rank to index on device
-    Kokkos::UnorderedMap<lid_t, lid_t, typename Space::device_type> mapping;
+    typedef Kokkos::UnorderedMap<lid_t, lid_t, typename Space::device_type> MapType;
+    MapType mapping;
   };
 
   template <typename Space>
-  Distributor<Space>::Distributor() : comm(MPI_COMM_WORLD), ranks_d("distributor_ranks_d", 0){
+  Distributor<Space>::Distributor() : comm(MPI_COMM_WORLD), ranks_d("distributor_ranks_d", 0) {
     ranks_h = deviceToHost(ranks_d);
   }
   template <typename Space>
-  Distributor<Space>::Distributor(MPI_Comm c) : comm(c),  ranks_d("distributor_ranks_d", 0){
+  Distributor<Space>::Distributor(MPI_Comm c) : comm(c),  ranks_d("distributor_ranks_d", 0) {
     ranks_h = deviceToHost(ranks_d);
   }
   template <typename Space>
@@ -90,15 +91,19 @@ namespace pumipic {
       ranks_h(i) = rnks[i];
     }
     Kokkos::deep_copy(ranks_d, ranks_h);
+
     buildMap();
   }
 
   template <typename Space>
   void Distributor<Space>::buildMap() {
+    mapping = MapType(ranks_d.size());
+    auto local_ranks = ranks_d;
+    auto& local_map = mapping;
     auto mapConstruct = KOKKOS_LAMBDA(const int i) {
-      mapping.insert(ranks_d(i),i);
+      local_map.insert(local_ranks(i),i);
     };
-    Kokkos::parallel_for(ranks_d.size(), mapConstruct);
+    Kokkos::parallel_for(local_ranks.size(), mapConstruct);
   }
 
   template <typename Space>

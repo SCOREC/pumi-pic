@@ -112,7 +112,8 @@ void updatePtclPositions(PS* ptcls) {
   ps::parallel_for(ptcls, updatePtclPos);
 }
 
-void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
+void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor& dist,
+             o::LOs elem_ids, const bool output) {
   updatePtclPositions(ptcls);
   const int ps_capacity = ptcls->capacity();
   auto ids = ptcls->get<2>();
@@ -140,7 +141,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   };
   ps::parallel_for(ptcls, lamb);
 
-  ptcls->migrate(ps_elem_ids, ps_process_ids);
+  ptcls->migrate(ps_elem_ids, ps_process_ids, dist);
 
   ids = ptcls->get<2>();
   if (output) {

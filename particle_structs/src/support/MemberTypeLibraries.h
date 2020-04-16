@@ -68,13 +68,13 @@ namespace pumipic {
   /* SendViews<Device, DataTypes> - sends views with MPI communications
        Usage: SendViews<Device, MemberTypes>(MemberTypesViews, offsetFromStart,
                                              numberOfEntries, destinationRank, initialTag,
-                                             ArrayOfRequests);
+                                             MPI_Comm, ArrayOfRequests);
    */
   template <typename Device, typename... Types> struct SendViews;
   /* RecvViews<Device, DataTypes> - recvs views from MPI communications
        Usage: RecvViews<Device, MemberTypes>(MemberTypeViews, offsetFromStart,
                                              numberOfEntries, sendingRank, initialTag,
-                                             ArrayOfRequests);
+                                             MPI_Comm, ArrayOfRequests);
    */
   template <typename Device, typename... Types> struct RecvViews;
   /* CopyMemSpaceToMemSpace<DestinationMemSpace, SourceMemSpace, DataTypes> -
@@ -258,42 +258,42 @@ namespace pumipic {
   template <typename Device, typename... Types> struct SendViewsImpl;
   template <typename Device> struct SendViewsImpl<Device> {
     SendViewsImpl(MemberTypeViews views, int offset, int size,
-                  int dest, int tag, MPI_Request* reqs) {}
+                  int dest, int tag, MPI_Comm comm, MPI_Request* reqs) {}
   };
   template <typename Device, typename T, typename... Types> struct SendViewsImpl<Device, T, Types...> {
     SendViewsImpl(MemberTypeViews views, int offset, int size,
-                  int dest, int tag, MPI_Request* reqs) {
+                  int dest, int tag, MPI_Comm comm, MPI_Request* reqs) {
       MemberTypeView<T, Device> v = *static_cast<MemberTypeView<T, Device>*>(views[0]);
-      PS_Comm_Isend(v.view(), offset, size, dest, tag, MPI_COMM_WORLD, reqs);
-      SendViewsImpl<Device, Types...>(views+1, offset, size, dest, tag + 1, reqs + 1);
+      PS_Comm_Isend(v.view(), offset, size, dest, tag, comm, reqs);
+      SendViewsImpl<Device, Types...>(views+1, offset, size, dest, tag + 1, comm, reqs + 1);
     }
   };
 
   template <typename Device, typename... Types> struct SendViews<Device, MemberTypes<Types...>> {
     SendViews(MemberTypeViews views, int offset, int size,
-              int dest, int start_tag, MPI_Request* reqs) {
-      SendViewsImpl<Device, Types...>(views, offset, size, dest, start_tag, reqs);
+              int dest, int start_tag, MPI_Comm comm, MPI_Request* reqs) {
+      SendViewsImpl<Device, Types...>(views, offset, size, dest, start_tag, comm, reqs);
     }
   };
 
   template <typename Device, typename... Types> struct RecvViewsImpl;
   template <typename Device> struct RecvViewsImpl<Device> {
     RecvViewsImpl(MemberTypeViews views, int offset, int size,
-                  int dest, int tag, MPI_Request* reqs) {}
+                  int dest, int tag, MPI_Comm comm, MPI_Request* reqs) {}
   };
   template <typename Device, typename T, typename... Types> struct RecvViewsImpl<Device, T, Types...> {
     RecvViewsImpl(MemberTypeViews views,
-                  int offset, int size, int dest, int tag, MPI_Request* reqs) {
+                  int offset, int size, int dest, int tag, MPI_Comm comm, MPI_Request* reqs) {
       MemberTypeView<T, Device> v = *static_cast<MemberTypeView<T, Device>*>(views[0]);
-      PS_Comm_Irecv(v.view(), offset, size, dest, tag, MPI_COMM_WORLD, reqs);
-      RecvViewsImpl<Device, Types...>(views+1, offset, size, dest, tag + 1, reqs + 1);
+      PS_Comm_Irecv(v.view(), offset, size, dest, tag, comm, reqs);
+      RecvViewsImpl<Device, Types...>(views+1, offset, size, dest, tag + 1, comm, reqs + 1);
     }
   };
 
   template <typename Device, typename... Types> struct RecvViews<Device, MemberTypes<Types...> > {
     RecvViews(MemberTypeViews views, int offset, int size,
-              int dest, int start_tag, MPI_Request* reqs) {
-      RecvViewsImpl<Device, Types...>(views, offset, size, dest, start_tag, reqs);
+              int dest, int start_tag, MPI_Comm comm, MPI_Request* reqs) {
+      RecvViewsImpl<Device, Types...>(views, offset, size, dest, start_tag, comm, reqs);
     }
   };
 

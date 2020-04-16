@@ -295,13 +295,12 @@ int testMigration(const char* name, PS* structure) {
     ps::parallel_for(structure, checkPostMigrate, "checkPostMigrate");
   fails += ps::getLastValue<lid_t>(failures);
 
-  return fails;
   //Make a distributor
   int neighbors[3];
   neighbors[0] = comm_rank;
   neighbors[1] = (comm_rank - 1 + comm_size) % comm_size;
   neighbors[2] = (comm_rank + 1) % comm_size;
-  ps::Distributor<typename PS::memory_space> dist(3, neighbors);
+  ps::Distributor<typename PS::memory_space> dist(std::min(comm_size, 3), neighbors);
 
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
@@ -310,7 +309,6 @@ int testMigration(const char* name, PS* structure) {
     new_process(p) = rnks(p);
   };
   ps::parallel_for(structure, sendBack, "sendBack");
-  printf("migrate 2\n");
   structure->migrate(new_element, new_process, dist);
 
   failures = kkLidView("fails", 1);

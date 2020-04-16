@@ -112,7 +112,7 @@ void updatePtclPositions(PS* ptcls) {
   ps::parallel_for(ptcls, updatePtclPos);
 }
 
-void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor& dist,
+void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist,
              o::LOs elem_ids, const bool output) {
   updatePtclPositions(ptcls);
   const int ps_capacity = ptcls->capacity();
@@ -153,7 +153,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor& dist,
   }
 }
 
-void search(p::Mesh& picparts, PS* ptcls, bool output) {
+void search(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist, bool output) {
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   o::Mesh* mesh = picparts.mesh();
@@ -167,7 +167,7 @@ void search(p::Mesh& picparts, PS* ptcls, bool output) {
   bool isFound = p::search_mesh_2d(*mesh, ptcls, x, xtgt, pid, elem_ids, maxLoops);
   assert(isFound);
   //rebuild the PS to set the new element-to-particle lists
-  rebuild(picparts, ptcls, elem_ids, output);
+  rebuild(picparts, ptcls, dist, elem_ids, output);
 }
 
 void setPtclIds(PS* ptcls) {
@@ -397,6 +397,15 @@ int main(int argc, char** argv) {
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
 
+  int nBuffers = picparts.numBuffers(picparts.dim());
+  int* buffered_ranks = new int[nBuffers];
+  auto buffers = picparts.bufferedRanks(picparts.dim());
+  buffered_ranks[0] = comm_rank;
+  for (int i = 0; i < nBuffers - 1; ++i)
+    buffered_ranks[i+1] = buffers[i];
+  p::Distributor<> dist(nBuffers, buffered_ranks);
+  delete [] buffered_ranks;
+
   //Build gyro avg mappings
   const auto rmax = 0.038;
   const auto numRings = 3;
@@ -517,7 +526,7 @@ int main(int argc, char** argv) {
     ellipticalPush::push(ptcls, *mesh, degPerPush, iter);
     MPI_Barrier(MPI_COMM_WORLD);
     timer.reset();
-    search(picparts,ptcls, output);
+    search(picparts,ptcls, dist, output);
     ps_np = ptcls->nPtcls();
     MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     if(totNp == 0) {

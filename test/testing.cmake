@@ -48,12 +48,12 @@ mpi_test(pseudoXGCm_24kElms_4 4
 mpi_test(pseudoXGCm_120kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/120k.osh ignored
-  10000 141 10 full bfs 0.5 0)
+  10000 141 10 bfs bfs 0.5 0)
 
 mpi_test(pseudoXGCm_120kElms_4 4
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/120k.osh ${TEST_DATA_DIR}/xgc/120k_4.cpn
-  10000 141 10 full bfs 0.5 0)
+  10000 141 10 bfs bfs 0.5 0)
 
 
 #MPI+X testing

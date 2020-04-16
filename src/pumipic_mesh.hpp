@@ -36,9 +36,9 @@ namespace pumipic {
     //Returns the commptr
     Omega_h::CommPtr comm() const {return commptr;}
 
-    //Returns the number of parts buffered
+    //Returns the number of parts buffered (includes self in count)
     int numBuffers(int dim) const {return num_cores[dim] + 1;}
-    //Returns a host array of the ranks buffered
+    //Returns a host array of the ranks buffered (Doesn't include self)
     Omega_h::HostWrite<Omega_h::LO> bufferedRanks(int dim) const {return buffered_parts[dim];}
 
 

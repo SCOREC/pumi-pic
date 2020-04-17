@@ -61,17 +61,35 @@ namespace pumipic {
   template <template <class...> class Template, class... Args>
   struct is_specialization<Template<Args...>, Template> : std::true_type {};
 
-  template <class ViewT>
-  typename std::enable_if<is_specialization<ViewT, Kokkos::View>{}, ViewT>::type::HostMirror
-  deviceToHost(ViewT view) {
-    auto hv = Kokkos::create_mirror_view(view);
-    Kokkos::deep_copy(hv, view);
-    return hv;
+  //Checks if view is a kokkos view and provides the type T
+  template <typename ViewT, typename T = ViewT>
+  using IsKokkosView =
+    typename std::enable_if<is_specialization<ViewT, Kokkos::View>{}, T>::type;
+  //Checks if view is a pumipic view and provides the type T
+  template <typename ViewT, typename T = ViewT>
+  using IsPPView =
+    typename std::enable_if<is_specialization<ViewT, View>{}, T>::type;
+
+  template <class ViewT> typename
+  IsKokkosView<ViewT>::HostMirror create_mirror_view(ViewT v) {
+    return Kokkos::create_mirror_view(v);
+  }
+  template <class ViewT> typename
+  IsPPView<ViewT>::HostMirror create_mirror_view(ViewT v) {
+    return typename ViewT::HostMirror(Kokkos::create_mirror_view(v.view()));
+  }
+
+  template <class ViewT, class ViewT2>
+  IsKokkosView<ViewT, void> deep_copy(ViewT dst, ViewT2 src) {
+    Kokkos::deep_copy(dst, src);
+  }
+  template <class ViewT, class ViewT2>
+  IsPPView<ViewT, void> deep_copy(ViewT dst, ViewT2 src) {
+    Kokkos::deep_copy(dst.view(), src.view());
   }
 
   template <class ViewT>
-  typename std::enable_if<is_specialization<ViewT, View>{}, ViewT>::type::HostMirror
-  deviceToHost(ViewT view) {
+  typename ViewT::HostMirror deviceToHost(ViewT view) {
     auto hv = create_mirror_view(view);
     deep_copy(hv, view);
     return hv;
@@ -109,16 +127,7 @@ namespace pumipic {
   }
 
   template <class ViewT, class T>
-  typename std::enable_if<is_specialization<ViewT, Kokkos::View>{}>::type
-  hostToDevice(ViewT view, T* data) {
-    auto hv = Kokkos::create_mirror_view(view);
-    hostToDevice(hv,view,data);
-    Kokkos::deep_copy(view, hv);
-  }
-
-  template <class ViewT, class T>
-  typename std::enable_if<is_specialization<ViewT, View>{}>::type
-  hostToDevice(ViewT view, T* data) {
+  void hostToDevice(ViewT view, T* data) {
     auto hv = create_mirror_view(view);
     hostToDevice(hv,view,data);
     deep_copy(view, hv);

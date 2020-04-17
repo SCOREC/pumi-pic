@@ -221,6 +221,8 @@ namespace pumipic {
 #undef CREATE_MPI_TYPE
 
   template <typename T> using BT = typename BaseType<T>::type;
+  template <typename View> using ViewType = typename View::data_type;
+  template <typename View> using ViewSpace = typename View::memory_space;
 
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
   Irecv_Map& get_map();

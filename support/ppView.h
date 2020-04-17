@@ -11,6 +11,7 @@ namespace pumipic {
     typedef typename KView::execution_space execution_space;
     typedef typename KView::memory_space memory_space;
     typedef typename KView::device_type device_type;
+    typedef typename KView::data_type data_type;
     typedef typename KView::value_type value_type;
     typedef View<T, typename KView::host_mirror_space, ArrayLayout> HostMirror;
     View() : view_() {}
@@ -26,7 +27,7 @@ namespace pumipic {
     operator KView() const {return view_;}
     PP_INLINE KView* operator->() {return &view_;}
     PP_INLINE KView& view() {return view_;}
-    PP_INLINE const T& data() const {return view_.data();}
+    PP_INLINE const T data() const {return view_.data();}
 
     PP_INLINE lid_t size() const {return view_.size();}
     PP_INLINE lid_t extent(int dim) const {return view_.extent(dim);}
@@ -58,15 +59,6 @@ namespace pumipic {
   private:
     KView view_;
   };
-
-  template <class ViewT> typename ViewT::HostMirror create_mirror_view(ViewT v) {
-    return typename ViewT::HostMirror(Kokkos::create_mirror_view(v.view()));
-  }
-
-  template <class ViewT, class ViewT2>
-  void deep_copy(ViewT dst, ViewT2 src) {
-    Kokkos::deep_copy(dst.view(), src.view());
-  }
 
   template <class T, typename Space> struct CopyViewToView {
     PP_INLINE CopyViewToView(View<T*, Space> dst, int dst_index,

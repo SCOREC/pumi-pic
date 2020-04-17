@@ -7,7 +7,6 @@
                                                         Kokkos::HostSpace>::accessible &&
                       Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                  Kokkos::CudaSpace>::accessible, int>::type;
-  // typename std::enable_if<std::is_same<typename Space::memory_space, Kokkos::CudaSpace>::value, int>::type;
 //Cuda-aware check for OpenMPI 2.0+ taken from https://github.com/kokkos/kokkos/issues/2003
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
 #define PS_CUDA_AWARE_MPI
@@ -38,12 +37,12 @@
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
 #else
-    typename ViewT::HostMirror view_host = Kokkos::create_mirror_view(new_view);
+    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
     int ret = MPI_Recv(view_host.data(), view_host.size(),
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
     //Copy received values to device and move it to the proper indices of the view
-    Kokkos::deep_copy(new_view, view_host);
+    deep_copy(new_view, view_host);
 #endif
     Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
         copyViewToView(view,i+offset, new_view, i);
@@ -83,14 +82,14 @@
                         MpiType<BT<ViewType<ViewT> > >::mpitype(), sender,
                         tag, comm, req);
 #else
-    typename ViewT::HostMirror view_host = Kokkos::create_mirror_view(new_view);
+    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
     int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
                         MpiType<BT<ViewType<ViewT> > >::mpitype(),
                         sender, tag, comm, req);
 #endif
     get_map()[req] = [=]() {
 #ifndef PS_CUDA_AWARE_MPI
-      Kokkos::deep_copy(new_view, view_host);
+      deep_copy(new_view, view_host);
 #endif
       Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
           copyViewToView(view,i+offset, new_view, i);
@@ -146,10 +145,10 @@
                         recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
 #else
     typename ViewT::HostMirror send_host = deviceToHost(send);
-    typename ViewT::HostMirror recv_host = Kokkos::create_mirror_view(recv);
+    typename ViewT::HostMirror recv_host = create_mirror_view(recv);
     int ret = MPI_Alltoall(send_host.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                            recv_host.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
-    Kokkos::deep_copy(recv, recv_host);
+    deep_copy(recv, recv_host);
     return ret;
 #endif
   }

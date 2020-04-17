@@ -1,15 +1,12 @@
 /************** Host Communication functions **************/
-template <typename View> using ViewType = typename View::traits::data_type;
-template <typename View> using ViewSpace = typename View::traits::memory_space;
 template <typename Space> using IsHost =
-  // typename std::enable_if<std::is_same<typename Space::memory_space, Kokkos::HostSpace>::value, int>::type;
   typename std::enable_if<Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                      Kokkos::HostSpace>::accessible, int>::type;
 //Send
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
                                        int dest, int tag, MPI_Comm comm) {
-  int size_per_entry = BT<ViewType<ViewT> >::size;
+  int size_per_entry = BaseType<ViewType<ViewT> >::size;
   return MPI_Send(view.data() + offset, size*size_per_entry,
                   MpiType<BT<ViewType<ViewT> > >::mpitype(), dest, tag, comm);
 }
@@ -17,7 +14,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
                                        int sender, int tag, MPI_Comm comm) {
-  int size_per_entry = BT<ViewType<ViewT> >::size;
+  int size_per_entry = BaseType<ViewType<ViewT> >::size;
   return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                   sender, tag, comm, MPI_STATUS_IGNORE);
 }

@@ -46,4 +46,10 @@ endif()
 
 pumipic_export_lib(support "${HEADERS}")
 
+if(IS_TESTING)
+  add_executable(ViewCommTests ViewComm_test.cpp)
+  target_link_libraries(ViewCommTests support)
+  include(testing.cmake)
+endif()
+
 bob_end_subdir()

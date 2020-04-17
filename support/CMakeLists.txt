@@ -4,6 +4,8 @@ set(HEADERS
   ppView.h
   SupportKK.h
   ViewComm.h
+  ViewComm_host.hpp
+  ViewComm_cuda.hpp
   ppAssert.h
 )
 

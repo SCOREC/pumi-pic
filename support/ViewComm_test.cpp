@@ -10,7 +10,9 @@ int iSendRecvWaitAllTest(const char* name);
 template <typename Space>
 int allToAllTest(const char* name, int msg_size);
 template <typename Space>
-int reductionTest(const char* name);
+int allReduceTest(const char* name);
+template <typename Space>
+int reduceTest(const char* name);
 
 template <typename Space>
 int runTests() {
@@ -23,6 +25,8 @@ int runTests() {
   fails += iSendRecvWaitTest<Space>("Large Isend/Irecv + Wait", 10000);
 
   fails += iSendRecvWaitAllTest<Space>("Isend/Irecv + Waitall");
+
+  fails += allReduceTest<Space>("Allreduce");
 
   return fails;
 }
@@ -412,4 +416,59 @@ int iSendRecvWaitAllTest(const char* name) {
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;
+}
+
+template <typename Space>
+int allReduceTest(const char* name) {
+  //Setup
+  if (!comm_rank)
+    printf("Beginning Test %s_%s\n", name, Space::name());
+  int fails = 0;
+  Kokkos::View<int*, Space> device_fails("failures", 1);
+  int local_rank = comm_rank;
+  int local_size = comm_size;
+  typedef Kokkos::RangePolicy<typename Space::execution_space> ExecPolicy;
+  typename Space::execution_space exec;
+
+  //Kokkos View Test
+  if (!comm_rank)
+    printf("  Kokkos View Test\n");
+  {
+    Kokkos::View<double*, Space> send_view("send_view", 10);
+    Kokkos::View<double*, Space> recv_view("recv_view", 10);
+    Kokkos::View<double*, Space> sum_view("sum_view", 10);
+    Kokkos::parallel_for(ExecPolicy(exec, 0, 10), KOKKOS_LAMBDA(const int i) {
+        send_view(i) = 1.0 / i;
+        sum_view(i) = local_size * 1.0 / i;
+    });
+    int ret = pumipic::PS_Comm_Allreduce(send_view, recv_view, 10, MPI_SUM, MPI_COMM_WORLD);
+    if (ret != MPI_SUCCESS) {
+      fprintf(stderr, "[ERROR] Rank %d: PS_Comm_Allreduce returned error code %d\n",
+              comm_rank, ret);
+      ++fails;
+    }
+    const double TOL = .000001;
+    Kokkos::parallel_for(ExecPolicy(exec, 0, 10), KOKKOS_LAMBDA(const int i) {
+      if (fabs(recv_view(i) - sum_view(i)) > TOL) {
+        printf("[ERROR] Rank %d: summed value is incorrect on element %d"
+               "[(actual) %f != %f (should be)]\n", local_rank, i, recv_view(i), sum_view(i));
+        Kokkos::atomic_add(&(device_fails(0)), 1);
+      }
+    });
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if (!comm_rank)
+    printf("  PUMIPic View Test\n");
+  {
+
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  //Closing
+  fails += pumipic::getLastValue<int>(device_fails);
+  int final_fail;
+  MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  return final_fail > 0;
+
 }

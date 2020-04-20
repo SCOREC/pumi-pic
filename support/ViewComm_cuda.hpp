@@ -153,4 +153,45 @@
 #endif
   }
 
+//reduce
+template <typename ViewT>
+IsCuda<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count,
+                                         MPI_Op op, int root, MPI_Comm comm) {
+
+#ifdef PS_CUDA_AWARE_MPI
+  return MPI_Reduce(send_view.data(), recv_view.data(), count,
+                    MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                    op, root, comm);
+#else
+  typename ViewT::HostMirror send_host = deviceToHost(send_view);
+  typename ViewT::HostMirror recv_host = create_mirror_view(recv_view);
+  int ret = MPI_Reduce(send_host.data(), recv_host.data(), count,
+                       MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                       op, root, comm);
+  int comm_rank;
+  MPI_Comm_rank(comm, &comm_rank);
+  if (comm_rank == root)
+    deep_copy(recv_view, recv_host);
+  return ret;
+#endif
+}
+
+//allreduce
+template <typename ViewT>
+IsCuda<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count,
+                                            MPI_Op op, MPI_Comm comm) {
+#ifdef PS_CUDA_AWARE_MPI
+  return MPI_Allreduce(send_view.data(), recv_view.data(), count,
+                       MpiType<BT<ViewType<ViewT> > >::mpitype(),op, comm);
+#else
+  typename ViewT::HostMirror send_host = deviceToHost(send_view);
+  typename ViewT::HostMirror recv_host = create_mirror_view(recv_view);
+  int ret = MPI_Allreduce(send_host.data(), recv_host.data(), count,
+                          MpiType<BT<ViewType<ViewT> > >::mpitype(), op, comm);
+  deep_copy(recv_view, recv_host);
+  return ret;
+#endif
+}
+
+
 #endif

@@ -55,3 +55,21 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
   return MPI_Alltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                       recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
 }
+
+//reduce
+template <typename ViewT>
+IsHost<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count,
+                                         MPI_Op op, int root, MPI_Comm comm) {
+  return MPI_Reduce(send_view.data(), recv_view.data(), count,
+                    MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                    op, root, comm);
+
+}
+
+//allreduce
+template <typename ViewT>
+IsHost<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count,
+                                            MPI_Op op, MPI_Comm comm) {
+  return MPI_Allreduce(send_view.data(), recv_view.data(), count,
+                       MpiType<BT<ViewType<ViewT> > >::mpitype(), op, comm);
+}

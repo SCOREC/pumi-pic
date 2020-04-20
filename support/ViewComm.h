@@ -198,6 +198,67 @@ namespace pumipic {
   template <typename ViewT>
   int PS_Comm_Alltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
                        MPI_Comm comm);
+
+  /* Routines to be abstracted
+     MPI_Allgather/NCCL
+     MPI_Broadcast/NCCL
+     MPI_Alltoallv
+     MPI_Wait
+     MPI_Waitany
+  */
+  /*!
+    \brief Wrapper around MPI_Reduce for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device
+
+    \param[out] recv_view The view in the same memory space as `send_view` to be filled
+    with the reduction
+
+    \param count The number of elements in `send_view`
+
+    \param op The MPI operation to be carried out in the reduction
+
+    \param root The MPI rank to receive the reduced values
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Reduce(send_view.data(), recv_view.data(), count, op, root, comm);
+
+  */
+  template <typename ViewT>
+  int PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count, MPI_Op op, int root,
+                     MPI_Comm comm);
+
+  /*!
+    \brief Wrapper around MPI_Allreduce for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device
+
+    \param[out] recv_view The view in the same memory space as `send_view` to be filled
+    with the reduction
+
+    \param count The number of elements in `send_view`
+
+    \param op The MPI operation to be carried out in the reduction
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Allreduce(send_view.data(), recv_view.data(), count, op, comm);
+
+  */
+  template <typename ViewT>
+  int PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count, MPI_Op op, MPI_Comm comm);
+
 #endif
 
   template <typename T> struct MpiType;
@@ -227,15 +288,6 @@ namespace pumipic {
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
   Irecv_Map& get_map();
 
-  /* Routines to be abstracted
-     MPI_Allreduce/NCCL
-     MPI_Reduce/NCCL
-     MPI_Allgather/NCCL
-     MPI_Broadcast/NCCL
-     MPI_Alltoallv
-     MPI_Wait
-     MPI_Waitany
-   */
 
 #include "ViewComm_host.hpp"
 

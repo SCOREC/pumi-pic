@@ -5,6 +5,13 @@
 #include <unordered_map>
 #include <mpi.h>
 namespace pumipic {
+  /* Routines to be abstracted
+     MPI_Allgather/NCCL
+     MPI_Broadcast/NCCL
+     MPI_Alltoallv
+     MPI_Waitany
+  */
+
 #if false //These function headers are for documentation purposes only
   /*! \file View Communications
     \brief Abstractions over various MPI routines for views located on either
@@ -14,7 +21,7 @@ namespace pumipic {
     space for matching send/recv calls
 
     \note Mixing of PS_Comm and direct MPI calls is not encouraged and may cause some
-    failures when sending data from the device
+    failures when performing nonblocking operations from the device
 
   */
   /*!
@@ -199,13 +206,6 @@ namespace pumipic {
   int PS_Comm_Alltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
                        MPI_Comm comm);
 
-  /* Routines to be abstracted
-     MPI_Allgather/NCCL
-     MPI_Broadcast/NCCL
-     MPI_Alltoallv
-     MPI_Wait
-     MPI_Waitany
-  */
   /*!
     \brief Wrapper around MPI_Reduce for views
 

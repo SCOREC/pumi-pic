@@ -6,10 +6,10 @@ typedef double Vector3[3];
 /* Type:
      int - particle ID
      double[3] - array example values
-     bool - bool value for checking
+     short - bool value for checking
      int - int value for checking
  */
-typedef ps::MemberTypes<int, Vector3, bool, int> Types;
+typedef ps::MemberTypes<int, Vector3, short, int> Types;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef typename ExeSpace::memory_space MemSpace;
 typedef typename ExeSpace::device_type Device;

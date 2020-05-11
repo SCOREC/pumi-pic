@@ -6,6 +6,7 @@
 #include <Omega_h_int_scan.hpp>
 #include <Omega_h_scan.hpp>
 #include <Omega_h_file.hpp>
+
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners, int self,
                                 Omega_h::Write<Omega_h::LO> owns);
@@ -100,7 +101,7 @@ namespace pumipic {
 
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
                               Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> has_part,
-                              Omega_h::Write<Omega_h::LO> is_safe) {
+                              Omega_h::Write<Omega_h::LO> is_safe, bool render) {
     int rank = comm->rank();
     int comm_size = comm->size();
     int dim = mesh.dim();
@@ -114,6 +115,8 @@ namespace pumipic {
     owner_dim[dim] = owner;
     mesh.add_tag(dim, "ownership", 1, owner_dim[dim]);
 
+    if (render && rank == 0)
+      Omega_h::vtk::write_parallel("partition", &mesh, dim);
     /************* Globally Number Entities **********/
     Omega_h::GOs ent_gid_per_dim[4];
     Omega_h::LOs rank_lid_per_dim[4];
@@ -239,6 +242,7 @@ namespace pumipic {
       Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
       setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
     }
+    picpart->add_tag(dim, "ownership", 1, ent_owner_per_dim[dim]);
   }
 }
 

@@ -30,6 +30,7 @@ int testRebuild(const char* name, PS* structure);
 int testMigration(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
+int testSegmentComp(const char* name, PS* structure);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -433,5 +434,33 @@ int testCopy(const char* name, PS* structure) {
     ++fails;
   }
   delete device_structure;
+  return fails;
+}
+
+int testSegmentComp(const char* name, PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  auto dbls = structure->get<1>();
+  auto setComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    for (int i = 0; i < 3; ++i)
+      dbls(p, i) = e * (i + 1);
+  };
+  pumipic::parallel_for(structure, setComponents, "Set components");
+
+  const double TOL = .00001;
+  auto checkComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto comps = dbls.getComponents<3>(p);
+    for (int i = 0; i < 3; ++i) {
+      if (abs(comps[i] - e * (i + 1)) > TOL) {
+        printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
+               p, i, comps[i], e * (i + 1));
+        Kokkos::atomic_add(&(failures[0]), 1);
+      }
+    }
+  };
+  pumipic::parallel_for(structure, checkComponents, "Check components");
+  fails += pumipic::getLastValue<lid_t>(failures);
+
   return fails;
 }

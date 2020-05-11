@@ -75,7 +75,8 @@ namespace pumipic {
     void constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
                           Omega_h::LOs owner,
                           Omega_h::Write<Omega_h::LO> has_part,
-                          Omega_h::Write<Omega_h::LO> is_safe);
+                          Omega_h::Write<Omega_h::LO> is_safe,
+                          bool render = false);
 
     //Communication setup
     void setupComm(int dim, Omega_h::LOs global_ents_per_rank,

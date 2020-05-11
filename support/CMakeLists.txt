@@ -2,6 +2,7 @@ set(HEADERS
   ppTypes.h
   ppMacros.h
   ppView.h
+  ppArray.h
   SupportKK.h
   ViewComm.h
   ViewComm_host.hpp

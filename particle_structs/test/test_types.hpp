@@ -10,6 +10,7 @@ typedef double Vector3[3];
      int - int value for checking
  */
 typedef ps::MemberTypes<int, Vector3, short, int> Types;
+
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef typename ExeSpace::memory_space MemSpace;
 typedef typename ExeSpace::device_type Device;

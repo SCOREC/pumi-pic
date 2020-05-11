@@ -5,9 +5,11 @@ function(mpi_test TESTNAME PROCS EXE)
   )
 endfunction(mpi_test)
 
-mpi_test(barycentric_3 1  ./barycentric test1)
+mpi_test(test_array_1 1 ./test_array)
 
-mpi_test(barycentric_4 1  ./barycentric test2)
+mpi_test(barycentric_3 1 ./barycentric test1)
+
+mpi_test(barycentric_4 1 ./barycentric test2)
 
 mpi_test(linetri_intersection_2 1
   ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )

@@ -3,7 +3,6 @@ function(make_test exename srcname)
   target_link_libraries(${exename} pumipic Omega_h::omega_h)
 endfunction(make_test)
 
-make_test(test_array test_array.cpp)
 make_test(print_partition print_partition.cpp)
 make_test(print_classification print_classification.cpp)
 make_test(full_mesh test_full_mesh.cpp)

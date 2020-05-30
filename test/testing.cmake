@@ -5,7 +5,6 @@ function(mpi_test TESTNAME PROCS EXE)
   )
 endfunction(mpi_test)
 
-mpi_test(test_array_1 1 ./test_array)
 
 mpi_test(barycentric_3 1 ./barycentric test1)
 

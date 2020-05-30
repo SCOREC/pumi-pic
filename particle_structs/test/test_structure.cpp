@@ -86,6 +86,7 @@ int main(int argc, char* argv[]) {
       fails += testRebuild(names[i].c_str(), structures[i]);
       fails += testMigration(names[i].c_str(), structures[i]);
       fails += testCopy(names[i].c_str(), structures[i]);
+      fails += testSegmentComp(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -443,14 +444,15 @@ int testSegmentComp(const char* name, PS* structure) {
 
   auto dbls = structure->get<1>();
   auto setComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto dbl_seg = dbls.getComponents(p);
     for (int i = 0; i < 3; ++i)
-      dbls(p, i) = e * (i + 1);
+      dbl_seg(i) = e * (i + 1);
   };
   pumipic::parallel_for(structure, setComponents, "Set components");
 
   const double TOL = .00001;
   auto checkComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
-    auto comps = dbls.getComponents<3>(p);
+    auto comps = dbls.getComponents(p);
     for (int i = 0; i < 3; ++i) {
       if (abs(comps[i] - e * (i + 1)) > TOL) {
         printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",

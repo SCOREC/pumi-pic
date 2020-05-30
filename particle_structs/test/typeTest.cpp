@@ -52,12 +52,12 @@ int main(int argc, char** argv) {
       if (mask) {
         scs_first(particle_id) = element_id;
         scs_second(particle_id, 0) = 1.0;
-        scs_second(particle_id,0) = 2.0;
+        scs_second(particle_id, 1) = 2.0;
       }
       else {
         scs_first(particle_id) = -1;
         scs_second(particle_id, 0) = 0;
-        scs_second(particle_id,0) = 0;
+        scs_second(particle_id, 1) = 0;
       }
     };
     scs->parallel_for(setValues);

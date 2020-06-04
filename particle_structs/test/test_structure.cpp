@@ -32,6 +32,9 @@ int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
 int testSegmentComp(const char* name, PS* structure);
 
+//Edge Case tests
+int migrateToEmptyAndRefill(const char* name, PS* structure);
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
@@ -87,6 +90,7 @@ int main(int argc, char* argv[]) {
       fails += testMigration(names[i].c_str(), structures[i]);
       fails += testCopy(names[i].c_str(), structures[i]);
       fails += testSegmentComp(names[i].c_str(), structures[i]);
+      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -464,5 +468,110 @@ int testSegmentComp(const char* name, PS* structure) {
   pumipic::parallel_for(structure, checkComponents, "Check components");
   fails += pumipic::getLastValue<lid_t>(failures);
 
+  return fails;
+}
+
+int migrateToEmptyAndRefill(const char* name, PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  int originalPtcls = structure->nPtcls();
+
+  kkLidView new_element("new_element", structure->capacity());
+  kkLidView new_process("new_process", structure->capacity());
+
+  int local_rank = comm_rank;
+  int local_csize = comm_size;
+  auto rnks = structure->get<3>();
+  auto elem = structure->get<2>();
+  int num_elems = structure->nElems();
+
+  auto sendToOdd = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    rnks(p) = local_rank;
+    elem(p) = e;
+    if (mask) {
+      if (local_rank % 2 == 0) {
+        new_process(p) = (local_rank + 1) % local_csize;
+        new_element(p) = num_elems - 1;
+      }
+      else {
+        new_process(p) = local_rank;
+        new_element(p) = e;
+      }
+    }
+    else {
+      new_element(p) = e;
+      new_process(p) = local_rank;
+    }
+  };
+  ps::parallel_for(structure, sendToOdd, "sendToOdd");
+  structure->migrate(new_element, new_process);
+
+  if (comm_rank % 2 == 0 && (comm_rank != 0 || comm_size % 2 == 0)) {
+    if (structure->nPtcls() != 0) {
+      ++fails;
+      fprintf(stderr, "[ERROR] Particles remain on rank %d\n", comm_rank);
+    }
+    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+      if (mask) {
+        failures(0) = 1;
+        printf("[ERROR] Particle %d remains on rank %d\n", p, local_rank);
+      }
+    };
+    ps::parallel_for(structure, checkPtcls, "checkPtcls");
+  }
+  else {
+    if (structure->nPtcls() < originalPtcls) {
+      ++fails;
+      fprintf(stderr, "[ERROR] No particles on rank %d\n", comm_rank);
+    }
+    const int prev_rank = ((comm_rank - 1) + comm_size) % comm_size;
+    auto new_rnks = structure->get<3>();
+    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+      if (mask) {
+        if (new_rnks(p) != local_rank && new_rnks(p) !=  prev_rank) {
+          failures(0) = 1;
+          printf("[ERROR] Particle %d is not from ranks %d or %d\n", p, local_rank, prev_rank);
+        }
+      }
+    };
+    ps::parallel_for(structure, checkPtcls, "checkPtcls");
+  }
+
+  //Send Particles back to original process
+  rnks = structure->get<3>();
+  new_element = kkLidView("new_element", structure->capacity());
+  new_process = kkLidView("new_process", structure->capacity());
+  auto sendToOrig = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    new_element(p) = e;
+    if (mask) {
+      new_process(p) = rnks(p);
+    }
+    else {
+      new_process(p) = local_rank;
+    }
+  };
+  ps::parallel_for(structure, sendToOrig, "sendToOrig");
+  structure->migrate(new_element, new_process);
+
+  if (structure->nPtcls() != originalPtcls) {
+    ++fails;
+    fprintf(stderr, "[ERROR] Number of particles does not match original on "
+            "rank %d [%d != %d]\n", comm_rank, structure->nPtcls(), originalPtcls);
+  }
+
+  auto elems = structure->get<2>();
+  new_element = kkLidView("new_element", structure->capacity());
+  auto resetElements = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    if (mask) {
+      new_element(p) = elems(p);
+    }
+    else {
+      new_element(p) = e;
+    }
+  };
+  structure->rebuild(new_element);
+
+  fails += pumipic::getLastValue<lid_t>(failures);
   return fails;
 }

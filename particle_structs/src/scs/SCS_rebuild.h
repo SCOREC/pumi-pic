@@ -130,11 +130,7 @@ namespace pumipic {
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-    //If tryShuffling is on and shuffling works then rebuild is complete
-    if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
-      Kokkos::Profiling::popRegion();
-      return;
-    }
+    //Count particles including new and leaving
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
     auto countNewParticles = PS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
       const lid_t new_elem = new_element(particle_id);
@@ -147,18 +143,32 @@ namespace pumipic {
         const lid_t new_elem = new_particle_elements(i);
         Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), 1);
       });
+
+    //Reduce the count of particles
     lid_t activePtcls;
     Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
         sum+= new_particles_per_elem(i);
       }, activePtcls);
+
     //If there are no particles left, then destroy the structure
     if(activePtcls == 0) {
       num_ptcls = 0;
-      num_slices = 0;
-      capacity_ = 0;
-      num_rows = 0;
+      printf("Rank %d is empty now\n", comm_rank);
+      //TODO reset particles
+      auto local_mask = particle_mask;
+      auto resetMask = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+        local_mask(p) = false;
+      };
+      parallel_for(resetMask, "resetMask");
       return;
     }
+
+    //If tryShuffling is on and shuffling works then rebuild is complete
+    if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
+      Kokkos::Profiling::popRegion();
+      return;
+    }
+
     lid_t new_num_ptcls = activePtcls;
 
     int new_C = chooseChunkHeight(C_max, new_particles_per_elem);

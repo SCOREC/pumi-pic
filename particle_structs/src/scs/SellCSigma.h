@@ -480,6 +480,8 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 template <class DataTypes, typename MemSpace>
 template <typename FunctionType>
 void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
+  if (nPtcls() == 0)
+    return;
   FunctionType* fn_d;
 #ifdef PP_USE_CUDA
   cudaMalloc(&fn_d, sizeof(FunctionType));

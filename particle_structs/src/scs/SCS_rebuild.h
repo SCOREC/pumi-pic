@@ -153,8 +153,6 @@ namespace pumipic {
     //If there are no particles left, then destroy the structure
     if(activePtcls == 0) {
       num_ptcls = 0;
-      printf("Rank %d is empty now\n", comm_rank);
-      //TODO reset particles
       auto local_mask = particle_mask;
       auto resetMask = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
         local_mask(p) = false;

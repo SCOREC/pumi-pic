@@ -15,13 +15,17 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(dist.mpi_comm(), &comm_rank);
 
+    int world_rank, world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     if (comm_size == 1) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      if(!comm_rank || comm_rank == comm_size/2)
-        fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
+      if(!world_rank || world_rank == world_size/2)
+        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
       Kokkos::Profiling::popRegion();
       return;
     }
+    Kokkos::Timer alltoall;
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
       const lid_t process = new_process(particle_id);
@@ -52,6 +56,10 @@ namespace pumipic {
       delete [] count_send_requests;
       delete [] count_recv_requests;
     }
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d AllToAll %f\n", world_rank, alltoall.seconds());
+    }
+    Kokkos::Timer countTotals;
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
         lsum += (num_send_particles(i) > 0);
@@ -62,11 +70,16 @@ namespace pumipic {
 
     if (num_sending_to == 0 && num_receiving_from == 0) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      if(!comm_rank || comm_rank == comm_size/2)
-        fprintf(stderr, "%d ps particle migration (seconds) %f\n", comm_rank, timer.seconds());
+      if(!world_rank || world_rank == world_size/2)
+        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
       Kokkos::Profiling::popRegion();
       return;
     }
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d countTotals %f\n", world_rank, countTotals.seconds());
+    }
+
+    Kokkos::Timer gatherSend;
     /********** Send particle information to new processes **********/
     //Perform an ex-sum on num_send_particles & num_recv_particles
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
@@ -104,6 +117,11 @@ namespace pumipic {
                                                                     new_process,
                                                                     send_index);
 
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d gatherSend %f\n", world_rank, gatherSend.seconds());
+    }
+
+    Kokkos::Timer allocate;
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     lid_t np_recv = offset_recv_particles_host(comm_size);
@@ -111,6 +129,12 @@ namespace pumipic {
     MTVs recv_particle;
     //Allocate views for each data type into recv_particle[type]
     CreateViews<device_type, DataTypes>(recv_particle, np_recv + new_ptcls);
+
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d allocate %f\n", world_rank, allocate.seconds());
+    }
+
+    Kokkos::Timer postComms;
 
     //Get pointers to the data for MPI calls
     lid_t send_num = 0, recv_num = 0;
@@ -147,8 +171,20 @@ namespace pumipic {
         recv_num+=num_types;
       }
     }
+
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d postComms %f\n", world_rank, postComms.seconds());
+    }
+
+    Kokkos::Timer waiting;
     PS_Comm_Waitall<device_type>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
     delete [] recv_requests;
+
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d waiting %f\n", world_rank, waiting.seconds());
+    }
+
+    Kokkos::Timer finalSetup;
 
     /********** Convert the received element from element gid to element lid *********/
     auto element_gid_to_lid_local = element_gid_to_lid;
@@ -175,17 +211,27 @@ namespace pumipic {
     });
     CopyViewsToViews<kkLidView, DataTypes>(recv_particle, new_particle_info, new_ptcl_map);
 
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d finalSetup %f\n", world_rank, finalSetup.seconds());
+    }
+
     /********** Combine and shift particles to their new destination **********/
     rebuild(new_element, recv_element, recv_particle);
 
+    Kokkos::Timer cleanup;
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
     delete [] send_requests;
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
-    if(!comm_rank || comm_rank == comm_size/2)
+
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d cleanup %f\n", world_rank, cleanup.seconds());
+    }
+
+    if(!world_rank || world_rank == world_size/2)
       fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier (seconds) %f\n",
-              comm_rank, timer.seconds(), btime);
+              world_rank, timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 }

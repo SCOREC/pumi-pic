@@ -206,6 +206,36 @@ namespace pumipic {
   int PS_Comm_Alltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
                        MPI_Comm comm);
 
+
+  /*!
+    \brief Wrapper around MPI_Ialltoall for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device to send
+
+    \param send_size The number of elements to send to each process
+
+    \param recv_view The view with data on either the host or device to receive
+
+    \param recv_size The number of elements to recv from each process
+
+    \param comm The MPI communicator
+
+    \param[out] request The MPI request to be filled after the MPI_Ialltoall completes
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Ialltoall(send_view.data(), send_size, send_datatype,
+    recv_view.data(), recv_size, recv_datatype, comm);
+
+    \note The send_view and recv_view must be allocated on the same memory space
+  */
+  template <typename ViewT>
+  int PS_Comm_Ialltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
+                        MPI_Comm comm, MPI_Request* request);
+
   /*!
     \brief Wrapper around MPI_Reduce for views
 

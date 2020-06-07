@@ -156,6 +156,29 @@ bool checkCudaAwareMPI();
 #endif
   }
 
+//Ialltoall
+template <typename ViewT>
+IsCuda<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
+                                            ViewT recv, int recv_size,
+                                            MPI_Comm comm, MPI_Request* request) {
+#ifdef PS_CUDA_AWARE_MPI
+  return MPI_Ialltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                      recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                      comm, request);
+#else
+  typename ViewT::HostMirror send_host = deviceToHost(send);
+  typename ViewT::HostMirror recv_host = create_mirror_view(recv);
+  int ret = MPI_Ialltoall(send_host.data(), send_size,
+                          MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                          recv_host.data(), recv_size,
+                          MpiType<BT<ViewType<ViewT> > >::mpitype(), comm, request);
+  get_map()[request] = [=]() {
+    deep_copy(recv, recv_host);
+  };
+  return ret;
+#endif
+  }
+
 //reduce
 template <typename ViewT>
 IsCuda<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count,

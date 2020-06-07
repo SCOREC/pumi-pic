@@ -10,14 +10,17 @@ namespace pumipic {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_migrate");
     Kokkos::Timer timer;
-    /********* Send # of particles being sent to each process *********/
+    //Distributor size & rank for performing migration
     int comm_size = dist.num_ranks();
     int comm_rank;
     MPI_Comm_rank(dist.mpi_comm(), &comm_rank);
 
+    //World rank & size for output control
     int world_rank, world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    //If serial, skip migration
     if (comm_size == 1) {
       rebuild(new_element, new_particle_elements, new_particle_info);
       if(!world_rank || world_rank == world_size/2)
@@ -25,7 +28,9 @@ namespace pumipic {
       Kokkos::Profiling::popRegion();
       return;
     }
+
     Kokkos::Timer alltoall;
+    //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
       const lid_t process = new_process(particle_id);
@@ -34,12 +39,19 @@ namespace pumipic {
                                mask * (process != comm_rank));
     };
     parallel_for(count_sending_particles);
+
+    /********* Send # of particles being sent to each process *********/
     kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
+    int num_send_ranks = dist.isWorld() ? 0 : comm_size - 1;
+    MPI_Request* count_send_requests = NULL;
+    if (num_send_ranks > 0)
+      count_send_requests = new MPI_Request[num_send_ranks];
+    int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
+    MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld())
-      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
+      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
+                        dist.mpi_comm(), count_recv_requests);
     else {
-      MPI_Request* count_send_requests = new MPI_Request[comm_size - 1];
-      MPI_Request* count_recv_requests = new MPI_Request[comm_size - 1];
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
         int rank = dist.rank_host(i);
@@ -51,46 +63,21 @@ namespace pumipic {
           ++request_index;
         }
       }
-      PS_Comm_Waitall<device_type>(comm_size - 1, count_send_requests, MPI_STATUSES_IGNORE);
-      PS_Comm_Waitall<device_type>(comm_size - 1, count_recv_requests, MPI_STATUSES_IGNORE);
-      delete [] count_send_requests;
-      delete [] count_recv_requests;
     }
+
     if (world_rank == world_size/2) {
       fprintf(stderr, "%d AllToAll %f\n", world_rank, alltoall.seconds());
     }
-    Kokkos::Timer countTotals;
-    lid_t num_sending_to = 0, num_receiving_from = 0;
-    Kokkos::parallel_reduce("sum_senders", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
-        lsum += (num_send_particles(i) > 0);
-      }, num_sending_to);
-    Kokkos::parallel_reduce("sum_receivers", comm_size, KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
-        lsum += (num_recv_particles(i) > 0);
-      }, num_receiving_from);
 
-    if (num_sending_to == 0 && num_receiving_from == 0) {
-      rebuild(new_element, new_particle_elements, new_particle_info);
-      if(!world_rank || world_rank == world_size/2)
-        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
-      Kokkos::Profiling::popRegion();
-      return;
-    }
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d countTotals %f\n", world_rank, countTotals.seconds());
-    }
-
+    //Gather sending particle data
     Kokkos::Timer gatherSend;
     /********** Send particle information to new processes **********/
     //Perform an ex-sum on num_send_particles & num_recv_particles
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
     kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
-    kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_send_particles, offset_send_particles);
     Kokkos::deep_copy(offset_send_particles_temp, offset_send_particles);
-
-    exclusive_scan(num_recv_particles, offset_recv_particles);
     kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
-    kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
 
     //Create arrays for particles being sent
     lid_t np_send = offset_send_particles_host(comm_size);
@@ -121,10 +108,52 @@ namespace pumipic {
       fprintf(stderr, "%d gatherSend %f\n", world_rank, gatherSend.seconds());
     }
 
+    //Wait until all counts are received
+    Kokkos::Timer recvWait;
+    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
+    delete [] count_recv_requests;
+
+    //Count the number of processes being sent to and recv from
+    Kokkos::Timer countTotals;
+    lid_t num_sending_to = 0, num_receiving_from = 0;
+    Kokkos::parallel_reduce("sum_senders", comm_size,
+                            KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
+      lsum += (num_send_particles(i) > 0);
+    }, num_sending_to);
+    Kokkos::parallel_reduce("sum_receivers", comm_size,
+                            KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
+      lsum += (num_recv_particles(i) > 0);
+    }, num_receiving_from);
+
+
+    //If no particles are being sent or received, perform rebuild
+    if (num_sending_to == 0 && num_receiving_from == 0) {
+      rebuild(new_element, new_particle_elements, new_particle_info);
+      if(!world_rank || world_rank == world_size/2)
+        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
+      Kokkos::Profiling::popRegion();
+      return;
+    }
+
+    //Offset the recv particles
+    kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
+    exclusive_scan(num_recv_particles, offset_recv_particles);
+    kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
+    int np_recv = offset_recv_particles_host(comm_size);
+
+    //wait for send requests if there are any
+    if (count_send_requests) {
+      PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
+      delete [] count_send_requests;
+    }
+
+    if (world_rank == world_size/2) {
+      fprintf(stderr, "%d recvWait %f\n", world_rank, recvWait.seconds());
+    }
+
     Kokkos::Timer allocate;
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
-    lid_t np_recv = offset_recv_particles_host(comm_size);
     kkLidView recv_element("recv_element", np_recv + new_ptcls);
     MTVs recv_particle;
     //Allocate views for each data type into recv_particle[type]

@@ -83,7 +83,6 @@ namespace pumipic {
 
     offset_ents_per_rank_per_dim[edim] = Omega_h::LOs(picpart_ents_per_rank);
     ent_to_comm_arr_index_per_dim[edim] = Omega_h::LOs(comm_arr_index);
-    ent_local_rank_id_per_dim[edim] = Omega_h::LOs(ent_rank_lids);
     is_complete_part[edim] = Omega_h::HostRead<Omega_h::LO>(is_complete);
     num_boundaries[edim] = 0;
     num_bounds[edim] = 0;

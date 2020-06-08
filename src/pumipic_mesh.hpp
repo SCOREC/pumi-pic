@@ -52,8 +52,6 @@ namespace pumipic {
     Omega_h::LOs commArrayIndex(int dim) {return ent_to_comm_arr_index_per_dim[dim];}
     //Array of owners of an entity sized nents
     Omega_h::LOs entOwners(int dim) {return ent_owner_per_dim[dim];}
-    //The local index of an entity in its own core region sized nents
-    Omega_h::LOs rankLocalIndex(int dim) {return ent_local_rank_id_per_dim[dim];}
 
     //Creates an array of size num_entreis_per_entity * nents for communication
     template <class T>
@@ -109,9 +107,6 @@ namespace pumipic {
     Omega_h::LOs ent_to_comm_arr_index_per_dim[4];
     //The owning part of each entity per dimension
     Omega_h::LOs ent_owner_per_dim[4];
-    //Mapping from entity id to local index of the core it belongs to
-    //  Note: This is stored in case needed, but is not used beyond setup.
-    Omega_h::LOs ent_local_rank_id_per_dim[4];
     /*Flag for each buffered part. True if the entire part is buffered
      * 2 = complete
      * 1 = partial

@@ -10,6 +10,7 @@ namespace pumipic {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_migrate");
     Kokkos::Timer timer;
+
     //Distributor size & rank for performing migration
     int comm_size = dist.num_ranks();
     int comm_rank;
@@ -29,7 +30,6 @@ namespace pumipic {
       return;
     }
 
-    Kokkos::Timer alltoall;
     //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
@@ -65,13 +65,7 @@ namespace pumipic {
       }
     }
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d AllToAll %f\n", world_rank, alltoall.seconds());
-    }
-
     //Gather sending particle data
-    Kokkos::Timer gatherSend;
-    /********** Send particle information to new processes **********/
     //Perform an ex-sum on num_send_particles & num_recv_particles
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
     kkLidView offset_send_particles_temp("offset_send_particles_temp", comm_size + 1);
@@ -104,17 +98,11 @@ namespace pumipic {
                                                                     new_process,
                                                                     send_index);
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d gatherSend %f\n", world_rank, gatherSend.seconds());
-    }
-
     //Wait until all counts are received
-    Kokkos::Timer recvWait;
     PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
 
     //Count the number of processes being sent to and recv from
-    Kokkos::Timer countTotals;
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size,
                             KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
@@ -124,7 +112,6 @@ namespace pumipic {
                             KOKKOS_LAMBDA (const lid_t& i, lid_t& lsum ) {
       lsum += (num_recv_particles(i) > 0);
     }, num_receiving_from);
-
 
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
@@ -147,23 +134,12 @@ namespace pumipic {
       delete [] count_send_requests;
     }
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d recvWait %f\n", world_rank, recvWait.seconds());
-    }
-
-    Kokkos::Timer allocate;
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     kkLidView recv_element("recv_element", np_recv + new_ptcls);
     MTVs recv_particle;
     //Allocate views for each data type into recv_particle[type]
     CreateViews<device_type, DataTypes>(recv_particle, np_recv + new_ptcls);
-
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d allocate %f\n", world_rank, allocate.seconds());
-    }
-
-    Kokkos::Timer postComms;
 
     //Get pointers to the data for MPI calls
     lid_t send_num = 0, recv_num = 0;
@@ -201,19 +177,8 @@ namespace pumipic {
       }
     }
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d postComms %f\n", world_rank, postComms.seconds());
-    }
-
-    Kokkos::Timer waiting;
     PS_Comm_Waitall<device_type>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
     delete [] recv_requests;
-
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d waiting %f\n", world_rank, waiting.seconds());
-    }
-
-    Kokkos::Timer finalSetup;
 
     /********** Convert the received element from element gid to element lid *********/
     auto element_gid_to_lid_local = element_gid_to_lid;
@@ -240,27 +205,20 @@ namespace pumipic {
     });
     CopyViewsToViews<kkLidView, DataTypes>(recv_particle, new_particle_info, new_ptcl_map);
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d finalSetup %f\n", world_rank, finalSetup.seconds());
-    }
 
     /********** Combine and shift particles to their new destination **********/
     rebuild(new_element, recv_element, recv_particle);
 
-    Kokkos::Timer cleanup;
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
     delete [] send_requests;
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
 
-    if (world_rank == world_size/2) {
-      fprintf(stderr, "%d cleanup %f\n", world_rank, cleanup.seconds());
-    }
-
     if(!world_rank || world_rank == world_size/2)
-      fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier (seconds) %f\n",
-              world_rank, timer.seconds(), btime);
+      fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier "
+              "(seconds) %f\n", world_rank, timer.seconds(), btime);
+
     Kokkos::Profiling::popRegion();
   }
 }

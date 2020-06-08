@@ -158,11 +158,19 @@ namespace pumipic {
         local_mask(p) = false;
       };
       parallel_for(resetMask, "resetMask");
+      if(!comm_rank || comm_rank == comm_size/2)
+        fprintf(stderr, "%d ps rebuild (seconds) %f pre-barrier (seconds) %f\n",
+                comm_rank, timer.seconds(), btime);
+      Kokkos::Profiling::popRegion();
+
       return;
     }
 
     //If tryShuffling is on and shuffling works then rebuild is complete
     if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
+      if(!comm_rank || comm_rank == comm_size/2)
+        fprintf(stderr, "%d ps rebuild (seconds) %f pre-barrier (seconds) %f\n",
+                comm_rank, timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }

@@ -41,7 +41,7 @@ namespace pumipic {
     //Calculate rankwise local ids
     //First number all entities by the global numbering
     //  NOTE: This numbering is wrong for boundary part ents
-    auto global_ids = global_ids_per_dim[edim];
+    auto global_ids = globalIds(edim);
     auto calculateRankLids = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
       const Omega_h::LO owner = ent_owners[ent_id];
       ent_rank_lids[ent_id] = global_ids[ent_id] - global_ents_per_rank[owner];
@@ -109,7 +109,7 @@ namespace pumipic {
     Omega_h::HostRead<Omega_h::LO> boundary_ent_offsets_host(boundary_ent_offsets);
     Omega_h::LO num_bound_ents = boundary_ent_offsets_host[comm_size];
     Omega_h::Write<Omega_h::LO> boundary_rlids(num_bound_ents);
-    Omega_h::LOs ent_rlids = rank_lids_per_dim[edim];
+    Omega_h::LOs ent_rlids = rankLocalIndex(edim);
     auto gatherBoundedEnts = OMEGA_H_LAMBDA(const Omega_h::LO& ent_id) {
       const Omega_h::LO own = ent_owners[ent_id];
       const Omega_h::LO lid = ent_rank_lids[ent_id];

@@ -18,6 +18,16 @@ int main(int argc, char** argv) {
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
+
+  const auto nparts_in = Omega_h::binary::read_nparts(argv[1], lib.world());
+  if (comm_size != nparts_in) {
+    if (!rank)
+      fprintf(stderr, "The input mesh must have number of "
+              "partitions equal to number of MPI processes\n");
+    MPI_Finalize();
+    return EXIT_FAILURE;
+  }
+
   if (comm_size == 1) {
       fprintf(stderr, "This tool must be run in parallel with the number of ranks equal to the"
               "target partition.\n");
@@ -39,7 +49,7 @@ int main(int argc, char** argv) {
 
   if (rank == 0) {
     char filename[200];
-    sprintf(filename, "%s_%d.ptn",argv[2],comm_size);
+    sprintf(filename, "%s_%d.ptn", argv[2], comm_size);
     std::ofstream in_str(filename);
     if (!in_str) {
       fprintf(stderr, "Cannot open file %s\n", filename);

@@ -11,13 +11,33 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   if (argc != 3) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition file prefix>\n", 
+      fprintf(stderr, "Usage: mpirun -np <num_parts> %s <mesh> <partition file prefix>\n",
               argv[0]);
     MPI_Finalize();
     return EXIT_FAILURE;
   }
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
+
+  Omega_h::filesystem::path const& path = argv[1];
+  auto const extension = path.extension().string();
+  if (extension == ".osh") {
+    const auto nparts_in = Omega_h::binary::read_nparts(argv[1], lib.world());
+    if (comm_size != nparts_in) {
+      if (!rank)
+        fprintf(stderr, "The input Omega_h mesh must have number of "
+              "partitions equal to number of MPI processes\n");
+      MPI_Finalize();
+      return EXIT_FAILURE;
+    }
+  }
+
+  if (comm_size == 1) {
+      fprintf(stderr, "This tool must be run in parallel with the number of ranks equal to the "
+              "target partition.\n");
+    MPI_Finalize();
+    return EXIT_FAILURE;
+  }
   Omega_h::Mesh mesh = Omega_h::read_mesh_file(argv[1], lib.world());
   int dim = mesh.dim();
   Omega_h::Read<Omega_h::GO> global_ids = mesh.globals(dim);
@@ -30,10 +50,10 @@ int main(int argc, char** argv) {
     owners[global_ids_h[i]] = rank;
   int* recv_owners = new int[nge];
   MPI_Reduce(owners, recv_owners, nge, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-  
+
   if (rank == 0) {
     char filename[200];
-    sprintf(filename, "%s_%d.ptn",argv[2],comm_size);
+    sprintf(filename, "%s_%d.ptn", argv[2], comm_size);
     std::ofstream in_str(filename);
     if (!in_str) {
       fprintf(stderr, "Cannot open file %s\n", filename);

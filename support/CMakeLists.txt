@@ -2,8 +2,11 @@ set(HEADERS
   ppTypes.h
   ppMacros.h
   ppView.h
+  ppArray.h
   SupportKK.h
   ViewComm.h
+  ViewComm_host.hpp
+  ViewComm_cuda.hpp
   ppAssert.h
 )
 
@@ -34,14 +37,20 @@ ${KOKKOS_LIBRARY})
 include(${CMAKE_SOURCE_DIR}/cmake/detect_kokkos_opts.cmake)
 detect_kokkos_opts()
 if (Kokkos_HAS_CUDA)
-add_definitions(-DPS_USE_CUDA)
-target_compile_definitions(support INTERFACE -DPS_USE_CUDA)
+add_definitions(-DPP_USE_CUDA)
+target_compile_definitions(support INTERFACE -DPP_USE_CUDA)
 endif()
 if (Kokkos_HAS_OpenMP)
-add_definitions(-DPS_USE_OPENMP)
-target_compile_definitions(support INTERFACE -DPS_USE_OPENMP)
+add_definitions(-DPP_USE_OPENMP)
+target_compile_definitions(support INTERFACE -DPP_USE_OPENMP)
 endif()
 
 pumipic_export_lib(support "${HEADERS}")
+
+if(IS_TESTING)
+  add_executable(ViewCommTests ViewComm_test.cpp)
+  target_link_libraries(ViewCommTests support)
+  include(testing.cmake)
+endif()
 
 bob_end_subdir()

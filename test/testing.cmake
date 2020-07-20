@@ -5,9 +5,10 @@ function(mpi_test TESTNAME PROCS EXE)
   )
 endfunction(mpi_test)
 
-mpi_test(barycentric_3 1  ./barycentric test1)
 
-mpi_test(barycentric_4 1  ./barycentric test2)
+mpi_test(barycentric_3 1 ./barycentric test1)
+
+mpi_test(barycentric_4 1 ./barycentric test2)
 
 mpi_test(linetri_intersection_2 1
   ./linetri_intersection  0.0,1.0,0.0:0.5,0.0,0.0:1.0,1.0,0.0  0.5,0.6,-2  0.5,0.6,2 )
@@ -48,12 +49,12 @@ mpi_test(pseudoXGCm_24kElms_4 4
 mpi_test(pseudoXGCm_120kElms 1
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/120k.osh ignored
-  10000 141 10 full bfs 0.5 0)
+  10000 141 10 bfs bfs 0.5 0)
 
 mpi_test(pseudoXGCm_120kElms_4 4
   ./pseudoXGCm --kokkos-threads=1
   ${TEST_DATA_DIR}/xgc/120k.osh ${TEST_DATA_DIR}/xgc/120k_4.cpn
-  10000 141 10 full bfs 0.5 0)
+  10000 141 10 bfs bfs 0.5 0)
 
 
 #MPI+X testing

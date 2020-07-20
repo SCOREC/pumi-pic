@@ -41,7 +41,7 @@ namespace pumipic {
     //Calculate rankwise local ids
     //First number all entities by the global numbering
     //  NOTE: This numbering is wrong for boundary part ents
-    auto global_ids = global_ids_per_dim[edim];
+    auto global_ids = globalIds(edim);
     auto calculateRankLids = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
       const Omega_h::LO owner = ent_owners[ent_id];
       ent_rank_lids[ent_id] = global_ids[ent_id] - global_ents_per_rank[owner];
@@ -83,7 +83,6 @@ namespace pumipic {
 
     offset_ents_per_rank_per_dim[edim] = Omega_h::LOs(picpart_ents_per_rank);
     ent_to_comm_arr_index_per_dim[edim] = Omega_h::LOs(comm_arr_index);
-    ent_local_rank_id_per_dim[edim] = Omega_h::LOs(ent_rank_lids);
     is_complete_part[edim] = Omega_h::HostRead<Omega_h::LO>(is_complete);
     num_boundaries[edim] = 0;
     num_bounds[edim] = 0;
@@ -110,7 +109,7 @@ namespace pumipic {
     Omega_h::HostRead<Omega_h::LO> boundary_ent_offsets_host(boundary_ent_offsets);
     Omega_h::LO num_bound_ents = boundary_ent_offsets_host[comm_size];
     Omega_h::Write<Omega_h::LO> boundary_rlids(num_bound_ents);
-    Omega_h::LOs ent_rlids = rank_lids_per_dim[edim];
+    Omega_h::LOs ent_rlids = rankLocalIndex(edim);
     auto gatherBoundedEnts = OMEGA_H_LAMBDA(const Omega_h::LO& ent_id) {
       const Omega_h::LO own = ent_owners[ent_id];
       const Omega_h::LO lid = ent_rank_lids[ent_id];
@@ -267,14 +266,15 @@ namespace pumipic {
     int my_num_entries = ent_offsets[commptr->rank()+1] - ent_offsets[commptr->rank()];
     int num_recvs = num_cores[edim] - num_bounds[edim] + num_boundaries[edim];
     int num_sends = num_cores[edim];
-    Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[num_recvs];
-    for (int i = 0; i < num_recvs; ++i)
-      neighbor_arrays[i] = new Omega_h::HostWrite<T>(my_num_entries*nvals);
     MPI_Request* send_requests = new MPI_Request[num_sends];
     MPI_Request* recv_requests = new MPI_Request[num_recvs];
     int index = 0;
     //Fan in is skipped for accept_op
     if (op != BCAST_OP) {
+      Omega_h::HostWrite<T>** neighbor_arrays = new Omega_h::HostWrite<T>*[num_recvs];
+      for (int i = 0; i < num_recvs; ++i)
+        neighbor_arrays[i] = new Omega_h::HostWrite<T>(my_num_entries*nvals);
+
       for (int i = 0; i < num_cores[edim]; ++i) {
         int rank = buffered_parts[edim][i];
         int num_entries = ent_offsets[rank+1] - ent_offsets[rank];

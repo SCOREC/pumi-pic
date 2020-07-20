@@ -3,7 +3,7 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Sort.hpp>
 
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #endif
@@ -16,7 +16,7 @@ void performSorting(Kokkos::View<int*> arr, const char* name) {
   Kokkos::Timer t;
   Kokkos::sort(arr, 0, arr.size());
   double kokkos_t = t.seconds();
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
   thrust::device_ptr<int> arr_d(copy.data());
   t.reset();
   thrust::sort(arr_d, arr_d + arr.size());

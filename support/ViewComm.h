@@ -5,6 +5,292 @@
 #include <unordered_map>
 #include <mpi.h>
 namespace pumipic {
+  /* Routines to be abstracted
+     MPI_Allgather/NCCL
+     MPI_Broadcast/NCCL
+     MPI_Alltoallv
+     MPI_Waitany
+  */
+
+#if false //These function headers are for documentation purposes only
+  /*! \file View Communications
+    \brief Abstractions over various MPI routines for views located on either
+    the host or device and abstract support for CUDA aware MPI.
+
+    \note Views can be on either the host or device, but must be in the same memory
+    space for matching send/recv calls
+
+    \note Mixing of PS_Comm and direct MPI calls is not encouraged and may cause some
+    failures when performing nonblocking operations from the device
+
+  */
+  /*!
+    \brief Wrapper around MPI_Send for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param view The view with data on either the host or device
+
+    \param offset The starting index of the data to send
+
+    \param size The number of elements of the view to send
+
+    \param dest The destination rank to send the message to
+
+    \param tag The tag associated with the MPI_Send
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Send(view.data() + offset, size, datatype, dest, tag, comm);
+
+  */
+  template <typename ViewT>
+  int PS_Comm_Send(ViewT view, int offset, int size, int dest, int tag, MPI_Comm comm);
+  /*!
+    \brief Wrapper around MPI_Recv for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param view The view with data on either the host or device
+
+    \param offset The starting index of where the data will be received in the view
+
+    \param size The number of elements to receive
+
+    \param source The source rank to receive the message from
+
+    \param tag The tag associated with the MPI_Recv
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Recv(view.data() + offset, size, datatype, source, tag, comm);
+
+  */
+
+  template <typename ViewT>
+  int PS_Comm_Recv(ViewT view, int offset, int size, int source, int tag, MPI_Comm comm);
+
+  /*!
+    \brief Wrapper around MPI_Isend for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param view The view with data on either the host or device
+
+    \param offset The starting index of the data to send
+
+    \param size The number of elements of the view to send
+
+    \param dest The destination rank to send the message to
+
+    \param tag The tag associated with the MPI_Send
+
+    \param comm The MPI communicator
+
+    \param[out] request The MPI request to be filled after the MPI_Isend completes
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Isend(view.data() + offset, size, datatype, dest, tag, comm, request);
+  */
+
+  template <typename ViewT>
+  int PS_Comm_Isend(ViewT view, int offset, int size, int dest, int tag,
+                    MPI_Comm comm, MPI_Request* request);
+
+  /*!
+    \brief Wrapper around MPI_Irecv for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param view The view with data on either the host or device
+
+    \param offset The starting index of where the data will be received in the view
+
+    \param size The number of elements to receive
+
+    \param source The source rank to receive the message from
+
+    \param tag The tag associated with the MPI_Recv
+
+    \param comm The MPI communicator
+
+    \param[out] request The MPI request to be filled after the MPI_Irecv completes
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Irecv(view.data() + offset, size, datatype, source, tag, comm, request);
+
+  */
+
+  template <typename ViewT>
+  int PS_Comm_Irecv(ViewT view, int offset, int size, int dest, int tag,
+                    MPI_Comm comm, MPI_Request* request);
+
+  /*!
+    \brief Wrapper around MPI_Wait
+
+    \tparam Space The memory space where the sends/recvs occurred
+
+    \param request The requests to wait on
+
+    \param[out] status A status filled by the MPI_Wait
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Wait(request, status);
+
+    \note PS_Comm_Wait must be used instead of MPI_Wait if using the
+    PS_Comm_Isend/Irecv functions on the device in order to finish copying the data.
+
+  */
+  template <typename Space>
+  int PS_Comm_Wait(MPI_Request* request, MPI_Status* status);
+
+  /*!
+    \brief Wrapper around MPI_Waitall
+
+    \tparam Space The memory space where the sends/recvs occurred
+
+    \param num_requests The number of requests
+
+    \param requests The array of requests sized `num_requests`
+
+    \param[out] statuses An array of statuses filled by the MPI_Waitall
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Waitall(num_requests, requests, statuses);
+
+    \note PS_Comm_Waitall must be used instead of MPI_Waitall if using the
+    PS_Comm_Isend/Irecv functions on the device in order to finish copying the data.
+
+  */
+  template <typename Space>
+  int PS_Comm_Waitall(int num_requests, MPI_Request* requests, MPI_Status* statuses);
+
+  /*!
+    \brief Wrapper around MPI_Alltoall for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device to send
+
+    \param send_size The number of elements to send to each process
+
+    \param recv_view The view with data on either the host or device to receive
+
+    \param recv_size The number of elements to recv from each process
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Alltoall(send_view.data(), send_size, send_datatype,
+                 recv_view.data(), recv_size, recv_datatype, comm);
+
+    \note The send_view and recv_view must be allocated on the same memory space
+  */
+  template <typename ViewT>
+  int PS_Comm_Alltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
+                       MPI_Comm comm);
+
+
+  /*!
+    \brief Wrapper around MPI_Ialltoall for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device to send
+
+    \param send_size The number of elements to send to each process
+
+    \param recv_view The view with data on either the host or device to receive
+
+    \param recv_size The number of elements to recv from each process
+
+    \param comm The MPI communicator
+
+    \param[out] request The MPI request to be filled after the MPI_Ialltoall completes
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Ialltoall(send_view.data(), send_size, send_datatype,
+    recv_view.data(), recv_size, recv_datatype, comm);
+
+    \note The send_view and recv_view must be allocated on the same memory space
+  */
+  template <typename ViewT>
+  int PS_Comm_Ialltoall(ViewT send_view, int send_size, ViewT recv_view, int recv_size,
+                        MPI_Comm comm, MPI_Request* request);
+
+  /*!
+    \brief Wrapper around MPI_Reduce for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device
+
+    \param[out] recv_view The view in the same memory space as `send_view` to be filled
+    with the reduction
+
+    \param count The number of elements in `send_view`
+
+    \param op The MPI operation to be carried out in the reduction
+
+    \param root The MPI rank to receive the reduced values
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Reduce(send_view.data(), recv_view.data(), count, op, root, comm);
+
+  */
+  template <typename ViewT>
+  int PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count, MPI_Op op, int root,
+                     MPI_Comm comm);
+
+  /*!
+    \brief Wrapper around MPI_Allreduce for views
+
+    \tparam ViewT The type of view, supports Kokkos::View & pumipic::View
+
+    \param send_view The view with data on either the host or device
+
+    \param[out] recv_view The view in the same memory space as `send_view` to be filled
+    with the reduction
+
+    \param count The number of elements in `send_view`
+
+    \param op The MPI operation to be carried out in the reduction
+
+    \param comm The MPI communicator
+
+    \return The error value returned by the call to MPI
+
+    \note The function call is equivalent to
+    MPI_Allreduce(send_view.data(), recv_view.data(), count, op, comm);
+
+  */
+  template <typename ViewT>
+  int PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count, MPI_Op op, MPI_Comm comm);
+
+#endif
+
   template <typename T> struct MpiType;
 #define CREATE_MPITYPE(type, mpi_type)                  \
   template <> struct MpiType<type> {                    \
@@ -12,7 +298,6 @@ namespace pumipic {
   }
   CREATE_MPITYPE(char, MPI_CHAR);
   CREATE_MPITYPE(short, MPI_SHORT);
-  CREATE_MPITYPE(bool, MPI_INT);
   CREATE_MPITYPE(int, MPI_INT);
   CREATE_MPITYPE(long, MPI_LONG);
   CREATE_MPITYPE(unsigned char, MPI_UNSIGNED_CHAR);
@@ -26,212 +311,16 @@ namespace pumipic {
 #undef CREATE_MPI_TYPE
 
   template <typename T> using BT = typename BaseType<T>::type;
+  template <typename View> using ViewType = typename View::data_type;
+  template <typename View> using ViewSpace = typename View::memory_space;
 
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
   Irecv_Map& get_map();
 
-  /* Routines to be abstracted
-     MPI_Allreduce/NCCL
-     MPI_Reduce/NCCL
-     MPI_Allgather/NCCL
-     MPI_Broadcast/NCCL
-     MPI_Alltoallv
-     MPI_Wait
-     MPI_Waitany
-   */
 
-  /************** Host Communication functions **************/
+#include "ViewComm_host.hpp"
 
-  template <typename View> using ViewType = typename View::traits::data_type;
-  template <typename View> using ViewSpace = typename View::traits::memory_space;
-  template <typename Space> using IsHost =
-    typename std::enable_if<std::is_same<typename Space::memory_space, Kokkos::HostSpace>::value, int>::type;
-
-  //Send
-  template <typename ViewT>
-  IsHost<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
-                                         int dest, int tag, MPI_Comm comm) {
-    int size_per_entry = BT<ViewType<ViewT> >::size;
-    return MPI_Send(view.data() + offset, size*size_per_entry,
-                    MpiType<BT<ViewType<ViewT> > >::mpitype(), dest, tag, comm);
-  }
-  //Recv
-  template <typename ViewT>
-  IsHost<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
-                              int sender, int tag, MPI_Comm comm) {
-    int size_per_entry = BT<ViewType<ViewT> >::size;
-    return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                    sender, tag, comm, MPI_STATUS_IGNORE);
-  }
-  //Isend
-  template <typename ViewT>
-  IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
-                                          int dest, int tag, MPI_Comm comm, MPI_Request* req) {
-    int size_per_entry = BaseType<ViewType<ViewT> >::size;
-    return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                     dest, tag, comm, req);
-  }
-  //Irecv
-  template <typename ViewT>
-  IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
-                                          int sender, int tag, MPI_Comm comm, MPI_Request* req) {
-    int size_per_entry = BaseType<ViewType<ViewT> >::size;
-    return MPI_Irecv(view.data() + offset, size*size_per_entry,
-                     MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                     sender, tag, comm, req);
-  }
-  //Waitall
-  template <typename Space>
-  IsHost<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
-    return MPI_Waitall(num_reqs, reqs, stats);
-  }
-  //Alltoall
-  template <typename ViewT>
-  IsHost<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
-                                             ViewT recv, int recv_size,
-                                             MPI_Comm comm) {
-    return MPI_Alltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                        recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
-  }
-
-  /************** Cuda Communication functions **************/
-#ifdef PS_USE_CUDA
-
-  //TODO change to check if the memory space is not accessible from host and accessible from cuda
-  //Return type check to see if the memory space is not the host space
-  template <typename Space> using IsCuda =
-  typename std::enable_if<std::is_same<typename Space::memory_space, Kokkos::CudaSpace>::value, int>::type;
-//Cuda-aware check for OpenMPI 2.0+ taken from https://github.com/kokkos/kokkos/issues/2003
-#if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
-#define PS_CUDA_AWARE_MPI
-#endif
-
-  //Send
-  template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
-                                         int dest, int tag, MPI_Comm comm) {
-    auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
-
-#ifdef PS_CUDA_AWARE_MPI
-    return MPI_Send(subview.data(), subview.size(), MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                    dest, tag, comm);
-#else
-    auto view_host = deviceToHost(subview);
-    return MPI_Send(view_host.data(), view_host.size(), MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                    dest, tag, comm);
-#endif
-  }
-  //Recv
-  template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
-                                         int sender, int tag, MPI_Comm comm) {
-    ViewT new_view("recv_view", size);
-#ifdef PS_CUDA_AWARE_MPI
-    int ret = MPI_Recv(new_view.data(), new_view.size(),
-                       MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                       sender, tag, comm, MPI_STATUS_IGNORE);
-#else
-    typename ViewT::HostMirror view_host = Kokkos::create_mirror_view(new_view);
-    int ret = MPI_Recv(view_host.data(), view_host.size(),
-                       MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                       sender, tag, comm, MPI_STATUS_IGNORE);
-    //Copy received values to device and move it to the proper indices of the view
-    Kokkos::deep_copy(new_view, view_host);
-#endif
-    Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        copyViewToView(view,i+offset, new_view, i);
-    });
-    return ret;
-  }
-
-  //Isend
-  template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
-                                  int dest, int tag, MPI_Comm comm, MPI_Request* req) {
-    auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
-#ifdef PS_CUDA_AWARE_MPI
-    return MPI_Isend(subview.data(), subview.size(),
-                     MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
-                     tag, comm, req);
-#else
-    auto view_host = deviceToHost(subview);
-    int ret =  MPI_Isend(view_host.data(), view_host.size(),
-                         MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
-                         tag, comm, req);
-    //Noop that will keep the view_host around until the lambda is removed
-    get_map()[req] = [=]() {
-      (void)view_host;
-    };
-    return ret;
-#endif
-  }
-  //Irecv
-  template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
-                                  int sender, int tag, MPI_Comm comm, MPI_Request* req) {
-    int size_per_entry = BaseType<ViewType<ViewT> >::size;
-    ViewT new_view("irecv_view", size);
-#ifdef PS_CUDA_AWARE_MPI
-    int ret = MPI_Irecv(new_view.data(), new_view.size(),
-                        MpiType<BT<ViewType<ViewT> > >::mpitype(), sender,
-                        tag, comm, req);
-#else
-    typename ViewT::HostMirror view_host = Kokkos::create_mirror_view(new_view);
-    int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
-                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                        sender, tag, comm, req);
-#endif
-    get_map()[req] = [=]() {
-#ifndef PS_CUDA_AWARE_MPI
-      Kokkos::deep_copy(new_view, view_host);
-#endif
-      Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-          copyViewToView(view,i+offset, new_view, i);
-      });
-    };
-
-    return ret;
-
-  }
-  //Waitall
-  template <typename Space>
-  IsCuda<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
-#ifdef PS_CUDA_AWARE_MPI
-    return MPI_Waitall(num_reqs, reqs, stats);
-#else
-    int ret = MPI_Waitall(num_reqs, reqs, stats);
-    for (int i = 0; i < num_reqs; ++i) {
-      Irecv_Map::iterator itr = get_map().find(reqs + i);
-      if (itr != get_map().end()) {
-        (itr->second)();
-        get_map().erase(itr);
-      }
-    }
-    return ret;
-#endif
-
-  }
-
-  //Alltoall
-  template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
-                                               ViewT recv, int recv_size,
-                                               MPI_Comm comm) {
-#ifdef PS_CUDA_AWARE_MPI
-    return MPI_Alltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                        recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
-#else
-    typename ViewT::HostMirror send_host = deviceToHost(send);
-    typename ViewT::HostMirror recv_host = Kokkos::create_mirror_view(recv);
-    int ret = MPI_Alltoall(send_host.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                           recv_host.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
-    Kokkos::deep_copy(recv, recv_host);
-    return ret;
-#endif
-  }
-
-#endif
-
+#include "ViewComm_cuda.hpp"
 
 
 }

@@ -1119,24 +1119,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 #ifdef PP_DEBUG
   return found;
 #endif
-  int maxLoops = 0;
-  MPI_Allreduce(&loops, &maxLoops, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-  int minLoops = 0;
-  MPI_Allreduce(&loops, &minLoops, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  long int totLoops = 0;
-  long int loops_li = loops;
-  MPI_Allreduce(&loops_li, &totLoops, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-  int ranksWithPtcls = 0;
-  const int hasPtcls = (psCapacity > 0);
-  MPI_Allreduce(&hasPtcls, &ranksWithPtcls, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  const double avgLoops = (double) totLoops / ranksWithPtcls;
-  if(maxLoops == loops)
-    fprintf(stderr, "pumipic search_2d maxLoops %d on rank %d\n", maxLoops, rank);
-  if(minLoops == loops)
-    fprintf(stderr, "pumipic search_2d minLoops %d on rank %d\n", minLoops, rank);
-  if(!rank)
-    fprintf(stderr, "pumipic search_2d totLoops %ld ranksWithPtcls %d average loops %f\n",
-            totLoops, ranksWithPtcls, avgLoops);
   Kokkos::Profiling::popRegion();
   return found;
 }

@@ -15,7 +15,7 @@
 #include <Kokkos_Sort.hpp>
 #include "SCSPair.h"
 #include "scs_input.hpp"
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #endif
@@ -41,8 +41,13 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
+#ifdef PP_USE_CUDA
   template <std::size_t N>
   using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+#else
+  template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
+template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
+#endif
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
@@ -95,6 +100,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
      new_process - array sized scs->capacity with the new process for each particle
   */
   void migrate(kkLidView new_element, kkLidView new_process,
+               Distributor<MemSpace> dist = Distributor<MemSpace>(),
                kkLidView new_particle_elements = kkLidView(),
                MTVs new_particle_info = NULL);
 
@@ -147,7 +153,8 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths,
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(kkLidView mask, PairView ptcls, kkLidView chunk_widths);
+  void setupParticleMask(kkLidView mask, PairView ptcls, kkLidView chunk_widths,
+                         kkLidView& chunk_starts);
   void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
                    MTVs particle_info);
 
@@ -255,7 +262,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk,capacity_);
 
   //Allocate the SCS and backup with 10% extra space
-  lid_t cap = getLastValue<lid_t>(offsets);
+  lid_t cap = capacity_;
   particle_mask = kkLidView("particle_mask", cap);
   if (extra_padding > 0)
     cap *= (1 + extra_padding);
@@ -263,16 +270,15 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   CreateViews<device_type, DataTypes>(scs_data_swap, cap);
   swap_size = current_size = cap;
 
-  if (num_ptcls > 0)
-    setupParticleMask(particle_mask, ptcls, chunk_widths);
+  if (num_ptcls > 0) {
+    kkLidView chunk_starts;
+    setupParticleMask(particle_mask, ptcls, chunk_widths, chunk_starts);
 
-  //If particle info is provided then enter the information
-  lid_t given_particles = particle_elements.size();
-  if (given_particles > 0 && particle_info != NULL) {
-#ifdef PP_DEBUG
-    assert(given_particles == num_ptcls);
-#endif
-    initSCSData(chunk_widths, particle_elements, particle_info);
+    //If particle info is provided then enter the information
+    lid_t given_particles = particle_elements.size();
+    if (given_particles > 0 && particle_info != NULL) {
+      initSCSData(chunk_starts, particle_elements, particle_info);
+    }
   }
   Kokkos::Profiling::popRegion();
 }
@@ -329,6 +335,9 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
   mirror_copy->pad_strat = pad_strat;
   mirror_copy->tryShuffling = tryShuffling;
   mirror_copy->num_empty_elements = num_empty_elements;
+
+  //Create the swap space
+  mirror_copy->scs_data_swap = createMemberViews<DataTypes, memory_space>(swap_size);
   //Deep copy each view
   mirror_copy->slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
                                                                    slice_to_chunk.size());
@@ -471,8 +480,10 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 template <class DataTypes, typename MemSpace>
 template <typename FunctionType>
 void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
+  if (nPtcls() == 0)
+    return;
   FunctionType* fn_d;
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
   cudaMalloc(&fn_d, sizeof(FunctionType));
   cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
 #else

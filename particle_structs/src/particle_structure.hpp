@@ -3,7 +3,7 @@
 #include <ppTypes.h>
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
-
+#include <psDistributor.hpp>
 namespace pumipic {
 
   template <class DataTypes, typename Space = DefaultMemSpace>
@@ -53,6 +53,7 @@ namespace pumipic {
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void migrate(kkLidView new_element, kkLidView new_process,
+                         Distributor<Space> dist = Distributor<Space>(),
                          kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;

@@ -36,24 +36,24 @@ namespace pumipic {
     //Returns the commptr
     Omega_h::CommPtr comm() const {return commptr;}
 
-    //Returns the number of parts buffered
+    //Returns the number of parts buffered (includes self in count)
     int numBuffers(int dim) const {return num_cores[dim] + 1;}
-    //Returns a host array of the ranks buffered
+    //Returns a host array of the ranks buffered (Doesn't include self)
     Omega_h::HostWrite<Omega_h::LO> bufferedRanks(int dim) const {return buffered_parts[dim];}
 
 
     //Picpart global ID array over entities sized nents
-    Omega_h::GOs globalIds(int dim) {return global_ids_per_dim[dim];}
+    Omega_h::GOs globalIds(int dim) {return picpart->get_array<Omega_h::GO>(dim, "gids");}
     //Safe tag over elements sized nelems (1 - safe, 0 - unsafe)
-    Omega_h::LOs safeTag() {return is_ent_safe;}
+    Omega_h::LOs safeTag() {return picpart->get_array<Omega_h::LO>(dim(), "safe");}
+    //Array of owners of an entity sized nents
+    Omega_h::LOs entOwners(int dim) {return picpart->get_array<Omega_h::LO>(dim, "ownership");}
+    //The local index of an entity in its own core region sized nents
+    Omega_h::LOs rankLocalIndex(int dim) {return picpart->get_array<Omega_h::LO>(dim,"rank_lids");}
     //Offset array for number of entities per rank sized comm_size
     Omega_h::LOs nentsOffsets(int dim) {return offset_ents_per_rank_per_dim[dim];}
     //Mapping from local id to comm array index sized nents
     Omega_h::LOs commArrayIndex(int dim) {return ent_to_comm_arr_index_per_dim[dim];}
-    //Array of owners of an entity sized nents
-    Omega_h::LOs entOwners(int dim) {return ent_owner_per_dim[dim];}
-    //The local index of an entity in its own core region sized nents
-    Omega_h::LOs rankLocalIndex(int dim) {return ent_local_rank_id_per_dim[dim];}
 
     //Creates an array of size num_entreis_per_entity * nents for communication
     template <class T>
@@ -75,7 +75,8 @@ namespace pumipic {
     void constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
                           Omega_h::LOs owner,
                           Omega_h::Write<Omega_h::LO> has_part,
-                          Omega_h::Write<Omega_h::LO> is_safe);
+                          Omega_h::Write<Omega_h::LO> is_safe,
+                          bool render = false);
 
     //Communication setup
     void setupComm(int dim, Omega_h::LOs global_ents_per_rank,
@@ -91,10 +92,6 @@ namespace pumipic {
     //*********************PICpart information**********************/
     //Number of core parts that are buffered (doesn't include self)
     int num_cores[4];
-    //Global ID of each mesh entity per dimension
-    Omega_h::GOs global_ids_per_dim[4];
-    //Global ID of each mesh entity per dimension
-    Omega_h::LOs rank_lids_per_dim[4];
     //Safe tag defined on the mesh elements
     Omega_h::LOs is_ent_safe;
 
@@ -106,11 +103,6 @@ namespace pumipic {
     Omega_h::LOs offset_ents_per_rank_per_dim[4];
     //Mapping from entity id to comm array index
     Omega_h::LOs ent_to_comm_arr_index_per_dim[4];
-    //The owning part of each entity per dimension
-    Omega_h::LOs ent_owner_per_dim[4];
-    //Mapping from entity id to local index of the core it belongs to
-    //  Note: This is stored in case needed, but is not used beyond setup.
-    Omega_h::LOs ent_local_rank_id_per_dim[4];
     /*Flag for each buffered part. True if the entire part is buffered
      * 2 = complete
      * 1 = partial

@@ -1,6 +1,11 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 
+#ifdef PP_USE_CUDA
+typedef Kokkos::CudaSpace DeviceSpace;
+#else
+typedef Kokkos::HostSpace DeviceSpace;
+#endif
 void finalize() {
   Kokkos::finalize();
   MPI_Finalize();
@@ -25,6 +30,10 @@ int testRebuild(const char* name, PS* structure);
 int testMigration(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
+int testSegmentComp(const char* name, PS* structure);
+
+//Edge Case tests
+int migrateToEmptyAndRefill(const char* name, PS* structure);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -77,7 +86,11 @@ int main(int argc, char* argv[]) {
       fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
       fails += setValues(names[i].c_str(), structures[i]);
       fails += testMetrics(names[i].c_str(), structures[i]);
+      fails += testRebuild(names[i].c_str(), structures[i]);
+      fails += testMigration(names[i].c_str(), structures[i]);
       fails += testCopy(names[i].c_str(), structures[i]);
+      fails += testSegmentComp(names[i].c_str(), structures[i]);
+      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -120,7 +133,7 @@ int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
             comm_rank);
     ++fails;
   }
-
+  return fails;
   //Build SCS with C = 32, sigma = 1, V = 10
   try {
     lid_t maxC = 32;
@@ -207,8 +220,8 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
 int setValues(const char* name, PS* structure) {
   int fails = 0;
   auto dbls = structure->get<1>();
-  auto nums = structure->get<2>();
-  auto bools = structure->get<3>();
+  auto bools = structure->get<2>();
+  auto nums = structure->get<3>();
   int local_rank = comm_rank;
   auto setValues = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
@@ -237,9 +250,96 @@ int testRebuild(const char* name, PS* structure) {
 }
 int testMigration(const char* name, PS* structure) {
   int fails = 0;
+  kkLidView failures("fails", 1);
+
+  kkLidView new_element("new_element", structure->capacity());
+  kkLidView new_process("new_process", structure->capacity());
+
+  int num_ptcls = structure->nPtcls();
+  //Send even particles one process to the right
+  auto pids = structure->get<0>();
+  auto rnks = structure->get<3>();
+  int local_rank = comm_rank;
+  int local_csize = comm_size;
+  int num_elems = structure->nElems();
+  auto sendRight = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    if (mask) {
+      new_element(p) = e;
+      if (e == num_elems - 1) {
+        new_process(p) = (local_rank + 1) % local_csize;
+      }
+      else
+        new_process(p) = local_rank;
+      rnks(p) = local_rank;
+    }
+    else {
+      new_element(p) = e;
+      new_process(p) = local_rank;
+    }
+  };
+  ps::parallel_for(structure, sendRight, "sendRight");
+  structure->migrate(new_element, new_process);
+
+  pids = structure->get<0>();
+  rnks = structure->get<3>();
+  auto checkPostMigrate = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    if (mask) {
+      const int pid = pids(p);
+      const int rank = rnks(p);
+      if (e == num_elems - 1 && rank == local_rank) {
+        printf("[ERROR] Failed to send particle %d on rank %d\n",
+               pid, local_rank);
+        failures(0) = 1;
+      }
+      if (e != 0 && rank != local_rank) {
+        printf("[ERROR] Incorrectly received particle %d from rank %d to rank %d in element %d\n", pid, rank, local_rank, e);
+        failures(0) = 1;
+      }
+    }
+  };
+  if (comm_size > 1)
+    ps::parallel_for(structure, checkPostMigrate, "checkPostMigrate");
+  fails += ps::getLastValue<lid_t>(failures);
+
+  //Make a distributor
+  int neighbors[3];
+  neighbors[0] = comm_rank;
+  neighbors[1] = (comm_rank - 1 + comm_size) % comm_size;
+  neighbors[2] = (comm_rank + 1) % comm_size;
+  ps::Distributor<typename PS::memory_space> dist(std::min(comm_size, 3), neighbors);
+
+  new_element = kkLidView("new_element", structure->capacity());
+  new_process = kkLidView("new_process", structure->capacity());
+  auto sendBack = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    new_element(p) = e;
+    new_process(p) = rnks(p);
+  };
+  ps::parallel_for(structure, sendBack, "sendBack");
+  structure->migrate(new_element, new_process, dist);
+
+  failures = kkLidView("fails", 1);
+  pids = structure->get<0>();
+  rnks = structure->get<3>();
+  auto checkPostBackMigrate = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    if (mask) {
+      if (rnks(p) != local_rank) {
+        printf("[ERROR] Test %s: Particle %d from rank %d was not sent back on rank %d\n",
+               name, pids(p), rnks(p), local_rank);
+        failures(0) = 1;
+      }
+    }
+  };
+  ps::parallel_for(structure, checkPostBackMigrate, "checkPostBackMigrate");
+
+  fails += ps::getLastValue<lid_t>(failures);
+  if (num_ptcls != structure->nPtcls()) {
+    printf("[ERROR] Test %s: Structure does not have all of the particles it started with on rank %d\n", name, comm_rank);
+    ++fails;
+  }
+
   return fails;
 }
-int testMetrics(const char* name,PS* structure) {
+int testMetrics(const char* name, PS* structure) {
   int fails = 0;
   try {
     structure->printMetrics();
@@ -277,7 +377,8 @@ int testCopy(const char* name, PS* structure) {
     ++fails;
   }
   //Copy particle structure back to the device
-  PS* device_structure = ps::copy<Kokkos::CudaSpace>(host_structure);
+  PS* device_structure = ps::copy<DeviceSpace>(host_structure);
+  delete host_structure;
   if (device_structure->nElems() != structure->nElems()) {
     fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() back to device on rank %d\n",
             name, comm_rank);
@@ -309,15 +410,15 @@ int testCopy(const char* name, PS* structure) {
   auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool mask) {
     if (mask) {
       if (ids1(pid) != ids2(pid)) {
-        printf("[ERROR] Test %s: Particle ids do not match for particle %d "
-               "[(old) %d != %d (copy)] on rank %d\n", name, pid, ids1(pid),
+        printf("[ERROR] Particle ids do not match for particle %d "
+               "[(old) %d != %d (copy)] on rank %d\n", pid, ids1(pid),
                ids2(pid), local_rank);
         failure(0) = 1;
       }
       for (int i = 0; i < 3; ++i)
         if (fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
-          printf("[ERROR] Test %s: Particle's dbl %d does not match for particle %d"
-                 "[(old) %.4f != %.4f (copy)] on rank %d\n", name, i, pid, dbls1(pid,i),
+          printf("[ERROR] Particle's dbl %d does not match for particle %d"
+                 "[(old) %.4f != %.4f (copy)] on rank %d\n", i, pid, dbls1(pid,i),
                  dbls2(pid,i), local_rank);
           failure(0) = 1;
       }
@@ -337,5 +438,140 @@ int testCopy(const char* name, PS* structure) {
             name);
     ++fails;
   }
+  delete device_structure;
+  return fails;
+}
+
+int testSegmentComp(const char* name, PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  auto dbls = structure->get<1>();
+  auto setComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto dbl_seg = dbls.getComponents(p);
+    for (int i = 0; i < 3; ++i)
+      dbl_seg(i) = e * (i + 1);
+  };
+  pumipic::parallel_for(structure, setComponents, "Set components");
+
+  const double TOL = .00001;
+  auto checkComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto comps = dbls.getComponents(p);
+    for (int i = 0; i < 3; ++i) {
+      if (abs(comps[i] - e * (i + 1)) > TOL) {
+        printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
+               p, i, comps[i], e * (i + 1));
+        Kokkos::atomic_add(&(failures[0]), 1);
+      }
+    }
+  };
+  pumipic::parallel_for(structure, checkComponents, "Check components");
+  fails += pumipic::getLastValue<lid_t>(failures);
+
+  return fails;
+}
+
+int migrateToEmptyAndRefill(const char* name, PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  int originalPtcls = structure->nPtcls();
+
+  kkLidView new_element("new_element", structure->capacity());
+  kkLidView new_process("new_process", structure->capacity());
+
+  int local_rank = comm_rank;
+  int local_csize = comm_size;
+  auto rnks = structure->get<3>();
+  auto elem = structure->get<2>();
+  int num_elems = structure->nElems();
+
+  auto sendToOdd = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    rnks(p) = local_rank;
+    elem(p) = e;
+    if (mask) {
+      if (local_rank % 2 == 0) {
+        new_process(p) = (local_rank + 1) % local_csize;
+        new_element(p) = num_elems - 1;
+      }
+      else {
+        new_process(p) = local_rank;
+        new_element(p) = e;
+      }
+    }
+    else {
+      new_element(p) = e;
+      new_process(p) = local_rank;
+    }
+  };
+  ps::parallel_for(structure, sendToOdd, "sendToOdd");
+  structure->migrate(new_element, new_process);
+
+  if (comm_rank % 2 == 0 && (comm_rank != 0 || comm_size % 2 == 0)) {
+    if (structure->nPtcls() != 0) {
+      ++fails;
+      fprintf(stderr, "[ERROR] Particles remain on rank %d\n", comm_rank);
+    }
+    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+      if (mask) {
+        failures(0) = 1;
+        printf("[ERROR] Particle %d remains on rank %d\n", p, local_rank);
+      }
+    };
+    ps::parallel_for(structure, checkPtcls, "checkPtcls");
+  }
+  else {
+    if (structure->nPtcls() < originalPtcls) {
+      ++fails;
+      fprintf(stderr, "[ERROR] No particles on rank %d\n", comm_rank);
+    }
+    const int prev_rank = ((comm_rank - 1) + comm_size) % comm_size;
+    auto new_rnks = structure->get<3>();
+    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+      if (mask) {
+        if (new_rnks(p) != local_rank && new_rnks(p) !=  prev_rank) {
+          failures(0) = 1;
+          printf("[ERROR] Particle %d is not from ranks %d or %d\n", p, local_rank, prev_rank);
+        }
+      }
+    };
+    ps::parallel_for(structure, checkPtcls, "checkPtcls");
+  }
+
+  //Send Particles back to original process
+  rnks = structure->get<3>();
+  new_element = kkLidView("new_element", structure->capacity());
+  new_process = kkLidView("new_process", structure->capacity());
+  auto sendToOrig = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    new_element(p) = e;
+    if (mask) {
+      new_process(p) = rnks(p);
+    }
+    else {
+      new_process(p) = local_rank;
+    }
+  };
+  ps::parallel_for(structure, sendToOrig, "sendToOrig");
+  structure->migrate(new_element, new_process);
+
+  if (structure->nPtcls() != originalPtcls) {
+    ++fails;
+    fprintf(stderr, "[ERROR] Number of particles does not match original on "
+            "rank %d [%d != %d]\n", comm_rank, structure->nPtcls(), originalPtcls);
+  }
+
+  auto elems = structure->get<2>();
+  new_element = kkLidView("new_element", structure->capacity());
+  auto resetElements = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    if (mask) {
+      new_element(p) = elems(p);
+    }
+    else {
+      new_element(p) = e;
+    }
+  };
+  structure->rebuild(new_element);
+
+  fails += pumipic::getLastValue<lid_t>(failures);
   return fails;
 }

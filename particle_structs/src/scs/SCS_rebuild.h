@@ -6,7 +6,7 @@ namespace pumipic {
                                                    kkLidView new_particle_elements,
                                                    MTVs new_particles) {
     //Count current/new particles per row
-    kkLidView new_particles_per_row("new_particles_per_row", numRows());
+    kkLidView new_particles_per_row("new_particles_per_row", numRows()+1);
     kkLidView num_holes_per_row("num_holes_per_row", numRows());
     kkLidView element_to_row_local = element_to_row;
     auto particle_mask_local = particle_mask;
@@ -46,13 +46,8 @@ namespace pumipic {
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
     kkLidView counting_offset_index("counting_offset_index", numRows() + 1);
-    Kokkos::parallel_scan(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& cur, const bool& final) {
-        cur += new_particles_per_row(i);
-        if (final) {
-          offset_new_particles(i+1) = cur;
-          counting_offset_index(i+1) = cur;
-        }
-      });
+    exclusive_scan(new_particles_per_row, offset_new_particles);
+    Kokkos::deep_copy(counting_offset_index, offset_new_particles);
 
     int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
     if (num_moving_ptcls == 0) {
@@ -135,11 +130,7 @@ namespace pumipic {
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-    //If tryShuffling is on and shuffling works then rebuild is complete
-    if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
-      Kokkos::Profiling::popRegion();
-      return;
-    }
+    //Count particles including new and leaving
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
     auto countNewParticles = PS_LAMBDA(lid_t element_id,lid_t particle_id, bool mask){
       const lid_t new_elem = new_element(particle_id);
@@ -152,18 +143,38 @@ namespace pumipic {
         const lid_t new_elem = new_particle_elements(i);
         Kokkos::atomic_fetch_add(&(new_particles_per_elem(new_elem)), 1);
       });
+
+    //Reduce the count of particles
     lid_t activePtcls;
     Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
         sum+= new_particles_per_elem(i);
       }, activePtcls);
+
     //If there are no particles left, then destroy the structure
     if(activePtcls == 0) {
       num_ptcls = 0;
-      num_slices = 0;
-      capacity_ = 0;
-      num_rows = 0;
+      auto local_mask = particle_mask;
+      auto resetMask = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+        local_mask(p) = false;
+      };
+      parallel_for(resetMask, "resetMask");
+      if(!comm_rank || comm_rank == comm_size/2)
+        fprintf(stderr, "%d ps rebuild (seconds) %f pre-barrier (seconds) %f\n",
+                comm_rank, timer.seconds(), btime);
+      Kokkos::Profiling::popRegion();
+
       return;
     }
+
+    //If tryShuffling is on and shuffling works then rebuild is complete
+    if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
+      if(!comm_rank || comm_rank == comm_size/2)
+        fprintf(stderr, "%d ps rebuild (seconds) %f pre-barrier (seconds) %f\n",
+                comm_rank, timer.seconds(), btime);
+      Kokkos::Profiling::popRegion();
+      return;
+    }
+
     lid_t new_num_ptcls = activePtcls;
 
     int new_C = chooseChunkHeight(C_max, new_particles_per_elem);

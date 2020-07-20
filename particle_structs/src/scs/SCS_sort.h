@@ -9,7 +9,7 @@ namespace pumipic {
     ptcl_pairs = PairView("ptcl_pairs", num_elems);
     if (sigma > 1) {
       lid_t i;
-#ifdef PS_USE_CUDA
+#ifdef PP_USE_CUDA
       Kokkos::View<lid_t*, typename MemSpace::device_type> elem_ids("elem_ids", num_elems);
       Kokkos::View<lid_t*, typename MemSpace::device_type> temp_ppe("temp_ppe", num_elems);
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
@@ -28,10 +28,10 @@ namespace pumipic {
         });
 #else
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-          ptcl_pairs(num_elems).first = ptcls_per_elem(i);
-          ptcl_pairs(num_elems).second = i;
-        });
-      PairView::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
+        ptcl_pairs(i).first = ptcls_per_elem(i);
+        ptcl_pairs(i).second = i;
+      });
+      typename PairView::HostMirror ptcl_pairs_host = deviceToHost(ptcl_pairs);
       MyPair* ptcl_pair_data = ptcl_pairs_host.data();
       for (i = 0; i < num_elems - sigma; i+=sigma) {
         std::sort(ptcl_pair_data + i, ptcl_pair_data + i + sigma);
@@ -42,9 +42,9 @@ namespace pumipic {
     }
     else {
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-          ptcl_pairs(i).first = ptcls_per_elem(i);
-          ptcl_pairs(i).second = i;
-        });
+        ptcl_pairs(i).first = ptcls_per_elem(i);
+        ptcl_pairs(i).second = i;
+      });
     }
   }
 }

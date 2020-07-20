@@ -1,6 +1,6 @@
 #include <fstream>
 
-#include <Omega_h_file.hpp> 
+#include <Omega_h_file.hpp>
 
 #include <pumipic_mesh.hpp>
 
@@ -24,26 +24,13 @@ int main(int argc, char** argv) {
   int dim = mesh.dim();
   int ne = mesh.nents(dim);
   if (rank == 0)
-    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(), 
+    printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(),
            mesh.nfaces(), mesh.nelems());
 
   //********* Load the partition vector ***********//
-  Omega_h::HostWrite<Omega_h::LO> host_owners(ne);
-  std::ifstream in_str(argv[2]);
-  if (!in_str) {
-    if (!rank)
-      fprintf(stderr,"Cannot open file %s\n", argv[2]);
-    MPI_Finalize();
-    return EXIT_FAILURE;
-  }
-  int own;
-  int index = 0;
-  while(in_str >> own) 
-    host_owners[index++] = own;
-  //Owner of each element
-  Omega_h::Write<Omega_h::LO> owner(host_owners);
+  pumipic::Input input(mesh, argv[2], pumipic::Input::FULL, pumipic::Input::FULL);
 
-  pumipic::Mesh picparts(mesh,owner);
+  pumipic::Mesh picparts(input);
 
   for (int i = 0; i <= mesh.dim(); ++i) {
     if (mesh.nents(i) != picparts.mesh()->nents(i)) {

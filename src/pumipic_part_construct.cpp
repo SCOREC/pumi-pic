@@ -6,6 +6,7 @@
 #include <Omega_h_int_scan.hpp>
 #include <Omega_h_scan.hpp>
 #include <Omega_h_file.hpp>
+
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners, int self,
                                 Omega_h::Write<Omega_h::LO> owns);
@@ -26,6 +27,9 @@ namespace {
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
                         Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
                         Omega_h::Write<Omega_h::Real> new_coords);
+  template <class T>
+  void convertTag(Omega_h::Mesh full_mesh, Omega_h::Mesh* picpart, int dim,
+                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tag);
 }
 
 namespace pumipic {
@@ -100,7 +104,7 @@ namespace pumipic {
 
   void Mesh::constructPICPart(Omega_h::Mesh& mesh, Omega_h::CommPtr comm,
                               Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> has_part,
-                              Omega_h::Write<Omega_h::LO> is_safe) {
+                              Omega_h::Write<Omega_h::LO> is_safe, bool render) {
     int rank = comm->rank();
     int comm_size = comm->size();
     int dim = mesh.dim();
@@ -114,16 +118,20 @@ namespace pumipic {
     owner_dim[dim] = owner;
     mesh.add_tag(dim, "ownership", 1, owner_dim[dim]);
 
+    mesh.add_tag(dim, "safe", 1, Omega_h::LOs(is_safe));
+    if (render && rank == 0)
+      Omega_h::vtk::write_parallel("partition", &mesh, dim);
     /************* Globally Number Entities **********/
-    Omega_h::GOs ent_gid_per_dim[4];
     Omega_h::LOs rank_lid_per_dim[4];
     Omega_h::LOs rank_offset_nents[4];
     for (int i = 0; i <= dim; ++i) {
       Omega_h::Write<Omega_h::GO> gids(mesh.nents(i), "global_ids");
       rank_offset_nents[i] = createGlobalNumbering(owner_dim[i], comm_size, gids);
-      ent_gid_per_dim[i] = Omega_h::GOs(gids);
-      rank_lid_per_dim[i] = rankLidNumbering(owner_dim[i], rank_offset_nents[i],
-                                             ent_gid_per_dim[i]);
+      auto ent_gids = Omega_h::GOs(gids);
+      mesh.add_tag(i, "gids", 1, ent_gids);
+      auto rank_lids = rankLidNumbering(owner_dim[i], rank_offset_nents[i],
+                                        ent_gids);
+      mesh.add_tag(i, "rank_lids", 1, rank_lids);
     }
 
     /***************** Count the number of parts in the picpart ****************/
@@ -163,18 +171,15 @@ namespace pumipic {
     if (isFullMesh()) {
       //Set picpart to point to the mesh
       picpart = &mesh;
-      is_ent_safe = Omega_h::LOs(is_safe);
       commptr = comm;
       //Save all tags on full mesh
       for (int i = 0; i <= dim; ++i) {
-        global_ids_per_dim[i] = ent_gid_per_dim[i];
-        rank_lids_per_dim[i] = rank_lid_per_dim[i];
-        ent_owner_per_dim[i] = owner_dim[i];
         //We dont need to setup communication arrays because an allreduce is used
         Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(owner_dim[i], comm_size);
         setupComm(i, rank_offset_nents[i], picpart_offset_nents, owner_dim[i]);
 
       }
+      delete [] num_ents;
       return;
     }
 
@@ -197,46 +202,43 @@ namespace pumipic {
 
     delete [] num_ents;
 
-    //****************Convert Safe Tags to the picpart***********
-    Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0, "safe_tag");
-    Omega_h::LOs elm_ids = ent_ids[dim];
-    const auto convertSafeToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
-      const Omega_h::LO new_elem = elm_ids[elem_id];
-      if (new_elem >= 0) {
-        new_safe[new_elem] = is_safe[elem_id];
-      }
-    };
-    Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
-    picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
-    is_ent_safe = Omega_h::LOs(new_safe);
+    // //****************Convert Safe Tags to the picpart***********
+    // Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0, "safe_tag");
+    // Omega_h::LOs elm_ids = ent_ids[dim];
+    // const auto convertSafeToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
+    //   const Omega_h::LO new_elem = elm_ids[elem_id];
+    //   if (new_elem >= 0) {
+    //     new_safe[new_elem] = is_safe[elem_id];
+    //   }
+    // };
+    // Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
+    // picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
+    // is_ent_safe = Omega_h::LOs(new_safe);
 
     commptr = comm;
     /****************Convert gids of each dim to the picpart***********/
     for (int i = 0; i <= dim; ++i) {
-      Omega_h::Write<Omega_h::GO> new_ent_gid(picpart->nents(i), 0);
-      Omega_h::Write<Omega_h::LO> new_ent_owners(picpart->nents(i), 0);
-      Omega_h::Write<Omega_h::LO> new_ent_rlids(picpart->nents(i), 0);
-      Omega_h::GOs ent_gid = ent_gid_per_dim[i];
-      Omega_h::LOs ent_ids_cpy = ent_ids[i];
-      Omega_h::LOs ent_owners = owner_dim[i];
-      Omega_h::LOs ent_rlids = rank_lid_per_dim[i];
-      const auto convertArraysToPicpart = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
-        const Omega_h::LO new_ent = ent_ids_cpy[ent_id];
-        //TODO remove this conditional using padding?
-        if (new_ent >= 0) {
-          new_ent_gid[new_ent] = ent_gid[ent_id];
-          new_ent_owners[new_ent] = ent_owners[ent_id];
-          new_ent_rlids[new_ent] = ent_rlids[ent_id];
-        }
-      };
-      Omega_h::parallel_for(mesh.nents(i), convertArraysToPicpart, "convertArraysToPicpart");
-      global_ids_per_dim[i] = Omega_h::GOs(new_ent_gid);
-      rank_lids_per_dim[i] = Omega_h::LOs(new_ent_rlids);
-      ent_owner_per_dim[i] = Omega_h::LOs(new_ent_owners);
-
+      //Move tags from old mesh to new mesh
+      for (int j = 0; j < mesh.ntags(i); ++j) {
+        Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
+        // Ignore Omega_h internal tags
+        if (tagbase->name() == "global" ||
+            tagbase->name() == "coordinates" ||
+            tagbase->name() == "class_dim" ||
+            tagbase->name() == "class_id")
+          continue;
+        if (tagbase->type() == OMEGA_H_I8)
+          convertTag<Omega_h::I8>(mesh, picpart, i, ent_ids[i], tagbase);
+        if (tagbase->type() == OMEGA_H_I32)
+          convertTag<Omega_h::I32>(mesh, picpart, i, ent_ids[i], tagbase);
+        if (tagbase->type() == OMEGA_H_I64)
+          convertTag<Omega_h::I64>(mesh, picpart, i, ent_ids[i], tagbase);
+        if (tagbase->type() == OMEGA_H_F64)
+          convertTag<Omega_h::Real>(mesh, picpart, i, ent_ids[i], tagbase);
+      }
       //**************** Build communication information ********************//
-      Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(new_ent_owners, comm_size);
-      setupComm(i, rank_offset_nents[i], picpart_offset_nents, new_ent_owners);
+      Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(entOwners(i), comm_size);
+      setupComm(i, rank_offset_nents[i], picpart_offset_nents, entOwners(i));
     }
   }
 }
@@ -246,8 +248,15 @@ namespace {
                                 Omega_h::Write<Omega_h::LO> owns) {
     auto class_ids = m.get_array<Omega_h::ClassId>(m.dim(), "class_id");
     Omega_h::Write<Omega_h::LO> selfcount(1,0,"selfcount");
+    int max_cids = class_owners.size();
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
+      if (c_id < 0)
+        printf("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
+      else if (c_id >= max_cids)
+        printf("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
       owns[id] = class_owners[c_id];
       const auto hasElm = (class_owners[c_id] == self);
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
@@ -480,5 +489,23 @@ namespace {
       Omega_h::build_from_elems_and_coords(picpart, full_mesh.family(), full_mesh.dim(),
                                          ent2v, new_coords);
     Omega_h::classify_equal_order(picpart, dim, ent2v, ent_class);
+  }
+
+  template <class T>
+  void convertTag(Omega_h::Mesh full_mesh, Omega_h::Mesh* picpart, int dim,
+                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tagbase) {
+    Omega_h::Read<T> tag = full_mesh.get_array<T>(dim, tagbase->name());
+    Omega_h::LO nents = full_mesh.nents(dim);
+    int nvalues = tag.size() / nents;
+    Omega_h::Write<T> new_tag(picpart->nents(dim) * nvalues);
+    auto convertTagValues = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
+      const Omega_h::LO new_ent = entToEnt[ent_id];
+      if (new_ent >= 0) {
+        for (int i = 0; i < nvalues; ++i)
+          new_tag[new_ent*nvalues + i] = tag[ent_id*nvalues + i];
+      }
+    };
+    Omega_h::parallel_for(nents, convertTagValues, "convertTagValues");
+    picpart->add_tag(dim, tagbase->name(), nvalues, Omega_h::Read<T>(new_tag));
   }
 }

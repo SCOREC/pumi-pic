@@ -34,6 +34,9 @@ namespace pumipic {
     void printInfo();
     static Method getMethod(std::string s);
 
+    Ownership getRule() const {return ownership_rule;}
+    Omega_h::LOs getPartition() const {return partition;}
+
     //Bridge dim for BFS (defaults to 0)
     int bridge_dim;
     //For Method = BFS, # of layers of BFS to go out to determine buffer (defaults to 3)

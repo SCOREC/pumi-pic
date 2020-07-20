@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     printf(", r");
   printf("> %d %d %d", mesh.nverts(), mesh.nedges(), mesh.nfaces());
   if (dim == 3)
-    printf("%d", mesh.nents(3));
+    printf(" %d", mesh.nents(3));
 printf("\n");
   //Check off all class ids with elements and count number of elements with each class id
   auto class_ids = mesh.get_array<Omega_h::ClassId>(dim, "class_id");

@@ -98,13 +98,13 @@ namespace pumipic {
                                                               GID_Mapping& elmGid2Lid) {
     elm2Gid = kkGidView("row to element gid", numRows());
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-        const gid_t gid = elmGid(i);
-        elm2Gid(i) = gid;
-        elmGid2Lid.insert(gid, i);
-      });
+      const gid_t gid = elmGid(i);
+      elm2Gid(i) = gid;
+      elmGid2Lid.insert(gid, i);
+    });
     Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, numRows()), KOKKOS_LAMBDA(const lid_t& i) {
-        elm2Gid(i) = -1;
-      });
+      elm2Gid(i) = -1;
+    });
   }
 
   template<class DataTypes, typename MemSpace>

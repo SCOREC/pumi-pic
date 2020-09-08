@@ -1,6 +1,7 @@
 set(HEADERS
   pumipic_adjacency.hpp
   pumipic_push.hpp
+  pumipic_lb.hpp
   pumipic_utils.hpp
   pumipic_constants.hpp
   pumipic_mesh.hpp
@@ -11,6 +12,7 @@ set(HEADERS
 )
 
 set(SOURCES
+  pumipic_lb.cpp
   pumipic_input.cpp
   pumipic_part_construct.cpp
   pumipic_comm.cpp
@@ -28,7 +30,10 @@ target_include_directories(pumipic-core INTERFACE
 target_link_libraries(pumipic-core
   support
   particleStructs
-  Omega_h::omega_h)
+  Omega_h::omega_h
+  EnGPar::engpar
+  SCOREC::pcu
+  )
 pumipic_export_lib(pumipic-core "${HEADERS}")
 
 # this INTERFACE target bundles all the enabled libraries together

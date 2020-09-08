@@ -124,11 +124,13 @@ namespace pumipic {
         const int new_rank = new_procs(ptcl);
         if (new_rank == comm_rank) {
           const int e = new_elems(ptcl);
-          int sbar_index = elem_sbars[e];
-          if (sbar_to_vert_local.exists(sbar_index)) {
-            auto index = sbar_to_vert_local.find(sbar_index);
-            const agi::lid_t vert_index = sbar_to_vert_local.value_at(index);
-            Kokkos::atomic_add(&(weights[vert_index]), 1.0);
+          if (e != -1) {
+            int sbar_index = elem_sbars[e];
+            if (sbar_to_vert_local.exists(sbar_index)) {
+              auto index = sbar_to_vert_local.find(sbar_index);
+              const agi::lid_t vert_index = sbar_to_vert_local.value_at(index);
+              Kokkos::atomic_add(&(weights[vert_index]), 1.0);
+            }
           }
         }
         else {
@@ -196,17 +198,19 @@ namespace pumipic {
       if (mask) {
         if (new_parts(ptcl) == comm_rank) {
           const int e = new_elems(ptcl);
-          const Omega_h::LO sbar = sbars[e];
-          if (sbar_to_index.exists(sbar)) {
-            const auto map_index = sbar_to_index.find(sbar);
-            const Omega_h::LO index = sbar_to_index.value_at(map_index);
-            const Omega_h::LO part = part_ids[index];
-            const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
-            if (part >= 0) {
-              if (wgt == 0)
-                Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
-              if (wgt > 0)
-                new_parts[ptcl] = part;
+          if (e != -1) {
+            const Omega_h::LO sbar = sbars[e];
+            if (sbar_to_index.exists(sbar)) {
+              const auto map_index = sbar_to_index.find(sbar);
+              const Omega_h::LO index = sbar_to_index.value_at(map_index);
+              const Omega_h::LO part = part_ids[index];
+              const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+              if (part >= 0) {
+                if (wgt == 0)
+                  Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+                if (wgt > 0)
+                  new_parts[ptcl] = part;
+              }
             }
           }
         }

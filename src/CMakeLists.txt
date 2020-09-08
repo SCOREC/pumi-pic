@@ -2,6 +2,7 @@ set(HEADERS
   pumipic_adjacency.hpp
   pumipic_push.hpp
   pumipic_lb.hpp
+  pumipic_ptcl_ops.hpp
   pumipic_utils.hpp
   pumipic_constants.hpp
   pumipic_mesh.hpp

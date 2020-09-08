@@ -131,7 +131,7 @@ void balancePtcls(pumipic::Mesh& picparts, PS* ptcls, pumipic::ParticleBalancer&
     }
   };
   pumipic::parallel_for(ptcls, setValues);
-  balancer.repartition(picparts, ptcls, new_elems, new_parts);
+  balancer.repartition(picparts, ptcls, 1.05, new_elems, new_parts);
 
   ptcls->migrate(new_elems, new_parts);
   printImb(ptcls);

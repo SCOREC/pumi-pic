@@ -158,7 +158,8 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
   int fails = 0;
   try {
-    PS* s = new ps::CSR<Types, MemSpace>(num_elems, num_ptcls, ppe,
+    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+    PS* s = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                          element_gids, particle_elements, particle_info);
     structures.push_back(s);
     names.push_back("csr");

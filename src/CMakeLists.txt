@@ -33,7 +33,7 @@ target_link_libraries(pumipic-core
   particleStructs
   Omega_h::omega_h
   EnGPar::engpar
-  SCOREC::pcu
+  EnGPar::pcu
   )
 pumipic_export_lib(pumipic-core "${HEADERS}")
 

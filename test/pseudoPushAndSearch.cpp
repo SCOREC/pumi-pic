@@ -33,23 +33,6 @@ void render(p::Mesh& picparts, int iter, int comm_rank) {
   Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 }
 
-void printImb(PS* ptcls) {
-  int np = ptcls->nPtcls();
-  int min_p, max_p, tot_p;
-  MPI_Reduce(&np, &min_p, 1, MPI_INT, MPI_MIN, 0, MPI_COMM_WORLD);
-  MPI_Reduce(&np, &max_p, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
-  MPI_Reduce(&np, &tot_p, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  int comm_size;
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  if (comm_rank == 0) {
-    float avg = tot_p / comm_size;
-    float imb = max_p / avg;
-    printf("Ptcl LB <max, min, avg, imb>: %d %d %.3f %.3f\n", max_p, min_p, avg, imb);
-  }
-}
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -188,7 +171,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   ps::parallel_for(ptcls, lamb);
 
   pumipic::migrate_lb_ptcls(picparts, ptcls, elem_ids, 1.05);
-  printImb(ptcls);
+  pumipic::printPtclImb(ptcls);
 
   int comm_rank = picparts.comm()->rank();
 

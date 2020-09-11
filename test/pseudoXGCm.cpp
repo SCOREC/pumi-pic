@@ -125,6 +125,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist,
   ps::parallel_for(ptcls, printElmIds);
 
   pumipic::migrate_lb_ptcls(picparts, ptcls, elem_ids, 1.05);
+  pumipic::printPtclImb(ptcls);
 
   int comm_rank = picparts.comm()->rank();
 

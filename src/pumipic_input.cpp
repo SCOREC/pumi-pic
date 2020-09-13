@@ -107,7 +107,6 @@ namespace pumipic {
       bufferBFSLayers = 0;
     if (safeMethod == MINIMUM)
       safeBFSLayers = 0;
-
   }
   Input::Input(Omega_h::Mesh& mesh, Ownership rule, Omega_h::LOs partition_vector,
                Method bufferMethod_, Method safeMethod_,

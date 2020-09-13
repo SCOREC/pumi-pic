@@ -16,7 +16,8 @@ namespace pumipic {
   /* template <> struct ThrustSpace<Kokkos::CudaSpace> { */
   /*   static constexpr thrust::detail::device_t space=thrust::device; */
   /* }; */
-  /* Wrapper around performing inclusive/exclusive scans
+  /* Wrapper around performing inclusive/exclusive scans.  For an exclusive scan
+     over an array of length N, the 'entries' and 'result' array need to be length N+1.
      Note: These exist because kokkos scans on Summit/Aimos fail on occassion,
              however thrust scans work
 

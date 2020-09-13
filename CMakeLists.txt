@@ -53,6 +53,11 @@ message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with 
 string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
 message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
+find_package(EnGPar REQUIRED)
+set(ENGPAR_ENABLED true)
+include_directories(${ENGPAR_INCLUDE_DIR})
+message(STATUS "Found EnGPar")
+
 # bob package creation {
 set(particle_structures_USE_Kokkos_DEFAULT ON)
 get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY)

@@ -13,6 +13,7 @@ namespace pumipic {
   private:
     Omega_h::Library* oh_lib;
     bool own_kokkos;
+    bool own_pcu;
     bool own_mpi;
   };
 }

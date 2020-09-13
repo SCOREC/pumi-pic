@@ -6,6 +6,7 @@
 #include <Omega_h_int_scan.hpp>
 #include <Omega_h_scan.hpp>
 #include <Omega_h_file.hpp>
+#include "pumipic_lb.hpp"
 
 namespace {
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners, int self,
@@ -171,75 +172,60 @@ namespace pumipic {
     if (isFullMesh()) {
       //Set picpart to point to the mesh
       picpart = &mesh;
-      commptr = comm;
-      //Save all tags on full mesh
-      for (int i = 0; i <= dim; ++i) {
-        //We dont need to setup communication arrays because an allreduce is used
-        Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(owner_dim[i], comm_size);
-        setupComm(i, rank_offset_nents[i], picpart_offset_nents, owner_dim[i]);
-
-      }
-      delete [] num_ents;
-      return;
     }
-
     //************Build a new mesh as the picpart**************
-    Omega_h::Library* lib = mesh.library();
-    picpart = new Omega_h::Mesh(lib);
+    else {
+      Omega_h::Library* lib = mesh.library();
+      picpart = new Omega_h::Mesh(lib);
 
-    //Gather coordinates
-    Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
-    gatherCoords(mesh, ent_ids[0], new_coords);
+      //Gather coordinates
+      Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
+      gatherCoords(mesh, ent_ids[0], new_coords);
 
-    //Build the mesh
-    for (int i = dim; i >= 0; --i)
-      buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
-    Omega_h::finalize_classification(picpart);
-    if(!picpart->nelems()) {
-      fprintf(stderr,"%s: empty part on rank %d\n", __func__, rank);
+      //Build the mesh
+      for (int i = dim; i >= 0; --i)
+        buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
+      Omega_h::finalize_classification(picpart);
+      if(!picpart->nelems()) {
+        fprintf(stderr,"%s: empty part on rank %d\n", __func__, rank);
+      }
+      assert(picpart->nelems());
+
+      /****************Convert all tags to picparts****************/
+      for (int i = 0; i <= dim; ++i) {
+        //Move tags from old mesh to new mesh
+        for (int j = 0; j < mesh.ntags(i); ++j) {
+          Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
+          // Ignore Omega_h internal tags
+          if (tagbase->name() == "global" ||
+              tagbase->name() == "coordinates" ||
+              tagbase->name() == "class_dim" ||
+              tagbase->name() == "class_id")
+            continue;
+          if (tagbase->type() == OMEGA_H_I8)
+            convertTag<Omega_h::I8>(mesh, picpart, i, ent_ids[i], tagbase);
+          if (tagbase->type() == OMEGA_H_I32)
+            convertTag<Omega_h::I32>(mesh, picpart, i, ent_ids[i], tagbase);
+          if (tagbase->type() == OMEGA_H_I64)
+            convertTag<Omega_h::I64>(mesh, picpart, i, ent_ids[i], tagbase);
+          if (tagbase->type() == OMEGA_H_F64)
+            convertTag<Omega_h::Real>(mesh, picpart, i, ent_ids[i], tagbase);
+        }
+      }
     }
-    assert(picpart->nelems());
 
     delete [] num_ents;
-
-    // //****************Convert Safe Tags to the picpart***********
-    // Omega_h::Write<Omega_h::LO> new_safe(picpart->nelems(), 0, "safe_tag");
-    // Omega_h::LOs elm_ids = ent_ids[dim];
-    // const auto convertSafeToPicpart = OMEGA_H_LAMBDA(Omega_h::LO elem_id) {
-    //   const Omega_h::LO new_elem = elm_ids[elem_id];
-    //   if (new_elem >= 0) {
-    //     new_safe[new_elem] = is_safe[elem_id];
-    //   }
-    // };
-    // Omega_h::parallel_for(mesh.nelems(), convertSafeToPicpart, "convertSafeToPicpart");
-    // picpart->add_tag(dim, "safe", 1, Omega_h::LOs(new_safe));
-    // is_ent_safe = Omega_h::LOs(new_safe);
-
     commptr = comm;
-    /****************Convert gids of each dim to the picpart***********/
+
+    //**************** Build communication information ********************//
     for (int i = 0; i <= dim; ++i) {
-      //Move tags from old mesh to new mesh
-      for (int j = 0; j < mesh.ntags(i); ++j) {
-        Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
-        // Ignore Omega_h internal tags
-        if (tagbase->name() == "global" ||
-            tagbase->name() == "coordinates" ||
-            tagbase->name() == "class_dim" ||
-            tagbase->name() == "class_id")
-          continue;
-        if (tagbase->type() == OMEGA_H_I8)
-          convertTag<Omega_h::I8>(mesh, picpart, i, ent_ids[i], tagbase);
-        if (tagbase->type() == OMEGA_H_I32)
-          convertTag<Omega_h::I32>(mesh, picpart, i, ent_ids[i], tagbase);
-        if (tagbase->type() == OMEGA_H_I64)
-          convertTag<Omega_h::I64>(mesh, picpart, i, ent_ids[i], tagbase);
-        if (tagbase->type() == OMEGA_H_F64)
-          convertTag<Omega_h::Real>(mesh, picpart, i, ent_ids[i], tagbase);
-      }
-      //**************** Build communication information ********************//
       Omega_h::LOs picpart_offset_nents = calculateOwnerOffset(entOwners(i), comm_size);
       setupComm(i, rank_offset_nents[i], picpart_offset_nents, entOwners(i));
     }
+
+    //Create load balancer
+    ptcl_balancer = new ParticleBalancer(*this);
+
   }
 }
 

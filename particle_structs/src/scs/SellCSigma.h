@@ -261,7 +261,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   //Create offsets into each chunk/vertical slice
   constructOffsets(num_chunks, num_slices, chunk_widths, offsets, slice_to_chunk,capacity_);
 
-  //Allocate the SCS and backup with 10% extra space
+  //Allocate the SCS and backup with extra space
   lid_t cap = capacity_;
   particle_mask = kkLidView("particle_mask", cap);
   if (extra_padding > 0)

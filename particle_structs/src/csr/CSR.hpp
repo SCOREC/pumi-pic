@@ -96,11 +96,14 @@ namespace pumipic {
       auto offset_cpy = offsets; 
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
-      kkLidView row_indices("row indces", num_elems);
-      
-      Kokkos::parallel_for("row indices", num_elems, KOKKOS_LAMBDA(const int& i){
-        row_indices(i) = offset_cpy(i); //just using offsets here also works
-      });
+      //kkLidView row_indices("row indces", num_elems);
+      kkLidView row_indices("row indces", num_elems+1);
+      Kokkos::deep_copy(row_indices, offset_cpy);
+      //I think deep_copy gets the job done here and is likely faster than opening up
+      //a parallel region
+      //Kokkos::parallel_for("row indices", num_elems, KOKKOS_LAMBDA(const int& i){
+      //  row_indices(i) = offset_cpy(i);
+      //});
 
       Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
         particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);

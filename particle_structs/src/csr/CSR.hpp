@@ -23,6 +23,9 @@ namespace {
         KOKKOS_LAMBDA (const int& i, int& lsum ) {
           //SS0 use a kokkos parallel_reduce to count the number of elements
           //that have at least one particle
+	  if(particles_per_element( i ) > 0) {
+            lsum += 1;
+	  }
         }, count);
     return count;
   }
@@ -93,6 +96,16 @@ namespace pumipic {
       auto offset_cpy = offsets; 
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
+      kkLidView row_indices("row indces", num_elems);
+      
+      Kokkos::parallel_for("row indices", num_elems, KOKKOS_LAMBDA(const int& i){
+        row_indices(i) = offset_cpy(i); //just using offsets here also works
+      });
+
+      Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
+        particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
+      });
+
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
     }
     // } ... or else!
@@ -138,12 +151,15 @@ namespace pumipic {
     //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     //to fill the entries of the offsets array.
     //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    
+    offsets = kkLidView("offsets", num_elems+1); 
+    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
+    exclusive_scan(particles_per_element, offsets);
+
     //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     //pumi-pic/support/SupportKK.h has a helper function for this
-
+    capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
-    CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
+    CreateViews<device_type, DataTypes>(ptcl_data, capacity_); 
 
     //If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();

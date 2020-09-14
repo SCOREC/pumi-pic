@@ -139,6 +139,7 @@ namespace pumipic {
   {
     Kokkos::Profiling::pushRegion("csr_construction");
     num_elems = num_elements;
+    num_rows = num_elems;
     num_ptcls = num_particles;
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
@@ -146,8 +147,9 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
 
-    //count elements with particles
-    num_rows = countElmsWithPtcls(particles_per_element);
+    //count elements with particles - now just setting num_rows to num_elems above
+    //num_rows = countElmsWithPtcls(particles_per_element);
+
     //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     //to fill the entries of the offsets array.
     //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function

@@ -23,9 +23,9 @@ namespace {
         KOKKOS_LAMBDA (const int& i, int& lsum ) {
           //SS0 use a kokkos parallel_reduce to count the number of elements
           //that have at least one particle
-	  if(particles_per_element( i ) > 0) {
-            lsum += 1;
-	  }
+//	  if(particles_per_element( i ) > 0) {
+ //           lsum += 1;
+//	  }
         }, count);
     return count;
   }
@@ -96,7 +96,6 @@ namespace pumipic {
       auto offset_cpy = offsets; 
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
-      //kkLidView row_indices("row indces", num_elems);
       kkLidView row_indices("row indces", num_elems+1);
       Kokkos::deep_copy(row_indices, offset_cpy);
       //I think deep_copy gets the job done here and is likely faster than opening up
@@ -106,7 +105,7 @@ namespace pumipic {
       //});
 
       Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
-        particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
+    //    particle_indices(i) = Kokkos::atomic_fetch_add(&(row_indices(particle_elements(i))), 1);
       });
 
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
@@ -156,13 +155,13 @@ namespace pumipic {
     //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     //to fill the entries of the offsets array.
     //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView("offsets", num_elems+1); 
-    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
-    exclusive_scan(particles_per_element, offsets);
-
+//    offsets = kkLidView("offsets", num_elems+1); 
+//    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
+//    exclusive_scan(particles_per_element, offsets);
+//
     //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     //pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets);
+//    capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_); 
 
@@ -231,5 +230,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::printMetrics() const {
     fprintf(stderr, "csr capacity %d\n", capacity_);
+    //fprintf(stderr, "number elements %d\n", num_elems);
+    //fprintf(stderr, "number particles %d\n", num_ptcls);
   }
 }

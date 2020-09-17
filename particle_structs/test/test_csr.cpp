@@ -129,11 +129,14 @@ int testSegmentComp(PS* structure) {
 }
 
 int checkPtclElem(ps::CSR<Types>* structure, kkLidView particle_elements){
+  //Fail count and accessing structure member variables
   int fails = 0;
   kkLidView failures("fails", 1);
   auto offsets_cpy = structure->getOffsets();
   auto pIDs = ps::getMemberView<Types,0>(structure->getPtcl_data());
 
+  //Parallel_for checking that all particles are in the correct
+  //element (row) inside structure (rows indexed by offsets)
   Kokkos::parallel_for("checkPtclElems", pIDs.size(), 
       KOKKOS_LAMBDA(const int& i){
     lid_t id = pIDs(i);

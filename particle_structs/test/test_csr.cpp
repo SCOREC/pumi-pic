@@ -128,6 +128,29 @@ int testSegmentComp(PS* structure) {
   return fails;
 }
 
+int checkPtclElem(ps::CSR<Types>* structure, kkLidView particle_elements){
+  int fails = 0;
+  kkLidView failures("fails", 1);
+  auto offsets_cpy = structure->getOffsets();
+  auto pIDs = ps::getMemberView<Types,0>(structure->getPtcl_data());
+
+  Kokkos::parallel_for("checkPtclElems", pIDs.size(), 
+      KOKKOS_LAMBDA(const int& i){
+    lid_t id = pIDs(i);
+    lid_t elem = particle_elements(id);
+    lid_t row_start = offsets_cpy(elem);
+    lid_t row_end = offsets_cpy(elem + 1);
+
+    if( (i < row_start) || (i >= row_end) ){
+      failures[0] += 1;
+      printf("Particle %d\t assigned to incorrect element (should be %d)\n", id,elem);
+    } 
+  });
+
+  fails += pumipic::getLastValue<lid_t>(failures);
+  return fails;
+}
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
@@ -157,7 +180,7 @@ int main(int argc, char* argv[]) {
                 particle_elements, particle_info);
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
-  PS* csr = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, 
+  ps::CSR<Types,MemSpace>* csr = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, 
                                       ppe, element_gids, particle_elements, particle_info);
   //Run tests
   fails += testCounts(csr, num_elems, num_ptcls);
@@ -165,6 +188,7 @@ int main(int argc, char* argv[]) {
   fails += setValues(csr);
   fails += testMetrics(csr);
   fails += testSegmentComp(csr);
+  fails += checkPtclElem(csr,particle_elements);
 
   //Cleanup
   ps::destroyViews<Types>(particle_info);

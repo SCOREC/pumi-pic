@@ -48,12 +48,12 @@ namespace {
   template <typename ppView>
   void reassignPtclElems(ppView particle_elements,ppView particles_per_element,int flag){
     if(flag == 1){
-      Kokkos::parallel_for("testing init 0", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
+      Kokkos::parallel_for("testing init 1", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
         particle_elements(i) = i%5;
       });
     }
     else if(flag == 2){ //uneven distribution of particles
-      Kokkos::parallel_for("testing init 1", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
+      Kokkos::parallel_for("testing init 2", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
         if(i%10 > 4) particle_elements(i) = 4;
         else particle_elements(i) = i%5;
       });
@@ -67,7 +67,7 @@ namespace {
       });
     }
     else if(flag == 3){ //some empty elements
-      Kokkos::parallel_for("testing init 1", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
+      Kokkos::parallel_for("testing init 3", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
         if(i > 21) particle_elements(i) = 0;
         else if(i > 18) particle_elements(i) = 1;
         else if(i > 12) particle_elements(i) = 3;
@@ -120,6 +120,8 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
 
+    kkLidView getOffsets() { return offsets; }
+    MTVs getPtcl_data() { return ptcl_data; }
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
@@ -147,18 +149,13 @@ namespace pumipic {
       //CSR offsets array and an atomic_fetch_add to compute these entries.
       lid_t given_particles = particle_elements.size();
       assert(given_particles == num_ptcls);
+
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
       auto offset_cpy = offsets; 
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
-      //kkLidView row_indices("row indces", num_elems);
       kkLidView row_indices("row indces", num_elems+1);
       Kokkos::deep_copy(row_indices, offset_cpy);
-      //I think deep_copy gets the job done here and is likely faster than opening up
-      //a parallel region
-      //Kokkos::parallel_for("row indices", num_elems, KOKKOS_LAMBDA(const int& i){
-      //  row_indices(i) = offset_cpy(i);
-      //});
 
       Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
         particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
@@ -205,10 +202,8 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
 
-    //count elements with particles - now just setting num_rows to num_elems above
-    //num_rows = countElmsWithPtcls(particles_per_element);
-    int flag = 3;
     //new particles per element per flag into the reassign
+    int flag = 0;
     //Reassigning elements to check its working right
     reassignPtclElems(particle_elements,particles_per_element,flag);
 
@@ -224,18 +219,17 @@ namespace pumipic {
     capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_); 
-    printView(offsets);
+
+    //printView(offsets);
   
 
     //Checking input data to verify against once placed into member variable 
-    if(particle_info != NULL){
-      auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
-      auto vals1 = ps::getMemberView<DataTypes,1>(particle_info);
-      auto vals2 = ps::getMemberView<DataTypes,2>(particle_info);
-      auto vals3 = ps::getMemberView<DataTypes,3>(particle_info);
+    //if(particle_info != NULL){
+    //  auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
+    //  auto vals2 = ps::getMemberView<DataTypes,2>(particle_info);
 
-      printView(pIDs,vals2,particle_elements);
-    }
+    //  printView(pIDs,vals2,particle_elements);
+    //}
 
 
     //If particle info is provided then enter the information
@@ -246,8 +240,8 @@ namespace pumipic {
     }
 
     //print to inspect if placed in correct slots
-    auto pIDs  = ps::getMemberView<DataTypes,0>(ptcl_data);
-    printView(pIDs);
+  //  auto pIDs  = ps::getMemberView<DataTypes,0>(ptcl_data);
+  //  printView(pIDs);
 
     if(!comm_rank)
       fprintf(stderr, "Building CSR done\n");

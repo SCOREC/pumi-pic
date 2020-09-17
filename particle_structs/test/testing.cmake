@@ -25,6 +25,7 @@ add_test(NAME write_ptcl_empty COMMAND mpirun -np 4 ./write_particles 0 0 0 0 em
 add_test(NAME write_ptcl_noptcls COMMAND mpirun -np 4 ./write_particles 100 0 0 0 no_ptcls_e100)
 
 add_test(NAME test_csr_small COMMAND ./test_csr small_ptcls_e5_p25_r0)
+add_test(NAME test_csr_small2 COMMAND ./test_csr small_ptcls_e5_p25_r4)
 add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
 add_test(NAME test_structures_small_4 COMMAND mpirun -np 4
   ./test_structure small_ptcls_e5_p25_r4)

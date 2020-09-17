@@ -143,7 +143,7 @@ int checkPtclElem(ps::CSR<Types>* structure, kkLidView particle_elements){
 
     if( (i < row_start) || (i >= row_end) ){
       failures[0] += 1;
-      printf("Particle %d\t assigned to incorrect element (should be %d)\n", id,elem);
+      printf("Particle %d\t assigned to incorrect element (should be element %d)\n", id,elem);
     } 
   });
 
@@ -155,6 +155,9 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
 
+  //Local count of fails
+  int fails = 0;
+  {
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
@@ -167,8 +170,6 @@ int main(int argc, char* argv[]) {
 
   char filename[256];
   sprintf(filename, "%s_%d.ptl", argv[1], comm_rank);
-  //Local count of fails
-  int fails = 0;
   //General structure parameters
   lid_t num_elems;
   lid_t num_ptcls;
@@ -199,6 +200,7 @@ int main(int argc, char* argv[]) {
       printf("All tests passed\n");
     else
       printf("%d tests failed\n", fails);
+  }
   }
   finalize();
   return fails;

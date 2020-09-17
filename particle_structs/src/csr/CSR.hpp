@@ -16,18 +16,7 @@ namespace {
           });
   }
 
- // print the contents of a broken down MTview for debugging
-  template <typename ppView,typename ppView1,typename ppView2>
-  void printView(ppView v0, ppView1 v1, ppView2 v2){
-      //printf("view: %s\n", v.label().c_str());
-      Kokkos::parallel_for("print_view",
-          v0.size(),
-          KOKKOS_LAMBDA (const int& i) {
-            printf("%d %d %d %d\n", i, v0(i), v1(i), v2(i));
-          });
-  }
-
-  // count the number of elements with particles
+  // count the number of elements with particles - remove this function?
   template <typename ppView>
   int countElmsWithPtcls(ppView particles_per_element){
     int count;
@@ -41,47 +30,6 @@ namespace {
 	  }
         }, count);
     return count;
-  }
-
-  //reassign particle elements to check if they get assigned properly in 
-  //initCrsData as an existing test currently does not exist
-  template <typename ppView>
-  void reassignPtclElems(ppView particle_elements,ppView particles_per_element,int flag){
-    if(flag == 1){
-      Kokkos::parallel_for("testing init 1", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
-        particle_elements(i) = i%5;
-      });
-    }
-    else if(flag == 2){ //uneven distribution of particles
-      Kokkos::parallel_for("testing init 2", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
-        if(i%10 > 4) particle_elements(i) = 4;
-        else particle_elements(i) = i%5;
-      });
-      Kokkos::parallel_for("new elem number", particles_per_element.size(),
-          KOKKOS_LAMBDA(const int& i){
-        if(i == 0) particles_per_element(i) = 3;
-        if(i == 1) particles_per_element(i) = 3;
-        if(i == 2) particles_per_element(i) = 3;
-        if(i == 3) particles_per_element(i) = 3;
-        if(i == 4) particles_per_element(i) = 13;
-      });
-    }
-    else if(flag == 3){ //some empty elements
-      Kokkos::parallel_for("testing init 3", particle_elements.size(), KOKKOS_LAMBDA(const int& i){
-        if(i > 21) particle_elements(i) = 0;
-        else if(i > 18) particle_elements(i) = 1;
-        else if(i > 12) particle_elements(i) = 3;
-        else particle_elements(i) = 4;
-      });
-      Kokkos::parallel_for("new elem number", particles_per_element.size(),
-          KOKKOS_LAMBDA(const int& i){
-        if(i == 0) particles_per_element(i) = 3;
-        if(i == 1) particles_per_element(i) = 3;
-        if(i == 2) particles_per_element(i) = 0;
-        if(i == 3) particles_per_element(i) = 6;
-        if(i == 4) particles_per_element(i) = 13;
-      });
-    }
   }
 }
 
@@ -157,16 +105,19 @@ namespace pumipic {
       kkLidView row_indices("row indces", num_elems+1);
       Kokkos::deep_copy(row_indices, offset_cpy);
 
+      //atomic_fetch_add to increment from the beginning of each element
+      //when filling (offset[element] is start of element)
       Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
         particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
       });
 
+      //populate ptcl_data with input data and particle_indices mapping
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
     }
     // } ... or else!
 
   private:
-    //The User defined kokkos policy
+    //The User defined Kokkos policy
     PolicyType policy;
 
     //Variables from ParticleStructure
@@ -202,11 +153,6 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
 
-    //new particles per element per flag into the reassign
-    int flag = 0;
-    //Reassigning elements to check its working right
-    reassignPtclElems(particle_elements,particles_per_element,flag);
-
     //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     //to fill the entries of the offsets array.
     //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
@@ -220,28 +166,12 @@ namespace pumipic {
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_); 
 
-    //printView(offsets);
-  
-
-    //Checking input data to verify against once placed into member variable 
-    //if(particle_info != NULL){
-    //  auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
-    //  auto vals2 = ps::getMemberView<DataTypes,2>(particle_info);
-
-    //  printView(pIDs,vals2,particle_elements);
-    //}
-
-
     //If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
     if (given_particles > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
       initCsrData(particle_elements, particle_info);
     }
-
-    //print to inspect if placed in correct slots
-  //  auto pIDs  = ps::getMemberView<DataTypes,0>(ptcl_data);
-  //  printView(pIDs);
 
     if(!comm_rank)
       fprintf(stderr, "Building CSR done\n");

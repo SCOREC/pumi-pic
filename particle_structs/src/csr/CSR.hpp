@@ -228,34 +228,57 @@ namespace pumipic {
                                  countParticlesOnProcess(new_particle_elements);
     capacity_ = particles_on_process;
 
+    
+    //fresh filling of particles_per_element
+    kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
+    Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
+        KOKKOS_LAMBDA(const int& i){
+          if(new_element[i] > -1)
+            Kokkos::atomic_increment(particles_per_element[new_element[i]]);
+        });
+    Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
+        KOKKOS_LAMBDA(const int& i){
+          if(new_particle_elements[i] > -1)
+            Kokkos::atomic_increment(particles_per_element[new_partilce_elements[i]]);
+        });
+
+    Kokkos::fence();
 
     //refill offset here 
-   
+    offests = kkLidView("offsets", num_elems+1);
+    exclusive_scan(particles_per_element, offsets);
+    assert(capacity_ == getLastValue(offsets)); 
+
+    //need to combine particle->element mapping and particledata to new structures for init
+    //remove all off process particles in the process
+    kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
+    //for now assuming all particles remain on process (no -1 elements)
+
+    CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
+    Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
+        KOKKOS_LAMBDA(const int& i){
+          particle_elements(i) = new_element(i);    
+          particle_info(i) = ptcl_data(i);
+        });
+    Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
+        KOKKOS_LAMBDA(const int& i){
+          particle_elements(i+new_element.size()) = new_particle_elements(i);
+          particle_info(i+new_element.size()) = new_particles(i);
+        });
+    Kokkos::fence();
 
 
-    //initCSR data could likely be used as oppose to explicitly calling the constructor
+    Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
+    //initCsr data could likely be used as oppose to explicitly calling the constructor
     //and moving the reference to *this 
-
+    initCsrData(particle_elements, particle_info);
     //after all data is copied into new Views
-    destoryViews<DataTypes, MemSpace>(ptcl_data);
     offsets = new_offsets;
     num_ptcls = particles_on_process;
     capacity_ = num_ptcls;
     //num_rows remains unchanged
     //num_types remains unchanged
-  
- 
-
-
-
-    //policy p remains the same (stored in policy member variable)
-    //num_elements remains same, num_particles calc above, particles_per_element need
-    //to count, element gids should be optional, particle_elements comes from 2 input 
-    //parameters, particle_info merges new_particles and current ptcl_data
-    CSR(PolicyType& p, lid_t num_elements, lid_t num_particles,
-        kkLidView particles_per_element, kkGidView element_gids,      
-        kkLidView particle_elements, MTVs particle_info) 
-     
+    
     fprintf(stderr, "[WARNING] CSR rebuild(...) not implemented\n");
   }
 

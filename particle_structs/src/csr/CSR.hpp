@@ -31,6 +31,19 @@ namespace {
         }, count);
     return count;
   }
+
+  //helper function for rebuild to determine how much space to allocate
+  template <typename ppView>
+  int countParticlesOnProcess(ppView particle_elements){
+    int count = 0;
+    Kokkos::parallel_reduce("particle on process",
+        particle_elements.size(), KOKKOS_LAMBDA (const int& i, int& lsum){
+      if(particle_elements(i) > -1){
+        lsum += 1;
+      }
+    }, count);
+    return count;
+  }
 }
 
 
@@ -195,6 +208,42 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
+    //new_element - integers corresponding to which mesh element each particle
+    //is now assigned to, -1 if no longer on current process
+    //new_particle_elements - integers corresponding to which mesh element
+    //particles new to the process exist in (-1 should throw error)
+    //new_particles - MTV data associated with each of the particles added
+    //to the process
+    
+    //Gameplan - count how many entries are > -1 first to determine space to allocate
+    //           'merge' existing and new data for input to CSR constructor
+    //           construct new CSR based on that input 
+
+    lid_t particles_on_process = countParticlesOnProcess(new_element) + 
+                                 countParticlesOnProcess(new_particle_elements);
+
+
+    //after all data is copied into new Views
+    destoryViews<DataTypes, MemSpace>(ptcl_data);
+    offsets = new_offsets;
+    //num_elems remains unchanged;
+    num_ptcls = particles_on_process;
+    capacity_ = num_ptcls;
+    //num_rows remains unchanged
+    //num_types remains unchanged
+  
+ 
+
+
+
+    //policy p remains the same (stored in policy member variable)
+    //num_elements remains same, num_particles calc above, particles_per_element need
+    //to count, element gids should be optional, particle_elements comes from 2 input 
+    //parameters, particle_info merges new_particles and current ptcl_data
+    CSR(PolicyType& p, lid_t num_elements, lid_t num_particles,
+        kkLidView particles_per_element, kkGidView element_gids,      
+        kkLidView particle_elements, MTVs particle_info) 
+     
     fprintf(stderr, "[WARNING] CSR rebuild(...) not implemented\n");
   }
 

@@ -210,10 +210,15 @@ namespace pumipic {
                                          MTVs new_particles) {
     //new_element - integers corresponding to which mesh element each particle
     //is now assigned to, -1 if no longer on current process
+    //
+    //Do new_element's indices correspond with current location in CSR representation 
+    //or particle ID?
+    //
     //new_particle_elements - integers corresponding to which mesh element
     //particles new to the process exist in (-1 should throw error)
     //new_particles - MTV data associated with each of the particles added
     //to the process
+    //Assume these index respectively for new particles
     
     //Gameplan - count how many entries are > -1 first to determine space to allocate
     //           'merge' existing and new data for input to CSR constructor
@@ -221,12 +226,19 @@ namespace pumipic {
 
     lid_t particles_on_process = countParticlesOnProcess(new_element) + 
                                  countParticlesOnProcess(new_particle_elements);
+    capacity_ = particles_on_process;
 
+
+    //refill offset here 
+   
+
+
+    //initCSR data could likely be used as oppose to explicitly calling the constructor
+    //and moving the reference to *this 
 
     //after all data is copied into new Views
     destoryViews<DataTypes, MemSpace>(ptcl_data);
     offsets = new_offsets;
-    //num_elems remains unchanged;
     num_ptcls = particles_on_process;
     capacity_ = num_ptcls;
     //num_rows remains unchanged

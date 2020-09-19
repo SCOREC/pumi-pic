@@ -57,6 +57,8 @@ find_package(EnGPar REQUIRED)
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})
 message(STATUS "Found EnGPar")
+bob_public_dep(EnGPar)
+
 
 # bob package creation {
 set(particle_structures_USE_Kokkos_DEFAULT ON)

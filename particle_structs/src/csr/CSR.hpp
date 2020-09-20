@@ -208,6 +208,7 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
+    Kokkos::Profiling::pushRegion("CSR Rebuild");
     //new_element - integers corresponding to which mesh element each particle
     //is now assigned to, -1 if no longer on current process
     //
@@ -227,7 +228,6 @@ namespace pumipic {
     lid_t particles_on_process = countParticlesOnProcess(new_element) + 
                                  countParticlesOnProcess(new_particle_elements);
     capacity_ = particles_on_process;
-
     
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
@@ -238,8 +238,8 @@ namespace pumipic {
         });
     Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
-          if(new_particle_elements[i] > -1)
-            Kokkos::atomic_increment(particles_per_element[new_partilce_elements[i]]);
+          assert(new_particle_elements[i] > -1);
+          Kokkos::atomic_increment(particles_per_element[new_particle_elements[i]]);
         });
 
     Kokkos::fence();
@@ -252,7 +252,9 @@ namespace pumipic {
     //need to combine particle->element mapping and particledata to new structures for init
     //remove all off process particles in the process
     kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
+    ///////////////////////////////////////////////////////////////////////////
     //for now assuming all particles remain on process (no -1 elements)
+    ///////////////////////////////////////////////////////////////////////////
 
     CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
     Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
@@ -269,17 +271,14 @@ namespace pumipic {
 
 
     Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
-    //initCsr data could likely be used as oppose to explicitly calling the constructor
-    //and moving the reference to *this 
     initCsrData(particle_elements, particle_info);
-    //after all data is copied into new Views
-    offsets = new_offsets;
     num_ptcls = particles_on_process;
-    capacity_ = num_ptcls;
-    //num_rows remains unchanged
-    //num_types remains unchanged
-    
-    fprintf(stderr, "[WARNING] CSR rebuild(...) not implemented\n");
+
+    fprintf(stderr, "CSR rebuild complete\n");
+    Kokkos::Profiling::popRegion();
+    ///////////////////////////////////////////////////////////////////////////
+    fprintf(stderr, "[WARNING] CSR rebuild(...) not fully implemented\n");
+    ///////////////////////////////////////////////////////////////////////////
   }
 
   template <class DataTypes, typename MemSpace>

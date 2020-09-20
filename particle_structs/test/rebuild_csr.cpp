@@ -2,46 +2,108 @@
 #include <Kokkos_Core.hpp>
 
 #include <MemberTypes.h>
-#include <SellCSigma.h>
+#include <CSR.hpp>
 
-#include "Distribute.h"
-
-using particle_structs::SellCSigma;
+using particle_structs::CSR;
 using particle_structs::MemberTypes;
 using particle_structs::getLastValue;
 using particle_structs::lid_t;
 typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef MemberTypes<int> Type;
-typedef SellCSigma<Type> SCS;
+typedef CSR<Type> CSR;
 
 bool shuffleParticlesTests();
 bool resortElementsTest();
 bool reshuffleTests();
 
+//CSR implementation tests
+bool rebuildNoChanges();
+bool rebuildNewPtcls();
+bool rebuildPtclsDestroyed();
+bool rebuildNewAndDestroyed();
+
 int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
+  Kokkos::Profiling::pushRegion("rebuild csr");
 
   bool passed = true;
-  if (!shuffleParticlesTests()) {
+  if(!rebuildNoChanges()){
     passed = false;
-    printf("[ERROR] shuffleParticlesTests() failed\n");
+    printf("[ERROR] rebuildNoChanges() failed\n");
   }
-  if (!resortElementsTest()) {
+  if(!rebuildNewPtcls()){
     passed = false;
-    printf("[ERROR] resortElementsTest() failed\n");
+    printf("[ERROR] rebuildNewPtcls() failed\n");
   }
-  if (!reshuffleTests()) {
+  if(!rebuildPtclsDestroyed()){
     passed = false;
-    printf("[ERROR] reshuffleTests() failed\n");
+    printf("[ERROR] rebuildPtclsDestroyed() failed\n");
+  }
+  if(!rebuildNewAndDestroyed()){
+    passed = false;
+    printf("[ERROR] rebuildNewAndDestroyed() failed\n");
   }
 
+  //SCS tests for reference
+  //if (!shuffleParticlesTests()) {
+  //  passed = false;
+  //  printf("[ERROR] shuffleParticlesTests() failed\n");
+  //}
+  //if (!resortElementsTest()) {
+  //  passed = false;
+  //  printf("[ERROR] resortElementsTest() failed\n");
+  //}
+  //if (!reshuffleTests()) {
+  //  passed = false;
+  //  printf("[ERROR] reshuffleTests() failed\n");
+  //}
+
+  Kokkos::Profiling::popRegion();
   Kokkos::finalize();
   MPI_Finalize();
   if (passed)
     printf("All tests passed\n");
   return 0;
 }
+
+bool rebuildNoChanges(){
+  Kokkos::Profiling::pushRegion("rebuildNoChanges");
+  bool passed = true;
+
+
+  Kokkos::Profiling::popRegion();
+  return passed;
+}
+
+bool rebuildNewPtcls(){
+  Kokkos::Profiling::pushRegion("rebuildNewPtcls");
+  bool passed = true;
+
+
+  Kokkos::Profiling::popRegion();
+  return passed;
+}
+
+bool rebuildPtclsDestroyed(){
+  Kokkos::Profiling::pushRegion("rebuildPtclsDestroyed");
+  bool passed = true;
+
+
+  Kokkos::Profiling::popRegion();
+  return passed;
+}
+
+bool rebuildNewAndDestroyed(){
+  Kokkos::Profiling::pushRegion("rebuildNewAndDestroyed");
+  bool passed = true;
+
+
+  Kokkos::Profiling::popRegion();
+  return passed;
+}
+
+
 
 
 bool shuffleParticlesTests() {

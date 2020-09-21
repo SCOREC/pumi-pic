@@ -243,7 +243,7 @@ namespace pumipic {
 
     //Alocate new (temp) MTV
     MTVs particle_info;
-    CreateViews<device_type,DataTypes>(particle_info,particles_on_process);
+    CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
 
 
     //fresh filling of particles_per_element
@@ -285,59 +285,71 @@ namespace pumipic {
         new_indices(i) = -1;
     });
 
-    CopyPSToPS<CSR<DataTypes,MemSpace>,DataTypes>(this, particle_info, ptcl_data, new_element, new_indices);
+    //Copy existing particles to their new location in the temp MTV
+    CopyPSToPS<CSR<DataTypes,MemSpace>,DataTypes>(this, particle_info, ptcl_data,
+                                                        new_element, new_indices);
+
+    //If there are new particles
+    lid_t num_new_ptcls = new_particle_elements.size();
+    kkLidView new_particle_indices("new_particle_indices", num_new_ptcls); 
+
+    //Determine new particle indices in the MTVs
+    Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
+                            KOKKOS_LAMBDA(const int& i){
+      lid_t new_elem = new_particle_elements(i);
+      new_particles_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
+    });
+
+    if(num_new_ptcls > 0){
+      CopyViewsToViews<kkLidView,DataTypes(particle_info, new_particles, 
+                                                          new_particle_indices);
+    }
+
+    //Resassign all member variables
+    ptcl_data = particle_info;
+    num_ptcls = capacity_;
+
+    ////need to combine particle->element mapping and particledata to new structures for init
+    ////remove all off process particles in the process
+    ////kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
+    /////////////////////////////////////////////////////////////////////////////
+    ////for now assuming all particles remain on process (no -1 elements)
+    /////////////////////////////////////////////////////////////////////////////
+    //MTVs particle_info;
+    //CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
+    //Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
+    //    KOKKOS_LAMBDA(const int& i){
+    //      particle_elements(i) = new_element(i);    
+    //  //    particle_info[i] = ptcl_data[i];
+    //    });
+    //const lid_t new_element_size = new_element.size();
+    //Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
+    //    KOKKOS_LAMBDA(const int& i){
+    //      particle_elements(i+new_element.size()) = new_particle_elements(i);
+    //   //   particle_info[i+new_element_size] = new_particles[i];
+    //    });
+    //Kokkos::fence();
+    //printView(particle_elements);
+    //fprintf(stderr,"Ptcl elements and MTV data transfered\n");
+
+    ////print to inspect if placed in correct slots
+    //auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
+    //fprintf(stderr,"Printing attempt\n");
+    //Kokkos::fence();
+    //printView(pIDs);
+    //fprintf(stderr,"End View printing\n");
+
+    ////can't resize MTV it appears
+    ////Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
+    //CreateViews<device_type,DataTypes>(ptcl_data,capacity_);
+    //initCsrData(particle_elements, particle_info);
+    //num_ptcls = particles_on_process;
+
+    //printView(ps::getMemberView<DataTypes,0>(ptcl_data));
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-    //need to combine particle->element mapping and particledata to new structures for init
-    //remove all off process particles in the process
-    //kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
-    ///////////////////////////////////////////////////////////////////////////
-    //for now assuming all particles remain on process (no -1 elements)
-    ///////////////////////////////////////////////////////////////////////////
-    MTVs particle_info;
-    CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
-    Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
-        KOKKOS_LAMBDA(const int& i){
-          particle_elements(i) = new_element(i);    
-      //    particle_info[i] = ptcl_data[i];
-        });
-    const lid_t new_element_size = new_element.size();
-    Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
-        KOKKOS_LAMBDA(const int& i){
-          particle_elements(i+new_element.size()) = new_particle_elements(i);
-       //   particle_info[i+new_element_size] = new_particles[i];
-        });
-    Kokkos::fence();
-    printView(particle_elements);
-    fprintf(stderr,"Ptcl elements and MTV data transfered\n");
-
-    //print to inspect if placed in correct slots
-    auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
-    fprintf(stderr,"Printing attempt\n");
-    Kokkos::fence();
-    printView(pIDs);
-    fprintf(stderr,"End View printing\n");
-
-    //can't resize MTV it appears
-    //Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
-    CreateViews<device_type,DataTypes>(ptcl_data,capacity_);
-    initCsrData(particle_elements, particle_info);
-    num_ptcls = particles_on_process;
-
-    printView(ps::getMemberView<DataTypes,0>(ptcl_data));
 
     fprintf(stderr, "CSR rebuild complete\n");
     Kokkos::Profiling::popRegion();

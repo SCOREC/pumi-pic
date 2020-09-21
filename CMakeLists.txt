@@ -64,7 +64,7 @@ find_package(EnGPar REQUIRED)
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})
 message(STATUS "Found EnGPar")
-set(pumipic_USE_EnGPar ON)
+set(pumipic_USE_EnGPar_DEFAULT ON)
 set(EnGPar_PREFIX ${EnGPar_PREFIX})
 bob_public_dep(EnGPar)
 

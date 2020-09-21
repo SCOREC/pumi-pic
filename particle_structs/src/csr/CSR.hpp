@@ -233,12 +233,19 @@ namespace pumipic {
     //           'merge' existing and new data for input to CSR constructor
     //           construct new CSR based on that input 
 
+    //Counting of particles on process
     lid_t particles_on_process = countParticlesOnProcess(new_element) + 
                                  countParticlesOnProcess(new_particle_elements);
     capacity_ = particles_on_process;
     fprintf(stderr,"print on next line\n");
     printf("particles on process: %d\ncapacity: %d\n", particles_on_process, capacity_);
-    
+
+
+    //Alocate new (temp) MTV
+    MTVs particle_info;
+    CreateViews<device_type,DataTypes>(particle_info,particles_on_process);
+
+
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
     Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
@@ -256,15 +263,47 @@ namespace pumipic {
     printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
 
+
+
     //refill offset here 
     offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
     assert(capacity_ == getLastValue(offsets)); 
     printView(offsets);
 
+    //Determine new_indices for all of the exisitng particles
+    auto offset_cpy = offsets;
+    kkLidView row_indices("row indices", num_elems+1);
+    Kokkos::deep_copy(row_indices,offset_cpy);
+    kkLidView new_indices("new indices", particles_on_process);
+    Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
+      const lid_t new_elem = new_element(i);
+      if(new_elem != -1){
+        new_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
+      }
+      else
+        new_indices(i) = -1;
+    });
+
+    CopyPSToPS<CSR<DataTypes,MemSpace>,DataTypes>(this, particle_info, ptcl_data, new_element, new_indices);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     //need to combine particle->element mapping and particledata to new structures for init
     //remove all off process particles in the process
-    kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
+    //kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
     ///////////////////////////////////////////////////////////////////////////
     //for now assuming all particles remain on process (no -1 elements)
     ///////////////////////////////////////////////////////////////////////////
@@ -273,12 +312,13 @@ namespace pumipic {
     Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
         KOKKOS_LAMBDA(const int& i){
           particle_elements(i) = new_element(i);    
-    //      particle_info[i] = ptcl_data[i];
+      //    particle_info[i] = ptcl_data[i];
         });
+    const lid_t new_element_size = new_element.size();
     Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
           particle_elements(i+new_element.size()) = new_particle_elements(i);
-     //     particle_info[i+new_element.size()] = new_particles[i];
+       //   particle_info[i+new_element_size] = new_particles[i];
         });
     Kokkos::fence();
     printView(particle_elements);

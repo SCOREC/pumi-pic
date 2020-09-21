@@ -17,6 +17,7 @@ make_test(buildSCSTest buildSCSTest.cpp)
 make_test(initParticles initParticles.cpp)
 
 make_test(rebuild_scs rebuild_scs.cpp)
+make_test(rebuild_csr rebuild_csr2.cpp)
 
 make_test(lambdaTest lambdaTest.cpp)
 

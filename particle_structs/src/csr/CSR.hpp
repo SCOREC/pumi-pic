@@ -13,7 +13,7 @@ namespace {
           v.size(),
           KOKKOS_LAMBDA (const int& i) {
             printf("%d %d\n", i, v[i]);
-          });
+      });
   }
 
   // count the number of elements with particles - remove this function?
@@ -45,7 +45,6 @@ namespace {
     return count;
   }
 }
-
 
 namespace pumipic {
 
@@ -81,6 +80,7 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
 
+    lid_t getNumPtcls() { return num_ptcls; }
     kkLidView getOffsets() { return offsets; }
     MTVs getPtcl_data() { return ptcl_data; }
 
@@ -105,11 +105,14 @@ namespace pumipic {
      *                      associated with each particle
      */
     void initCsrData(kkLidView particle_elements, MTVs particle_info) {
+      fprintf(stderr, "initCsrData entered\n");
       //Create the 'particle_indices' array.  particle_indices[i] stores the 
       //location in the 'ptcl_data' where  particle i is stored.  Use the
       //CSR offsets array and an atomic_fetch_add to compute these entries.
       lid_t given_particles = particle_elements.size();
       assert(given_particles == num_ptcls);
+
+      fprintf(stderr, "assert passed\n");
 
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
       auto offset_cpy = offsets; 
@@ -117,6 +120,9 @@ namespace pumipic {
       //SS3 insert code to set the entries of particle_indices>
       kkLidView row_indices("row indces", num_elems+1);
       Kokkos::deep_copy(row_indices, offset_cpy);
+      fprintf(stderr,"deep copy complete\n");
+
+      //Rebuild appears to fail at the deep copy step on a runtime error 
 
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
@@ -125,6 +131,7 @@ namespace pumipic {
       });
 
       //populate ptcl_data with input data and particle_indices mapping
+      fprintf(stderr,"begin MTV copy\n");
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
     }
     // } ... or else!
@@ -209,6 +216,7 @@ namespace pumipic {
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
     Kokkos::Profiling::pushRegion("CSR Rebuild");
+    fprintf(stderr, "CSR Rebuild begun\n");
     //new_element - integers corresponding to which mesh element each particle
     //is now assigned to, -1 if no longer on current process
     //
@@ -228,26 +236,31 @@ namespace pumipic {
     lid_t particles_on_process = countParticlesOnProcess(new_element) + 
                                  countParticlesOnProcess(new_particle_elements);
     capacity_ = particles_on_process;
+    fprintf(stderr,"print on next line\n");
+    printf("particles on process: %d\ncapacity: %d\n", particles_on_process, capacity_);
     
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
     Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
         KOKKOS_LAMBDA(const int& i){
           if(new_element[i] > -1)
-            Kokkos::atomic_increment(particles_per_element[new_element[i]]);
+            Kokkos::atomic_increment(&particles_per_element[new_element[i]]);
         });
     Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
           assert(new_particle_elements[i] > -1);
-          Kokkos::atomic_increment(particles_per_element[new_particle_elements[i]]);
+          Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
         });
 
     Kokkos::fence();
+    printView(particles_per_element);
+    fprintf(stderr,"Ptcls per elem set\n");
 
     //refill offset here 
-    offests = kkLidView("offsets", num_elems+1);
+    offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
     assert(capacity_ == getLastValue(offsets)); 
+    printView(offsets);
 
     //need to combine particle->element mapping and particledata to new structures for init
     //remove all off process particles in the process
@@ -255,24 +268,36 @@ namespace pumipic {
     ///////////////////////////////////////////////////////////////////////////
     //for now assuming all particles remain on process (no -1 elements)
     ///////////////////////////////////////////////////////////////////////////
-
+    MTVs particle_info;
     CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
     Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
         KOKKOS_LAMBDA(const int& i){
           particle_elements(i) = new_element(i);    
-          particle_info(i) = ptcl_data(i);
+    //      particle_info[i] = ptcl_data[i];
         });
     Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
           particle_elements(i+new_element.size()) = new_particle_elements(i);
-          particle_info(i+new_element.size()) = new_particles(i);
+     //     particle_info[i+new_element.size()] = new_particles[i];
         });
     Kokkos::fence();
+    printView(particle_elements);
+    fprintf(stderr,"Ptcl elements and MTV data transfered\n");
 
+    //print to inspect if placed in correct slots
+    auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
+    fprintf(stderr,"Printing attempt\n");
+    Kokkos::fence();
+    printView(pIDs);
+    fprintf(stderr,"End View printing\n");
 
-    Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
+    //can't resize MTV it appears
+    //Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
+    CreateViews<device_type,DataTypes>(ptcl_data,capacity_);
     initCsrData(particle_elements, particle_info);
     num_ptcls = particles_on_process;
+
+    printView(ps::getMemberView<DataTypes,0>(ptcl_data));
 
     fprintf(stderr, "CSR rebuild complete\n");
     Kokkos::Profiling::popRegion();

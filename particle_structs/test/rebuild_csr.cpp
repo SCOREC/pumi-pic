@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <Kokkos_Core.hpp>
+#include "read_particles.hpp"
+#include <particle_structs.hpp>
 
 #include <MemberTypes.h>
 #include <CSR.hpp>
@@ -8,16 +10,17 @@ using particle_structs::CSR;
 using particle_structs::MemberTypes;
 using particle_structs::getLastValue;
 using particle_structs::lid_t;
+//using particle_structs::kkLidView;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef MemberTypes<int> Type;
-typedef CSR<Type> CSR;
+//typedef MemberTypes<int> Type;
 
 bool shuffleParticlesTests();
 bool resortElementsTest();
 bool reshuffleTests();
 
 //CSR implementation tests
-bool rebuildNoChanges();
+bool rebuildNoChanges(ps::CSR<Types,MemSpace>* csr);
+bool rebuildNewElems();
 bool rebuildNewPtcls();
 bool rebuildPtclsDestroyed();
 bool rebuildNewAndDestroyed();
@@ -26,9 +29,30 @@ int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
   Kokkos::Profiling::pushRegion("rebuild csr");
+  
+  char filename[256];
+  //General structure parameters
+  lid_t num_elems;
+  lid_t num_ptcls;
+  CSR::kkLidView ppe;
+  CSR::kkGidView element_gids;
+  CSR::kkLidView particle_elements;
+  PS::MTVs particle_info;
+  readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
+                particle_elements, particle_info);
+
+  Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
+  ps::CSR<Types,MemSpace>* csr = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, 
+                                      ppe, element_gids, particle_elements, particle_info);
+
+  //rebuild(new_element,new_particle_element,new_particles) 
+  kkLidView new_element = particle_elements;
+  kkLidView new_particle_elements = kkLidView("new particle elements", 0);
+  MTVs new_particles = NULL; 
+
 
   bool passed = true;
-  if(!rebuildNoChanges()){
+  if(!rebuildNoChanges(csr)){
     passed = false;
     printf("[ERROR] rebuildNoChanges() failed\n");
   }
@@ -67,8 +91,22 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-bool rebuildNoChanges(){
+//Rebuild test with no changes to structure
+bool rebuildNoChanges(ps::CSR<Types,MemSpace>* csr){
   Kokkos::Profiling::pushRegion("rebuildNoChanges");
+  bool passed = true;
+
+    
+
+
+
+  Kokkos::Profiling::popRegion();
+  return passed;
+}
+
+//Rebuild test with no new particles, but reassigned particle elements
+bool rebuildNewElems(){
+  Kokkos::Profiling::pushRegion("rebuildNewElems");
   bool passed = true;
 
 
@@ -76,6 +114,7 @@ bool rebuildNoChanges(){
   return passed;
 }
 
+//Rebuild test with new particles added only
 bool rebuildNewPtcls(){
   Kokkos::Profiling::pushRegion("rebuildNewPtcls");
   bool passed = true;
@@ -85,6 +124,7 @@ bool rebuildNewPtcls(){
   return passed;
 }
 
+//Rebuild test with exsiting particles destroyed only
 bool rebuildPtclsDestroyed(){
   Kokkos::Profiling::pushRegion("rebuildPtclsDestroyed");
   bool passed = true;
@@ -94,6 +134,7 @@ bool rebuildPtclsDestroyed(){
   return passed;
 }
 
+//Rebuild test with particles added and destroyed
 bool rebuildNewAndDestroyed(){
   Kokkos::Profiling::pushRegion("rebuildNewAndDestroyed");
   bool passed = true;

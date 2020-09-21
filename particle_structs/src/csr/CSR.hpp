@@ -3,6 +3,7 @@
 #include <particle_structure.hpp>
 #include <particle_structs.hpp>
 namespace ps = particle_structs;
+#include <psMemberType.h>
 
 namespace {
   // print the contents of a view for debugging
@@ -122,8 +123,6 @@ namespace pumipic {
       Kokkos::deep_copy(row_indices, offset_cpy);
       fprintf(stderr,"deep copy complete\n");
 
-      //Rebuild appears to fail at the deep copy step on a runtime error 
-
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
       Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
@@ -211,10 +210,12 @@ namespace pumipic {
     fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
   }
 
+  /*
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
+
     Kokkos::Profiling::pushRegion("CSR Rebuild");
     fprintf(stderr, "CSR Rebuild begun\n");
     //new_element - integers corresponding to which mesh element each particle
@@ -286,8 +287,11 @@ namespace pumipic {
     });
 
     //Copy existing particles to their new location in the temp MTV
-    CopyPSToPS<CSR<DataTypes,MemSpace>,DataTypes>(this, particle_info, ptcl_data,
-                                                        new_element, new_indices);
+    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+
+    //Reallocate ptcl_data
+    destroyViews<device_type,DataTypes>(ptcl_data);
+    CreateViews<device_type,DataTypes>(ptcl_data, capacity_);
 
     //If there are new particles
     lid_t num_new_ptcls = new_particle_elements.size();
@@ -297,11 +301,11 @@ namespace pumipic {
     Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
                             KOKKOS_LAMBDA(const int& i){
       lid_t new_elem = new_particle_elements(i);
-      new_particles_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
+      new_particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
     });
 
     if(num_new_ptcls > 0){
-      CopyViewsToViews<kkLidView,DataTypes(particle_info, new_particles, 
+      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles, 
                                                           new_particle_indices);
     }
 
@@ -348,15 +352,14 @@ namespace pumipic {
     //printView(ps::getMemberView<DataTypes,0>(ptcl_data));
 
 
-
-
-
     fprintf(stderr, "CSR rebuild complete\n");
     Kokkos::Profiling::popRegion();
     ///////////////////////////////////////////////////////////////////////////
     fprintf(stderr, "[WARNING] CSR rebuild(...) not fully implemented\n");
     ///////////////////////////////////////////////////////////////////////////
   }
+  */
+ 
 
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
@@ -392,4 +395,6 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::printMetrics() const {
     fprintf(stderr, "csr capacity %d\n", capacity_);
   }
-}
+} //end namespace pumipic
+
+#include "CSR_rebuild.hpp"

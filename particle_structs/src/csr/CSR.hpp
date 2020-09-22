@@ -84,6 +84,7 @@ namespace pumipic {
     lid_t getNumPtcls() { return num_ptcls; }
     kkLidView getOffsets() { return offsets; }
     MTVs getPtcl_data() { return ptcl_data; }
+    lid_t getCapacity() { return capacity_; } 
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),

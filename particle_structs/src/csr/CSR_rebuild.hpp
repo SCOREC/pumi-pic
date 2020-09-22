@@ -1,4 +1,5 @@
 #pragma once
+
 #include "psMemberType.h"
 
 namespace pumipic{
@@ -38,7 +39,6 @@ namespace pumipic{
     Kokkos::fence();
     printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
-
 
 
     //refill offset here 

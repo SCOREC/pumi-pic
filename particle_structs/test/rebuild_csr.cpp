@@ -1,113 +1,129 @@
-#include <stdio.h>
-#include <Kokkos_Core.hpp>
-#include "read_particles.hpp"
 #include <particle_structs.hpp>
+#include "read_particles.hpp"
 
-#include <MemberTypes.h>
 #include <CSR.hpp>
+#include <MemberTypes.h>
 
-using particle_structs::CSR;
+#include "Distribute.h"
+
+#ifdef PP_USE_CUDA
+typedef Kokkos::CudaSpace DeviceSpace;
+#else
+typedef Kokkos::HostSpace DeviceSpace;
+#endif
+int comm_rank, comm_size;
+
+//using particle_structs::CSR;
 using particle_structs::MemberTypes;
 using particle_structs::getLastValue;
 using particle_structs::lid_t;
-//using particle_structs::kkLidView;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-//typedef MemberTypes<int> Type;
+typedef MemberTypes<int> Type;
+typedef particle_structs::CSR<Type> CSR;
 
-bool shuffleParticlesTests();
-bool resortElementsTest();
-bool reshuffleTests();
-
-//CSR implementation tests
-bool rebuildNoChanges(ps::CSR<Types,MemSpace>* csr);
+bool rebuildNoChanges();
 bool rebuildNewElems();
 bool rebuildNewPtcls();
 bool rebuildPtclsDestroyed();
 bool rebuildNewAndDestroyed();
 
-int main(int argc, char* argv[]) {
-  MPI_Init(&argc, &argv);
-  Kokkos::initialize(argc, argv);
-  Kokkos::Profiling::pushRegion("rebuild csr");
-  
-  char filename[256];
-  //General structure parameters
-  lid_t num_elems;
-  lid_t num_ptcls;
-  CSR::kkLidView ppe;
-  CSR::kkGidView element_gids;
-  CSR::kkLidView particle_elements;
-  PS::MTVs particle_info;
-  readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
-                particle_elements, particle_info);
 
-  Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
-  ps::CSR<Types,MemSpace>* csr = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids, particle_elements, particle_info);
+int main(int argc, char* argv[]){
+  Kokkos::initialize(argc,argv);
+  MPI_Init(&argc,&argv);
 
-  //rebuild(new_element,new_particle_element,new_particles) 
-  kkLidView new_element = particle_elements;
-  kkLidView new_particle_elements = kkLidView("new particle elements", 0);
-  MTVs new_particles = NULL; 
+  //count of fails
+  int fails = 0;
+  //begin Kokkos scope
+  {
+    MPI_Comm_rank(MPI_COMM_WORLD,&comm_rank);
+    MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
 
+    ///////////////////////////////////////////////////////////////////////////
+    //Tests to run go here
+    ///////////////////////////////////////////////////////////////////////////
 
-  bool passed = true;
-  if(!rebuildNoChanges(csr)){
-    passed = false;
-    printf("[ERROR] rebuildNoChanges() failed\n");
+    //verify still correct elements and no changes otherwise
+    fails += rebuildNoChanges();
+
+    //verify all elements are correctly assigned to new elements
+    //fails += rebuildNewElems(csr);
+
+    //check new elements are added properly and all elements assgined correct
+    //fails += rebuildNewPtcls(csr);
+
+    //check for particles that were removed and the rest in their correct loc
+    //fails += rebuildPtclsDestroyed(csr);
+
+    //complete check of rebuild functionality
+    //fails += rebuildNewAndDestroyed(csr);
+
   }
-  if(!rebuildNewPtcls()){
-    passed = false;
-    printf("[ERROR] rebuildNewPtcls() failed\n");
-  }
-  if(!rebuildPtclsDestroyed()){
-    passed = false;
-    printf("[ERROR] rebuildPtclsDestroyed() failed\n");
-  }
-  if(!rebuildNewAndDestroyed()){
-    passed = false;
-    printf("[ERROR] rebuildNewAndDestroyed() failed\n");
-  }
-
-  //SCS tests for reference
-  //if (!shuffleParticlesTests()) {
-  //  passed = false;
-  //  printf("[ERROR] shuffleParticlesTests() failed\n");
-  //}
-  //if (!resortElementsTest()) {
-  //  passed = false;
-  //  printf("[ERROR] resortElementsTest() failed\n");
-  //}
-  //if (!reshuffleTests()) {
-  //  passed = false;
-  //  printf("[ERROR] reshuffleTests() failed\n");
-  //}
-
-  Kokkos::Profiling::popRegion();
+  //end Kokkos scope
   Kokkos::finalize();
   MPI_Finalize();
-  if (passed)
-    printf("All tests passed\n");
-  return 0;
+  return fails;
 }
 
-//Rebuild test with no changes to structure
-bool rebuildNoChanges(ps::CSR<Types,MemSpace>* csr){
-  Kokkos::Profiling::pushRegion("rebuildNoChanges");
-  bool passed = true;
+//template <class DataTypes,typename MemSpace>
+//CSR<DataTypes,MemSpace>::rebuild(kkLidView new_element,
+//                                 kkLidView new_particle_elements,
+//                                 MTVs new_particles);
 
+//Rebuild test with no changes to structure
+bool rebuildNoChanges(){
+  Kokkos::Profiling::pushRegion("rebuildNoChanges");
+  bool failed = false;
+
+  //Test construction based on SCS testing
+  int ne = 5;
+  int np = 20;
+  int* ptcls_per_elem = new int[ne];
+  std::vector<int>* ids = new std::vector<int>[ne];
+  distribute_particles(ne, np, 0, ptcls_per_elem, ids); 
+  Kokkos::TeamPolicy<exe_space> po(32,Kokkos::AUTO);
+  CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v",ne);
+  CSR::kkGidView element_gids_v("",0);
+  particle_structs::hostToDevice(ptcls_per_elem_v,ptcls_per_elem);
+
+  CSR* csr = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
+  CSR* csr2 = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
+
+  delete [] ptcls_per_elem;
+  delete [] ids;
+
+  CSR::kkLidView new_element("new_element", csr->getCapacity());
+  
+  auto values = csr->get<0>();
+  auto values2 = csr->get<0>();
+  //"Send To Self"
+  Kokkos::parallel_for("sendToSelf", values.size(), 
+      KOKKOS_LAMBDA (const int& i) {
     
 
-
+  });
 
   Kokkos::Profiling::popRegion();
-  return passed;
+  return failed;
 }
 
 //Rebuild test with no new particles, but reassigned particle elements
 bool rebuildNewElems(){
   Kokkos::Profiling::pushRegion("rebuildNewElems");
   bool passed = true;
+
+  //kkLidView new_element = kkLidView("new_element", csr->getNumPtcls());
+  //kkLidView new_particle_elements = kkLidView("new_particle_elements", 0);
+  //PS::MTVs new_particles;
+
+  //Kokkos::parallel_for("new ptcl elements assignment", new_element.size(),
+  //                        KOKKOS_LAMBDA(const int& i){
+  //  //for the case of 5 particles per element
+  //  new_element(i) = i/5;
+  //});
+
+  //csr->rebuild(new_element, new_particle_elements, new_particles);
+
 
 
   Kokkos::Profiling::popRegion();
@@ -145,281 +161,3 @@ bool rebuildNewAndDestroyed(){
 }
 
 
-
-
-bool shuffleParticlesTests() {
-  int ne = 5;
-  int np = 20;
-  int* ptcls_per_elem = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-  int C = 4;
-  Kokkos::TeamPolicy<exe_space> po(128, C);
-
-  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-  SCS::kkGidView element_gids_v("", 0);
-  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
-
-  SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
-  SCS* scs2 = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v,  element_gids_v);
-  delete [] ptcls_per_elem;
-  delete [] ids;
-
-  scs->printFormat();
-  scs->printMetrics();
-  SCS::kkLidView new_element("new_element", scs->capacity());
-
-  auto values = scs->get<0>();
-  auto values2 = scs2->get<0>();
-  auto sendToSelf = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    new_element(particle_id) = element_id;
-    values(particle_id) = particle_id;
-    values2(particle_id) = particle_id;
-  };
-  scs->parallel_for(sendToSelf);
-
-  //Rebuild with no changes
-  scs->rebuild(new_element);
-
-  scs->printFormat();
-  scs->printMetrics();
-  values = scs->get<0>();
-
-  SCS::kkLidView fail("fail",1);
-  auto checkParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    if (mask) {
-      if (values(ptcl_id) % C != values2(ptcl_id) % C) {
-        printf("Particle mismatch at %d (%d != %d)\n", ptcl_id, values(ptcl_id), values2(ptcl_id));
-        fail(0) = 1;
-      }
-    }
-  };
-  scs->parallel_for(checkParticles);
-  if (getLastValue<lid_t>(fail) == 1) {
-    printf("Value mismatch on at least one particle\n");
-    return false;
-  }
-  auto moveParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    new_element(ptcl_id) = (elm_id + 2) % ne;
-  };
-  scs->parallel_for(moveParticles);
-
-  scs->rebuild(new_element);
-
-  values = scs->get<0>();
-
-  auto printParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    if (mask)
-      printf("Particle %d has value %d\n", ptcl_id, values(ptcl_id));
-  };
-  scs->parallel_for(printParticles);
-  scs->printFormat();
-  scs->printMetrics();
-  delete scs;
-  delete scs2;
-  return true;
-}
-
-
-bool resortElementsTest() {
-  int ne = 5;
-  int np = 20;
-  particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
-  distribute_elements(ne, 0, 0, 1, gids);
-  int* ptcls_per_elem = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-
-  Kokkos::TeamPolicy<exe_space> po(128, 4);
-  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-  SCS::kkGidView element_gids_v("element_gids_v", ne);
-  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
-  particle_structs::hostToDevice(element_gids_v, gids);
-
-  SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
-  delete [] ptcls_per_elem;
-  delete [] ids;
-  delete [] gids;
-
-  scs->printFormat();
-  scs->printMetrics();
-  auto values = scs->get<0>();
-
-  SCS::kkLidView new_element("new_element", scs->capacity());
-  //Remove all particles from first element
-  auto moveParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    if (mask) {
-      values(ptcl_id) = elm_id;
-      if (ptcl_id % 4 == 0 && ptcl_id < 8)
-        new_element(ptcl_id) = -1;
-      else
-        new_element(ptcl_id) = elm_id;
-    }
-  };
-  scs->parallel_for(moveParticles);
-  scs->rebuild(new_element);
-
-  scs->printFormat();
-  scs->printMetrics();
-  values = scs->get<0>();
-  SCS::kkLidView fail("", 1);
-  auto checkParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    if (mask) {
-      if (values(ptcl_id) != elm_id) {
-        fail(0) = 1;
-      }
-    }
-  };
-  scs->parallel_for(checkParticles);
-
-  if (getLastValue<lid_t>(fail) == 1) {
-    printf("Value mismatch on some particles\n");
-    return false;
-  }
-  delete scs;
-  return true;
-}
-
-
-bool reshuffleTests() {
-
-  //Move nothing (should only use reshuffle)
-  printf("\n\nReshuffle Tests\n");
-
-  int ne = 4;
-  int np = 10;
-  int* ptcls_per_elem = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids);
-
-  Kokkos::TeamPolicy<exe_space> po(128, 4);
-  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-  SCS::kkGidView element_gids_v("element_gids_v", 0);
-  particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
-
-  SCS* scs = new SCS(po, ne, np, ne, np, ptcls_per_elem_v, element_gids_v);
-  delete [] ptcls_per_elem;
-  delete [] ids;
-  scs->printFormat();
-
-  auto pids = scs->get<0>();
-  auto setPids = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    pids(particle_id) = particle_id;
-  };
-  scs->parallel_for(setPids);
-  SCS::kkLidView new_element("new_element", scs->capacity());
-
-  SCS::kkLidView fail("fail", 1);
-
-  //Shuffle
-  printf("\nSend To Self");
-  auto sendToSelf = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    new_element(particle_id) = element_id;
-  };
-  scs->parallel_for(sendToSelf);
-
-  scs->rebuild(new_element);
-
-  scs->printFormat();
-
-  //Shuffle
-  printf("\nSend first particle to padding in 2");
-  SCS::kkLidView elem("elem",1);
-  auto sendToChunk = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (particle_id != pids(particle_id)) {
-      fail(0) = 1;
-      printf("[ERROR] Particle %d was moved during first shuffle\n", pids(particle_id));
-    }
-    if (particle_id == 0) {
-      new_element(particle_id) = 2;
-      elem(0) = element_id;
-    }
-  };
-  scs->parallel_for(sendToChunk);
-
-  scs->rebuild(new_element);
-  scs->printFormat();
-
-  //Shuffle with particle back to 0
-  printf("\nSend particle back to first id");
-  auto sendBack = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (mask && pids(particle_id) == 0) {
-      if (element_id == 2)
-        new_element(particle_id) = elem(0);
-      else {
-        printf("[ERROR] Particle 0 (index: %d) was not moved to element 2\n", particle_id);
-        fail(0) = 1;
-      }
-    }
-  };
-  scs->parallel_for(sendBack);
-
-  scs->rebuild(new_element);
-  scs->printFormat();
-
-  //Add new particles to empty spots
-  printf("\nFill Empties with new particles");
-  auto sendToSelfAgain = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (mask && particle_id != pids(particle_id)) {
-      fail(0) = 1;
-      if (pids(particle_id) == 0)
-        printf("[ERROR] Particle 0 was not returned to its original elements\n");
-      else
-        printf("[ERROR] Particle %d was moved during a previous shuffle\n", pids(particle_id));
-    }
-    new_element(particle_id) = element_id;
-  };
-  scs->parallel_for(sendToSelfAgain);
-
-  SCS::kkLidView new_particle_elems("new_particle_elems", 2);
-  auto new_particle_info = particle_structs::createMemberViews<Type>(2);
-  auto new_pids = particle_structs::getMemberView<Type, 0>(new_particle_info);
-  Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& i) {
-    new_particle_elems(0) = 2;
-    new_particle_elems(1) = 3;
-    new_pids(0) = 100;
-    new_pids(1) = 200;
-  });
-
-  scs->rebuild(new_element, new_particle_elems, new_particle_info);
-
-  scs->printFormat();
-
-
-  //Remove all particles from element 0 & 2, move particles from 1 & 3 to 0 & 2
-  printf("\nDump and redistribute particles");
-  auto dumpAndRedistribute = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (!mask) {
-      printf("[ERROR] Missing particle %d\n", particle_id);
-      fail(0) = 1;
-    }
-    if (pids(particle_id) == 100 && element_id != 2) {
-      printf("[ERROR] New particle 100 was not inserted into correct element\n");
-    }
-    if (pids(particle_id) == 200 && element_id != 3) {
-      printf("[ERROR] New particle 200 was not inserted into correct element\n");
-    }
-    if (element_id % 2 == 0)
-      new_element(particle_id) = -1;
-    else
-      new_element(particle_id) = element_id / 2 * 2;
-  };
-  scs->parallel_for(dumpAndRedistribute);
-
-  scs->rebuild(new_element);
-  scs->printFormat();
-
-  auto checkFinal = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
-    if (mask) {
-      if (element_id % 2 == 1) {
-        printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);
-      }
-      if (pids(particle_id) % 2 != 0) {
-        printf("[ERROR] Odd Particle %d remains on element %d\n", particle_id, element_id);
-      }
-    }
-  };
-  scs->parallel_for(checkFinal);
-  int f = particle_structs::getLastValue<lid_t>(fail);
-  return !f;
-}

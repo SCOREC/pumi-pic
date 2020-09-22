@@ -65,7 +65,7 @@ namespace pumipic{
     CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
 
     //Reallocate ptcl_data
-    destroyViews<device_type,DataTypes>(ptcl_data);
+    destroyViews<DataTypes>(ptcl_data);
     CreateViews<device_type,DataTypes>(ptcl_data, capacity_);
 
     //If there are new particles

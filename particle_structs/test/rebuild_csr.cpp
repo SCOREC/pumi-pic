@@ -21,11 +21,11 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef MemberTypes<int> Type;
 typedef particle_structs::CSR<Type> CSR;
 
-bool rebuildNoChanges();
-bool rebuildNewElems();
-bool rebuildNewPtcls();
-bool rebuildPtclsDestroyed();
-bool rebuildNewAndDestroyed();
+int rebuildNoChanges();
+int rebuildNewElems();
+int rebuildNewPtcls();
+int rebuildPtclsDestroyed();
+int rebuildNewAndDestroyed();
 
 
 int main(int argc, char* argv[]){
@@ -71,9 +71,9 @@ int main(int argc, char* argv[]){
 //                                 MTVs new_particles);
 
 //Rebuild test with no changes to structure
-bool rebuildNoChanges(){
+int rebuildNoChanges(){
   Kokkos::Profiling::pushRegion("rebuildNoChanges");
-  bool failed = false;
+  int fails = 0;
 
   //Test construction based on SCS testing
   int ne = 5;
@@ -96,21 +96,53 @@ bool rebuildNoChanges(){
   
   auto values = csr->get<0>();
   auto values2 = csr->get<0>();
+  auto offsets_cpy = csr->getOffsets();
   //"Send To Self"
-  Kokkos::parallel_for("sendToSelf", values.size(), 
+  Kokkos::parallel_for("sendToSelf", np, 
       KOKKOS_LAMBDA (const int& i) {
-    
+    //assigns new_elements to be the current elements and fills values and
+    //values2 for comparison after the rebuild
+
+    lid_t elem = 0;
+    while(offsets_cpy(elem+1) < i)
+      elem++;
+
+    new_element(i) = elem;
+    values(i) = i;
+    values2(i) = i;  
 
   });
 
+  fprintf(stderr,"Rebuild next\n");
+  //Rebuild with no changes
+  csr->rebuild(new_element);
+  values = csr->get<0>();
+
+  kkLidView failed = kkLidView("failed", 1);
+  Kokkos::parallel_for("check no changes", np,
+      KOKKOS_LAMBDA (const int& i){
+    lid_t elem1 = 0;
+    lid_t elem2 = 0;
+    while(offsets_cpy(elem1+1) < i)
+      elem1++;
+    while(offsets_cpy(elem2+1) < i)
+      elem2++;
+
+    if(elem1 != elem2)
+      failed(0)+=1; 
+  });
+
+
+  fails+= getLastValue<lid_t>(failed);
+
   Kokkos::Profiling::popRegion();
-  return failed;
+  return fails;
 }
 
 //Rebuild test with no new particles, but reassigned particle elements
-bool rebuildNewElems(){
+int rebuildNewElems(){
   Kokkos::Profiling::pushRegion("rebuildNewElems");
-  bool passed = true;
+  int fails = 0;
 
   //kkLidView new_element = kkLidView("new_element", csr->getNumPtcls());
   //kkLidView new_particle_elements = kkLidView("new_particle_elements", 0);
@@ -127,37 +159,37 @@ bool rebuildNewElems(){
 
 
   Kokkos::Profiling::popRegion();
-  return passed;
+  return fails;
 }
 
 //Rebuild test with new particles added only
-bool rebuildNewPtcls(){
+int rebuildNewPtcls(){
   Kokkos::Profiling::pushRegion("rebuildNewPtcls");
-  bool passed = true;
+  int fails = 0;
 
 
   Kokkos::Profiling::popRegion();
-  return passed;
+  return fails;
 }
 
 //Rebuild test with exsiting particles destroyed only
-bool rebuildPtclsDestroyed(){
+int rebuildPtclsDestroyed(){
   Kokkos::Profiling::pushRegion("rebuildPtclsDestroyed");
-  bool passed = true;
+  int fails = 0; 
 
 
   Kokkos::Profiling::popRegion();
-  return passed;
+  return fails;
 }
 
 //Rebuild test with particles added and destroyed
-bool rebuildNewAndDestroyed(){
+int rebuildNewAndDestroyed(){
   Kokkos::Profiling::pushRegion("rebuildNewAndDestroyed");
-  bool passed = true;
+  int fails = 0;
 
 
   Kokkos::Profiling::popRegion();
-  return passed;
+  return fails;
 }
 
 

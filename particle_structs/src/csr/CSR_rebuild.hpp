@@ -1,6 +1,8 @@
 #pragma once
 
-#include "psMemberType.h"
+//#include "psMemberType.h"
+//For now using '2' version due to issue with dependency tree
+#include "psMemberType2.h"
 
 namespace pumipic{
   template<class DataTypes,typename MemSpace>
@@ -62,7 +64,7 @@ namespace pumipic{
     });
 
     //Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    CopyPSToPS2< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
 
     //Reallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);

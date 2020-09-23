@@ -39,7 +39,7 @@ namespace pumipic{
         });
 
     Kokkos::fence();
-    printView(particles_per_element);
+    //printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
 
 
@@ -47,7 +47,7 @@ namespace pumipic{
     offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
     assert(capacity_ == getLastValue(offsets)); 
-    printView(offsets);
+    //printView(offsets);
 
     //Determine new_indices for all of the exisitng particles
     auto offset_cpy = offsets;
@@ -62,6 +62,7 @@ namespace pumipic{
       else
         new_indices(i) = -1;
     });
+    printView(new_indices);
 
     //Copy existing particles to their new location in the temp MTV
     CopyPSToPS2< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
@@ -89,9 +90,11 @@ namespace pumipic{
     //Resassign all member variables
     ptcl_data = particle_info;
     num_ptcls = capacity_;
+    printMetrics();
+    fprintf(stderr, "ptcl_data:\n");
+    printView(ps::getMemberView<DataTypes,0>(ptcl_data));
 
     Kokkos::Profiling::popRegion();
     fprintf(stderr, "CSR rebuild complete\n");
   }
-
 }

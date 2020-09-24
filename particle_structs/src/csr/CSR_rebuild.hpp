@@ -39,7 +39,7 @@ namespace pumipic{
         });
 
     Kokkos::fence();
-    //printView(particles_per_element);
+    printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
 
 
@@ -47,13 +47,13 @@ namespace pumipic{
     offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
     assert(capacity_ == getLastValue(offsets)); 
-    //printView(offsets);
+    printView(offsets);
 
     //Determine new_indices for all of the exisitng particles
     auto offset_cpy = offsets;
     kkLidView row_indices("row indices", num_elems+1);
     Kokkos::deep_copy(row_indices,offset_cpy);
-    kkLidView new_indices("new indices", particles_on_process);
+    kkLidView new_indices("new indices", new_element.size());
     Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
       const lid_t new_elem = new_element(i);
       if(new_elem != -1){
@@ -62,14 +62,23 @@ namespace pumipic{
       else
         new_indices(i) = -1;
     });
+
+    fprintf(stderr,"new indices printed\n");
+    printf("new_element size: %d\n", new_element.size());
+    printView(new_element);
+
+
+    fprintf(stderr,"\nnew indices:\n");
     printView(new_indices);
 
     //Copy existing particles to their new location in the temp MTV
     CopyPSToPS2< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
 
+    fprintf(stderr,"copy ps to ps complete");
     //Reallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
     CreateViews<device_type,DataTypes>(ptcl_data, capacity_);
+    fprintf(stderr,"create new ptcl_data MTV complete");
 
     //If there are new particles
     lid_t num_new_ptcls = new_particle_elements.size();

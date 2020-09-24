@@ -87,14 +87,15 @@ namespace pumipic {
                  typename PS::kkLidView ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
-      auto copyPSToPS = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+      auto copyPSToPS2 = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const lid_t new_elem = new_element(ptcl_id);
+        printf("new element: %d\n", new_elem);
         if (mask && new_elem != -1) {
           const int index = ps_indices(ptcl_id);
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
-      parallel_for(ps, copyPSToPS);
+      parallel_for(ps, copyPSToPS2);
       CopyPSToPSImpl2<PS, Types...>(ps, dsts+1, srcs+1, new_element, ps_indices);
     }
 

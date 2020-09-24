@@ -102,7 +102,7 @@ namespace pumipic{
 
     //Resassign all member variables
     ptcl_data = particle_info;
-    capacity_ = getLastValue<lid_t>(offsets);
+    capacity_ = getLastValue<lid_t>(offsets_new);
     num_ptcls = capacity_;
     offsets   = offsets_new;
     printMetrics();

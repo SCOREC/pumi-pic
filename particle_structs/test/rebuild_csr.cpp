@@ -47,13 +47,13 @@ int main(int argc, char* argv[]){
     ///////////////////////////////////////////////////////////////////////////
 
     //verify still correct elements and no changes otherwise
-    fails += rebuildNoChanges();
+    //fails += rebuildNoChanges();
 
     //verify all elements are correctly assigned to new elements
-    fails += rebuildNewElems();
+    //fails += rebuildNewElems();
 
     //check new elements are added properly and all elements assgined correct
-    fails += rebuildNewPtcls();
+    ///fails += rebuildNewPtcls();
 
     //check for particles that were removed and the rest in their correct loc
     fails += rebuildPtclsDestroyed();
@@ -119,6 +119,7 @@ int rebuildNoChanges(){
     //set values to the element to check they end up in the correct one
     values(i) = elem;
     values2(i) = elem;  
+    });
 
   //fprintf(stderr,"csr data check:\n");
   //printView(ps::getMemberView<Type,0>(csr->getPtcl_data()));
@@ -348,7 +349,6 @@ int rebuildNewPtcls(){
   csr->rebuild(new_element, new_particle_elements, new_particles);
   Kokkos::fence();
   auto valuesNew = csr->get<0>(); //new size
-  auto valuesNew = csr->get<0>(); //new size
   offsets_cpy = csr->getOffsets();
 
 //  auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
@@ -423,13 +423,15 @@ int rebuildPtclsDestroyed(){
 
   delete [] ptcls_per_elem;
   delete [] ids;
-  //fprintf(stderr,"csr2 inited\n");
-  //printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
+//  fprintf(stderr,"csr inited\n");
+//  printView(ps::getMemberView<Type,0>(csr->getPtcl_data()));
+//  fprintf(stderr,"csr2 inited\n");
+//  printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
 
   CSR::kkLidView new_element("new_element", csr->getCapacity());
   
-  auto valuesOrig = csr->get<0>();
-  auto valuesOrig2 = csr2->get<0>();
+  auto values = csr->get<0>();
+  auto values2 = csr2->get<0>();
   auto offsets_cpy = csr->getOffsets();
 
   //"Send To Self"
@@ -437,73 +439,66 @@ int rebuildPtclsDestroyed(){
       KOKKOS_LAMBDA (const int& i) {
     //assigns new_elements to be the current elements and fills values and
     //values2 for comparison after the rebuild
+
     lid_t elem = 0;
     while(offsets_cpy(elem+1) < i)
       elem++;
 
-    new_element(i) = (3*i+2)%ne;
+    new_element(i) = elem; //change to assign to diff elems
     if(i%7 == 0) new_element(i) = -1;
-    //give each particle an identifier
-    valuesOrig(i) = i;
-    valuesOrig2(i) = i;  
+    values(i) = i;
+    values2(i) = i;  
+
   });
+  //fprintf(stderr,"csr data check:\n");
+  //printView(ps::getMemberView<Type,0>(csr->getPtcl_data()));
+
   //fprintf(stderr,"csr2 data check:\n");
   //printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
 
-  
-  fprintf(stderr, "into rebuild\n");
+  //fprintf(stderr,"Rebuild next\n");
+  //Rebuild with elements removed 
   csr->rebuild(new_element);
-  Kokkos::fence();
-  auto valuesNew = csr->get<0>(); //new size
-  auto valuesNew = csr->get<0>(); //new size
+  values = csr->get<0>();
   offsets_cpy = csr->getOffsets();
 
-//  auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
-//  auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
-//
-//  printView(pIDs);
-//  printView(pIDs2);
+  auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
+  auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
 
-  fprintf(stderr,"Check that it work: ////////////////////////\n");
+  printView(pIDs);
+  printView(pIDs2);
 
+  lid_t particles = csr->getCapacity();
+  printf("particles after removal: %d\n",particles);
   kkLidView failed = kkLidView("failed", 1);
-  Kokkos::parallel_for("check orig particles", np,
+  Kokkos::parallel_for("check no changes", np,
       KOKKOS_LAMBDA (const int& i){
-      //insert checks here
-      lid_t id = valuesOrig2(i);
-      lid_t dest_elem = new_element(i);
+    lid_t id = values2(i);
+    lid_t dest_elem = new_element(i);
+    bool found = false;
+    if(dest_elem == -1){
+      for(lid_t i = 0; i < particles; ++i){
+        assert(values(i) != id);
+      }
+      found = true;
+    }
+    else{
       lid_t row_start = offsets_cpy(dest_elem);
-      lid_t row_end = offsets_cpy(dest_elem+1);
-      bool found = false;
+      lid_t row_end =offsets_cpy(dest_elem+1);
       for(lid_t i = row_start; i < row_end; ++i){
-        if(valuesNew(i) == id){
+        if(values(i) == id){
           found = true;
           break;
         } 
       }
-      if(!found) failed(0)+=1;
+    }
+    if(!found) failed(0)+=1;
   });
-  fprintf(stderr, "Orig ptcls checked");
-  Kokkos::parallel_for("check new particles", nnp,
-      KOKKOS_LAMBDA (const int& i){
-      //insert checks here
-      lid_t id = new_particle_access(i);
-      lid_t dest_elem = new_particle_elements(i);
-      lid_t row_start = offsets_cpy(dest_elem);
-      lid_t row_end = offsets_cpy(dest_elem+1);
-      bool found = false;
-      for(lid_t i = row_start; i < row_end; i++){
-        if(valuesNew(i) == id){
-          found = true;
-          break;
-        }
-      }
-      if(!found) failed(0) += 1;
-  });
-
-
-  fails+= getLastValue<lid_t>(failed);
+  
+  fails += getLastValue<lid_t>(failed);
   fprintf(stderr,"end\n");
+
+
   Kokkos::Profiling::popRegion();
   return fails;
 }

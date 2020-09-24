@@ -42,7 +42,6 @@ namespace pumipic{
     printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
 
-
     //refill offset here 
     offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
@@ -63,16 +62,21 @@ namespace pumipic{
         new_indices(i) = -1;
     });
 
-    fprintf(stderr,"new indices printed\n");
     printf("new_element size: %d\n", new_element.size());
     printView(new_element);
 
 
-    fprintf(stderr,"\nnew indices:\n");
+    printf("new_indices size: %d\n", new_indices.size());
     printView(new_indices);
+    fprintf(stderr,"\nnew indices printed \n");
+
+    printf("particle info size: %d\n", ps::getMemberView<DataTypes,0>(particle_info).size());
+    printf("particle data size: %d\n", ps::getMemberView<DataTypes,0>(ptcl_data).size());
 
     //Copy existing particles to their new location in the temp MTV
+    Kokkos::fence();
     CopyPSToPS2< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    Kokkos::fence();
 
     fprintf(stderr,"copy ps to ps complete");
     //Reallocate ptcl_data

@@ -50,10 +50,10 @@ int main(int argc, char* argv[]){
     fails += rebuildNoChanges();
 
     //verify all elements are correctly assigned to new elements
-    //fails += rebuildNewElems();
+    fails += rebuildNewElems();
 
     //check new elements are added properly and all elements assgined correct
-    fails += rebuildNewPtcls();
+    //fails += rebuildNewPtcls();
 
     //check for particles that were removed and the rest in their correct loc
     //fails += rebuildPtclsDestroyed();
@@ -144,11 +144,11 @@ int rebuildNoChanges(){
 
   values = csr->get<0>();
 
-  auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
-  auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
+  //auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
+  //auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
 
-  printView(pIDs);
-  printView(pIDs2);
+  //printView(pIDs);
+  //printView(pIDs2);
 
   //values holds the current element of each particle in csr
   //values2 holds the original element assignments
@@ -162,7 +162,7 @@ int rebuildNoChanges(){
 
 
   fails+= getLastValue<lid_t>(failed);
-  fprintf(stderr,"end\n");
+  //fprintf(stderr,"end\n");
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -220,10 +220,10 @@ int rebuildNewElems(){
     while(offsets_cpy(elem+1) < i)
       elem++;
 
-    new_element(i) = 4-elem;
+    new_element(i) = (elem*3 + i)%ne; 
     //set values to the element to check they end up in the correct one
-    values(i) = elem;
-    values2(i) = elem;  
+    values(i) = i;
+    values2(i) = i;  
 
   });
   //fprintf(stderr,"csr data check:\n");
@@ -236,18 +236,7 @@ int rebuildNewElems(){
   //Rebuild with no changes
   csr->rebuild(new_element);
   values = csr->get<0>();
-
-  Kokkos::parallel_for("check Element", np,
-      KOKKOS_LAMBDA (const int& i){
-
-        lid_t elem = 0;
-        while(offsets_cpy(elem+1)<i) elem++;
-
-        values(i) = elem;
-  });
-
-
-
+  offsets_cpy = csr->getOffsets();
 
   auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
   auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
@@ -261,14 +250,23 @@ int rebuildNewElems(){
   kkLidView failed = kkLidView("failed", 1);
   Kokkos::parallel_for("check no changes", np,
       KOKKOS_LAMBDA (const int& i){
-    if(values(i) != values2(np-i)){
-      failed(0)+=1; 
+    lid_t id = values2(i);
+    lid_t dest_elem = new_element(i);
+    lid_t row_start = offsets_cpy(dest_elem);
+    lid_t row_end =offsets_cpy(dest_elem+1);
+    bool found = false;
+    for(lid_t i = row_start; i < row_end; ++i){
+      if(values(i) == id){
+        found = true;
+        break;
+      } 
     }
+    if(!found) failed(0)+=1;
   });
   
 
 
-  fails+= getLastValue<lid_t>(failed);
+  fails += getLastValue<lid_t>(failed);
   fprintf(stderr,"end\n");
 
   Kokkos::Profiling::popRegion();

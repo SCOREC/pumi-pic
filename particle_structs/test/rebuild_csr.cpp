@@ -3,6 +3,9 @@
 
 #include <CSR.hpp>
 #include <MemberTypes.h>
+#include <MemberTypeLibraries.h>
+#include <ppTypes.h>
+#include <psMemberType.h>
 
 #include "Distribute.h"
 
@@ -47,10 +50,10 @@ int main(int argc, char* argv[]){
     fails += rebuildNoChanges();
 
     //verify all elements are correctly assigned to new elements
-    fails += rebuildNewElems();
+    //fails += rebuildNewElems();
 
     //check new elements are added properly and all elements assgined correct
-    //fails += rebuildNewPtcls();
+    fails += rebuildNewPtcls();
 
     //check for particles that were removed and the rest in their correct loc
     //fails += rebuildPtclsDestroyed();
@@ -168,7 +171,7 @@ int rebuildNoChanges(){
 int rebuildNewElems(){
   Kokkos::Profiling::pushRegion("rebuildNewElems");
   int fails = 0;
-//kkLidView new_element = kkLidView("new_element", csr->getNumPtcls());
+  //kkLidView new_element = kkLidView("new_element", csr->getNumPtcls());
   //kkLidView new_particle_elements = kkLidView("new_particle_elements", 0);
   //PS::MTVs new_particles;
 
@@ -200,7 +203,7 @@ int rebuildNewElems(){
 //  printView(ps::getMemberView<Type,0>(csr->getPtcl_data()));
 //  fprintf(stderr,"csr2 inited\n");
 //  printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
-//
+
   CSR::kkLidView new_element("new_element", csr->getCapacity());
   
   auto values = csr->get<0>();
@@ -232,6 +235,7 @@ int rebuildNewElems(){
   //fprintf(stderr,"Rebuild next\n");
   //Rebuild with no changes
   csr->rebuild(new_element);
+  values = csr->get<0>();
 
   Kokkos::parallel_for("check Element", np,
       KOKKOS_LAMBDA (const int& i){
@@ -240,11 +244,10 @@ int rebuildNewElems(){
         while(offsets_cpy(elem+1)<i) elem++;
 
         values(i) = elem;
-      });
+  });
 
 
 
-  values = csr->get<0>();
 
   auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());
   auto pIDs2  = ps::getMemberView<Type,0>(csr2->getPtcl_data());
@@ -258,15 +261,15 @@ int rebuildNewElems(){
   kkLidView failed = kkLidView("failed", 1);
   Kokkos::parallel_for("check no changes", np,
       KOKKOS_LAMBDA (const int& i){
-    if(values(i) != values2(i))
+    if(values(i) != values2(np-i)){
       failed(0)+=1; 
+    }
   });
+  
 
 
   fails+= getLastValue<lid_t>(failed);
   fprintf(stderr,"end\n");
-
-
 
   Kokkos::Profiling::popRegion();
   return fails;
@@ -293,8 +296,8 @@ int rebuildNewPtcls(){
 
   delete [] ptcls_per_elem;
   delete [] ids;
-  fprintf(stderr,"csr2 inited\n");
-  printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
+  //fprintf(stderr,"csr2 inited\n");
+  //printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
 
   CSR::kkLidView new_element("new_element", csr->getCapacity());
   
@@ -307,22 +310,34 @@ int rebuildNewPtcls(){
       KOKKOS_LAMBDA (const int& i) {
     //assigns new_elements to be the current elements and fills values and
     //values2 for comparison after the rebuild
-
     lid_t elem = 0;
     while(offsets_cpy(elem+1) < i)
       elem++;
 
     new_element(i) = elem;
-    values(i) = i;
-    values2(i) = i;  
-
+    //give each particle an identifier
+    values(i) = elem;
+    values2(i) = elem;  
   });
-  fprintf(stderr,"csr2 data check:\n");
-  printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
+  //fprintf(stderr,"csr2 data check:\n");
+  //printView(ps::getMemberView<Type,0>(csr2->getPtcl_data()));
+
   
   //////////////////////////////////////////////////////////////
   //Introduce new particles
-//  int nnp = 5;
+  int nnp = 5;
+  CSR::kkLidView new_particle_elements("new_particle_elements", nnp);
+  auto new_particles = particle_structs::createMemberViews<Type>(nnp);
+  auto new_particle_access = particle_structs::getMemberView<Type,0>(new_particles);
+  Kokkos::parallel_for("new_particle_elements", nnp, 
+      KOKKOS_LAMBDA (const int& i){
+      new_particle_elements(i) = i%5;
+      new_particle_access(i) = i%5;
+  });
+
+
+
+
 //  //int* new_ptcls_per_elem = new int[ne];
 //  delete[] new_ids;
 //  std::vector<int>* new_ids = new std::vector<int>[ne];
@@ -337,21 +352,18 @@ int rebuildNewPtcls(){
 //      new_particle_elements(i) = i%ne;
 //  });
 //
-//
-//  
-//
-//
-//
-//
-//  //////////////////////////////////////////////////////////////
-//
-//
-//
 //  fprintf(stderr,"Rebuild next\n");
 //  //Rebuild with new particles
 //  MTVs new_particles;
 //  CreateViews<device_type,DataTypes>(new_particles, new_particle_elements.size());
-  csr->rebuild(new_element/*, new_particle_elements, new_particles*/);
+  fprintf(stderr,"new_particle_elements:\n");
+  printView(new_particle_elements);
+  fprintf(stderr,"new particle MTV data:\n");
+  printView(new_particle_access);
+
+
+  fprintf(stderr, "into rebuild");
+  csr->rebuild(new_element, new_particle_elements, new_particles);
   values = csr->get<0>();
 
   auto pIDs  = ps::getMemberView<Type,0>(csr->getPtcl_data());

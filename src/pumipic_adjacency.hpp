@@ -584,9 +584,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         rank, timer.seconds(), btime);
     fprintf(stderr, "%d pumipic search_2d loops %d\n", rank, loops);
   }
-#ifdef PP_DEBUG
-  return found;
-#endif
   Kokkos::Profiling::popRegion();
   return found;
 }

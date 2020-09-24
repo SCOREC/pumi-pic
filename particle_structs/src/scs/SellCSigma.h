@@ -1,4 +1,3 @@
-
 #ifndef SELL_C_SIGMA_H_
 #define SELL_C_SIGMA_H_
 #include <vector>
@@ -244,10 +243,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
     fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   PairView ptcls;
-  Kokkos::Timer timer;
   sigmaSort(ptcls, num_elems,ptcls_per_elem, sigma);
-  if(comm_rank == 0 || comm_rank == comm_size/2)
-    fprintf(stderr,"%d SCS sorting time (seconds) %f\n", comm_rank, timer.seconds());
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;

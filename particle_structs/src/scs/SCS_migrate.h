@@ -1,5 +1,4 @@
 #pragma once
-#include <psMemberType.h>
 namespace pumipic {
 
   template<class DataTypes, typename MemSpace>

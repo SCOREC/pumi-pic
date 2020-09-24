@@ -1,9 +1,7 @@
 #pragma once
 
-#include <particle_structure.hpp>
 #include <particle_structs.hpp>
 namespace ps = particle_structs;
-#include <psMemberType.h>
 
 namespace {
   // print the contents of a view for debugging
@@ -68,9 +66,9 @@ namespace pumipic {
     CSR& operator=(const CSR&) = delete;
 
     CSR(PolicyType& p,
-        lid_t num_elements, lid_t num_particles, 
+        lid_t num_elements, lid_t num_particles,
         kkLidView particles_per_element,
-        kkGidView element_gids, 
+        kkGidView element_gids,
         kkLidView particle_elements = kkLidView(),
         MTVs particle_info = NULL);
     ~CSR();
@@ -84,7 +82,7 @@ namespace pumipic {
     lid_t getNumPtcls() { return num_ptcls; }
     kkLidView getOffsets() { return offsets; }
     MTVs getPtcl_data() { return ptcl_data; }
-    lid_t getCapacity() { return capacity_; } 
+    lid_t getCapacity() { return capacity_; }
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
@@ -101,14 +99,14 @@ namespace pumipic {
 
     //---Attention User---  Do **not** call this function! {
     /**
-     * (in) particle_elements - particle_elements[i] contains the id (index) 
+     * (in) particle_elements - particle_elements[i] contains the id (index)
      *                          of the parent element * of particle i
      * (in) particle_info - 'member type views' containing the user's data to be
      *                      associated with each particle
      */
     void initCsrData(kkLidView particle_elements, MTVs particle_info) {
       fprintf(stderr, "initCsrData entered\n");
-      //Create the 'particle_indices' array.  particle_indices[i] stores the 
+      //Create the 'particle_indices' array.  particle_indices[i] stores the
       //location in the 'ptcl_data' where  particle i is stored.  Use the
       //CSR offsets array and an atomic_fetch_add to compute these entries.
       lid_t given_particles = particle_elements.size();
@@ -117,7 +115,7 @@ namespace pumipic {
       fprintf(stderr, "assert passed\n");
 
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
-      auto offset_cpy = offsets; 
+      auto offset_cpy = offsets;
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
       kkLidView row_indices("row indces", num_elems+1);
@@ -147,7 +145,7 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::num_rows;
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
-  
+
     //Offsets array into CSR
     kkLidView offsets;
   };
@@ -160,7 +158,7 @@ namespace pumipic {
                                 kkGidView element_gids,      //optional
                                 kkLidView particle_elements, //optional
                                 MTVs particle_info) :        //optional
-      ParticleStructure<DataTypes, MemSpace>(), 
+      ParticleStructure<DataTypes, MemSpace>(),
       policy(p)
   {
     Kokkos::Profiling::pushRegion("csr_construction");
@@ -176,7 +174,7 @@ namespace pumipic {
     //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     //to fill the entries of the offsets array.
     //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView("offsets", num_elems+1); 
+    offsets = kkLidView("offsets", num_elems+1);
     Kokkos::resize(particles_per_element, particles_per_element.size()+1);
     exclusive_scan(particles_per_element, offsets);
 
@@ -184,7 +182,7 @@ namespace pumipic {
     //pumi-pic/support/SupportKK.h has a helper function for this
     capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
-    CreateViews<device_type, DataTypes>(ptcl_data, capacity_); 
+    CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
 
     //If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
@@ -222,7 +220,7 @@ namespace pumipic {
     //new_element - integers corresponding to which mesh element each particle
     //is now assigned to, -1 if no longer on current process
     //
-    //Do new_element's indices correspond with current location in CSR representation 
+    //Do new_element's indices correspond with current location in CSR representation
     //or particle ID?
     //
     //new_particle_elements - integers corresponding to which mesh element
@@ -230,13 +228,13 @@ namespace pumipic {
     //new_particles - MTV data associated with each of the particles added
     //to the process
     //Assume these index respectively for new particles
-    
+
     //Gameplan - count how many entries are > -1 first to determine space to allocate
     //           'merge' existing and new data for input to CSR constructor
-    //           construct new CSR based on that input 
+    //           construct new CSR based on that input
 
     //Counting of particles on process
-    lid_t particles_on_process = countParticlesOnProcess(new_element) + 
+    lid_t particles_on_process = countParticlesOnProcess(new_element) +
                                  countParticlesOnProcess(new_particle_elements);
     capacity_ = particles_on_process;
     fprintf(stderr,"print on next line\n");
@@ -267,10 +265,10 @@ namespace pumipic {
 
 
 
-    //refill offset here 
+    //refill offset here
     offsets = kkLidView("offsets", num_elems+1);
     exclusive_scan(particles_per_element, offsets);
-    assert(capacity_ == getLastValue(offsets)); 
+    assert(capacity_ == getLastValue(offsets));
     printView(offsets);
 
     //Determine new_indices for all of the exisitng particles
@@ -296,7 +294,7 @@ namespace pumipic {
 
     //If there are new particles
     lid_t num_new_ptcls = new_particle_elements.size();
-    kkLidView new_particle_indices("new_particle_indices", num_new_ptcls); 
+    kkLidView new_particle_indices("new_particle_indices", num_new_ptcls);
 
     //Determine new particle indices in the MTVs
     Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
@@ -306,7 +304,7 @@ namespace pumipic {
     });
 
     if(num_new_ptcls > 0){
-      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles, 
+      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
                                                           new_particle_indices);
     }
 
@@ -316,15 +314,15 @@ namespace pumipic {
 
     ////need to combine particle->element mapping and particledata to new structures for init
     ////remove all off process particles in the process
-    ////kkLidView particle_elements = kkLidView("particle elements", particles_on_process); 
+    ////kkLidView particle_elements = kkLidView("particle elements", particles_on_process);
     /////////////////////////////////////////////////////////////////////////////
     ////for now assuming all particles remain on process (no -1 elements)
     /////////////////////////////////////////////////////////////////////////////
     //MTVs particle_info;
-    //CreateViews<device_type, DataTypes>(particle_info, particles_on_process); 
+    //CreateViews<device_type, DataTypes>(particle_info, particles_on_process);
     //Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
     //    KOKKOS_LAMBDA(const int& i){
-    //      particle_elements(i) = new_element(i);    
+    //      particle_elements(i) = new_element(i);
     //  //    particle_info[i] = ptcl_data[i];
     //    });
     //const lid_t new_element_size = new_element.size();
@@ -360,7 +358,7 @@ namespace pumipic {
     ///////////////////////////////////////////////////////////////////////////
   }
   */
- 
+
 
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>

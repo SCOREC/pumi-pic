@@ -106,7 +106,11 @@ namespace pumipic {
                MemberTypeViewsConst srcs,
                typename PS::kkLidView new_element,
                typename PS::kkLidView ps_indices) {
+      fprintf(stderr,"entered CopyPSToPS\n");
+      Kokkos::fence();
       CopyPSToPSImpl2<PS, Types...>(ps, dsts, srcs, new_element, ps_indices);
+      Kokkos::fence();
+      fprintf(stderr,"exited CopyPSToPS\n");
     }
   };
 }

@@ -15,9 +15,9 @@ namespace pumipic{
     //Counting of particles on process
     lid_t particles_on_process = countParticlesOnProcess(new_element) + 
                                  countParticlesOnProcess(new_particle_elements);
-    capacity_ = particles_on_process;
     fprintf(stderr,"print on next line\n");
-    printf("particles on process: %d\ncapacity: %d\n", particles_on_process, capacity_);
+    printf("particles on process: %d\n", particles_on_process);
+    num_ptcls = particles_on_process;
 
 
     //Alocate new (temp) MTV
@@ -42,16 +42,18 @@ namespace pumipic{
     printView(particles_per_element);
     fprintf(stderr,"Ptcls per elem set\n");
 
+
     //refill offset here 
-    offsets = kkLidView("offsets", num_elems+1);
-    exclusive_scan(particles_per_element, offsets);
-    assert(capacity_ == getLastValue(offsets)); 
-    printView(offsets);
+    auto offsets_new = kkLidView("offsets", num_elems+1);
+    Kokkos::deep_copy(offsets_new, offsets);
+    exclusive_scan(particles_per_element, offsets_new);
+    //assert(capacity_ == getLastValue(offsets)); 
+    printView(offsets_new);
 
     //Determine new_indices for all of the exisitng particles
-    auto offset_cpy = offsets;
+    //auto offset_cpy = offsets;
     kkLidView row_indices("row indices", num_elems+1);
-    Kokkos::deep_copy(row_indices,offset_cpy);
+    Kokkos::deep_copy(row_indices,offsets_new);
     kkLidView new_indices("new indices", new_element.size());
     Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
       const lid_t new_elem = new_element(i);
@@ -72,6 +74,9 @@ namespace pumipic{
 
     printf("particle info size: %d\n", ps::getMemberView<DataTypes,0>(particle_info).size());
     printf("particle data size: %d\n", ps::getMemberView<DataTypes,0>(ptcl_data).size());
+    printf("new element   size: %d\n", new_element.size());
+    printf("new indices   size: %d\n", new_indices.size());
+    
 
     //Copy existing particles to their new location in the temp MTV
     Kokkos::fence();
@@ -102,7 +107,9 @@ namespace pumipic{
 
     //Resassign all member variables
     ptcl_data = particle_info;
+    capacity_ = getLastValue<lid_t>(offsets);
     num_ptcls = capacity_;
+    offsets   = offsets_new;
     printMetrics();
     fprintf(stderr, "ptcl_data:\n");
     printView(ps::getMemberView<DataTypes,0>(ptcl_data));

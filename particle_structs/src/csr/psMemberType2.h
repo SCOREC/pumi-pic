@@ -79,6 +79,8 @@ namespace pumipic {
                    MemberTypeViewsConst srcs,
                    typename PS::kkLidView new_element,
                    typename PS::kkLidView ps_indices) {
+      fprintf(stderr,"Call to enclose2()\n");
+      Kokkos::fence();
       enclose2(ps,dsts,srcs,new_element, ps_indices);
     }
     void enclose2(PS* ps, MemberTypeViewsConst dsts,
@@ -87,15 +89,19 @@ namespace pumipic {
                  typename PS::kkLidView ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
+      Kokkos::fence();
+      fprintf(stderr,"Cast src to dst done\n");
       auto copyPSToPS2 = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const lid_t new_elem = new_element(ptcl_id);
-        printf("new element: %d\n", new_elem);
+        printf("particle: %d\tnew element: %d\n", ptcl_id,new_elem);
         if (mask && new_elem != -1) {
           const int index = ps_indices(ptcl_id);
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
       parallel_for(ps, copyPSToPS2);
+      fprintf(stderr,"parallel_for done\n");
+      Kokkos::fence();
       CopyPSToPSImpl2<PS, Types...>(ps, dsts+1, srcs+1, new_element, ps_indices);
     }
 

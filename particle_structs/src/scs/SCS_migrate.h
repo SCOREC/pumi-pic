@@ -16,16 +16,10 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(dist.mpi_comm(), &comm_rank);
 
-    //World rank & size for output control
-    int world_rank, world_size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
     //If serial, skip migration
     if (comm_size == 1) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      if(!world_rank || world_rank == world_size/2)
-        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
+      RecordTime("ps particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -116,8 +110,7 @@ namespace pumipic {
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      if(!world_rank || world_rank == world_size/2)
-        fprintf(stderr, "%d ps particle migration (seconds) %f\n", world_rank, timer.seconds());
+      RecordTime("ps particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -215,9 +208,7 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
 
-    if(!world_rank || world_rank == world_size/2)
-      fprintf(stderr, "%d ps particle migration (seconds) %f pre-barrier "
-              "(seconds) %f\n", world_rank, timer.seconds(), btime);
+    RecordTime("ps particle migration", timer.seconds(), btime);
 
     Kokkos::Profiling::popRegion();
   }

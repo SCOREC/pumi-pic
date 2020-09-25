@@ -44,7 +44,13 @@ namespace pumipic {
     Or if prebarrierTime is provided:
       <comm_rank> str (seconds) %f pre-barrier (seconds) %f
   */
-  void RecordTime(const char* str, double seconds, double prebarrierTime = 0.0);
+  void RecordTime(std::string str, double seconds, double prebarrierTime = 0.0);
+
+  /*
+    Allows printing additional info using the timing verbosity. `str` will only be printed if
+    verbosity was set greater than or equal to the passed in `verbosity`
+  */
+  void PrintAdditionalTimeInfo(char* str, int verbosity);
 
   /*
     Print a summary of all recorded timing on each process that enabled recording

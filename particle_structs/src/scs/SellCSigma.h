@@ -18,7 +18,7 @@
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #endif
-
+#include <ppTiming.hpp>
 namespace pumipic {
 
 void enable_prebarrier();

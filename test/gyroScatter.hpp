@@ -222,9 +222,8 @@ void gyroScatter(o::Mesh* mesh, PS* ptcls, o::LOs v2v, std::string scatterTagNam
   };
   o::parallel_for(mesh->nverts(), scatterToMappedVerts, "xgcm_scatterToMappedVerts");
   mesh->set_tag(o::VERT, scatterTagName, o::Reals(scatter_w));
-  if(!rank || rank == comm_size/2)
-    fprintf(stderr, "%d gyro scatter (seconds) %f pre-barrier (seconds) %f\n",
-        rank, timer.seconds(), btime);
+
+  pumipic::RecordTime("gyro scatter", timer.seconds(), btime);
   Kokkos::Profiling::popRegion();
 }
 
@@ -252,10 +251,8 @@ void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
   const auto rtime = reducetimer.seconds();
 
   mesh->set_tag(0, syncTagName, Omega_h::Reals(sync_array));
-  if(!rank || rank == comm_size/2) {
-    fprintf(stderr, "%d gyro sync times (sec): sync %f pre-barrier %f reduction %f\n",
-        rank, timer.seconds(), btime, rtime);
-  }
+  pumipic::RecordTime("gyro sync", timer.seconds(), btime);
+  pumipic::RecordTime("gyro reduction", rtime);
   Kokkos::Profiling::popRegion();
 }
 #endif

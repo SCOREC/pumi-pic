@@ -9,6 +9,7 @@
 #include <fstream>
 #include "ellipticalPush.hpp"
 #include <random>
+#include <ppTiming.hpp>
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
@@ -353,6 +354,11 @@ int main(int argc, char** argv) {
            typeid (Kokkos::DefaultHostExecutionSpace).name());
     printTimerResolution();
   }
+
+  pumipic::SetTimingVerbosity(0);
+  if (comm_rank == comm_size / 2) {
+    pumipic::EnableTiming();
+  }
   auto full_mesh = readMesh(argv[1], lib);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -533,7 +539,7 @@ int main(int argc, char** argv) {
     delete ptcls;
 
   }
-
+  pumipic::SummarizeTime();
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

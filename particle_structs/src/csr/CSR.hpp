@@ -105,14 +105,11 @@ namespace pumipic {
      *                      associated with each particle
      */
     void initCsrData(kkLidView particle_elements, MTVs particle_info) {
-      fprintf(stderr, "initCsrData entered\n");
       //Create the 'particle_indices' array.  particle_indices[i] stores the
       //location in the 'ptcl_data' where  particle i is stored.  Use the
       //CSR offsets array and an atomic_fetch_add to compute these entries.
       lid_t given_particles = particle_elements.size();
       assert(given_particles == num_ptcls);
-
-      fprintf(stderr, "assert passed\n");
 
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
       auto offset_cpy = offsets;
@@ -120,7 +117,6 @@ namespace pumipic {
       //SS3 insert code to set the entries of particle_indices>
       kkLidView row_indices("row indces", num_elems+1);
       Kokkos::deep_copy(row_indices, offset_cpy);
-      fprintf(stderr,"deep copy complete\n");
 
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
@@ -129,7 +125,6 @@ namespace pumipic {
       });
 
       //populate ptcl_data with input data and particle_indices mapping
-      fprintf(stderr,"begin MTV copy\n");
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
     }
     // } ... or else!
@@ -208,157 +203,6 @@ namespace pumipic {
                                          MTVs new_particle_info) {
     fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
   }
-
-  /*
-  template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::rebuild(kkLidView new_element,
-                                         kkLidView new_particle_elements,
-                                         MTVs new_particles) {
-
-    Kokkos::Profiling::pushRegion("CSR Rebuild");
-    fprintf(stderr, "CSR Rebuild begun\n");
-    //new_element - integers corresponding to which mesh element each particle
-    //is now assigned to, -1 if no longer on current process
-    //
-    //Do new_element's indices correspond with current location in CSR representation
-    //or particle ID?
-    //
-    //new_particle_elements - integers corresponding to which mesh element
-    //particles new to the process exist in (-1 should throw error)
-    //new_particles - MTV data associated with each of the particles added
-    //to the process
-    //Assume these index respectively for new particles
-
-    //Gameplan - count how many entries are > -1 first to determine space to allocate
-    //           'merge' existing and new data for input to CSR constructor
-    //           construct new CSR based on that input
-
-    //Counting of particles on process
-    lid_t particles_on_process = countParticlesOnProcess(new_element) +
-                                 countParticlesOnProcess(new_particle_elements);
-    capacity_ = particles_on_process;
-    fprintf(stderr,"print on next line\n");
-    printf("particles on process: %d\ncapacity: %d\n", particles_on_process, capacity_);
-
-
-    //Alocate new (temp) MTV
-    MTVs particle_info;
-    CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
-
-
-    //fresh filling of particles_per_element
-    kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
-    Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
-        KOKKOS_LAMBDA(const int& i){
-          if(new_element[i] > -1)
-            Kokkos::atomic_increment(&particles_per_element[new_element[i]]);
-        });
-    Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
-        KOKKOS_LAMBDA(const int& i){
-          assert(new_particle_elements[i] > -1);
-          Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
-        });
-
-    Kokkos::fence();
-    printView(particles_per_element);
-    fprintf(stderr,"Ptcls per elem set\n");
-
-
-
-    //refill offset here
-    offsets = kkLidView("offsets", num_elems+1);
-    exclusive_scan(particles_per_element, offsets);
-    assert(capacity_ == getLastValue(offsets));
-    printView(offsets);
-
-    //Determine new_indices for all of the exisitng particles
-    auto offset_cpy = offsets;
-    kkLidView row_indices("row indices", num_elems+1);
-    Kokkos::deep_copy(row_indices,offset_cpy);
-    kkLidView new_indices("new indices", particles_on_process);
-    Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
-      const lid_t new_elem = new_element(i);
-      if(new_elem != -1){
-        new_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
-      }
-      else
-        new_indices(i) = -1;
-    });
-
-    //Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
-
-    //Reallocate ptcl_data
-    destroyViews<device_type,DataTypes>(ptcl_data);
-    CreateViews<device_type,DataTypes>(ptcl_data, capacity_);
-
-    //If there are new particles
-    lid_t num_new_ptcls = new_particle_elements.size();
-    kkLidView new_particle_indices("new_particle_indices", num_new_ptcls);
-
-    //Determine new particle indices in the MTVs
-    Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
-                            KOKKOS_LAMBDA(const int& i){
-      lid_t new_elem = new_particle_elements(i);
-      new_particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
-    });
-
-    if(num_new_ptcls > 0){
-      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
-                                                          new_particle_indices);
-    }
-
-    //Resassign all member variables
-    ptcl_data = particle_info;
-    num_ptcls = capacity_;
-
-    ////need to combine particle->element mapping and particledata to new structures for init
-    ////remove all off process particles in the process
-    ////kkLidView particle_elements = kkLidView("particle elements", particles_on_process);
-    /////////////////////////////////////////////////////////////////////////////
-    ////for now assuming all particles remain on process (no -1 elements)
-    /////////////////////////////////////////////////////////////////////////////
-    //MTVs particle_info;
-    //CreateViews<device_type, DataTypes>(particle_info, particles_on_process);
-    //Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
-    //    KOKKOS_LAMBDA(const int& i){
-    //      particle_elements(i) = new_element(i);
-    //  //    particle_info[i] = ptcl_data[i];
-    //    });
-    //const lid_t new_element_size = new_element.size();
-    //Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
-    //    KOKKOS_LAMBDA(const int& i){
-    //      particle_elements(i+new_element.size()) = new_particle_elements(i);
-    //   //   particle_info[i+new_element_size] = new_particles[i];
-    //    });
-    //Kokkos::fence();
-    //printView(particle_elements);
-    //fprintf(stderr,"Ptcl elements and MTV data transfered\n");
-
-    ////print to inspect if placed in correct slots
-    //auto pIDs  = ps::getMemberView<DataTypes,0>(particle_info);
-    //fprintf(stderr,"Printing attempt\n");
-    //Kokkos::fence();
-    //printView(pIDs);
-    //fprintf(stderr,"End View printing\n");
-
-    ////can't resize MTV it appears
-    ////Kokkos::resize(ptcl_data, capacity_); //going to write over ptcl_data anyways
-    //CreateViews<device_type,DataTypes>(ptcl_data,capacity_);
-    //initCsrData(particle_elements, particle_info);
-    //num_ptcls = particles_on_process;
-
-    //printView(ps::getMemberView<DataTypes,0>(ptcl_data));
-
-
-    fprintf(stderr, "CSR rebuild complete\n");
-    Kokkos::Profiling::popRegion();
-    ///////////////////////////////////////////////////////////////////////////
-    fprintf(stderr, "[WARNING] CSR rebuild(...) not fully implemented\n");
-    ///////////////////////////////////////////////////////////////////////////
-  }
-  */
-
 
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>

@@ -41,8 +41,7 @@ int main(int argc, char* argv[]){
   {
     MPI_Comm_rank(MPI_COMM_WORLD,&comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-
-    ///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
     //Tests to run go here
     ///////////////////////////////////////////////////////////////////////////
 
@@ -100,39 +99,38 @@ int rebuildNoChanges(){
   Kokkos::parallel_for("sendToSelf", np, 
       KOKKOS_LAMBDA (const int& i) {
     lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i)
+    while(offsets_cpy(elem+1) < i+1)
       elem++;
 
     new_element(i) = elem;
-    //set values to the element to check they end up in the correct one
-    values(i) = elem;
-    values2(i) = elem;  
-    });
+
+    values(i) = i;
+    values2(i) = i;  
+  });
 
   //Rebuild with no changes (function takes second and third args as optional
   csr->rebuild(new_element);
 
   values = csr->get<0>();
 
-  //Setting current elements to changed MTV
-  Kokkos::parallel_for("check Element", np,
-      KOKKOS_LAMBDA (const int& i){
-        lid_t elem = 0;
-        while(offsets_cpy(elem+1)<i) elem++;
-
-        values(i) = elem;
-      });
-
-  //values holds the current element of each particle in csr
-  //values2 holds the original element assignments
   kkLidView failed = kkLidView("failed", 1);
   Kokkos::parallel_for("check no changes", np,
       KOKKOS_LAMBDA (const int& i){
-    if(values(i) != values2(i))
-      failed(0)+=1; 
+    lid_t id = values2(i);
+    lid_t dest_elem = new_element(i);
+    lid_t row_start = offsets_cpy(dest_elem);
+    lid_t row_end = offsets_cpy(dest_elem+1);
+    bool found = false;
+    for(lid_t i = row_start; i < row_end; ++i){
+      if(values(i) == id){
+        found = true;
+        break;
+      } 
+    }
+    if(!found) failed(0)+=1;
   });
 
-  fails+= getLastValue<lid_t>(failed);
+  fails += getLastValue<lid_t>(failed);
 
   Kokkos::Profiling::popRegion();
   return fails;
@@ -148,7 +146,7 @@ int rebuildNewElems(){
   int np = 20;
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids); 
+  distribute_particles(ne, np, 2, ptcls_per_elem, ids); 
   Kokkos::TeamPolicy<exe_space> po(32,Kokkos::AUTO);
   CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v",ne);
   CSR::kkGidView element_gids_v("",0);
@@ -170,7 +168,7 @@ int rebuildNewElems(){
   Kokkos::parallel_for("sendToSelf", np, 
       KOKKOS_LAMBDA (const int& i) {
     lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i)
+    while(offsets_cpy(elem+1) < i+1)
       elem++;
 
     new_element(i) = (elem*3 + i)%ne; //change to assign to diff elems
@@ -216,7 +214,7 @@ int rebuildNewPtcls(){
   int np = 20;
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids); 
+  distribute_particles(ne, np, 1, ptcls_per_elem, ids); 
   Kokkos::TeamPolicy<exe_space> po(32,Kokkos::AUTO);
   CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v",ne);
   CSR::kkGidView element_gids_v("",0);
@@ -238,7 +236,7 @@ int rebuildNewPtcls(){
   Kokkos::parallel_for("sendToSelf", np, 
       KOKKOS_LAMBDA (const int& i) {
     lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i)
+    while(offsets_cpy(elem+1) < i+1)
       elem++;
 
     new_element(i) = (3*i+2)%ne;
@@ -324,7 +322,7 @@ int rebuildPtclsDestroyed(){
   int np = 20;
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids); 
+  distribute_particles(ne, np, 1, ptcls_per_elem, ids); 
   Kokkos::TeamPolicy<exe_space> po(32,Kokkos::AUTO);
   CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v",ne);
   CSR::kkGidView element_gids_v("",0);
@@ -347,7 +345,7 @@ int rebuildPtclsDestroyed(){
       KOKKOS_LAMBDA (const int& i) {
 
     lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i)
+    while(offsets_cpy(elem+1) < i+1)
       elem++;
 
     new_element(i) = elem; //change to assign to diff elems
@@ -404,7 +402,7 @@ int rebuildNewAndDestroyed(){
   int np = 20;
   int* ptcls_per_elem = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
-  distribute_particles(ne, np, 0, ptcls_per_elem, ids); 
+  distribute_particles(ne, np, 1, ptcls_per_elem, ids); 
   Kokkos::TeamPolicy<exe_space> po(32,Kokkos::AUTO);
   CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v",ne);
   CSR::kkGidView element_gids_v("",0);
@@ -427,7 +425,7 @@ int rebuildNewAndDestroyed(){
       KOKKOS_LAMBDA (const int& i) {
 
     lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i)
+    while(offsets_cpy(elem+1) < i+1)
       elem++;
 
     new_element(i) = (3*elem+7)%ne; //change to assign to diff elems

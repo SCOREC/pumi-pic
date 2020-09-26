@@ -2,6 +2,7 @@
 #include <Omega_h_bbox.hpp>
 #include "pumipic_kktypes.hpp"
 #include "pumipic_adjacency.hpp"
+#include "pumipic_ptcl_ops.hpp"
 #include <particle_structs.hpp>
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
@@ -31,6 +32,7 @@ void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::string s = ss.str();
   Omega_h::vtk::write_parallel(s, picparts.mesh(), picparts.dim());
 }
+
 
 void printTiming(const char* name, double t) {
   fprintf(stderr, "kokkos %s (seconds) %f\n", name, t);
@@ -160,24 +162,18 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   ps::parallel_for(ptcls, printElmIds);
 
   PS::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
-  PS::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
-  Omega_h::LOs is_safe = picparts.safeTag();
-  Omega_h::LOs elm_owners = picparts.entOwners(picparts.dim());
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask) {
       int new_elem = elem_ids[pid];
       ps_elem_ids(pid) = new_elem;
-      ps_process_ids(pid) = comm_rank;
-      if (new_elem != -1 && is_safe[new_elem] == 0) {
-        ps_process_ids(pid) = elm_owners[new_elem];
-      }
     }
   };
   ps::parallel_for(ptcls, lamb);
 
-  ptcls->migrate(ps_elem_ids, ps_process_ids);
+  pumipic::migrate_lb_ptcls(picparts, ptcls, elem_ids, 1.05);
+  pumipic::printPtclImb(ptcls);
+
+  int comm_rank = picparts.comm()->rank();
 
   printf("PS on rank %d has Elements: %d. Ptcls %d. Capacity %d. Rows %d.\n"
          , comm_rank, ptcls->nElems(), ptcls->nPtcls(), ptcls->capacity(), ptcls->numRows());

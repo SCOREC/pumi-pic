@@ -60,6 +60,14 @@ set(Kokkos_PREFIX_DEFAULT ${Kokkos_PREFIX}/lib/CMake)
 bob_public_dep(Kokkos)
 # }
 
+find_package(EnGPar REQUIRED)
+set(ENGPAR_ENABLED true)
+include_directories(${ENGPAR_INCLUDE_DIR})
+message(STATUS "Found EnGPar")
+set(pumipic_USE_EnGPar_DEFAULT ON)
+set(EnGPar_PREFIX ${EnGPar_PREFIX})
+bob_public_dep(EnGPar)
+
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")

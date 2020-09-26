@@ -2,6 +2,7 @@
 #include <particle_structs.hpp>
 #include "pumipic_adjacency.hpp"
 #include "pumipic_mesh.hpp"
+#include "pumipic_ptcl_ops.hpp"
 #include "pumipic_profiling.hpp"
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
@@ -123,25 +124,10 @@ void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist,
   };
   ps::parallel_for(ptcls, printElmIds);
 
-  PS::kkLidView ps_elem_ids("ps_elem_ids", ps_capacity);
-  PS::kkLidView ps_process_ids("ps_process_ids", ps_capacity);
-  Omega_h::LOs is_safe = picparts.safeTag();
-  Omega_h::LOs elm_owners = picparts.entOwners(picparts.dim());
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if (mask) {
-      int new_elem = elem_ids[pid];
-      ps_elem_ids(pid) = new_elem;
-      ps_process_ids(pid) = comm_rank;
-      if (new_elem != -1 && is_safe[new_elem] == 0) {
-        ps_process_ids(pid) = elm_owners[new_elem];
-      }
-    }
-  };
-  ps::parallel_for(ptcls, lamb);
+  pumipic::migrate_lb_ptcls(picparts, ptcls, elem_ids, 1.05);
+  pumipic::printPtclImb(ptcls);
 
-  ptcls->migrate(ps_elem_ids, ps_process_ids, dist);
+  int comm_rank = picparts.comm()->rank();
 
   ids = ptcls->get<2>();
   if (output) {
@@ -430,121 +416,123 @@ int main(int argc, char** argv) {
 
   Omega_h::Int ne = mesh->nelems();
 
+  {
+    PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
+    PS::kkGidView element_gids("element_gids", ne);
+    Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
+    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+        element_gids(i) = mesh_element_gids[i];
+      });
+    const int mdlFace = atoi(argv[4]);
+    int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtclsPerRank);
+    Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
+        const int np = ptcls_per_elem(i);
+        if (output && np > 0)
+          printf("ppe[%d] %d\n", i, np);
+      });
 
-  PS::kkLidView ptcls_per_elem("ptcls_per_elem", ne);
-  PS::kkGidView element_gids("element_gids", ne);
-  Omega_h::GOs mesh_element_gids = picparts.globalIds(picparts.dim());
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
-    element_gids(i) = mesh_element_gids[i];
-  });
-  const int mdlFace = atoi(argv[4]);
-  int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtclsPerRank);
-  Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
-    const int np = ptcls_per_elem(i);
-    if (output && np > 0)
-     printf("ppe[%d] %d\n", i, np);
-  });
-
-  long int totNumPtcls = 0;
-  long int actualParticles_li = actualParticles;
-  MPI_Allreduce(&actualParticles_li, &totNumPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-  if (!comm_rank)
-    fprintf(stderr, "particles created %ld\n", totNumPtcls);
-
-  const auto maxIter = atoi(argv[5]);
-  if (!comm_rank)
-    fprintf(stderr, "max iterations: %d\n", maxIter);
-
-  //'sigma', 'V', and the 'policy' control the layout of the PS structure
-  //in memory and can be ignored until performance is being evaluated.  These
-  //are reasonable initial settings for OpenMP.
-  const int sigma = INT_MAX; // full sorting
-  const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
-  //Create the particle structure
-  ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
-                                    ptcls_per_elem, element_gids);
-  //Uniformly pad (other choices are PAD_PROPORTIONALLY/PAD_INVERSELY)
-  scs_input.padding_strat = ps::PAD_EVENLY;
-  //10% padding according to above strat
-  scs_input.shuffle_padding = 0.1;
-  //0% padding at the end -> rebuild will need to reallocate if the structure expands
-  scs_input.extra_padding = 0;
-  ps::ParticleStructure<Particle>* ptcls = new SellCSigma<Particle>(scs_input);
-  setInitialPtclCoords(picparts, ptcls, output);
-  setPtclIds(ptcls);
-
-  //define parameters controlling particle motion
-  const double h = 1.72479370-.08;
-  const auto k = .020558260;
-  const auto d = 0.6;
-  ellipticalPush::setup(ptcls, h, k, d);
-  const auto degPerPush = atof(argv[8]);
-  if (!comm_rank)
-    fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
-
-  if (comm_rank == 0)
-    fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
-
-  o::LOs elmTags(ne, -1, "elmTagVals");
-  mesh->add_tag(o::FACE, "has_particles", 1, elmTags);
-  mesh->add_tag(o::VERT, "avg_density", 1, o::Reals(mesh->nverts(), 0));
-  const auto fwdTagName = "ptclToMeshScatterFwd";
-  mesh->add_tag(o::VERT, fwdTagName, 1, o::Reals(mesh->nverts(), 0));
-  const auto bkwdTagName = "ptclToMeshScatterBkwd";
-  mesh->add_tag(o::VERT, bkwdTagName, 1, o::Reals(mesh->nverts(), 0));
-  const auto syncTagName = "ptclToMeshSync";
-  mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
-  tagParentElements(picparts, ptcls, 0);
-
-  const auto enable_prebarrier = atoi(argv[9]);
-  if(enable_prebarrier) {
-    if(!comm_rank)
-      fprintf(stderr, "pre-barrier enabled\n");
-    particle_structs::enable_prebarrier();
-    pumipic_enable_prebarrier();
-  }
-  Kokkos::Timer timer;
-  Kokkos::Timer fullTimer;
-  int iter;
-  long int totNp;
-  long int ps_np;
-  for(iter=1; iter<=maxIter; iter++) {
-    if(!comm_rank || (comm_rank == comm_size/2))
-      ptcls->printMetrics();
-    ps_np = ptcls->nPtcls();
-    MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-    if(totNp == 0) {
-      fprintf(stderr, "No particles remain... exiting push loop\n");
-      break;
-    }
+    long int totNumPtcls = 0;
+    long int actualParticles_li = actualParticles;
+    MPI_Allreduce(&actualParticles_li, &totNumPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
     if (!comm_rank)
-      fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
-    getMemImbalance(ps_np!=0);
-    getPtclImbalance(ps_np);
-    timer.reset();
-    ellipticalPush::push(ptcls, *mesh, degPerPush, iter);
-    MPI_Barrier(MPI_COMM_WORLD);
-    timer.reset();
-    search(picparts,ptcls, dist, output);
-    ps_np = ptcls->nPtcls();
-    MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
-    if(totNp == 0) {
-      fprintf(stderr, "No particles remain... exiting push loop\n");
-      break;
-    }
-    tagParentElements(picparts,ptcls,iter);
-    if(output && !(iter%100))
-      render(picparts,iter, comm_rank);
-    gyroScatter(mesh,ptcls,forward_map,fwdTagName);
-    gyroScatter(mesh,ptcls,backward_map,bkwdTagName);
-    gyroSync(picparts,fwdTagName,bkwdTagName,syncTagName);
-  }
-  if (comm_rank == 0)
-    fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
+      fprintf(stderr, "particles created %ld\n", totNumPtcls);
 
-  //cleanup
-  delete ptcls;
+    const auto maxIter = atoi(argv[5]);
+    if (!comm_rank)
+      fprintf(stderr, "max iterations: %d\n", maxIter);
+
+    //'sigma', 'V', and the 'policy' control the layout of the PS structure
+    //in memory and can be ignored until performance is being evaluated.  These
+    //are reasonable initial settings for OpenMP.
+    const int sigma = INT_MAX; // full sorting
+    const int V = 1024;
+    Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+    //Create the particle structure
+    ps::SCS_Input<Particle> scs_input(policy, sigma, V, ne, actualParticles,
+                                      ptcls_per_elem, element_gids);
+    //Uniformly pad (other choices are PAD_PROPORTIONALLY/PAD_INVERSELY)
+    scs_input.padding_strat = ps::PAD_EVENLY;
+    //10% padding according to above strat
+    scs_input.shuffle_padding = 0.1;
+    //0% padding at the end -> rebuild will need to reallocate if the structure expands
+    scs_input.extra_padding = 0;
+    ps::ParticleStructure<Particle>* ptcls = new SellCSigma<Particle>(scs_input);
+    setInitialPtclCoords(picparts, ptcls, output);
+    setPtclIds(ptcls);
+
+    //define parameters controlling particle motion
+    const double h = 1.72479370-.08;
+    const auto k = .020558260;
+    const auto d = 0.6;
+    ellipticalPush::setup(ptcls, h, k, d);
+    const auto degPerPush = atof(argv[8]);
+    if (!comm_rank)
+      fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
+
+    if (comm_rank == 0)
+      fprintf(stderr, "ellipse center %f %f ellipse ratio %.3f\n", h, k, d);
+
+    o::LOs elmTags(ne, -1, "elmTagVals");
+    mesh->add_tag(o::FACE, "has_particles", 1, elmTags);
+    mesh->add_tag(o::VERT, "avg_density", 1, o::Reals(mesh->nverts(), 0));
+    const auto fwdTagName = "ptclToMeshScatterFwd";
+    mesh->add_tag(o::VERT, fwdTagName, 1, o::Reals(mesh->nverts(), 0));
+    const auto bkwdTagName = "ptclToMeshScatterBkwd";
+    mesh->add_tag(o::VERT, bkwdTagName, 1, o::Reals(mesh->nverts(), 0));
+    const auto syncTagName = "ptclToMeshSync";
+    mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
+    tagParentElements(picparts, ptcls, 0);
+
+    const auto enable_prebarrier = atoi(argv[9]);
+    if(enable_prebarrier) {
+      if(!comm_rank)
+        fprintf(stderr, "pre-barrier enabled\n");
+      particle_structs::enable_prebarrier();
+      pumipic_enable_prebarrier();
+    }
+    Kokkos::Timer timer;
+    Kokkos::Timer fullTimer;
+    int iter;
+    long int totNp;
+    long int ps_np;
+    for(iter=1; iter<=maxIter; iter++) {
+      if(!comm_rank || (comm_rank == comm_size/2))
+        ptcls->printMetrics();
+      ps_np = ptcls->nPtcls();
+      MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+      if(totNp == 0) {
+        fprintf(stderr, "No particles remain... exiting push loop\n");
+        break;
+      }
+      if (!comm_rank)
+        fprintf(stderr, "iter %d particles %ld\n", iter, totNp);
+      getMemImbalance(ps_np!=0);
+      getPtclImbalance(ps_np);
+      timer.reset();
+      ellipticalPush::push(ptcls, *mesh, degPerPush, iter);
+      MPI_Barrier(MPI_COMM_WORLD);
+      timer.reset();
+      search(picparts,ptcls, dist, output);
+      ps_np = ptcls->nPtcls();
+      MPI_Allreduce(&ps_np, &totNp, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+      if(totNp == 0) {
+        fprintf(stderr, "No particles remain... exiting push loop\n");
+        break;
+      }
+      tagParentElements(picparts,ptcls,iter);
+      if(output && !(iter%100))
+        render(picparts,iter, comm_rank);
+      gyroScatter(mesh,ptcls,forward_map,fwdTagName);
+      gyroScatter(mesh,ptcls,backward_map,bkwdTagName);
+      gyroSync(picparts,fwdTagName,bkwdTagName,syncTagName);
+    }
+    if (comm_rank == 0)
+      fprintf(stderr, "%d iterations of pseudopush (seconds) %f\n", iter, fullTimer.seconds());
+
+    //cleanup
+    delete ptcls;
+
+  }
 
   if (!comm_rank)
     fprintf(stderr, "done\n");

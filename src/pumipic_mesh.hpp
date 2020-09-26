@@ -4,6 +4,8 @@
 #include "pumipic_input.hpp"
 
 namespace pumipic {
+  class ParticleBalancer;
+
   class Mesh {
   public:
     //Delete default compilers
@@ -69,6 +71,9 @@ namespace pumipic {
     template <class T>
     void reduceCommArray(int dim, Op op, Omega_h::Write<T> array);
 
+    //Grab the particle load balancer
+    ParticleBalancer* ptclBalancer() const {return ptcl_balancer;}
+
     //Users should not run the following functions.
     //They are meant to be private, but must be public for enclosing lambdas
     //Picpart construction
@@ -120,5 +125,7 @@ namespace pumipic {
     Omega_h::HostWrite<Omega_h::LO> offset_bounded_per_dim[4];
     //The entities to send to each part for boundary
     Omega_h::LOs bounded_ent_ids[4];
+
+    ParticleBalancer* ptcl_balancer = NULL;
   };
 }

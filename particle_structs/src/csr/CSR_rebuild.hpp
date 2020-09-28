@@ -10,6 +10,7 @@ namespace pumipic{
     //Counting of particles on process
     lid_t particles_on_process = countParticlesOnProcess(new_element) +
                                  countParticlesOnProcess(new_particle_elements);
+    //Needs to be assigned here for later methods used
     num_ptcls = particles_on_process;
 
     //Alocate new (temp) MTV
@@ -19,13 +20,14 @@ namespace pumipic{
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
 
+    //Fill ptcls per elem for exisitng ptcls
     auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask){
       if(new_element[ptcl_id] > -1)
         Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);
     };
-    parallel_for(count_existing);
+    parallel_for(count_existing,"fill particle Per Element existing");
 
-    Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
+    Kokkos::parallel_for("fill particlesPerElementNew", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
           assert(new_particle_elements[i] > -1);
           Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
@@ -48,13 +50,13 @@ namespace pumipic{
       else
         new_indices[ptcl_id] = -1;
     };
-    parallel_for(existing_ptcl_new_indices);
+    parallel_for(existing_ptcl_new_indices,"calc row indices");
 
 
     //Copy existing particles to their new location in the temp MTV
     CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
 
-    //Reallocate ptcl_data
+    //Deallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
 
     //If there are new particles

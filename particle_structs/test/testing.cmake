@@ -13,7 +13,8 @@ add_test(NAME test_csr_small3 COMMAND ./test_csr small_ptcls_e5_p25_r4_edit)
 add_test(NAME scs_padding COMMAND ./test_scs_padding)
 
 add_test(NAME rebuild_scs COMMAND ./rebuild_scs)
-add_test(NAME rebuild_csr COMMAND ./rebuild_csr small_ptcls_e5_p25_r0)
+add_test(NAME rebuild_csr_small COMMAND ./rebuild_csr 5 20 0)
+add_test(NAME rebuild_csr_large COMMAND ./rebuild_csr 50 1000 2)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
 

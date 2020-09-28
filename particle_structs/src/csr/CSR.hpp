@@ -242,6 +242,8 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::printMetrics() const {
     fprintf(stderr, "csr capacity %d\n", capacity_);
+    fprintf(stderr, "num ptcls    %d\n", num_ptcls);
+    fprintf(stderr, "num elements %d\n", num_elems);
   }
 } //end namespace pumipic
 

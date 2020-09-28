@@ -120,9 +120,14 @@ namespace pumipic {
 
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
-      Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
-        particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
-      });
+      //Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
+      //  particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
+      //});
+
+      auto fill_ptcl_indices = PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask){
+        particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(ptcl_id)),1);
+      };
+      parallel_for(fill_ptcl_indices);
 
       //populate ptcl_data with input data and particle_indices mapping
       CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);

@@ -18,11 +18,18 @@ namespace pumipic{
 
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
-    Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
-        KOKKOS_LAMBDA(const int& i){
-          if(new_element[i] > -1)
-            Kokkos::atomic_increment(&particles_per_element[new_element[i]]);
-        });
+    //Kokkos::parallel_for("fill particlesPerElement1", new_element.size(),
+    //    KOKKOS_LAMBDA(const int& i){
+    //      if(new_element[i] > -1)
+    //        Kokkos::atomic_increment(&particles_per_element[new_element[i]]);
+    //    });
+
+    auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask){
+      if(new_element[ptcl_id] > -1)
+        Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);
+    };
+    parallel_for(count_existing);
+
     Kokkos::parallel_for("fill particlesPerElement2", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i){
           assert(new_particle_elements[i] > -1);
@@ -38,14 +45,24 @@ namespace pumipic{
     kkLidView row_indices("row indices", num_elems+1);
     Kokkos::deep_copy(row_indices,offsets_new);
     kkLidView new_indices("new indices", new_element.size());
-    Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
-      const lid_t new_elem = new_element(i);
-      if(new_elem != -1){
-        new_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
-      }
+    //Kokkos::parallel_for("new_indices", new_element.size(), KOKKOS_LAMBDA(const int& i){
+    //  const lid_t new_elem = new_element(i);
+    //  if(new_elem != -1){
+    //    new_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
+    //  }
+    //  else
+    //    new_indices(i) = -1;
+    //});
+
+    auto existing_indices = PS_LAMBDA(const lid_t elm_id, lid_t ptcl_id, bool mask){
+      const lid_t new_elem = new_element[ptcl_id];
+      if(new_elem != -1)
+        new_indices[ptcl_id] = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
       else
-        new_indices(i) = -1;
-    });
+        new_indices[ptcl_id] = -1;
+    };
+    parallel_for(existing_indices);
+
 
     //Copy existing particles to their new location in the temp MTV
     CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);

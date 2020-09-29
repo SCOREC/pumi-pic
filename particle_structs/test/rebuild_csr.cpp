@@ -95,7 +95,9 @@ bool rebuildNoChanges(int ne_in, int np_in,int distribution){
   CSR::kkGidView element_gids_v("",0);
   particle_structs::hostToDevice(ptcls_per_elem_v,ptcls_per_elem);
 
+  //Structure to perform rebuild on
   CSR* csr = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
+  //Structure to compare rebuild result to 
   CSR* csr_ref = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
   delete [] ptcls_per_elem;
@@ -104,8 +106,10 @@ bool rebuildNoChanges(int ne_in, int np_in,int distribution){
   CSR::kkLidView new_element("new_element", csr->capacity());
 
   //pID = particle ID
+  //Gives access to MTV data to set an identifier for each ptcl
   auto pID = csr->get<0>();
   auto pID_ref = csr_ref->get<0>();
+  //Copy of offsets accessible in this scope
   auto offsets_cpy = csr->getOffsets();
 
   //Assign values to ptcls to track their movement
@@ -121,10 +125,12 @@ bool rebuildNoChanges(int ne_in, int np_in,int distribution){
     pID_ref(i) = i;  
   });
 
-  //Rebuild with no changes (function takes second and third args as optional
+  //Rebuild with no changes (function takes second and third args as optional)
   csr->rebuild(new_element);
 
+  //(Necessary) updates of pID and offsets_cpy
   pID = csr->get<0>();
+  offsets_cpy = csr->getOffsets();
 
   kkLidView failed = kkLidView("failed", 1);
   Kokkos::parallel_for("check no changes", np,
@@ -191,6 +197,8 @@ bool rebuildNewElems(int ne_in, int np_in,int distribution){
 
   //Rebuild with no changes
   csr->rebuild(new_element);
+  
+  //(Necessary) update of pID and offsets_cpy after rebuild
   pID = csr->get<0>();
   offsets_cpy = csr->getOffsets();
 
@@ -280,7 +288,7 @@ bool rebuildNewPtcls(int ne_in, int np_in,int distribution){
 
   kkLidView failed = kkLidView("failed", 1);
 
-  //Check old value & new_element --> expected new element 
+  //csr_ref (values_ref) + new_element --> expected element after rebuild
 
   //Check existing ptcls placed correctly
   Kokkos::parallel_for("check orig particles", np,
@@ -467,7 +475,8 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
   pID = csr->get<0>();
   offsets_cpy = csr->getOffsets();
 
-  lid_t particles = csr->capacity();
+  //need variable here bc can't access csr on device
+  const lid_t num_ptcls = csr->capacity();
 
   //Check original particles placed correctly
   kkLidView failed = kkLidView("failed", 1);
@@ -477,7 +486,7 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
     const lid_t dest_elem = new_element(i);
     bool found = false;
     if(dest_elem == -1){
-      for(lid_t i = 0; i < particles; ++i){
+      for(lid_t i = 0; i < num_ptcls; ++i){
         assert(pID(i) != id);
       }
       found = true;

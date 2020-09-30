@@ -15,22 +15,6 @@ namespace {
       });
   }
 
-  // count the number of elements with particles - remove this function?
-  template <typename ppView>
-  int countElmsWithPtcls(ppView particles_per_element){
-    int count;
-    Kokkos::parallel_reduce("count_elements_with_particles",
-        particles_per_element.size(),
-        KOKKOS_LAMBDA (const int& i, int& lsum ) {
-          //SS0 use a kokkos parallel_reduce to count the number of elements
-          //that have at least one particle
-	  if(particles_per_element( i ) > 0) {
-            lsum += 1;
-	  }
-        }, count);
-    return count;
-  }
-
   //helper function for rebuild to determine how much space to allocate
   template <typename ppView>
   int countParticlesOnProcess(ppView particle_elements){
@@ -120,10 +104,6 @@ namespace pumipic {
 
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
-      //Kokkos::parallel_for("particle indices", given_particles, KOKKOS_LAMBDA(const int& i){
-      //  particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(i)), 1);
-      //});
-
       auto fill_ptcl_indices = PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask){
         particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(ptcl_id)),1);
       };

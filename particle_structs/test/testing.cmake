@@ -14,9 +14,13 @@ add_test(NAME scs_padding COMMAND ./test_scs_padding)
 
 add_test(NAME rebuild_scs COMMAND ./rebuild_scs)
 
-add_test(NAME rebuild_csr_small COMMAND ./rebuild_csr 5 20 0)
-add_test(NAME rebuild_csr_medium COMMAND ./rebuild_csr 50 1000 0)
-add_test(NAME rebuild_csr_large COMMAND ./rebuild_csr 250 10000 0)
+add_test(NAME rebuild_csr_small COMMAND ./rebuild_csr 5 20 1)
+add_test(NAME rebuild_csr_medium COMMAND ./rebuild_csr 50 1000 1)
+add_test(NAME rebuild_csr_large_0 COMMAND ./rebuild_csr 2500 1000000 0)
+#add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
+#add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
+#add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
+#add_test(NAME rebuild_csr_large_4 COMMAND ./rebuild_csr 2500 1000000 4)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
 

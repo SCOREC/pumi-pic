@@ -1,5 +1,6 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
+#include <stdlib.h>
 
 #include <CSR.hpp>
 #include <MemberTypes.h>
@@ -41,7 +42,11 @@ int main(int argc, char* argv[]){
   {
     MPI_Comm_rank(MPI_COMM_WORLD,&comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-
+    
+    if(argc != 4){
+      printf("[ERROR] Too few command line arguments (%d supplied, 4 required)\n", argc);
+      return 1;
+    }
     int number_elements  = atoi(argv[1]);
     int number_particles = atoi(argv[2]);
     int distribution     = atoi(argv[3]);

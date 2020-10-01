@@ -304,11 +304,15 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
    const o::Reals& gridx, const o::Reals& gridz, const o::Vector<3>& pos,
    const bool cylSymm = true, const o::LO nComp = 1, const o::LO comp = 0,
    bool debug = false) {
+  int nx = gridx.size();
+  int nz = gridz.size();
+  if(debug)
+    printf("nx %d nz %d comp %d nComp %d \n", nx, nz, comp, nComp);
+  if(nx <=1 || nz <= 1)
+    return data[comp];
   auto x = pos[0];
   auto z = pos[2]; 
   x = (cylSymm) ? sqrt(x*x+pos[1]*pos[1]) : x;
-  int nx = gridx.size();
-  int nz = gridz.size();
   auto dx = gridx[1] - gridx[0]; /*(gridx[nx-1] - gridx[0])/nx*/ 
   auto dz = gridz[1] - gridz[0]; /*(gridz[nz-1] - gridz[0])/nz*/ 
   OMEGA_H_CHECK(dx >0 && dz>0);
@@ -393,7 +397,7 @@ void interp2dVector_wgrid (const o::Reals& data3, const o::Reals& gridx,
     field[i] = interpolate2d_wgrid(data3, gridx, gridz, pos, cylSymm, 3, i, debug);
   if(debug)
     printf("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
-  if(cylSymm) {
+  if(gridx.size() > 1 && gridz.size() > 1 && cylSymm) {
     o::Real theta = atan2(pos[1], pos[0]);
     auto field0 = field[0];
     auto field1 = field[1]; 

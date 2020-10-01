@@ -1,42 +1,24 @@
 # particle_structures
-Sell-C-sigma with vertical slicing for unstructured mesh particle-in-cell (PIC) 
 
-# Dependencies
+Particles strucutres for unstructed mesh particle-in-cell (PIC). 
 
-- Kokkos
-- Thrust (on GPUs)
+- Sell-C-sigma (SCS) with vertical slicing 
+- Compressed Sparse Row (CSR) (in progress on csr branch)
 
-# Building on SCOREC RHEL7
 
-## Kokkos with OpenMP
+# Directory Layout
 
-```
-module load gcc/7.3.0-bt47fwr mpich/3.2.1-niuhmad cmake/3.13.1-ovasnmm trilinos/develop-debug-openmp-ackkufk
-cmake /path/to/particle_structures/source/dir -DENABLE_KOKKOS=ON -DCMAKE_INSTALL_PREFIX=$PWD/install -DCMAKE_CXX_COMPILER=mpicxx
-make
-make install
-```
+- cdash
+- cmake
+- src
+  - csr - Compressed Sparse Row implementation
+  - scs - Sell-C-Sigma implementation
+  - support - MemberTypeArray, Segment, and Distributor source
+- test - particle structure specific test source, `ctest3` test generation files
 
-## Kokkos with Cuda
-
-```
-module load gcc/7.3.0-bt47fwr mpich/3.3-diz4f6i cmake/3.13.1-ovasnmm
-kk=/lore/cwsmith/develop/build-kokkos-blockade-cuda/install
-omega_h=/lore/cwsmith/develop/build-omegah-rhel7-cuda-latest/install
-export CMAKE_PREFIX_PATH=$kk:$omega_h:$CMAKE_PREFIX_PATH
-export MPICH_CXX=/lore/cwsmith/develop/kokkos/bin/nvcc_wrapper
-cuda=/usr/local/cuda-10.1
-export PATH=$cuda/bin:$PATH
-export LD_LIBRARY_PATH=$cuda/lib64:$LD_LIBRARY_PATH
-cmake /path/to/particle_structures/source/dir -DENABLE_KOKKOS=ON -DCMAKE_INSTALL_PREFIX=$PWD/install-cuda -DCMAKE_CXX_COMPILER=mpicxx
-make
-make install
-```
-
-Debug symbols can be added by appending `-DCMAKE_BUILD_TYPE=DEBUG` to the cmake
-command.
 
 # Running tests
 
-Running `ctest` will execute a several unit tests
+Unit tests can be run with `ctest3` from the overall PUMIPic build directory.
 
+Inidividual tests can be selected by running `ctest3 -R <test_name>` and an optional `-V` flag for output during the run. Test names are defined in `test/CMakeLists.txt` as the first argument to `make_test(test_name test.cpp)` (test commands can be found in `test/testing.cmake`). 

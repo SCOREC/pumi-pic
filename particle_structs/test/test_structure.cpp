@@ -25,7 +25,7 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
 int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
 int setValues(const char* name, PS* structure);
-int mathOperations(const char* name, PS* structure);
+int pseudoPush(const char* name, PS* structure);
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure);
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
       //fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
       fails += setValues(names[i].c_str(), structures[i]);
       Kokkos::fence();
-      fails += mathOperations(names[i].c_str(), structures[i]);
+      fails += pseudoPush(names[i].c_str(), structures[i]);
       Kokkos::fence();
       //fails += testMetrics(names[i].c_str(), structures[i]);
       //fails += testRebuild(names[i].c_str(), structures[i]);
@@ -254,8 +254,15 @@ int setValues(const char* name, PS* structure) {
   return fails;
 }
 
-int mathOperations(const char* name, PS* structure){
+int pseudoPush(const char* name, PS* structure){
   int fails = 0; 
+
+  kkLidView parentElmData = kkLidView("parentElmData",structure->nElems());
+  Kokkos::parallel_for("parentElmData", parentElmData.size(), 
+      KOKKOS_LAMBDA(const lid_t& e){
+    parentElmData(e) = 2+3*e;
+  }); 
+
   auto dbls = structure->get<1>();
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
@@ -265,9 +272,9 @@ int mathOperations(const char* name, PS* structure){
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;
       dbls(p, 2) += 10;
-      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e); 
-      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e); 
-      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e); 
+      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e); 
+      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e); 
+      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e); 
       nums(p) = local_rank;
       bools(p) = true;
     }

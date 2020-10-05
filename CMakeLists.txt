@@ -113,6 +113,7 @@ set(ALL_LIBS
 
 if(IS_TESTING)
   add_subdirectory(test)
+  add_subdirectory(performance_tests)
 endif()
 
 bob_end_package()

@@ -14,9 +14,9 @@ add_test(NAME rebuild_scs COMMAND ./rebuild_scs)
 add_test(NAME rebuild_csr_small COMMAND ./rebuild_csr 5 20 1)
 add_test(NAME rebuild_csr_medium COMMAND ./rebuild_csr 50 1000 1)
 add_test(NAME rebuild_csr_large_0 COMMAND ./rebuild_csr 2500 1000000 0)
-#add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
-#add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
-#add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
+add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
+add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
+add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
 #add_test(NAME rebuild_csr_large_4 COMMAND ./rebuild_csr 2500 1000000 4)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
@@ -32,16 +32,20 @@ add_test(NAME write_ptcl_4 COMMAND mpirun -np 4 ./write_particles 100 10000 0 2
   small_ptcls_e100_p10k_r4)
 add_test(NAME write_ptcl_empty COMMAND mpirun -np 4 ./write_particles 0 0 0 0 empty_ptcls)
 add_test(NAME write_ptcl_noptcls COMMAND mpirun -np 4 ./write_particles 100 0 0 0 no_ptcls_e100)
+add_test(NAME write_ptcl_medium COMMAND ./write_particles 500 100000 0 0 medium_ptcls_e500_p10e5_r0)
+add_test(NAME write_ptcl_large COMMAND ./write_particles 2500 1000000 0 0 large_ptcls_e2500_p10e6_r0)
 
 add_test(NAME test_csr_small COMMAND ./test_csr small_ptcls_e5_p25_r0)
 add_test(NAME test_csr_small2 COMMAND ./test_csr small_ptcls_e5_p25_r4)
 
 add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
-add_test(NAME test_structures_small_4 COMMAND mpirun -np 4
-  ./test_structure small_ptcls_e5_p25_r4)
-add_test(NAME test_structures_4 COMMAND mpirun -np 4
-  ./test_structure small_ptcls_e100_p10k_r4)
-add_test(NAME test_structures_empty COMMAND mpirun -np 4
-  ./test_structure empty_ptcls)
-add_test(NAME test_structures_noptcls COMMAND mpirun -np 4
-  ./test_structure no_ptcls_e100)
+add_test(NAME test_structures_medium COMMAND ./test_structure medium_ptcls_e500_p10e5_r0)
+add_test(NAME test_structures_large COMMAND ./test_structure large_ptcls_e2500_p10e6_r0)
+#add_test(NAME test_structures_small_4 COMMAND mpirun -np 4
+#  ./test_structure small_ptcls_e5_p25_r4)
+#add_test(NAME test_structures_4 COMMAND mpirun -np 4
+#  ./test_structure small_ptcls_e100_p10k_r4)
+#add_test(NAME test_structures_empty COMMAND mpirun -np 4
+#  ./test_structure empty_ptcls)
+#add_test(NAME test_structures_noptcls COMMAND mpirun -np 4
+#  ./test_structure no_ptcls_e100)

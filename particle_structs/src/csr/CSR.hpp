@@ -62,6 +62,7 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::nPtcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
+    using ParticleStructure<DataTypes, MemSpace>::copy;
 
     lid_t getNumPtcls() { return num_ptcls; }
     kkLidView getOffsets() { return offsets; }

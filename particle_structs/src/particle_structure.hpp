@@ -32,6 +32,7 @@ namespace pumipic {
     ParticleStructure(const std::string& name_);
     virtual ~ParticleStructure() {}
 
+    const std::string& getName() const {return name;}
     lid_t nElems() const {return num_elems;}
     lid_t nPtcls() const {return num_ptcls;}
     lid_t capacity() const {return capacity_;}

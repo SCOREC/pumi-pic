@@ -161,6 +161,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
  private:
 
   //Variables from ParticleStructure
+  using ParticleStructure<DataTypes, MemSpace>::name;
   using ParticleStructure<DataTypes, MemSpace>::num_elems;
   using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
   using ParticleStructure<DataTypes, MemSpace>::capacity_;
@@ -300,7 +301,8 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
 
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
-  ParticleStructure<DataTypes, MemSpace>(), policy(input.policy), element_gid_to_lid(input.ne) {
+    ParticleStructure<DataTypes, MemSpace>(input.name), policy(input.policy),
+    element_gid_to_lid(input.ne) {
   sigma = input.sig;
   V_ = input.V;
   num_elems = input.ne;

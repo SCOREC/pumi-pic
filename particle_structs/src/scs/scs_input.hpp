@@ -31,6 +31,9 @@ namespace pumipic {
     //Padding strategy
     PaddingStrategy padding_strat;
 
+    //String identification for the particle structure
+    std::string name;
+
     friend class SellCSigma<DataTypes, MemSpace>;
   protected:
     PolicyType policy;
@@ -51,5 +54,6 @@ namespace pumipic {
     shuffle_padding = 0.1;
     extra_padding = 0.05;
     padding_strat = PAD_EVENLY;
+    name = "ptcls";
   }
 }

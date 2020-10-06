@@ -159,7 +159,7 @@ namespace pumipic {
       };
       parallel_for(resetMask, "resetMask");
 
-      RecordTime("ps rebuild", timer.seconds(), btime);
+      RecordTime(name +" rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
 
       return;
@@ -167,7 +167,7 @@ namespace pumipic {
 
     //If tryShuffling is on and shuffling works then rebuild is complete
     if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
-      RecordTime("ps rebuild", timer.seconds(), btime);
+      RecordTime(name + " rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -275,7 +275,7 @@ namespace pumipic {
     current_size = swap_size;
     swap_size = tmp_size;
 
-    RecordTime("ps rebuild", timer.seconds(), btime);
+    RecordTime(name +" rebuild", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

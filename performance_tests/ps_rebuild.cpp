@@ -54,8 +54,8 @@ int main(int argc, char* argv[]) {
     structures.push_back(std::make_pair("Sell-16-1",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
                                                   16, 1, 1024)));
-    // structures.push_back(std::make_pair("CSR",
-    //                                     createCSR(num_elems, num_ptcls, ppe, element_gids)));
+    structures.push_back(std::make_pair("CSR",
+                                        createCSR(num_elems, num_ptcls, ppe, element_gids)));
 
     const int ITERS = 100;
     printf("Performing %d iterations of rebuild on each structure\n", ITERS);

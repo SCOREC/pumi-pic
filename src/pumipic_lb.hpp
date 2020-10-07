@@ -24,6 +24,10 @@ namespace {
 }
 namespace pumipic {
 
+  //Print particle imbalance statistics
+  template <class PS>
+  void printPtclImb(PS* ptcls, MPI_Comm comm = MPI_COMM_WORLD);
+
   class Mesh;
   class ParticlePlan;
 
@@ -107,6 +111,7 @@ namespace pumipic {
   void ParticleBalancer::addWeights(Mesh& picparts, PS* ptcls,
                                     typename PS::kkLidView new_elems,
                                     typename PS::kkLidView new_procs) {
+    MPI_Comm comm = picparts.comm()->get_impl();
     int comm_rank = picparts.comm()->rank();
     // Device map of number of particles already assigned to another process
     Kokkos::UnorderedMap<int, agi::wgt_t> forcedPtcls(picparts.numBuffers(picparts->dim()));
@@ -162,9 +167,9 @@ namespace pumipic {
     MPI_Request* recv_requests = new MPI_Request[num_peers];
     for (int i = 0; i < num_peers; ++i) {
       MPI_Irecv(peer_wgts + i, 1, MPI_DOUBLE, owners_host[i],
-                0, MPI_COMM_WORLD, recv_requests + i);
+                0, comm, recv_requests + i);
       MPI_Isend(&(wgts_host[i]), 1, MPI_DOUBLE, owners_host[i],
-                0, MPI_COMM_WORLD, send_requests + i);
+                0, comm, send_requests + i);
     }
     MPI_Waitall(num_peers, recv_requests, MPI_STATUSES_IGNORE);
     delete [] recv_requests;
@@ -228,4 +233,26 @@ namespace pumipic {
     ParticlePlan plan = balance(tol, step_factor);
     selectParticles(picparts, ptcls, new_elems, plan, new_parts);
   }
+
+  //Print particle imbalance statistics
+  template <class PS>
+  void printPtclImb(PS* ptcls, MPI_Comm comm) {
+    int np = ptcls->nPtcls();
+    int min_p, max_p, tot_p;
+    MPI_Reduce(&np, &min_p, 1, MPI_INT, MPI_MIN, 0, comm);
+    MPI_Reduce(&np, &max_p, 1, MPI_INT, MPI_MAX, 0, comm);
+    MPI_Reduce(&np, &tot_p, 1, MPI_INT, MPI_SUM, 0, comm);
+
+    int comm_rank;
+    MPI_Comm_rank(comm, &comm_rank);
+    int comm_size;
+    MPI_Comm_size(comm, &comm_size);
+    if (comm_rank == 0) {
+      float avg = tot_p / comm_size;
+      float imb = max_p / avg;
+      printf("Ptcl LB <max, min, avg, imb>: %d %d %.3f %.3f\n", max_p, min_p, avg, imb);
+    }
+
+  }
+
 }

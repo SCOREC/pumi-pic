@@ -1,4 +1,3 @@
-
 #ifndef SELL_C_SIGMA_H_
 #define SELL_C_SIGMA_H_
 #include <vector>
@@ -19,7 +18,7 @@
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #endif
-
+#include <ppTiming.hpp>
 namespace pumipic {
 
 void enable_prebarrier();
@@ -162,6 +161,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
  private:
 
   //Variables from ParticleStructure
+  using ParticleStructure<DataTypes, MemSpace>::name;
   using ParticleStructure<DataTypes, MemSpace>::num_elems;
   using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
   using ParticleStructure<DataTypes, MemSpace>::capacity_;
@@ -244,10 +244,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
     fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   PairView ptcls;
-  Kokkos::Timer timer;
   sigmaSort(ptcls, num_elems,ptcls_per_elem, sigma);
-  if(comm_rank == 0 || comm_rank == comm_size/2)
-    fprintf(stderr,"%d SCS sorting time (seconds) %f\n", comm_rank, timer.seconds());
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
@@ -304,7 +301,8 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
 
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
-  ParticleStructure<DataTypes, MemSpace>(), policy(input.policy), element_gid_to_lid(input.ne) {
+    ParticleStructure<DataTypes, MemSpace>(input.name), policy(input.policy),
+    element_gid_to_lid(input.ne) {
   sigma = input.sig;
   V_ = input.V;
   num_elems = input.ne;

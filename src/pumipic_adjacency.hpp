@@ -579,14 +579,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       break;
     }
   }
-  if(!rank || rank == comm_size/2) {
-    fprintf(stderr, "%d pumipic search_2d (seconds) %f pre-barrier (seconds) %f\n",
-        rank, timer.seconds(), btime);
-    fprintf(stderr, "%d pumipic search_2d loops %d\n", rank, loops);
-  }
-#ifdef PP_DEBUG
-  return found;
-#endif
+
+  RecordTime("pumipic search_2d", timer.seconds(), btime);
+  char buffer[1024];
+  sprintf(buffer, "%d pumipic search_2d loops %d", rank, loops);
+  PrintAdditionalTimeInfo(buffer, 1);
   Kokkos::Profiling::popRegion();
   return found;
 }

@@ -1,3 +1,4 @@
+#pragma once
 
 #include "pumipic_mesh.hpp"
 #include <particle_structs.hpp>

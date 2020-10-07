@@ -17,9 +17,13 @@ namespace pumipic {
 
   ParticleBalancer::~ParticleBalancer() {
     agi::destroyGraph(weightGraph);
+    //Return PCU communicator to world
+    PCU_Switch_Comm(MPI_COMM_WORLD);
   }
   ParticleBalancer::ParticleBalancer(Mesh& picparts) {
     Omega_h::CommPtr comm = picparts.comm();
+    //Change PCU communicator to the mesh communicator
+    PCU_Switch_Comm(comm->get_impl());
     int comm_rank = comm->rank();
     //Prepare comm array of safe values for core regions
     int dim = picparts.dim();
@@ -471,6 +475,9 @@ namespace pumipic {
     }
     weightGraph->constructEdges(sbar_ids.size(), edges, degs, pins);
     weightGraph->constructGhosts(vert_to_owner);
+    delete [] pins;
+    delete [] degs;
+    delete [] edges;
   }
 
   Omega_h::LOs ParticleBalancer::getSbarIDs(Mesh& picparts) const {

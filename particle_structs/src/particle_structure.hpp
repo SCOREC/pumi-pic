@@ -29,8 +29,10 @@ namespace pumipic {
     template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
     ParticleStructure();
+    ParticleStructure(const std::string& name_);
     virtual ~ParticleStructure() {}
 
+    const std::string& getName() const {return name;}
     lid_t nElems() const {return num_elems;}
     lid_t nPtcls() const {return num_ptcls;}
     lid_t capacity() const {return capacity_;}
@@ -58,6 +60,8 @@ namespace pumipic {
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
   protected:
+    //String to identify the particle structure
+    std::string name;
     //Element and particle Counts/capacities
     lid_t num_elems;
     lid_t num_ptcls;
@@ -94,7 +98,13 @@ namespace pumipic {
   };
 
   template <class DataTypes, typename Space>
-  ParticleStructure<DataTypes, Space>::ParticleStructure() : num_elems(0), num_ptcls(0),
+  ParticleStructure<DataTypes, Space>::ParticleStructure() : name("ptcls"), num_elems(0), num_ptcls(0),
                                                              capacity_(0), num_rows(0) {
   }
+
+  template <class DataTypes, typename Space>
+  ParticleStructure<DataTypes, Space>::ParticleStructure(const std::string& name_) : name(name_), num_elems(0), num_ptcls(0),
+                                                             capacity_(0), num_rows(0) {
+  }
+
 }

@@ -8,9 +8,11 @@ set(HEADERS
   ViewComm_host.hpp
   ViewComm_cuda.hpp
   ppAssert.h
+  ppTiming.hpp
 )
 
 set(SOURCES
+  ppTiming.cpp
   ppAssert.cpp
   ViewComm.cpp
 )

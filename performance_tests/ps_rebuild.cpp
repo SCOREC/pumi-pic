@@ -91,5 +91,6 @@ PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, i
   return new pumipic::SellCSigma<PerfTypes, MemSpace>(input);
 }
 PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
-  return new pumipic::CSR<PerfTypes, MemSpace>(num_elems, num_ptcls, ppe, elm_gids);
+  Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
+  return new pumipic::CSR<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }

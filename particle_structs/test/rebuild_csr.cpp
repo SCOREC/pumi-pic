@@ -367,19 +367,28 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
   auto offsets_cpy = csr->getOffsets();
 
   //Assign identifiers
-  Kokkos::parallel_for("sendToSelf", np, 
-      KOKKOS_LAMBDA (const int& i) {
+//  Kokkos::parallel_for("sendToSelf", np, 
+//      KOKKOS_LAMBDA (const int& i) {
+//
+//    lid_t elem = 0;
+//    while(offsets_cpy(elem+1) < i+1)
+//      elem++;
+//
+//    new_element(i) = elem; //change to assign to diff elems
+//    if(i%7 == 0) new_element(i) = -1;
+//    pID(i) = i;
+//    pID_ref(i) = i;  
+//
+//  });
 
-    lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i+1)
-      elem++;
+  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool mask){
+    new_element(p) = e;
+    if(p%7 == 0) new_element(p) = -1;
+    pID(p) = p;
+    pID_ref(p) = p;
+  };
+  csr->parallel_for(assign_ptcl_elems, "assing ptcl elems");
 
-    new_element(i) = elem; //change to assign to diff elems
-    if(i%7 == 0) new_element(i) = -1;
-    pID(i) = i;
-    pID_ref(i) = i;  
-
-  });
 
   //Rebuild with elements removed 
   csr->rebuild(new_element);
@@ -447,19 +456,27 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
   auto offsets_cpy = csr->getOffsets();
 
   //Assign ptcl elements
-  Kokkos::parallel_for("sendToSelf", np, 
-      KOKKOS_LAMBDA (const int& i) {
+//  Kokkos::parallel_for("sendToSelf", np, 
+//      KOKKOS_LAMBDA (const int& i) {
+//
+//    lid_t elem = 0;
+//    while(offsets_cpy(elem+1) < i+1)
+//      elem++;
+//
+//    new_element(i) = (3*elem+7)%ne; //change to assign to diff elems
+//    if(i%7 == 0) new_element(i) = -1;
+//    pID(i) = i;
+//    pID_ref(i) = i;  
+//
+//  });
 
-    lid_t elem = 0;
-    while(offsets_cpy(elem+1) < i+1)
-      elem++;
-
-    new_element(i) = (3*elem+7)%ne; //change to assign to diff elems
-    if(i%7 == 0) new_element(i) = -1;
-    pID(i) = i;
-    pID_ref(i) = i;  
-
-  });
+  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool mask){
+    new_element(p) = (3*e+7)%ne;
+    if(p%7 == 0) new_element(p) = -1;
+    pID(p) = p;
+    pID_ref(p) = p;
+  };
+  csr->parallel_for(assign_ptcl_elems, "assing ptcl elems");
 
   //////////////////////////////////////////////////////////////
   //Introduce new particles

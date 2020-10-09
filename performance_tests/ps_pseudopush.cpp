@@ -60,20 +60,57 @@ int main(int argc, char* argv[]) {
                                         createCSR(num_elems, num_ptcls, ppe, element_gids)));
 
     const int ITERS = 100;
-    printf("Performing %d iterations of rebuild on each structure\n", ITERS);
-    /* Perform rebuild on particle structures */
+    printf("Performing %d iterations of pseudo-push on each structure\n", ITERS);
+    /* Perform pseudo-push on particle structures */
     double percentMoved = atof(argv[4]);
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS* ptcls = structures[i].second;
-      printf("Beginning rebuild on structure %s\n", name.c_str());
+      printf("Beginning pseudo-push on structure %s\n", name.c_str());
+      
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
-        Kokkos::Timer rebuild_timer;
-        ptcls->rebuild(new_elms);
-        float rebuild_time = rebuild_timer.seconds();
-        pumipic::RecordTime(name.c_str(), rebuild_time);
+
+        /* Begin Push Setup */
+        //Per element data to access in pseudoPush
+        Kokkos::View<double> parentElmData("parentElmData", ptcls->nElems());
+        Kokkos::parallel_for("parent_elem_data", parentElmData.size(), 
+            KOKKOS_LAMBDA(const int& e){
+          parentElmData(e) = sqrt(e) * e;
+        });
+
+        auto nums = ptcls->get<0>();
+        auto dbls = ptcls->get<1>();
+        auto dbl = ptcls->get<2>();
+
+        auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const& bool mask){
+          if(mask){
+            dbls(p,0) += 10;
+            dbls(p,1) += 10;
+            dbls(p,2) += 10;
+            dbls(p,0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e);
+            dbls(p,1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e);
+            dbls(p,2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e);
+            nums(p) = p;
+            dbl(p)  = parentElmData(e);
+          }
+          else{
+            dbls(p,0) = 0;
+            dbls(p,1) = 0;
+            dbls(p,2) = 0;
+            nums(p) = -1;
+            dbl(p)  = 0;
+          }
+        };
+
+        Kokkos::Timer pseudo_push_timer;
+        /* Begin push operations */
+        ps::parallel_for(ptcls,pseudoPush,"pseudo push"); 
+        /* End push */
+
+        float pseudo_push_time = pseudo_push_timer.seconds();
+        pumipic::RecordTime(name.c_str(), pseudo_push_time);
       }
     }
 

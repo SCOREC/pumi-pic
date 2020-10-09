@@ -9,4 +9,6 @@ endfunction(make_test)
 
 make_test(ps_rebuild ps_rebuild.cpp)
 
+make_test(ps_pseudopush ps_pseudopush.cpp)
+
 bob_end_subdir()

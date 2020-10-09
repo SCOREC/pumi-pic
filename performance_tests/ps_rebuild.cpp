@@ -3,7 +3,7 @@
 #include "perfTypes.hpp"
 #include "../particle_structs/test/Distribute.h"
 
-PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V);
+PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
 
 int main(int argc, char* argv[]) {
@@ -30,6 +30,7 @@ int main(int argc, char* argv[]) {
     kkGidView element_gids("",0);
     int* ppe_host = new int[num_elems];
     std::vector<int>* ids = new std::vector<int>[num_elems];
+    printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe_host, ids);
     pumipic::hostToDevice(ppe, ppe_host);
     delete [] ppe_host;
@@ -40,19 +41,19 @@ int main(int argc, char* argv[]) {
     ParticleStructures structures;
     structures.push_back(std::make_pair("Sell-32-ne",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, num_elems, 1024)));
+                                                  32, num_elems, 1024, "Sell-32-ne")));
     structures.push_back(std::make_pair("Sell-16-ne",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, num_elems, 1024)));
+                                                  16, num_elems, 1024, "Sell-16-ne")));
     structures.push_back(std::make_pair("Sell-32-1024",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, 1024, 1024)));
+                                                  32, 1024, 1024, "Sell-32-1024")));
     structures.push_back(std::make_pair("Sell-16-1024",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, 1024, 1024)));
+                                                  16, 1024, 1024, "Sell-16-1024")));
     structures.push_back(std::make_pair("Sell-32-1",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, 1, 1024)));
+                                                  32, 1, 1024, "Sell-32-1")));
     structures.push_back(std::make_pair("Sell-16-1",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
                                                   16, 1, 1024)));
@@ -87,9 +88,10 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V) {
+PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(4, C);
   pumipic::SCS_Input<PerfTypes> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
   return new pumipic::SellCSigma<PerfTypes, MemSpace>(input);
 }
 PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {

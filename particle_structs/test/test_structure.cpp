@@ -257,17 +257,23 @@ int setValues(const char* name, PS* structure) {
 int pseudoPush(const char* name, PS* structure){
   int fails = 0; 
 
-  kkLidView parentElmData = kkLidView("parentElmData",structure->nElems());
+  int elements = structure->nElems();
+  fprintf(stderr, "elements : %d\n", elements);
+  Kokkos::View<double> parentElmData = Kokkos::View<double>("parentElmData", elements);
+//  kkLidView parentElmData = kkLidView("parentElmData",structure->nElems());
+  fprintf(stderr, "parent elm data size : %d\n", parentElmData.size());
   Kokkos::parallel_for("parentElmData", parentElmData.size(), 
       KOKKOS_LAMBDA(const lid_t& e){
     parentElmData(e) = 2+3*e;
   }); 
+  printView(parentElmData);
 
   auto dbls = structure->get<1>();
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
   int local_rank = comm_rank;
   auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
+    printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
     if(mask){
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;
@@ -286,6 +292,7 @@ int pseudoPush(const char* name, PS* structure){
       bools(p) = false;
     }
   };
+
   Kokkos::fence();
   Kokkos::Timer timer;
   ps::parallel_for(structure, quickMaths, "setValues");

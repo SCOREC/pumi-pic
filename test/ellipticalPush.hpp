@@ -66,9 +66,7 @@ namespace ellipticalPush {
       }
     };
     ps::parallel_for(ptcls, setPosition);
-    if(!rank || rank == comm_size/2)
-      fprintf(stderr, "%d elliptical push (seconds) %f pre-barrier (seconds) %f\n",
-          rank, timer.seconds(), btime);
+    pumipic::RecordTime("elliptical push", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 }

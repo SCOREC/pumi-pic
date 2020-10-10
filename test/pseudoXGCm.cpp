@@ -9,6 +9,7 @@
 #include <fstream>
 #include "ellipticalPush.hpp"
 #include <random>
+#include <ppTiming.hpp>
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
@@ -353,6 +354,11 @@ int main(int argc, char** argv) {
            typeid (Kokkos::DefaultHostExecutionSpace).name());
     printTimerResolution();
   }
+
+  pumipic::SetTimingVerbosity(0);
+  if (comm_rank == comm_size / 2) {
+    pumipic::EnableTiming();
+  }
   auto full_mesh = readMesh(argv[1], lib);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -456,6 +462,7 @@ int main(int argc, char** argv) {
     scs_input.shuffle_padding = 0.1;
     //0% padding at the end -> rebuild will need to reallocate if the structure expands
     scs_input.extra_padding = 0;
+    scs_input.name = "ps";
     ps::ParticleStructure<Particle>* ptcls = new SellCSigma<Particle>(scs_input);
     setInitialPtclCoords(picparts, ptcls, output);
     setPtclIds(ptcls);
@@ -533,7 +540,7 @@ int main(int argc, char** argv) {
     delete ptcls;
 
   }
-
+  pumipic::SummarizeTime();
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

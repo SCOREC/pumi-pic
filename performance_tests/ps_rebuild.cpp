@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
                                                   32, 1, 1024, "Sell-32-1")));
     structures.push_back(std::make_pair("Sell-16-1",
                                         createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, 1, 1024)));
+                                                  16, 1, 1024, "Sell-16-1")));
     structures.push_back(std::make_pair("CSR",
                                         createCSR(num_elems, num_ptcls, ppe, element_gids)));
 

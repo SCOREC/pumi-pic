@@ -11,7 +11,7 @@ namespace {
       Kokkos::parallel_for("print_view",
           v.size(),
           KOKKOS_LAMBDA (const int& i) {
-            printf("%d %d\n", i, v[i]);
+            printf("%d %d\n", i, v(i));
       });
   }
 

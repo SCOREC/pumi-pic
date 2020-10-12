@@ -259,8 +259,7 @@ int pseudoPush(const char* name, PS* structure){
 
   int elements = structure->nElems();
   fprintf(stderr, "elements : %d\n", elements);
-  Kokkos::View<double> parentElmData = Kokkos::View<double>("parentElmData", elements);
-//  kkLidView parentElmData = kkLidView("parentElmData",structure->nElems());
+  Kokkos::View<double*> parentElmData("parentElmData", elements);
   fprintf(stderr, "parent elm data size : %d\n", parentElmData.size());
   Kokkos::parallel_for("parentElmData", parentElmData.size(), 
       KOKKOS_LAMBDA(const lid_t& e){

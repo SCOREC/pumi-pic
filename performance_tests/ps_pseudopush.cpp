@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
         auto dbls = ptcls->get<1>();
         auto dbl = ptcls->get<2>();
 
-        auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const& bool mask){
+        auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
           if(mask){
             dbls(p,0) += 10;
             dbls(p,1) += 10;

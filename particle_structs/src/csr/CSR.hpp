@@ -172,8 +172,8 @@ namespace pumipic {
       initCsrData(particle_elements, particle_info);
     }
 
-    if(!comm_rank)
-      fprintf(stderr, "Building CSR done\n");
+    //if(!comm_rank)
+    //  fprintf(stderr, "Building CSR done\n");
     Kokkos::Profiling::popRegion();
   }
 

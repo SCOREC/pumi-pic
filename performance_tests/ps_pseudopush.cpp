@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
 
         /* Begin Push Setup */
         //Per element data to access in pseudoPush
-        Kokkos::View<double> parentElmData("parentElmData", ptcls->nElems());
+        Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
         Kokkos::parallel_for("parent_elem_data", parentElmData.size(), 
             KOKKOS_LAMBDA(const int& e){
           parentElmData(e) = sqrt(e) * e;
@@ -86,9 +86,9 @@ int main(int argc, char* argv[]) {
 
         auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
           if(mask){
-            dbls(p,0) += 10;
-            dbls(p,1) += 10;
-            dbls(p,2) += 10;
+            dbls(p,0) = 10.3;
+            dbls(p,1) = 10.3;
+            dbls(p,2) = 10.3;
             dbls(p,0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e);
             dbls(p,1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e);
             dbls(p,2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e);
@@ -108,7 +108,6 @@ int main(int argc, char* argv[]) {
         /* Begin push operations */
         ps::parallel_for(ptcls,pseudoPush,"pseudo push"); 
         /* End push */
-
         float pseudo_push_time = pseudo_push_timer.seconds();
         pumipic::RecordTime(name.c_str(), pseudo_push_time);
       }

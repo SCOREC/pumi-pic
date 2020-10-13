@@ -11,12 +11,12 @@ int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
 
   /* Check commandline arguments */
-  if (argc != 5) {
-    fprintf(stderr, "Usage: %s <num elems> <num ptcls> <distribution> <%% ptcls move>\n",
+  if (argc != 4) {
+    fprintf(stderr, "Usage: %s <num elems> <num ptcls> <distribution>\n",
             argv[0]);
   }
 
-  fprintf(stderr, "Test Command:\n %s %s %s %s %s\n", argv[0], argv[1], argv[2], argv[3], argv[4]);
+  fprintf(stderr, "Test Command:\n %s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
@@ -62,16 +62,12 @@ int main(int argc, char* argv[]) {
     const int ITERS = 100;
     printf("Performing %d iterations of pseudo-push on each structure\n", ITERS);
     /* Perform pseudo-push on particle structures */
-    double percentMoved = atof(argv[4]);
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS* ptcls = structures[i].second;
       printf("Beginning pseudo-push on structure %s\n", name.c_str());
       
       for (int i = 0; i < ITERS; ++i) {
-        kkLidView new_elms("new elems", ptcls->capacity());
-        redistribute_particles(ptcls, strat, percentMoved, new_elms);
-
         /* Begin Push Setup */
         //Per element data to access in pseudoPush
         Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());

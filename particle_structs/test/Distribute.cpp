@@ -4,7 +4,11 @@
 #include <random>
 #include <math.h>
 #include <cstdlib>
-
+#ifdef PP_USE_CUDA
+#include <cuda.h>
+#include <curand.h>
+#include <curand_kernel.h>
+#endif
 namespace {
 
 void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
@@ -153,10 +157,70 @@ void exponential_distribution(int ne, int np, int* ptcls_per_elem, std::vector<i
   }
 }
 
+#ifdef PP_USE_CUDA
+  const int num_states = 1024;
+  Kokkos::View<curandState_t*> cuda_states;
+  bool states_inited = false;
+  void initStates() {
+    if (!states_inited) {
+      cuda_states = Kokkos::View<curandState_t*>("cuda_states", 1024);
+      states_inited = true;
+      int seed = std::chrono::system_clock::now().time_since_epoch().count();
+      auto local_states = cuda_states;
+      Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
+        curand_init(seed, index * 2 * 100, 1, &(local_states(index)));
+      });
+    }
+  }
+#endif
+
+
 void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
                               Kokkos::View<int*> elem_per_ptcl) {
 
   //For now just call the CPU version
+#ifdef PP_USE_CUDA
+  //Initialize cuda states for PRNG
+  initStates();
+
+  //Initialize bin lengths/starts
+  int base = pow(ne, .2);
+  if (base < 2)
+    base = 2;
+  if (base > 32)
+    base = 32;
+  Kokkos::View<int*> bin_starts("bin_starts", 5);
+  int bin_starts_host[5];
+  bin_starts_host[0] = 0;
+  for (int i = 1; i < 10; ++i) {
+    bin_starts_host[i] = bin_starts_host[i-1] + pow(base, i);
+  }
+  pumipic::hostToDevice(bin_starts, bin_starts_host);
+  int ptcls_per_state = np / num_states + 1;
+  auto local_states = cuda_states;
+  //Generate a random bin from poisson distribution then assign an element in the bin
+  //  using uniform random distribution
+  Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
+    curandState_t state = local_states[index];
+    const int start_ptcl = ptcls_per_state * index;
+    for (int i = 0; i < ptcls_per_state; ++i) {
+      const int ptcl_index = start_ptcl + i;
+      int bin = curand_poisson(&state, .01);
+      if (bin >= 5)
+        bin = 4;
+      const int range = pow(base, bin + 1);
+      const int minElem = bin_starts[bin];
+      int elem = minElem + curand(&state) % range;
+      if (elem >= ne) {
+        elem = ne - 1;
+      }
+      if (ptcl_index < np) {
+        elem_per_ptcl[ptcl_index] = elem;
+        Kokkos::atomic_add(&(ptcls_per_elem[elem]), 1);
+      }
+    }
+  });
+#else
   int* ppe = new int[ne];
   std::vector<int>* ids = new std::vector<int>[ne];
   exponential_distribution(ne, np, ppe, ids);
@@ -171,6 +235,7 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
   delete [] new_elems;
   delete [] ppe;
   delete [] ids;
+#endif
 }
 
 const int num_dist_funcs = 4;
@@ -245,4 +310,10 @@ bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_pe
   }
   return true;
 
+}
+
+void cleanup_distribution_memory() {
+#ifdef PP_USE_CUDA
+  cuda_states = Kokkos::View<curandState_t*>(0);
+#endif
 }

@@ -13,7 +13,7 @@ namespace pumipic {
       Kokkos::View<lid_t*, typename MemSpace::device_type> elem_ids("elem_ids", num_elems);
       Kokkos::View<lid_t*, typename MemSpace::device_type> temp_ppe("temp_ppe", num_elems);
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-          temp_ppe(i) = ptcls_per_elem(i);
+          temp_ppe(i) = -ptcls_per_elem(i);
           elem_ids(i) = i;
         });
       thrust::device_ptr<lid_t> ptcls_t(temp_ppe.data());
@@ -23,8 +23,8 @@ namespace pumipic {
       }
       thrust::sort_by_key(thrust::device, ptcls_t + i, ptcls_t + num_elems, elem_ids_t + i);
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-          ptcl_pairs(num_elems - 1 - i).first = temp_ppe(i);
-          ptcl_pairs(num_elems - 1 - i).second = elem_ids(i);
+          ptcl_pairs(i).first = -temp_ppe(i);
+          ptcl_pairs(i).second = elem_ids(i);
         });
 #else
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {

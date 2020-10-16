@@ -8,13 +8,34 @@ namespace pumipic {
   class Input {
   public:
 
-    //Method for creating buffers/safe zone
+    /* Method for creating buffers/safe zone
+
+       FULL:
+         Buffer: Each picpart is composed of the entire mesh
+         Safe: Each safe zone is the entire picpart*
+           * If buffer is created using BFS then the safe zone
+             will be some number of layers away from the boundary of
+             the picpart
+       BFS:
+         Buffer: Each picpart is composed of each core region within
+                 `bufferBFSLayers` layers of elements from the boundary
+                 of the part's core region.
+         Safe: The safe zone is composed of the core region plus
+               elements within `safeBFSLayers` layers from the boundary
+               of the part's core region.
+       MINIMUM:
+         Buffer: Each picpart is composed of the core region
+         Safe: The safe zone is composed of each element in the core region
+       NONE:
+         Buffer: Invalid, uses MINIMUM instead
+         Safe: The safe zone is empty
+     */
     enum Method {
       INVALID = -1,
-      FULL, //Buffer entire mesh or safe entire buffer
-      BFS, //Buffer/Safe BFS layers out
-      MINIMUM, //Buffer/Safe the core part
-      NONE //Do not create Safe zone (only for SafeMethod)
+      FULL,
+      BFS,
+      MINIMUM,
+      NONE
     };
 
     //Defines the type of info given in partition_vector

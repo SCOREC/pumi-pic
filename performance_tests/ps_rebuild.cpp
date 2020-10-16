@@ -11,8 +11,12 @@ int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
 
   /* Check commandline arguments */
-  if (argc != 5) {
-    fprintf(stderr, "Usage: %s <num elems> <num ptcls> <distribution> <%% ptcls move>\n",
+  int test_num;
+  if(argc == 6){
+    test_num = atoi(argv[5]);
+  }
+  else if (argc != 5) {
+    fprintf(stderr, "Usage: %s <num elems> <num ptcls> <distribution> <%% ptcls move> <optional: test_num>\n",
             argv[0]);
   }
 
@@ -34,26 +38,66 @@ int main(int argc, char* argv[]) {
 
     /* Create particle structure */
     ParticleStructures structures;
-    structures.push_back(std::make_pair("Sell-32-ne",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, num_elems, 1024, "Sell-32-ne")));
-    structures.push_back(std::make_pair("Sell-16-ne",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, num_elems, 1024, "Sell-16-ne")));
-    structures.push_back(std::make_pair("Sell-32-1024",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, 1024, 1024, "Sell-32-1024")));
-    structures.push_back(std::make_pair("Sell-16-1024",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, 1024, 1024, "Sell-16-1024")));
-    structures.push_back(std::make_pair("Sell-32-1",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  32, 1, 1024, "Sell-32-1")));
-    structures.push_back(std::make_pair("Sell-16-1",
-                                        createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                  16, 1, 1024, "Sell-16-1")));
-    structures.push_back(std::make_pair("CSR",
-                                        createCSR(num_elems, num_ptcls, ppe, element_gids)));
+    if(argc == 5){
+      switch(test_num){
+        case 0:
+          structures.push_back(std::make_pair("Sell-32-ne",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, num_elems, 1024)));
+          break;
+        case 1:
+          structures.push_back(std::make_pair("Sell-16-ne",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, num_elems, 1024)));
+          break;
+        case 2:
+          structures.push_back(std::make_pair("Sell-32-1024",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, 1024, 1024)));
+          break;
+        case 3:
+          structures.push_back(std::make_pair("Sell-16-1024",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, 1024, 1024)));
+          break;
+        case 4:
+          structures.push_back(std::make_pair("Sell-32-1",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, 1, 1024)));
+          break;
+        case 5:
+          structures.push_back(std::make_pair("Sell-16-1",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, 1, 1024)));
+          break;
+        case 6:
+          structures.push_back(std::make_pair("CSR",
+                                          createCSR(num_elems, num_ptcls, ppe, element_gids)));
+          break;
+      }
+    }
+    else{
+      structures.push_back(std::make_pair("Sell-32-ne",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, num_elems, 1024, "Sell-32-ne")));
+      structures.push_back(std::make_pair("Sell-16-ne",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, num_elems, 1024, "Sell-16-ne")));
+      structures.push_back(std::make_pair("Sell-32-1024",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, 1024, 1024, "Sell-32-1024")));
+      structures.push_back(std::make_pair("Sell-16-1024",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, 1024, 1024, "Sell-16-1024")));
+      structures.push_back(std::make_pair("Sell-32-1",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, 1, 1024, "Sell-32-1")));
+      structures.push_back(std::make_pair("Sell-16-1",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    16, 1, 1024, "Sell-16-1")));
+      structures.push_back(std::make_pair("CSR",
+                                          createCSR(num_elems, num_ptcls, ppe, element_gids)));
+    }
 
     const int ITERS = 100;
     printf("Performing %d iterations of rebuild on each structure\n", ITERS);

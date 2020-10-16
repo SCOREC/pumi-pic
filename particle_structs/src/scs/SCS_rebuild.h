@@ -124,7 +124,7 @@ namespace pumipic {
                                                  MTVs new_particles) {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_rebuild");
-    Kokkos::Timer timer;
+    //Kokkos::Timer timer;
     int comm_rank, comm_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -158,7 +158,7 @@ namespace pumipic {
       };
       parallel_for(resetMask, "resetMask");
 
-      RecordTime(name +" rebuild", timer.seconds(), btime);
+      //RecordTime(name +" rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
 
       return;
@@ -166,7 +166,7 @@ namespace pumipic {
 
     //If tryShuffling is on and shuffling works then rebuild is complete
     if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
-      RecordTime(name + " rebuild", timer.seconds(), btime);
+      //RecordTime(name + " rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -274,7 +274,7 @@ namespace pumipic {
     current_size = swap_size;
     swap_size = tmp_size;
 
-    RecordTime(name +" rebuild", timer.seconds(), btime);
+    //RecordTime(name +" rebuild", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

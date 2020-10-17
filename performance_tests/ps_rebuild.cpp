@@ -20,7 +20,10 @@ int main(int argc, char* argv[]) {
             argv[0]);
   }
 
-  fprintf(stderr, "Test Command:\n %s %s %s %s %s\n", argv[0], argv[1], argv[2], argv[3], argv[4]);
+  fprintf(stderr, "Test Command:\n %s %s %s %s %s", argv[0], argv[1], argv[2], argv[3], argv[4]);
+  if(argc == 6)
+    fprintf(stderr, " %s", argv[5]);
+  fprintf(stderr, "\n");
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
@@ -38,37 +41,37 @@ int main(int argc, char* argv[]) {
 
     /* Create particle structure */
     ParticleStructures structures;
-    if(argc == 5){
+    if(argc == 6){
       switch(test_num){
         case 0:
           structures.push_back(std::make_pair("Sell-32-ne",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    32, num_elems, 1024)));
+                                                    32, num_elems, 1024, "Sell-32-ne")));
           break;
         case 1:
           structures.push_back(std::make_pair("Sell-16-ne",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    16, num_elems, 1024)));
+                                                    16, num_elems, 1024, "Sell-16-ne")));
           break;
         case 2:
           structures.push_back(std::make_pair("Sell-32-1024",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    32, 1024, 1024)));
+                                                    32, 1024, 1024, "Sell-32-1024")));
           break;
         case 3:
           structures.push_back(std::make_pair("Sell-16-1024",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    16, 1024, 1024)));
+                                                    16, 1024, 1024, "Sell-16-1024")));
           break;
         case 4:
           structures.push_back(std::make_pair("Sell-32-1",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    32, 1, 1024)));
+                                                    32, 1, 1024, "Sell-32-1")));
           break;
         case 5:
           structures.push_back(std::make_pair("Sell-16-1",
                                           createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                    16, 1, 1024)));
+                                                    16, 1, 1024, "Sell-16-1")));
           break;
         case 6:
           structures.push_back(std::make_pair("CSR",

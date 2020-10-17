@@ -20,7 +20,11 @@ int main(int argc, char* argv[]) {
             argv[0]);
   }
 
-  fprintf(stderr, "Test Command:\n %s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
+  fprintf(stderr, "Test Command:\n %s %s %s %s ", argv[0], argv[1], argv[2], argv[3]);
+  if(argc == 5)
+    fprintf(stderr, "%s\n", argv[4]);
+  else
+    fprintf(stderr, "\n");
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);

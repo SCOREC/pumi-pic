@@ -65,18 +65,23 @@ namespace pumipic {
     Kokkos::Timer migrate_timer;
     ptcls->migrate(new_elems, new_procs);
     float migrate_time = migrate_timer.seconds();
-    if (mesh.comm()->rank() == 0) {
-      printf("Migration Timers: Init= %f Balance= %f Migrate= %f\n",
-             init_time, balance_time, migrate_time);
-    }
+    RecordTime("migration_init", init_time);
+    RecordTime("migration_balance", balance_time);
+    RecordTime("migration", migrate_time);
   }
 
   template <class PS>
   void migrate_ptcls(Mesh& mesh, PS* ptcls, Omega_h::LOs elems) {
+    Kokkos::Timer init_timer;
     typename PS::kkLidView new_elems("ps_element_ids", ptcls->capacity());
     typename PS::kkLidView new_procs("ps_process_ids", ptcls->capacity());
     setUnsafeProcs(mesh, ptcls, elems, new_elems, new_procs);
+    float init_time = init_timer.seconds();
+    Kokkos::Timer migrate_timer;
     ptcls->migrate(new_elems, new_procs);
+    float migrate_time = migrate_timer.seconds();
+    RecordTime("migration_init", init_time);
+    RecordTime("migration", migrate_time);
   }
 
 }

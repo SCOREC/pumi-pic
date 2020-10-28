@@ -92,13 +92,35 @@ namespace pumipic {
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if (isTiming()) {
       if (verbosity >= 0) {
+        int name_length = 9;
+        int tt_length = 10;
+        int cc_length = 10;
+        int at_length = 12;
+        for (std::size_t index = 0; index < time_per_op.size(); ++index) {
+          if (time_per_op[index].str.size() > name_length)
+            name_length = time_per_op[index].str.size();
+          int len = log10(time_per_op[index].time) + 8;
+          if (len > tt_length)
+            tt_length = len;
+          len = log10(time_per_op[index].count) + 1;
+          if (len > cc_length)
+            cc_length = len;
+          len = log10(time_per_op[index].time / time_per_op[index].count) + 8;
+          if (len > at_length)
+            len = at_length;
+        }
         char buffer[8192];
         char* ptr = buffer + sprintf(buffer, "Timing Summary %d\n", comm_rank);
+        ptr += sprintf(ptr, "Operation   %*sTotal Time   %*sCall Count   %*sAverage Time\n",
+                       name_length - 9 , "", tt_length - 10, "",
+                       cc_length - 10, "");
         for (int index = 0; index < time_per_op.size(); ++index) {
-          ptr += sprintf(ptr, "%s: Total Time=%f  Call Count=%d  Average Time=%f",
-                         time_per_op[index].str.c_str(), time_per_op[index].time,
-                         time_per_op[index].count,
-                         time_per_op[index].time / time_per_op[index].count);
+          ptr += sprintf(ptr, "%s   %*s%*.6f   %*d   %*.6f",
+                         time_per_op[index].str.c_str(),
+                         (int)(name_length - time_per_op[index].str.size()), "",
+                         tt_length, time_per_op[index].time,
+                         cc_length, time_per_op[index].count,
+                         at_length, time_per_op[index].time / time_per_op[index].count);
           if (time_per_op[index].hasPrebarrier) {
             ptr += sprintf(ptr, "  Total Prebarrier=%f", time_per_op[index].prebarrier);
           }

@@ -77,6 +77,13 @@ int main(int argc, char* argv[]) {
           structures.push_back(std::make_pair("CSR",
                                           createCSR(num_elems, num_ptcls, ppe, element_gids)));
           break;
+        case 7:
+          structures.push_back(std::make_pair("CSR",
+                                          createCSR(num_elems, num_ptcls, ppe, element_gids)));
+          structures.push_back(std::make_pair("Sell-32-ne",
+                                          createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                    32, num_elems, 1024, "Sell-32-ne")));
+          break;
       }
     }
     else{

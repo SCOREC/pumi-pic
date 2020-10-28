@@ -43,6 +43,8 @@ int main(int argc, char* argv[]) {
     delete [] ppe_host;
     delete [] ids;
 
+    printView(ppe);
+
 
     /* Create particle structure */
     ParticleStructures structures;

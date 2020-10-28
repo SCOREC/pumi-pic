@@ -124,10 +124,11 @@ namespace pumipic {
                                                  MTVs new_particles) {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_rebuild");
-    //Kokkos::Timer timer;
     int comm_rank, comm_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+    Kokkos::Timer timer;
 
     //Count particles including new and leaving
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
@@ -148,6 +149,9 @@ namespace pumipic {
     Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
         sum+= new_particles_per_elem(i);
       }, activePtcls);
+    
+    Kokkos::fence();
+    RecordTime(name + " count active particles", timer.seconds());
 
     //If there are no particles left, then destroy the structure
     if(activePtcls == 0) {
@@ -158,21 +162,25 @@ namespace pumipic {
       };
       parallel_for(resetMask, "resetMask");
 
-      //RecordTime(name +" rebuild", timer.seconds(), btime);
+      RecordTime(name +" rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
 
       return;
     }
 
+    Kokkos::Timer time_shuffle;
     //If tryShuffling is on and shuffling works then rebuild is complete
     if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
-      //RecordTime(name + " rebuild", timer.seconds(), btime);
+      RecordTime(name + " rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
+    RecordTime(name + " shuffle attempt", time_shuffle.seconds());
 
     lid_t new_num_ptcls = activePtcls;
 
+    Kokkos::fence();
+    Kokkos::Timer time_build_structure;
     int new_C = chooseChunkHeight(C_max, new_particles_per_elem);
     int old_C = C_;
     C_ = new_C;
@@ -238,8 +246,17 @@ namespace pumipic {
     };
     parallel_for(copySCS);
 
+    Kokkos::fence();
+    RecordTime(name + " SCS specific building", time_build_structure.seconds());
+
+    Kokkos::Timer time_pstops;
     CopyPSToPS<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, scs_data_swap, ptcl_data,
                                                            new_element, new_indices);
+    Kokkos::fence();
+    RecordTime(name + " PSToPs", time_pstops.seconds());
+
+    Kokkos::Timer time_newPtcls;
+    
     //Add new particles
     lid_t num_new_ptcls = new_particle_elements.size();
     kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);
@@ -254,6 +271,7 @@ namespace pumipic {
 
     if (new_particle_elements.size() > 0)
       CopyViewsToViews<kkLidView, DataTypes>(scs_data_swap, new_particles, new_particle_indices);
+    RecordTime(name + " ViewsToViews", time_newPtcls.seconds());
 
     //set scs to point to new values
     C_ = new_C;
@@ -274,7 +292,7 @@ namespace pumipic {
     current_size = swap_size;
     swap_size = tmp_size;
 
-    //RecordTime(name +" rebuild", timer.seconds(), btime);
+    RecordTime(name +" rebuild", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

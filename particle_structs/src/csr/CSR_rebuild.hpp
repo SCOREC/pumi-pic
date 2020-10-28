@@ -6,6 +6,7 @@ namespace pumipic{
                                         kkLidView new_particle_elements,
                                         MTVs new_particles){
     Kokkos::Profiling::pushRegion("CSR Rebuild");
+    Kokkos::Timer timer;
 
     //Counting of particles on process
     lid_t particles_on_process = countParticlesOnProcess(new_element) +
@@ -13,13 +14,17 @@ namespace pumipic{
     //Needs to be assigned here for later methods used
     num_ptcls = particles_on_process;
 
+    RecordTime("CSR count active particles", timer.seconds());
+
     //Alocate new (temp) MTV
     MTVs particle_info;
     CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
 
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
-
+    
+    Kokkos::fence();
+    Kokkos::Timer time_ppe;
     //Fill ptcls per elem for exisitng ptcls
     auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask){
       if(new_element[ptcl_id] > -1)
@@ -32,7 +37,11 @@ namespace pumipic{
           assert(new_particle_elements[i] > -1);
           Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
         });
+    Kokkos::fence();
+    RecordTime("CSR calc ppe", time_ppe.seconds());
 
+    //time offsets and indices calc
+    Kokkos::Timer time_off_ind;
     //refill offset here 
     auto offsets_new = kkLidView("offsets", num_elems+1); //CopyPSToPS uses orig offsets
     Kokkos::deep_copy(offsets_new, offsets);
@@ -51,13 +60,20 @@ namespace pumipic{
         new_indices[ptcl_id] = -1;
     };
     parallel_for(existing_ptcl_new_indices,"calc row indices");
+    Kokkos::fence();
 
+    RecordTime("CSR offsets and indices", time_off_ind.seconds());
 
+    Kokkos::Timer time_pstops;
     //Copy existing particles to their new location in the temp MTV
     CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    Kokkos::fence();
+    RecordTime("CSR PSToPS", time_pstops.seconds());
 
     //Deallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
+    
+    Kokkos::Timer time_newPtcls;
 
     //If there are new particles
     lid_t num_new_ptcls = new_particle_elements.size();
@@ -74,6 +90,8 @@ namespace pumipic{
       CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
                                                           new_particle_indices);
     }
+    Kokkos::fence();
+    RecordTime("CSR ViewsToViews", time_newPtcls.seconds());
 
     //Resassign all member variables
     ptcl_data = particle_info;
@@ -81,6 +99,7 @@ namespace pumipic{
     num_ptcls = capacity_;
     offsets   = offsets_new;
 
+    RecordTime("CSR rebuild", timer.seconds());
     Kokkos::Profiling::popRegion();
   }
 }

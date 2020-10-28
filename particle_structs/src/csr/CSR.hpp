@@ -1,6 +1,8 @@
 #pragma once
 
 #include <particle_structs.hpp>
+#include <ppTiming.hpp>
+
 namespace ps = particle_structs;
 
 namespace {

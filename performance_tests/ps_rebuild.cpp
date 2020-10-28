@@ -12,8 +12,12 @@ int main(int argc, char* argv[]) {
 
   /* Check commandline arguments */
   int test_num;
+  bool new_ptcls;
   if(argc == 6){
     test_num = atoi(argv[5]);
+  }
+  else if(argc == 7){
+    new_ptcls = atoi(argv[6]);
   }
   else if (argc != 5) {
     fprintf(stderr, "Usage: %s <num elems> <num ptcls> <distribution> <%% ptcls move> <optional: test_num>\n",
@@ -23,6 +27,8 @@ int main(int argc, char* argv[]) {
   fprintf(stderr, "Test Command:\n %s %s %s %s %s", argv[0], argv[1], argv[2], argv[3], argv[4]);
   if(argc == 6)
     fprintf(stderr, " %s", argv[5]);
+  if(argc == 7)
+    fprintf(stderr, " %s", argv[6]);
   fprintf(stderr, "\n");
 
   /* Enable timing on every process */
@@ -122,10 +128,32 @@ int main(int argc, char* argv[]) {
         Kokkos::Timer t;
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
         pumipic::RecordTime("redistribute", t.seconds());
-        Kokkos::Timer rebuild_timer;
-        ptcls->rebuild(new_elms);
-        float rebuild_time = rebuild_timer.seconds();
-        pumipic::RecordTime(name.c_str(), rebuild_time);
+
+        if(new_ptcls){
+          /* Option to introduce new particles */
+          int num_elems = atoi(argv[1]);
+          int num_new_ptcls = 100000; // will be introduce 100 times so can't be too big
+          int strat     = atoi(argv[3]);
+          kkLidView ppe_new("ptcls_per_elem", num_elems);
+          kkLidView ptcl_elems_new("ptcl_elems", num_ptcls);
+          kkGidView element_gids_new("",0);
+          printf("Generating new particle distribution with strategy: %s\n", distribute_name(strat));
+          distribute_particles(num_elems, num_new_ptcls, strat, ppe_new, ptcl_elems_new);
+  
+          //MTVs ptcl_info_new;
+          //CreateViews<device_type, PerfTypes>(ptcl_info_new,num_new_ptcls);
+
+          Kokkos::Timer rebuild_timer;
+          ptcls->rebuild(new_elms, ptcl_elems_new,NULL);
+          float rebuild_time = rebuild_timer.seconds();
+          pumipic::RecordTime(name.c_str(), rebuild_time);
+        }
+        else{
+          Kokkos::Timer rebuild_timer;
+          ptcls->rebuild(new_elms);
+          float rebuild_time = rebuild_timer.seconds();
+          pumipic::RecordTime(name.c_str(), rebuild_time);
+        }
       }
     }
 

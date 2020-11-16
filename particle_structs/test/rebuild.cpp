@@ -11,7 +11,7 @@ using particle_structs::MemberTypes;
 using particle_structs::getLastValue;
 using particle_structs::lid_t;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef MemberTypes<int> Type;
+typedef MemberTypes<int, int, double[3]> Type;
 typedef SellCSigma<Type> SCS;
 
 bool shuffleParticlesTests();
@@ -43,10 +43,10 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-template <typename PS>
-int sumValues(PS* ptcls) {
-  auto values = ptcls->template get<0>();
-  Kokkos::View<int*> sum("sum", 1);
+template <typename PS, int N>
+typename PS::DataType<N> sumValues(PS* ptcls) {
+  auto values = ptcls->template get<N>();
+  Kokkos::View<typename PS::DataType<N>*> sum("sum", 1);
   auto sumVals = PS_LAMBDA(const int e, const int p, const bool mask) {
     if (mask)
       Kokkos::atomic_add(&(sum[0]), values(p));
@@ -70,27 +70,35 @@ bool shuffleParticlesTests() {
   particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
 
   SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
+  scs->setShuffling(false);
   SCS* scs2 = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v,  element_gids_v);
+  scs2->setShuffling(false);
   delete [] ptcls_per_elem;
   delete [] ids;
 
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   auto values = scs->get<0>();
+  auto elms = scs->get<1>();
+  auto dbls = scs->get<2>();
   auto values2 = scs2->get<0>();
   auto sendToSelf = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     new_element(particle_id) = element_id;
+    elms(particle_id) = element_id;
     values(particle_id) = particle_id;
+    dbls(particle_id,0) = particle_id;
+    dbls(particle_id,1) = particle_id * 2;
+    dbls(particle_id,2) = particle_id * 4;
     values2(particle_id) = particle_id;
   };
   scs->parallel_for(sendToSelf);
 
-  int sum = sumValues(scs);
+  int sum = sumValues<SCS, 0>(scs);
 
   //Rebuild with no changes
   scs->rebuild(new_element);
 
-  int sum2 = sumValues(scs);
+  int sum2 = sumValues<SCS, 0>(scs);
   if (sum != sum2) {
     printf("Sum of values does not equal after rebuilding\n");
     return false;
@@ -116,23 +124,32 @@ bool shuffleParticlesTests() {
   };
   scs->parallel_for(moveParticles);
 
-  int sum2 = sumValues(scs);
-  if (sum != sum2) {
-    printf("Sum of values does not equal after rebuilding\n");
+  int sum3 = sumValues<SCS, 0>(scs);
+  if (sum != sum3) {
+    printf("Sum of values does not equal after rebuilding second time\n");
     return false;
   }
 
   scs->rebuild(new_element);
 
   values = scs->get<0>();
-
+  elms = scs->get<1>();
+  SCS::kkLidView fail2("fail",1);
   auto printParticles = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
-    if (mask)
-      printf("Particle %d has value %d\n", ptcl_id, values(ptcl_id));
+    if (mask) {
+      if ((elms(ptcl_id) + 2) % ne != elm_id) {
+        printf("Particle moved to wrong element at ptcl %d [%d] (%d != %d)\n", ptcl_id,
+               values(ptcl_id), (elms(ptcl_id) + 2) % ne, elm_id);
+        fail2(0) = 1;
+      }
+    }
   };
   scs->parallel_for(printParticles);
-  scs->printFormat();
-  scs->printMetrics();
+
+  if (getLastValue<lid_t>(fail2) == 1) {
+    printf("Incorrect element on at least one particle\n");
+    return false;
+  }
   delete scs;
   delete scs2;
   return true;
@@ -155,6 +172,7 @@ bool resortElementsTest() {
   particle_structs::hostToDevice(element_gids_v, gids);
 
   SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
+  scs->setShuffling(false);
   delete [] ptcls_per_elem;
   delete [] ids;
   delete [] gids;
@@ -313,9 +331,11 @@ bool reshuffleTests() {
     }
     if (pids(particle_id) == 100 && element_id != 2) {
       printf("[ERROR] New particle 100 was not inserted into correct element\n");
+      fail(0) = 1;
     }
     if (pids(particle_id) == 200 && element_id != 3) {
       printf("[ERROR] New particle 200 was not inserted into correct element\n");
+      fail(0) = 1;
     }
     if (element_id % 2 == 0)
       new_element(particle_id) = -1;
@@ -331,9 +351,11 @@ bool reshuffleTests() {
     if (mask) {
       if (element_id % 2 == 1) {
         printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);
+        fail(0) = 1;
       }
       if (pids(particle_id) % 2 != 0) {
         printf("[ERROR] Odd Particle %d remains on element %d\n", particle_id, element_id);
+        fail(0) = 1;
       }
     }
   };

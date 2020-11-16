@@ -231,7 +231,6 @@ namespace pumipic {
     kkLidView new_indices("new_scs_index", capacity());
     auto copySCS = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
       const lid_t new_elem = new_element(ptcl_id);
-      //TODO remove conditional
       if (mask && new_elem != -1) {
         const lid_t new_row = new_element_to_row(new_elem);
         new_indices(ptcl_id) = Kokkos::atomic_fetch_add(&element_index(new_row), new_C);
@@ -277,7 +276,9 @@ namespace pumipic {
     std::size_t tmp_size = current_size;
     current_size = swap_size;
     swap_size = tmp_size;
-
+    void* tmp_ptrs = swap_data_d;
+    swap_data_d = ptcl_data_d;
+    ptcl_data_d = tmp_ptrs;
     RecordTime(name +" rebuild", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }

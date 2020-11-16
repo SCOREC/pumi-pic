@@ -27,14 +27,14 @@ int main(int argc, char* argv[]) {
     passed = false;
     printf("[ERROR] shuffleParticlesTests() failed\n");
   }
-  if (!resortElementsTest()) {
-    passed = false;
-    printf("[ERROR] resortElementsTest() failed\n");
-  }
-  if (!reshuffleTests()) {
-    passed = false;
-    printf("[ERROR] reshuffleTests() failed\n");
-  }
+  // if (!resortElementsTest()) {
+  //   passed = false;
+  //   printf("[ERROR] resortElementsTest() failed\n");
+  // }
+  // if (!reshuffleTests()) {
+  //   passed = false;
+  //   printf("[ERROR] reshuffleTests() failed\n");
+  // }
 
   Kokkos::finalize();
   MPI_Finalize();
@@ -43,6 +43,18 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
+template <typename PS>
+int sumValues(PS* ptcls) {
+  auto values = ptcls->template get<0>();
+  Kokkos::View<int*> sum("sum", 1);
+  auto sumVals = PS_LAMBDA(const int e, const int p, const bool mask) {
+    if (mask)
+      Kokkos::atomic_add(&(sum[0]), values(p));
+  };
+  pumipic::parallel_for(ptcls, sumVals);
+  auto hm = Kokkos::create_mirror_view(sum);
+  return hm(0);
+}
 
 bool shuffleParticlesTests() {
   int ne = 5;
@@ -62,8 +74,6 @@ bool shuffleParticlesTests() {
   delete [] ptcls_per_elem;
   delete [] ids;
 
-  scs->printFormat();
-  scs->printMetrics();
   SCS::kkLidView new_element("new_element", scs->capacity());
 
   auto values = scs->get<0>();
@@ -75,11 +85,16 @@ bool shuffleParticlesTests() {
   };
   scs->parallel_for(sendToSelf);
 
+  int sum = sumValues(scs);
+
   //Rebuild with no changes
   scs->rebuild(new_element);
 
-  scs->printFormat();
-  scs->printMetrics();
+  int sum2 = sumValues(scs);
+  if (sum != sum2) {
+    printf("Sum of values does not equal after rebuilding\n");
+    return false;
+  }
   values = scs->get<0>();
 
   SCS::kkLidView fail("fail",1);
@@ -100,6 +115,12 @@ bool shuffleParticlesTests() {
     new_element(ptcl_id) = (elm_id + 2) % ne;
   };
   scs->parallel_for(moveParticles);
+
+  int sum2 = sumValues(scs);
+  if (sum != sum2) {
+    printf("Sum of values does not equal after rebuilding\n");
+    return false;
+  }
 
   scs->rebuild(new_element);
 

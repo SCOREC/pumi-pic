@@ -19,6 +19,8 @@
 #include <thrust/device_ptr.h>
 #endif
 #include <ppTiming.hpp>
+#include <psMemberType.h>
+
 namespace pumipic {
 
 void enable_prebarrier();
@@ -167,6 +169,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   using ParticleStructure<DataTypes, MemSpace>::capacity_;
   using ParticleStructure<DataTypes, MemSpace>::num_rows;
   using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
+  using ParticleStructure<DataTypes, MemSpace>::ptcl_data_d;
   using ParticleStructure<DataTypes, MemSpace>::num_types;
 
   //The User defined kokkos policy
@@ -203,6 +206,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   GID_Mapping element_gid_to_lid;
   //Pointers to the start of each SCS for each data type
   MTVs scs_data_swap;
+  //Device ptrs to swap space
+  void* swap_data_d;
   std::size_t current_size, swap_size;
 
   //Padding terms
@@ -221,7 +226,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
                  MTVs particle_info);
   void destroy();
 
-  SellCSigma(lid_t Cmax) : ParticleStructure<DataTypes, MemSpace>(), policy(PolicyType(1000,Cmax)) {};
+  SellCSigma(lid_t Cmax) : ParticleStructure<DataTypes, MemSpace>(), policy(PolicyType(1000,Cmax)), swap_data_d(NULL) {};
 
 };
 
@@ -265,6 +270,11 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
     cap *= (1 + extra_padding);
   CreateViews<device_type, DataTypes>(ptcl_data, cap);
   CreateViews<device_type, DataTypes>(scs_data_swap, cap);
+
+  //Create Device ptrs to ptcl data
+  createDevicePtrs<DataTypes, device_type>(ptcl_data, ptcl_data_d);
+  createDevicePtrs<DataTypes, device_type>(scs_data_swap, swap_data_d);
+
   swap_size = current_size = cap;
 
   if (num_ptcls > 0) {
@@ -277,6 +287,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
       initSCSData(chunk_starts, particle_elements, particle_info);
     }
   }
+
   Kokkos::Profiling::popRegion();
 }
 
@@ -286,8 +297,9 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
                                             lid_t np, kkLidView ptcls_per_elem,
                                             kkGidView element_gids,
                                             kkLidView particle_elements,
-                                            MTVs particle_info) :
-  ParticleStructure<DataTypes, MemSpace>(), policy(p), element_gid_to_lid(ne) {
+                                            MTVs particle_info)
+  : ParticleStructure<DataTypes, MemSpace>(), policy(p),
+    element_gid_to_lid(ne), swap_data_d(NULL) {
   //Set variables
   sigma = sig;
   V_ = v;
@@ -302,7 +314,7 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
     ParticleStructure<DataTypes, MemSpace>(input.name), policy(input.policy),
-    element_gid_to_lid(input.ne) {
+    element_gid_to_lid(input.ne), swap_data_d(NULL) {
   sigma = input.sig;
   V_ = input.V;
   num_elems = input.ne;
@@ -364,6 +376,11 @@ template<class DataTypes, typename MemSpace>
 void SellCSigma<DataTypes, MemSpace>::destroy() {
   destroyViews<DataTypes, memory_space>(ptcl_data);
   destroyViews<DataTypes, memory_space>(scs_data_swap);
+  if (swap_data_d) {
+    destroyPtrs<DataTypes, memory_space>(swap_data_d);
+    swap_data_d = NULL;
+  }
+
 }
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::~SellCSigma() {

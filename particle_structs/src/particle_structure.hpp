@@ -4,7 +4,12 @@
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
 #include <psDistributor.hpp>
+
+
 namespace pumipic {
+
+  //Temporary hack
+  template <typename Device, typename... Types> struct SetPtrs;
 
   template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {
@@ -68,15 +73,18 @@ namespace pumipic {
     lid_t capacity_;
     lid_t num_rows;
 
-    //Particle information
-    MTVs ptcl_data;
-
     //Number of Data types
     static constexpr std::size_t num_types = DataTypes::size;
 
+    //Particle information
+    MTVs ptcl_data;
+    //Device pointers to particle information
+    void* ptcl_data_d;
+
+
     /*
       Copy a particle structure to another memory space
-      Note: if the same memory space is used then a the data is not duplicated
+      Note: if the same memory space is used then the data is not duplicated
     */
     template <class Space2>
     void copy(Mirror<Space2>* old) {
@@ -95,16 +103,17 @@ namespace pumipic {
       }
     }
     template <typename DT, typename Space2> friend class ParticleStructure;
-  };
+
+   };
 
   template <class DataTypes, typename Space>
-  ParticleStructure<DataTypes, Space>::ParticleStructure() : name("ptcls"), num_elems(0), num_ptcls(0),
-                                                             capacity_(0), num_rows(0) {
+  ParticleStructure<DataTypes, Space>::ParticleStructure()
+    : name("ptcls"), num_elems(0), num_ptcls(0), capacity_(0), num_rows(0), ptcl_data_d(NULL) {
   }
 
   template <class DataTypes, typename Space>
-  ParticleStructure<DataTypes, Space>::ParticleStructure(const std::string& name_) : name(name_), num_elems(0), num_ptcls(0),
-                                                             capacity_(0), num_rows(0) {
+  ParticleStructure<DataTypes, Space>::ParticleStructure(const std::string& name_)
+    : name(name_), num_elems(0), num_ptcls(0), capacity_(0), num_rows(0), ptcl_data_d(NULL){
   }
 
 }

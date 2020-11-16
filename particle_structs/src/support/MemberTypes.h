@@ -25,12 +25,14 @@ template<>
 struct MemberTypes<> {
   static constexpr std::size_t size = 0;
   static constexpr std::size_t memsize = 0;
+  static constexpr std::size_t viewmemsize = 0;
 };
 
 template<typename H, typename... T>
   struct MemberTypes<H,T...> {
   static constexpr std::size_t size = 1 + MemberTypes<T...>::size;
   static constexpr std::size_t memsize = sizeof(H) + MemberTypes<T...>::memsize;
+  static constexpr std::size_t viewmemsize = sizeof(Kokkos::View<H*>) + MemberTypes<T...>::viewmemsize;
 
   template <std::size_t I>
     static std::size_t sizeToIndex() {return MemberSize<I,H,T...,void>::memsize;}

@@ -202,8 +202,10 @@ namespace pumipic {
     lid_t new_cap = getLastValue<lid_t>(new_offsets);
     kkLidView new_particle_mask("new_particle_mask", new_cap);
     if (swap_size < new_cap) {
-      destroyViews<DataTypes, memory_space>(scs_data_swap);
+      destroyViews<DataTypes, device_type>(scs_data_swap);
+      destroyPtrs<DataTypes, device_type>(swap_data_d);
       CreateViews<device_type, DataTypes>(scs_data_swap, new_cap*1.1);
+      createDevicePtrs<DataTypes, device_type>(scs_data_swap, swap_data_d);
       swap_size = new_cap * 1.1;
     }
 
@@ -238,9 +240,10 @@ namespace pumipic {
       }
     };
     parallel_for(copySCS);
-
-    CopyPSToPS<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, scs_data_swap, ptcl_data,
-                                                           new_element, new_indices);
+    // CopyPSToPS<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, scs_data_swap, ptcl_data,
+    //                                                        new_element, new_indices);
+    CopyPSToPS2<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, swap_data_d, ptcl_data_d,
+                                                            new_element, new_indices);
     //Add new particles
     lid_t num_new_ptcls = new_particle_elements.size();
     kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);

@@ -13,10 +13,10 @@ int main(int argc, char* argv[]) {
   /* Check commandline arguments */
   int test_num;
   bool new_ptcls;
-  if(argc == 6){
+  if(argc >= 6){
     test_num = atoi(argv[5]);
   }
-  else if(argc == 7){
+  else if(argc >= 7){
     new_ptcls = atoi(argv[6]);
   }
   else if (argc != 5) {

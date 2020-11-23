@@ -189,10 +189,11 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
     base = 2;
   if (base > 32)
     base = 32;
-  Kokkos::View<int*> bin_starts("bin_starts", 5);
-  int bin_starts_host[5];
+  const int nbins = 5;
+  Kokkos::View<int*> bin_starts("bin_starts", nbins);
+  int bin_starts_host[nbins];
   bin_starts_host[0] = 0;
-  for (int i = 1; i < 10; ++i) {
+  for (int i = 1; i < nbins; ++i) {
     bin_starts_host[i] = bin_starts_host[i-1] + pow(base, i);
   }
   pumipic::hostToDevice(bin_starts, bin_starts_host);
@@ -206,7 +207,7 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
     for (int i = 0; i < ptcls_per_state; ++i) {
       const int ptcl_index = start_ptcl + i;
       int bin = curand_poisson(&state, .01);
-      if (bin >= 5)
+      if (bin >= nbins)
         bin = 4;
       const int range = pow(base, bin + 1);
       const int minElem = bin_starts[bin];

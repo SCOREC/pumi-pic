@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
   int num_ptcls = atoi(argv[2]);
   int strat = atoi(argv[3]);
   bool optimal = false;
-  float param = .01;
+  double param = .01;
 
   //Optional arguments specified with flags
   for(int i = 4; i < argc; i+=2){
@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
       i--;
     }
     else if(std::string(argv[i]) == "-r"){
-      param = atoi(argv[i+1]);
+      param = atof(argv[i+1]);
     }
     else{
       fprintf(stderr, "Illegal argument: %s", argv[i]);

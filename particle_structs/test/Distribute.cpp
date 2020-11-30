@@ -176,66 +176,51 @@ void exponential_distribution(int ne, int np, int* ptcls_per_elem, std::vector<i
 
 
 void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                              Kokkos::View<int*> elem_per_ptcl, float poisson_num) {
+                              Kokkos::View<int*> elem_per_ptcl, float param=1.0) {
+  // Attempts to Convert a uniform rand variable to exponential
+  float lambda = param; //rate parameter for exp func
+  int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  double freq_max = log(1.0/ne)*-1; //max value out of the log to scale with
 
-  //For now just call the CPU version
-#ifdef PP_USE_CUDA
-  //Initialize cuda states for PRNG
-  initStates();
+  Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+  Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
+    //generate uniform RV
+    auto generator = pool.get_state();
+    const int uni_elem = generator.urand(ne);
+    pool.free_state(generator);
+    //Convert uniform rand variable to exponential
+    int exp_elem;
+    int exp_elem_start;
+    int exp_elem_end;
+    if(uni_elem == ne - 1) exp_elem = 0;
+    else{
+      double percent_elem = ((double)uni_elem)/ne;
+      double temp = -1/lambda * log(1 - percent_elem)/freq_max;
+      double temp_next = -1/lambda*log(1-percent_elem-1.0/ne)/freq_max;
+      exp_elem_start = temp*ne;
+      exp_elem_end = temp_next*ne;
 
-  //Initialize bin lengths/starts
-  int base = pow(ne, .3);
-  if (base < 2)
-    base = 2;
-  if (base > 32)
-    base = 32;
-  Kokkos::View<int*> bin_starts("bin_starts", 5);
-  int bin_starts_host[5];
-  bin_starts_host[0] = 0;
-  for (int i = 1; i < 10; ++i) {
-    bin_starts_host[i] = bin_starts_host[i-1] + pow(base, i);
-  }
-  pumipic::hostToDevice(bin_starts, bin_starts_host);
-  int ptcls_per_state = np / num_states + 1;
-  auto local_states = cuda_states;
-  //Generate a random bin from poisson distribution then assign an element in the bin
-  //  using uniform random distribution
-  Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
-    curandState_t state = local_states[index];
-    const int start_ptcl = ptcls_per_state * index;
-    for (int i = 0; i < ptcls_per_state; ++i) {
-      const int ptcl_index = start_ptcl + i;
-      int bin = curand_poisson(&state, poisson_num);
-      if (bin >= 5)
-        bin = 4;
-      const int range = pow(base, bin + 1);
-      const int minElem = bin_starts[bin];
-      int elem = minElem + curand(&state) % range;
-      if (elem >= ne) {
-        elem = ne - 1;
+      int length = exp_elem_end - exp_elem_start;
+      int inside_elem = 0;
+      //Distribute uniformly across gaps in RV conversion
+      if(length > 1){
+        auto gen = pool.get_state();
+        inside_elem = gen.urand(length);
+        pool.free_state(gen);
       }
-      if (ptcl_index < np) {
-        elem_per_ptcl[ptcl_index] = elem;
-        Kokkos::atomic_add(&(ptcls_per_elem[elem]), 1);
+      exp_elem = exp_elem_start + inside_elem;
+      //Distribute uniformly across ne if outside of ne
+      if(exp_elem >= ne){
+        auto gen = pool.get_state();
+        inside_elem = gen.urand(ne);
+        pool.free_state(gen);
+        exp_elem = inside_elem;
       }
     }
+
+    elem_per_ptcl[index] = exp_elem;
+    Kokkos::atomic_add(&(ptcls_per_elem[exp_elem]),1);
   });
-#else
-  int* ppe = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
-  exponential_distribution(ne, np, ppe, ids);
-  int* new_elems = new int[np];
-  for (int i = 0; i < ne; ++i) {
-    for (std::size_t j = 0; j < ids[i].size(); ++j) {
-      new_elems[ids[i][j]] = i;
-    }
-  }
-  pumipic::hostToDevice(ptcls_per_elem, ppe);
-  pumipic::hostToDevice(elem_per_ptcl, new_elems);
-  delete [] new_elems;
-  delete [] ppe;
-  delete [] ids;
-#endif
 }
 
 const int num_dist_funcs = 4;

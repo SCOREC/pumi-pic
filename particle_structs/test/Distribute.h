@@ -19,6 +19,9 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
                           Kokkos::View<int*> elem_per_ptcl);
 
+bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
+                          Kokkos::View<int*> elem_per_ptcl,float param);
+
 template <typename PS>
 bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
                             typename PS::kkLidView new_elms);

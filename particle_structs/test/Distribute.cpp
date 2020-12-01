@@ -157,29 +157,13 @@ void exponential_distribution(int ne, int np, int* ptcls_per_elem, std::vector<i
   }
 }
 
-#ifdef PP_USE_CUDA
-  const int num_states = 1024;
-  Kokkos::View<curandState_t*> cuda_states;
-  bool states_inited = false;
-  void initStates() {
-    if (!states_inited) {
-      cuda_states = Kokkos::View<curandState_t*>("cuda_states", 1024);
-      states_inited = true;
-      int seed = std::chrono::system_clock::now().time_since_epoch().count();
-      auto local_states = cuda_states;
-      Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
-        curand_init(seed, index * 2 * 100, 1, &(local_states(index)));
-      });
-    }
-  }
-#endif
-
 
 void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
                               Kokkos::View<int*> elem_per_ptcl, float param=1.0) {
   // Attempts to Convert a uniform rand variable to exponential
   float lambda = param; //rate parameter for exp func
-  int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  //int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  int seed = 0; //fixed seed for consistent testing
   double freq_max = log(1.0/ne)*-1; //max value out of the log to scale with
 
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
@@ -298,21 +282,13 @@ bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_pe
 }
 */
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl, float param=.01) {
-  if(strat == 3)
-    (*gpu_funcs[3])(ne,np,ptcls_per_elem,elem_per_ptcl,param);
-  else if(strat >= 0 && strat < num_dist_funcs)
-    (*gpu_funcs[strat])(ne,np,ptcls_per_elem,elem_per_ptcl,0);
+                          Kokkos::View<int*> elem_per_ptcl, float param) {
+  if(strat >= 0 && strat < num_dist_funcs)
+    (*gpu_funcs[strat])(ne,np,ptcls_per_elem,elem_per_ptcl,param);
   else {
     distribute_help();
     return false;
   }
   return true;
 
-}
-
-void cleanup_distribution_memory() {
-#ifdef PP_USE_CUDA
-  cuda_states = Kokkos::View<curandState_t*>(0);
-#endif
 }

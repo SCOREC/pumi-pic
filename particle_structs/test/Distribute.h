@@ -16,11 +16,11 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,
                           std::vector<int>* ids);
 
 
-bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl);
+//bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
+//                          Kokkos::View<int*> elem_per_ptcl);
 
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl,float param);
+                          Kokkos::View<int*> elem_per_ptcl,float param=1.0);
 
 template <typename PS>
 bool redistribute_particles(PS* ptcls, int strat, double percentMoved,

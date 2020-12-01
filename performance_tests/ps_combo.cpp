@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
     kkGidView element_gids("",0);
     printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems,param);
-    printView(ppe);
+    //printView(ppe); //Uncomment to view distribution of particles
 
     /* Create particle structure */
     ParticleStructures structures;
@@ -141,17 +141,16 @@ int main(int argc, char* argv[]) {
         /* End push */
         float pseudo_push_time = pseudo_push_timer.seconds();
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
-        //fprintf(stderr, "Iter: %d\n", i);
       }
       
-//      printf("Beginning rebuild on structure %s\n", name.c_str());
-//      for (int i = 0; i < ITERS; ++i) {
-//        kkLidView new_elms("new elems", ptcls->capacity());
-//        Kokkos::Timer t;
-//        redistribute_particles(ptcls, strat, percentMoved, new_elms);
-//        pumipic::RecordTime("redistribute", t.seconds());
-//        ptcls->rebuild(new_elms);
-//      }
+      printf("Beginning rebuild on structure %s\n", name.c_str());
+      for (int i = 0; i < ITERS; ++i) {
+        kkLidView new_elms("new elems", ptcls->capacity());
+        Kokkos::Timer t;
+        redistribute_particles(ptcls, strat, percentMoved, new_elms);
+        pumipic::RecordTime("redistribute", t.seconds());
+        ptcls->rebuild(new_elms);
+      }
 
     } //end loop over structures
 
@@ -162,7 +161,6 @@ int main(int argc, char* argv[]) {
 
   } //end Kokkos region
 
-  cleanup_distribution_memory();
   pumipic::SummarizeTime();
   Kokkos::finalize();
   return 0;

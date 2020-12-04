@@ -135,15 +135,25 @@ namespace pumipic {
   }
 
 
-template <typename T, typename Device>
-T getLastValue(Kokkos::View<T*, Device> view) {
-  const int size = view.size();
-  if (size == 0)
-    return 0;
-  T lastVal;
-  Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
-  return lastVal;
-}
+  template <typename T, typename Device>
+  T getLastValue(Kokkos::View<T*, Device> view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    T lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
+    return lastVal;
+  }
+
+  template <typename ViewT>
+  typename ViewT::value_type getLastValue(ViewT view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    typename ViewT::value_type lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
+    return lastVal;
+  }
 
   template <typename ViewT>
   PP_INLINE typename std::enable_if<ViewT::rank == 1>::type copyViewToView(ViewT dst, int dstind,

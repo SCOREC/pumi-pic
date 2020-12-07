@@ -37,7 +37,7 @@ void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* id
 }
 
 void even_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                       Kokkos::View<int*> elem_per_ptcl,float param) {
+                       Kokkos::View<int*> elem_per_ptcl,float) {
   int p;
   int r;
   if (ne == 0)
@@ -81,7 +81,7 @@ void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>*
 }
 
 void uniform_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl,float param) {
+                          Kokkos::View<int*> elem_per_ptcl,float) {
   int seed = std::chrono::system_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
   Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
@@ -117,7 +117,7 @@ void gaussian_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>
 }
 
 void gaussian_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                           Kokkos::View<int*> elem_per_ptcl,float param) {
+                           Kokkos::View<int*> elem_per_ptcl,float) {
   int seed = std::chrono::system_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
   Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
@@ -162,7 +162,7 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
                               Kokkos::View<int*> elem_per_ptcl, float param=1.0) {
   // Attempts to Convert a uniform rand variable to exponential
   float lambda = param; //rate parameter for exp func
-  //int seed = std::chrono::system_clock::now().time_since_epoch().count();
+
   int seed = 0; //fixed seed for consistent testing
   double freq_max = log(1.0/ne)*-1; //max value out of the log to scale with
 
@@ -268,19 +268,7 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::v
   }
   return true;
 }
-/*
-bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl) {
-  if(strat >= 0 && strat < num_dist_funcs)
-    (*gpu_funcs[strat])(ne,np,ptcls_per_elem,elem_per_ptcl);
-  else {
-    distribute_help();
-    return false;
-  }
-  return true;
 
-}
-*/
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
                           Kokkos::View<int*> elem_per_ptcl, float param) {
   if(strat >= 0 && strat < num_dist_funcs)

@@ -37,7 +37,7 @@ void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* id
 }
 
 void even_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                       Kokkos::View<int*> elem_per_ptcl) {
+                       Kokkos::View<int*> elem_per_ptcl,float) {
   int p;
   int r;
   if (ne == 0)
@@ -81,7 +81,7 @@ void uniform_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>*
 }
 
 void uniform_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl) {
+                          Kokkos::View<int*> elem_per_ptcl,float) {
   int seed = std::chrono::system_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
   Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
@@ -117,7 +117,7 @@ void gaussian_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>
 }
 
 void gaussian_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                           Kokkos::View<int*> elem_per_ptcl) {
+                           Kokkos::View<int*> elem_per_ptcl,float) {
   int seed = std::chrono::system_clock::now().time_since_epoch().count();
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
   Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
@@ -157,90 +157,59 @@ void exponential_distribution(int ne, int np, int* ptcls_per_elem, std::vector<i
   }
 }
 
-#ifdef PP_USE_CUDA
-  const int num_states = 1024;
-  Kokkos::View<curandState_t*> cuda_states;
-  bool states_inited = false;
-  void initStates() {
-    if (!states_inited) {
-      cuda_states = Kokkos::View<curandState_t*>("cuda_states", 1024);
-      states_inited = true;
-      int seed = std::chrono::system_clock::now().time_since_epoch().count();
-      auto local_states = cuda_states;
-      Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
-        curand_init(seed, index * 2 * 100, 1, &(local_states(index)));
-      });
-    }
-  }
-#endif
-
 
 void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
-                              Kokkos::View<int*> elem_per_ptcl) {
+                              Kokkos::View<int*> elem_per_ptcl, float param=1.0) {
+  // Attempts to Convert a uniform rand variable to exponential
+  float lambda = param; //rate parameter for exp func
 
-  //For now just call the CPU version
-#ifdef PP_USE_CUDA
-  //Initialize cuda states for PRNG
-  initStates();
+  int seed = 0; //fixed seed for consistent testing
+  double freq_max = log(1.0/ne)*-1; //max value out of the log to scale with
 
-  //Initialize bin lengths/starts
-  int base = pow(ne, .2);
-  if (base < 2)
-    base = 2;
-  if (base > 32)
-    base = 32;
-  Kokkos::View<int*> bin_starts("bin_starts", 5);
-  int bin_starts_host[5];
-  bin_starts_host[0] = 0;
-  for (int i = 1; i < 10; ++i) {
-    bin_starts_host[i] = bin_starts_host[i-1] + pow(base, i);
-  }
-  pumipic::hostToDevice(bin_starts, bin_starts_host);
-  int ptcls_per_state = np / num_states + 1;
-  auto local_states = cuda_states;
-  //Generate a random bin from poisson distribution then assign an element in the bin
-  //  using uniform random distribution
-  Kokkos::parallel_for(num_states, PS_LAMBDA(const int index) {
-    curandState_t state = local_states[index];
-    const int start_ptcl = ptcls_per_state * index;
-    for (int i = 0; i < ptcls_per_state; ++i) {
-      const int ptcl_index = start_ptcl + i;
-      int bin = curand_poisson(&state, .01);
-      if (bin >= 5)
-        bin = 4;
-      const int range = pow(base, bin + 1);
-      const int minElem = bin_starts[bin];
-      int elem = minElem + curand(&state) % range;
-      if (elem >= ne) {
-        elem = ne - 1;
+  Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+  Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
+    //generate uniform RV
+    auto generator = pool.get_state();
+    const int uni_elem = generator.urand(ne);
+    pool.free_state(generator);
+    //Convert uniform rand variable to exponential
+    int exp_elem;
+    int exp_elem_start;
+    int exp_elem_end;
+    if(uni_elem == ne - 1) exp_elem = 0;
+    else{
+      double percent_elem = ((double)uni_elem)/ne;
+      double temp = -1/lambda * log(1 - percent_elem)/freq_max;
+      double temp_next = -1/lambda*log(1-percent_elem-1.0/ne)/freq_max;
+      exp_elem_start = temp*ne;
+      exp_elem_end = temp_next*ne;
+
+      int length = exp_elem_end - exp_elem_start;
+      int inside_elem = 0;
+      //Distribute uniformly across gaps in RV conversion
+      if(length > 1){
+        auto gen = pool.get_state();
+        inside_elem = gen.urand(length);
+        pool.free_state(gen);
       }
-      if (ptcl_index < np) {
-        elem_per_ptcl[ptcl_index] = elem;
-        Kokkos::atomic_add(&(ptcls_per_elem[elem]), 1);
+      exp_elem = exp_elem_start + inside_elem;
+      //Distribute uniformly across ne if outside of ne
+      if(exp_elem >= ne){
+        auto gen = pool.get_state();
+        inside_elem = gen.urand(ne);
+        pool.free_state(gen);
+        exp_elem = inside_elem;
       }
     }
+
+    elem_per_ptcl[index] = exp_elem;
+    Kokkos::atomic_add(&(ptcls_per_elem[exp_elem]),1);
   });
-#else
-  int* ppe = new int[ne];
-  std::vector<int>* ids = new std::vector<int>[ne];
-  exponential_distribution(ne, np, ppe, ids);
-  int* new_elems = new int[np];
-  for (int i = 0; i < ne; ++i) {
-    for (std::size_t j = 0; j < ids[i].size(); ++j) {
-      new_elems[ids[i][j]] = i;
-    }
-  }
-  pumipic::hostToDevice(ptcls_per_elem, ppe);
-  pumipic::hostToDevice(elem_per_ptcl, new_elems);
-  delete [] new_elems;
-  delete [] ppe;
-  delete [] ids;
-#endif
 }
 
 const int num_dist_funcs = 4;
 typedef void (*dist_func)(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
-typedef void (*dist_func_gpu)(int, int, Kokkos::View<int*>, Kokkos::View<int*>);
+typedef void (*dist_func_gpu)(int, int, Kokkos::View<int*>, Kokkos::View<int*>,float);
 typedef const char* dist_name ;
 
 dist_func funcs[num_dist_funcs] = {
@@ -301,19 +270,13 @@ bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem, std::v
 }
 
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-                          Kokkos::View<int*> elem_per_ptcl) {
+                          Kokkos::View<int*> elem_per_ptcl, float param) {
   if(strat >= 0 && strat < num_dist_funcs)
-    (*gpu_funcs[strat])(ne,np,ptcls_per_elem,elem_per_ptcl);
+    (*gpu_funcs[strat])(ne,np,ptcls_per_elem,elem_per_ptcl,param);
   else {
     distribute_help();
     return false;
   }
   return true;
 
-}
-
-void cleanup_distribution_memory() {
-#ifdef PP_USE_CUDA
-  cuda_states = Kokkos::View<curandState_t*>(0);
-#endif
 }

@@ -150,7 +150,7 @@ namespace pumipic {
     const int size = view.size();
     if (size == 0)
       return 0;
-    typename ViewT::value_type lastVal;
+    typename ViewT::non_const_value_type lastVal;
     Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
     return lastVal;
   }

@@ -510,6 +510,9 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
       });
     });
   });
+#ifdef PP_USE_CUDA
+  cudaFree(fn_d);
+#endif
 }
 
 } // end namespace pumipic

@@ -51,8 +51,24 @@ set(pumipic_USE_EnGPar_DEFAULT ON)
 set(EnGPar_PREFIX ${EnGPar_PREFIX})
 bob_public_dep(EnGPar)
 
-# Find Kokkos
-find_package(Kokkos REQUIRED)
+option(ENABLE_CABANA "Build with Cabana" OFF)
+if(ENABLE_CABANA)
+  find_package(Cabana REQUIRED)
+  # bob package creation { no idea if this will work
+  get_filename_component(Cabana_PREFIX ${CABANA_INCLUDE_DIR} DIRECTORY) 
+  set(pumipic_USE_Cabana_DEFAULT ON)
+  set(Cabana_PREFIX ${Cabana_PREFIX})
+  bob_public_dep(Cabana)
+  # }
+else()
+  find_package(Kokkos REQUIRED)
+  # bob package creation {
+  get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY)
+  set(pumipic_USE_Kokkos_DEFAULT ON)
+  set(Kokkos_PREFIX ${Kokkos_PREFIX})
+  bob_public_dep(Kokkos)
+  # }
+endif()
 set(KOKKOS_ENABLED true)
 include_directories(${KOKKOS_INCLUDE_DIR})
 
@@ -60,14 +76,6 @@ include(${KOKKOS_INCLUDE_DIR}/../kokkos_generated_settings.cmake)
 message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
 string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
 message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
-
-# bob package creation {
-get_filename_component(Kokkos_PREFIX ${KOKKOS_INCLUDE_DIR} DIRECTORY)
-set(pumipic_USE_Kokkos_DEFAULT ON)
-set(Kokkos_PREFIX ${Kokkos_PREFIX})
-bob_public_dep(Kokkos)
-# }
-
 
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)

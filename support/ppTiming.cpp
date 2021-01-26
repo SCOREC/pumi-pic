@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <vector>
 #include <mpi.h>
+#include <algorithm>
 
 namespace {
   int verbosity = 0;
@@ -87,7 +88,31 @@ namespace pumipic {
     }
   }
 
-  void SummarizeTime() {
+  bool sortByAlpha(const TimeInfo& first, const TimeInfo& second) {
+    return first.str < second.str;
+  }
+  bool sortByLongest(const TimeInfo& first, const TimeInfo& second) {
+    return first.time > second.time;
+  }
+  bool sortByShortest(const TimeInfo& first, const TimeInfo& second) {
+    return first.time < second.time;
+  }
+  void sortTimeInfo(TimingSortOption sort) {
+    if (sort == SORT_ALPHA) {
+      std::sort(time_per_op.begin(), time_per_op.end(), sortByAlpha);
+    }
+    else if (sort == SORT_ORDER) {
+
+    }
+    else if (sort == SORT_LONGEST) {
+      std::sort(time_per_op.begin(), time_per_op.end(), sortByLongest);
+    }
+    else if (sort == SORT_SHORTEST) {
+      std::sort(time_per_op.begin(), time_per_op.end(), sortByShortest);
+    }
+  }
+
+  void SummarizeTime(TimingSortOption sort) {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if (isTiming()) {
@@ -96,6 +121,7 @@ namespace pumipic {
         int tt_length = 10;
         int cc_length = 10;
         int at_length = 12;
+        sortTimeInfo(sort);
         for (std::size_t index = 0; index < time_per_op.size(); ++index) {
           if (time_per_op[index].str.size() > name_length)
             name_length = time_per_op[index].str.size();

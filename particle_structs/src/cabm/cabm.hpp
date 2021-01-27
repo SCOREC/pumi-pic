@@ -5,6 +5,32 @@
 #include <Cabana_Core.hpp>
 #include <cassert>
 
+namespace Cabana {
+
+template <typename T, typename... Types>
+struct AppendMT;
+
+//Append type to the end
+template <typename T, typename... Types>
+struct AppendMT<T, MemberTypes<Types...> > {
+  static constexpr int size = 1 + MemberTypes<Types...>::size;
+  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
+};
+
+
+// class to append member types
+template <typename T, typename... Types>
+struct MemberTypesAppend;
+
+//Append type to the end
+template <typename T, typename... Types>
+struct MemberTypesAppend<T, MemberTypes<Types...> > {
+  static constexpr int size = 1 + MemberTypes<Types...>::size;
+  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
+};
+
+}//end cabana
+
 namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
@@ -20,7 +46,7 @@ namespace pumipic {
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
     using CM_DT = Cabana::AppendMT<int,DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemorySpace>;
+    using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemSpace>;
 
     CabM() = delete;
     CabM(const CabM&) = delete;

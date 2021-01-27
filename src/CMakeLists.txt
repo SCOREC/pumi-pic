@@ -32,7 +32,6 @@ target_link_libraries(pumipic-core
   support
   particleStructs
   Omega_h::omega_h
-  Kokkos::kokkos
   EnGPar::engpar
   EnGPar::pcu
   )

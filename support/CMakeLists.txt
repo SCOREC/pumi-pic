@@ -33,6 +33,9 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
+if(ENABLE_CABANA)
+  target_link_libraries(support PUBLIC Cabana::cabanacore)
+endif()
 
 cmake_policy(SET CMP0057 NEW)
 if ("CUDA" IN_LIST Kokkos_DEVICES)

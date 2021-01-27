@@ -5,16 +5,16 @@
 #include <Cabana_Core.hpp>
 #include <cassert>
 
-namespace Cabana {
+namespace {
 
 template <typename T, typename... Types>
 struct AppendMT;
 
 //Append type to the end
 template <typename T, typename... Types>
-struct AppendMT<T, MemberTypes<Types...> > {
-  static constexpr int size = 1 + MemberTypes<Types...>::size;
-  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
+struct AppendMT<T, Cabana::MemberTypes<Types...> > {
+  static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
+  using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
 };
 
 
@@ -24,12 +24,12 @@ struct MemberTypesAppend;
 
 //Append type to the end
 template <typename T, typename... Types>
-struct MemberTypesAppend<T, MemberTypes<Types...> > {
-  static constexpr int size = 1 + MemberTypes<Types...>::size;
-  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
+struct MemberTypesAppend<T, Cabana::MemberTypes<Types...> > {
+  static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
+  using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
 };
 
-}//end cabana
+}//end anonymous
 
 namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
@@ -45,7 +45,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
-    using CM_DT = Cabana::AppendMT<int,DataTypes>;
+    using CM_DT = AppendMT<int,DataTypes>;
     using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemSpace>;
 
     CabM() = delete;

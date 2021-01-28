@@ -40,13 +40,11 @@ set(MPIRUN_PROCFLAG "-np" CACHE STRING
   "the command line flag to give process count to MPIRUN")
 
 
-find_package(Omega_h 9 REQUIRED)
 set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
 
-find_package(EnGPar REQUIRED)
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})
 message(STATUS "Found EnGPar")
@@ -56,7 +54,6 @@ bob_public_dep(EnGPar)
 
 option(ENABLE_CABANA "Build with Cabana" OFF)
 if(ENABLE_CABANA)
-  find_package(Cabana REQUIRED)
   # bob package creation { no idea if this will work
   set(pumipic_USE_Cabana_DEFAULT ON)
   set(Cabana_PREFIX ${Cabana_PREFIX})
@@ -64,7 +61,6 @@ if(ENABLE_CABANA)
   # }
 endif()
 
-find_package(Kokkos CONFIG REQUIRED COMPONENTS kokkos)
 # bob package creation {
 set(pumipic_USE_Kokkos_DEFAULT ON)
 set(Kokkos_PREFIX ${Kokkos_PREFIX})

@@ -61,11 +61,16 @@ if(ENABLE_CABANA)
   # }
 endif()
 
-# bob package creation {
 set(pumipic_USE_Kokkos_DEFAULT ON)
 set(Kokkos_PREFIX ${Kokkos_PREFIX})
 bob_public_dep(Kokkos)
-# }
+include(${Kokkos_PREFIX}/kokkos_generated_settings.cmake)
+if(NOT ENABLE_CABANA)
+  message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+  message(STATUS "Kokkos enabled - Overriding compiler flags for consistency with Kokkos install")
+  string(REPLACE ";" " " CMAKE_CXX_FLAGS "${KOKKOS_CXX_FLAGS}")
+  message(STATUS "Kokkos CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+endif()
 set(KOKKOS_ENABLED true)
 
 set(debug_flag)

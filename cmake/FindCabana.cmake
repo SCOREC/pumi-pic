@@ -1,8 +1,8 @@
 # - Try to find Cabana
 # Once done this will define
 #  Cabana_FOUND - System has Cabana
-#  Cabana_INCLUDE_DIRS - The Cabana include directories
-#  Cabana_LIBRARIES - The libraries needed to use Cabana
+#  Cabana_INCLUDE_DIR - The Cabana include directories
+#  Cabana_LIBRARY - The libraries needed to use Cabana
 
 set(Cabana_INSTALL_DIR "" CACHE STRING "Cabana install directory")
 if(Cabana_INSTALL_DIR)
@@ -11,10 +11,7 @@ endif()
 
 find_path(Cabana_INCLUDE_DIR Cabana_Core.hpp PATHS "${Cabana_INSTALL_DIR}/include")
 
-find_library(Cabana_LIBRARY cabanacore PATHS "${Cabana_INSTALL_DIR}/lib")
-
-set(Cabana_LIBRARIES ${Cabana_LIBRARY} )
-set(Cabana_INCLUDE_DIRS ${Cabana_INCLUDE_DIR} )
+find_library(Cabana_LIBRARY cabanacore PATHS "${Cabana_INSTALL_DIR}/lib64")
 
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set Cabana_FOUND to TRUE

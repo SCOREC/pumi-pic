@@ -220,6 +220,9 @@ namespace pumipic {
           (*fn_d)(elm, particle_id, mask);
         });
     });
+#ifdef PP_USE_CUDA
+    cudaFree(fn_d);
+#endif
   }
 
   template <class DataTypes, typename MemSpace>

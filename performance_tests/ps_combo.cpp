@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
 
       //Per element data to access in pseudoPush
       Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
-      Kokkos::parallel_for("parent_elem_data", parentElmData.size(), 
+      Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
           KOKKOS_LAMBDA(const int& e){
         parentElmData(e) = sqrt(e) * e;
       });
@@ -126,13 +126,13 @@ int main(int argc, char* argv[]) {
         Kokkos::fence();
         Kokkos::Timer pseudo_push_timer;
         /* Begin push operations */
-        ps::parallel_for(ptcls,pseudoPush,"pseudo push"); 
+        ps::parallel_for(ptcls,pseudoPush,"pseudo push");
         Kokkos::fence();
         /* End push */
         float pseudo_push_time = pseudo_push_timer.seconds();
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
-      
+
       printf("Beginning rebuild on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
@@ -151,7 +151,6 @@ int main(int argc, char* argv[]) {
 
   } //end Kokkos region
 
-  cleanup_distribution_memory();
   pumipic::SummarizeTime();
   Kokkos::finalize();
   return 0;
@@ -167,4 +166,3 @@ PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
   return new pumipic::CSR<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }
-

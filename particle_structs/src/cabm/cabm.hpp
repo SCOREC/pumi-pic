@@ -1,6 +1,6 @@
 #pragma once
 
-#include <particle_structure.hpp>
+#include <particle_structs.hpp>
 
 #include <Cabana_Core.hpp>
 #include <cassert>

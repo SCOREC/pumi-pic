@@ -54,10 +54,18 @@ namespace pumipic {
   */
   void PrintAdditionalTimeInfo(char* str, int verbosity);
 
+  //Sorting options for timing summary
+  enum TimingSortOption {
+    SORT_ALPHA,  //sort alphabetically
+    SORT_ORDER,  //sort in order of operation occurrence
+    SORT_LONGEST, //sort by longest operations first
+    SORT_SHORTEST //sort by shortest operations first
+  };
+
   /*
     Print a summary of all recorded timing on each process that enabled recording
   */
-  void SummarizeTime();
+  void SummarizeTime(TimingSortOption sort = SORT_ALPHA);
 
   /*
     Print a summary of all recorded timing reduced by all ranks that enable recording

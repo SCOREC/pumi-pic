@@ -1,6 +1,6 @@
 #pragma once
-#include "ps_for.hpp"
 #include <MemberTypeLibraries.h>
+#include "ps_for.hpp"
 namespace pumipic {
 /* CopyParticleToSend<ParticleStructure, DataTypes> - copies particle info to send arrays
      Usage: CopyParticlesToSend<ParticleStructure, DataTypes>(ParticleStructure,
@@ -18,6 +18,11 @@ namespace pumipic {
                                                        DestinationIndexForParticle);
 */
   template <typename PS, typename... Types> struct CopyPSToPS;
+
+  //Forward definition of parallel_for for particle structures
+  template <typename FunctionType, typename DataTypes, typename MemSpace>
+  void parallel_for(ParticleStructure<DataTypes, MemSpace>* ps,
+                    FunctionType& fn, std::string s="");
 
 //Copy Particles To Send Templated Struct
   template <typename PS, typename... Types> struct CopyParticlesToSendImpl;

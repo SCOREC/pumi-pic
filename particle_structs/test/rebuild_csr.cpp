@@ -2,12 +2,6 @@
 #include "read_particles.hpp"
 #include <stdlib.h>
 
-#include <CSR.hpp>
-#include <MemberTypes.h>
-#include <MemberTypeLibraries.h>
-#include <ppTypes.h>
-#include <psMemberType.h>
-
 #include "Distribute.h"
 
 #ifdef PP_USE_CUDA

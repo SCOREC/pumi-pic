@@ -1,12 +1,10 @@
 #pragma once
 
-#include "particle_structure.hpp"
-#include <SellCSigma.h>
-#include <CSR.hpp>
+#include <particle_structs.hpp>
 namespace pumipic {
   template <typename FunctionType, typename DataTypes, typename MemSpace>
   void parallel_for(ParticleStructure<DataTypes, MemSpace>* ps, FunctionType& fn,
-                    std::string s="") {
+                    std::string s) {
     SellCSigma<DataTypes, MemSpace>* scs = dynamic_cast<SellCSigma<DataTypes, MemSpace>*>(ps);
     if (scs) {
       scs->parallel_for(fn, s);

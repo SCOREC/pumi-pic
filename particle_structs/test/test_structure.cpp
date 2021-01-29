@@ -1,5 +1,6 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
+#include <cmath>
 
 #ifdef PP_USE_CUDA
 typedef Kokkos::CudaSpace DeviceSpace;
@@ -24,6 +25,7 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
 int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
 int setValues(const char* name, PS* structure);
+int pseudoPush(const char* name, PS* structure);
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure);
@@ -73,24 +75,27 @@ int main(int argc, char* argv[]) {
     fails += addSCSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
     //Add CSR
-    /* Uncomment when CSR is being implemented
+    // Uncomment when CSR is being implemented
     fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
-    */
+    
 
 
 
     //Run each structure on every test
     for (int i = 0; i < structures.size(); ++i) {
-      fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
-      fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
+      //fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
+      //fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
       fails += setValues(names[i].c_str(), structures[i]);
-      fails += testMetrics(names[i].c_str(), structures[i]);
-      fails += testRebuild(names[i].c_str(), structures[i]);
-      fails += testMigration(names[i].c_str(), structures[i]);
-      fails += testCopy(names[i].c_str(), structures[i]);
-      fails += testSegmentComp(names[i].c_str(), structures[i]);
-      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
+      Kokkos::fence();
+      fails += pseudoPush(names[i].c_str(), structures[i]);
+      Kokkos::fence();
+      //fails += testMetrics(names[i].c_str(), structures[i]);
+      //fails += testRebuild(names[i].c_str(), structures[i]);
+      //fails += testMigration(names[i].c_str(), structures[i]);
+      //fails += testCopy(names[i].c_str(), structures[i]);
+      //fails += testSegmentComp(names[i].c_str(), structures[i]);
+      //fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -158,7 +163,8 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
   int fails = 0;
   try {
-    PS* s = new ps::CSR<Types, MemSpace>(num_elems, num_ptcls, ppe,
+    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+    PS* s = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                          element_gids, particle_elements, particle_info);
     structures.push_back(s);
     names.push_back("csr");
@@ -239,7 +245,60 @@ int setValues(const char* name, PS* structure) {
       bools(p) = false;
     }
   };
+  Kokkos::fence();
+  Kokkos::Timer timer;
   ps::parallel_for(structure, setValues, "setValues");
+  Kokkos::fence();
+  double time = timer.seconds();
+  printf("Time to set values %s : %f\n", name, time);
+  return fails;
+}
+
+int pseudoPush(const char* name, PS* structure){
+  int fails = 0; 
+
+  int elements = structure->nElems();
+  fprintf(stderr, "elements : %d\n", elements);
+  Kokkos::View<double*> parentElmData("parentElmData", elements);
+  fprintf(stderr, "parent elm data size : %d\n", parentElmData.size());
+  Kokkos::parallel_for("parentElmData", parentElmData.size(), 
+      KOKKOS_LAMBDA(const lid_t& e){
+    parentElmData(e) = 2+3*e;
+  }); 
+  printView(parentElmData);
+
+  auto dbls = structure->get<1>();
+  auto bools = structure->get<2>();
+  auto nums = structure->get<3>();
+  int local_rank = comm_rank;
+  auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
+    printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
+    if(mask){
+      dbls(p, 0) += 10;
+      dbls(p, 1) += 10;
+      dbls(p, 2) += 10;
+      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e); 
+      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e); 
+      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e); 
+      nums(p) = local_rank;
+      bools(p) = true;
+    }
+    else{
+      dbls(p, 0) = 0;
+      dbls(p, 1) = 0;
+      dbls(p, 2) = 0;
+      nums(p) = -1;
+      bools(p) = false;
+    }
+  };
+
+  Kokkos::fence();
+  Kokkos::Timer timer;
+  ps::parallel_for(structure, quickMaths, "setValues");
+  Kokkos::fence();
+  double time = timer.seconds();
+  printf("Time for math Ops on %s : %f\n", name, time);
+
   return fails;
 }
 
@@ -248,6 +307,7 @@ int testRebuild(const char* name, PS* structure) {
   int fails = 0;
   return fails;
 }
+
 int testMigration(const char* name, PS* structure) {
   int fails = 0;
   kkLidView failures("fails", 1);

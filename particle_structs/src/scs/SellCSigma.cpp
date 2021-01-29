@@ -1,4 +1,4 @@
-#include "SellCSigma.h"
+#include <mpi.h>
 #include <Kokkos_Core.hpp>
 namespace pumipic {
   namespace {

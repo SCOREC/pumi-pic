@@ -3,7 +3,7 @@
 Particles strucutres for unstructed mesh particle-in-cell (PIC). 
 
 - Sell-C-sigma (SCS) with vertical slicing 
-- Compressed Sparse Row (CSR) (in progress on csr branch)
+- Compressed Sparse Row (CSR) (in progress)
 
 
 # Directory Layout

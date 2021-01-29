@@ -8,8 +8,6 @@
 #include <SupportKK.h>
 
 
-void cleanup_distribution_memory();
-
 bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipic::gid_t* gids);
 
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,

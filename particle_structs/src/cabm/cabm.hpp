@@ -44,6 +44,8 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
+    typedef Kokkos::TeamPolicy<execution_space> PolicyType;
+
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
     using CM_DT = AppendMT<int,DataTypes>;
     using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemSpace>;
@@ -62,6 +64,163 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::nPtcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
+
+
+    /**
+     * helper function: Builds the offset array for the CSR structure
+     * @param[in] particles_per_element View representing the number of active elements in each SoA
+     * @return offset array (each element is the first index of each SoA block)
+    */
+    kkLidView buildOffset(const kkLidView particles_per_element) {
+      const lid_t num_elements = particles_per_element.size();
+      Kokkos::View<lid_t,Kokkos::HostSpace> offsets_h("offsets_host", num_elements+1);
+      // elem at i owns SoA offsets[i+1] - offsets[i]
+      auto vector_length = AoSoA_t::vector_length;
+      offsets_h(0) = 0;
+      for ( int i=0; i<num_elements; i++ ) {
+        const auto SoA_count = (particles_per_element(i)/vector_length) + 1;
+        offsets_h(i+1) = SoA_count + offsets_h(i);
+      }
+      auto offsets_d =
+        Kokkos::create_mirror_view_and_copy(ParticleStructure<DataTypes, MemSpace>::memory_space, offsets_h);
+      return offsets_d;
+    }
+
+    /**
+     * helper function: initialize an AoSoA (including hidden active SoA)
+     * @param[in] capacity maximum capacity (number of particles) of the AoSoA to be created
+     * @param[in] num_soa total number of SoAs (can be greater than elem_count if
+     * any element of particles_per_element is vector_length)
+     * @return AoSoA of max capacity, capacity, and total number of SoAs, numSoa
+    */
+    AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa) {
+      auto aosoa = AoSoA_t();
+      aosoa.resize(capacity);
+      assert(num_soa == aosoa.numSoA());
+      return aosoa;
+    }
+
+    /**
+     * helper function: builds the parent view for tracking particle position
+     * @param[in] num_elements total number of element SoAs in AoSoA
+     * @param[in] num_soa total number of SoAs (can be greater than elem_count if
+     * any element of deg is _vector_length)
+     * @param[in] offsets offset array for AoSoA, built by buildOffset
+     * @return parent array, each element is an int representing the parent element each SoA resides in
+    */
+    kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets ) {
+      Kokkos::View<lid_t,Kokkos::HostSpace> elms_h("parentElms_host", num_soa);
+      kkLidHostMirror offsets_h = create_mirror_view(offsets);
+      Kokkos::deep_copy( offsets_h, offsets );
+      for ( int elm=0; elm<num_elements; elm++ )
+        for ( int soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
+          elms_h(soa)=elm;
+      auto elms_d =
+        Kokkos::create_mirror_view_and_copy(ParticleStructure<DataTypes, MemSpace>::memory_space, elms_h);
+      return elms_d;
+    }
+
+    /**
+     * helper function: initializes last SoAs in AoSoA as active mask
+     * where 1 denotes an active particle and 0 denotes an inactive particle.
+     * @param[out] aosoa the AoSoA to be edited
+     * @param[in] particles_per_element pointer to an array of ints, representing the number of active elements in each SoA
+     * @param[in] parentElms parent view for AoSoA, built by getParentElms
+     * @param[in] offsets offset array for AoSoA, built by buildOffset
+    */
+    void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
+    const kkLidView parentElms, const kkLidView offsets) {
+      
+      const lid_t num_elements = particles_per_element.size();
+      const auto vector_length = AoSoA_t::vector_length;
+
+      const auto activeSliceIdx = aosoa.number_of_members-1;
+      auto active = Cabana::slice<activeSliceIdx>(aosoa);
+      Cabana::SimdPolicy<AoSoA_t::vector_length,execution_space> simd_policy(0, capacity);
+      Cabana::simd_parallel_for(simd_policy,
+        KOKKOS_LAMBDA( const int soa, const int ptcl ) {
+          const auto elm = parentElms(soa);
+          const auto num_soa = offsets(elm+1)-offsets(elm);
+          const auto last_soa = offsets(elm+1)-1;
+          const auto elm_ppe = particles_per_element(elm);
+          const auto last_soa_ppe = vector_length - ((num_soa * vector_length) - elm_ppe);
+          int isActive = 0;
+          if (soa < last_soa) {
+            isActive = 1;
+          }
+          if (soa == last_soa && ptcl < last_soa_ppe) {
+            isActive = 1;
+          }
+          active.access(soa,ptcl) = isActive;
+        }, "set_active");
+    }
+
+    /**
+     * helper function: fills aosoa_ with particle data
+     * @param[in] particle_indices - particle_elements[i] contains the index of particle i
+     *                          in its parent element
+     * @param[in] particle_elements - particle_elements[i] contains the id (index)
+     *                          of the parent element * of particle i
+     * @param[in] particle_info - 'member type views' containing the user's data to be
+     *                      associated with each particle
+    */
+    void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info) {
+      const auto vector_length = AoSoA_t::vector_length;
+      
+      // calculate SoA and ptcl in SoA indices for next loop
+      kkLidView soa_indices("soa_indices", num_ptcls);
+      kkLidView soa_ptcl_indices("soa_ptcl_indices", num_ptcls);
+      Kokkos::parallel_for("soa_and_ptcl", num_ptcls,
+        KOKKOS_LAMBDA(const lid_t ptcl_id) {
+          soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id)) + (particle_indices(ptcl_id)/vector_length);
+          soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%vector_length;
+        });
+
+      // add data from particle_info to correct position in aosoa_
+      const lid_t league_size = num_types;
+      const lid_t team_size = AoSoA_t::vector_length;
+      const lid_t num_ptcls_cpy = num_ptcls;
+      const lid_t aosoa_copy = aosoa_;
+      const PolicyType policy(league_size, team_size);
+      Kokkos::parallel_for("fill_aosoa", policy,
+          KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
+          const lid_t member_type_ind = thread.league_rank();
+          const auto member_slice = Cabana::slice<member_type_ind>(aosoa_copy);
+          Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, num_ptcls_cpy), [=] (lid_t& ptcl_id) {
+            member_slice.access( soa_indices(ptcl_id), soa_ptcl_indices(ptcl_id) ) = (*particle_info[member_type_ind])(ptcl_id);
+          });
+      });
+      aosoa_ = aosoa_copy;
+    }
+
+    //---Attention User---  Do **not** call this function!
+    /**
+     * @param[in] particle_elements - particle_elements[i] contains the id (index)
+     *                          of the parent element * of particle i
+     * @param[in] particle_info - 'member type views' containing the user's data to be
+     *                      associated with each particle
+    */
+    void initCabMData(kkLidView particle_elements, MTVs particle_info) {
+      assert(particle_elements.size() == num_ptcls);
+
+      // create a pointer to the offsets array that we can access in a kokkos parallel_for
+      auto offset_copy = offsets;
+      kkLidView particle_indices("particle_indices", num_ptcls);
+      // View for tracking particle index in elements
+      kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
+      Kokkos::parallel_for("fill_zeros", num_elems,
+        KOKKOS_LAMBDA(const int& i) {
+          ptcl_elm_indices(i) = 0;
+        });
+      
+      // atomic_fetch_add to increment from the beginning of each element
+      Kokkos::parallel_for("fill_ptcl_indices", num_ptcls,
+        KOKKOS_LAMBDA(const lid_t ptcl_id) {
+          particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
+        });
+
+      fillAoSoA(particle_indices, particle_elements, particle_info);
+    }
 
 
     void migrate(kkLidView new_element, kkLidView new_process,
@@ -87,8 +246,10 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
     //Offsets array into CabM
+    lid_t num_soa_; // number of SoA
     kkLidView offsets;
-    AoSoA_t _aosoa;
+    kkLidView _parentElms; // Parent elements for each SoA
+    AoSoA_t aosoa_;
   };
 
   template <class DataTypes, typename MemSpace>
@@ -97,7 +258,17 @@ namespace pumipic {
                                 kkGidView element_gids,
                                 kkLidView particle_elements,
                                 MTVs particle_info) {
-    fprintf(stderr, "[WARNING] CabM constructor not implemented\n");
+    assert(num_elements == particles_per_element.size());
+    num_elems = num_elements;
+    num_rows = num_elems;
+    offsets = buildOffset(particles_per_element);
+    num_soa_ = offsets[num_elements];
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    aosoa_ = makeAoSoA(capacity, num_soa_);
+    num_types = aosoa_.number_of_members-1;
+    _parentElms = getParentElms(num_elements, num_soa_, offsets);
+    setActive(aosoa_, particles_per_element, offsets);
+    initCabMData(particle_elements, particle_info);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -123,12 +294,35 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CabM<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
-    fprintf(stderr, "[WARNING] CabM parallel_for(...) not implemented\n");
+    if (nPtcls() == 0)
+      return;
 
+    // move function pointer to GPU (if needed)
+    FunctionType* fn_d;
+    #ifdef PP_USE_CUDA
+        cudaMalloc(&fn_d, sizeof(FunctionType));
+        cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+    #else
+        fn_d = &fn;
+    #endif
+
+    auto parentElms_cpy = _parentElms;
+    const auto vector_length = AoSoA_t::vector_length;
+    const auto activeSliceIdx = aosoa_.number_of_members-1;
+    const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // check which particles are active
+    Cabana::SimdPolicy<AoSoA_t::vector_length,execution_space> simd_policy( 0, capacity_);
+    Cabana::simd_parallel_for(simd_policy,
+      KOKKOS_LAMBDA( const int soa, const int ptcl ) {
+        const lid_t elm = parentElms_cpy(soa);
+        const lid_t particle_id = soa*vector_length + ptcl;
+        (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
+      }, "parallel_for");
   }
 
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::printMetrics() const {
-    fprintf(stderr, "[WARNING] CabM printMetrics() not implemented\n");
+    fprintf(stderr, "CabM capacity %d\n", capacity_);
+    fprintf(stderr, "CabM num ptcls %d\n", num_ptcls);
+    fprintf(stderr, "CabM num elements %d\n", num_elems);
   }
 }

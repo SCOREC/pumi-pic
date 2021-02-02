@@ -98,8 +98,8 @@ namespace pumipic {
         const auto SoA_count = (particles_per_element(i)/soa_len) + 1;
         offsets_h(i+1) = SoA_count + offsets_h(i);
       }
-      auto offsets_d =
-        Kokkos::create_mirror_view_and_copy(ParticleStructure<DataTypes, MemSpace>::memory_space, offsets_h);
+      kkLidView offsets_d("offsets_device", offsets_h.size());
+      hostToDevice(offsets_d, offsets_h.data());
       return offsets_d;
     }
 
@@ -132,8 +132,8 @@ namespace pumipic {
       for ( int elm=0; elm<num_elements; elm++ )
         for ( int soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
           elms_h(soa)=elm;
-      auto elms_d =
-        Kokkos::create_mirror_view_and_copy(ParticleStructure<DataTypes, MemSpace>::memory_space, elms_h);
+      kkLidView elms_d("elements_device", elms_h.size());
+      hostToDevice(elms_d, elms_h.data());
       return elms_d;
     }
 
@@ -146,7 +146,7 @@ namespace pumipic {
      * @param[in] offsets offset array for AoSoA, built by buildOffset
     */
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
-    const kkLidView parentElms, const kkLidView offsets) {
+        const kkLidView parentElms, const kkLidView offsets) {
       
       const lid_t num_elements = particles_per_element.size();
       const auto soa_len = AoSoA_t::vector_length;
@@ -197,7 +197,7 @@ namespace pumipic {
       const lid_t league_size = num_types;
       const lid_t team_size = AoSoA_t::vector_length;
       const lid_t num_ptcls_cpy = num_ptcls;
-      const lid_t aosoa_copy = aosoa_;
+      const auto aosoa_copy = aosoa_;
       const PolicyType policy(league_size, team_size);
       Kokkos::parallel_for("fill_aosoa", policy,
           KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
@@ -271,14 +271,13 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     offsets = buildOffset(particles_per_element); // build offset array
-    num_soa_ = offsets[num_elements];
+    num_soa_ = getLastValue(offsets);
     capacity_ = num_soa_*AoSoA_t::vector_length;
     aosoa_ = makeAoSoA(capacity_, num_soa_); // initialize AoSoA
-    num_types = aosoa_.number_of_members-1;
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elements, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, particles_per_element, offsets);
+    setActive(aosoa_, particles_per_element, parentElms_, offsets);
     initCabMData(particle_elements, particle_info); // initialize data
   }
 
@@ -305,8 +304,8 @@ namespace pumipic {
     Kokkos::View<int*> elmOffsets("elmOffsets", num_elems);
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(aosoa_);
-    auto elmDegree_d =
-      Kokkos::create_mirror_view_and_copy(ParticleStructure<DataTypes, MemSpace>::memory_space, elmDegree);
+    kkLidView elmDegree_d("elmDegree_device", elmDegree.size());
+    hostToDevice(elmDegree_d,elmDegree.data());
     //first loop to count number of particles per new element (atomic)
     auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
       if (active.access(soa,tuple) == 1){
@@ -319,7 +318,7 @@ namespace pumipic {
     auto elmDegree_h = Kokkos::create_mirror_view_and_copy(host_space(), elmDegree_d);
 
     //prepare a new aosoa to store the shuffled particles
-    auto newOffset = buildOffset(elmDegree_h.data());
+    auto newOffset = buildOffset(elmDegree_d);
     const auto newNumSoa = newOffset[num_elems];
     const auto newCapacity = newNumSoa*soa_len;
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
@@ -349,7 +348,7 @@ namespace pumipic {
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
       //destroy the old aosoa and use the new one in the CabanaM object
       aosoa_ = newAosoa;
-      setActive(aosoa_, elmDegree_h.data(), parentElms_, offsets);
+      setActive(aosoa_, elmDegree_d, parentElms_, offsets);
   }
 
   template <class DataTypes, typename MemSpace>

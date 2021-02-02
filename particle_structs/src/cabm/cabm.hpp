@@ -56,9 +56,12 @@ namespace pumipic {
     CabM(const CabM&) = delete;
     CabM& operator=(const CabM&) = delete;
 
-    CabM(lid_t num_elements, lid_t num_particles, kkLidView particles_per_element,
-        kkGidView element_gids, kkLidView particle_elements = kkLidView(),
-        MTVs particle_info = NULL);
+    CabM( PolicyType& p,
+          lid_t num_elements, lid_t num_particles,
+          kkLidView particles_per_element,
+          kkGidView element_gids,
+          kkLidView particle_elements = kkLidView(),
+          MTVs particle_info = NULL);
     ~CabM();
 
     //Functions from ParticleStructure
@@ -239,6 +242,9 @@ namespace pumipic {
     void printMetrics() const;
 
   private:
+    //The User defined Kokkos policy
+    PolicyType policy;
+
     //Variables from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::num_elems;
     using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
@@ -247,30 +253,35 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    //Offsets array into CabM
     lid_t num_soa_; // number of SoA
-    kkLidView offsets;
+    kkLidView offsets; // Offsets array into CabM
     kkLidView parentElms_; // Parent elements for each SoA
     AoSoA_t aosoa_;
   };
 
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::CabM(lid_t num_elements, lid_t num_particles,
-                                kkLidView particles_per_element,
-                                kkGidView element_gids,
-                                kkLidView particle_elements,
-                                MTVs particle_info) {
+  CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
+                                   lid_t num_elements, lid_t num_particles,
+                                   kkLidView particles_per_element,
+                                   kkGidView element_gids,
+                                   kkLidView particle_elements,
+                                   MTVs particle_info) : 
+    ParticleStructure<DataTypes, MemSpace>(),
+    policy(p)
+  {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
     num_rows = num_elems;
-    offsets = buildOffset(particles_per_element);
+    offsets = buildOffset(particles_per_element); // build offset array
     num_soa_ = offsets[num_elements];
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    aosoa_ = makeAoSoA(capacity, num_soa_);
+    aosoa_ = makeAoSoA(capacity, num_soa_); // initialize AoSoA
     num_types = aosoa_.number_of_members-1;
+    // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elements, num_soa_, offsets);
+    // set active mask
     setActive(aosoa_, particles_per_element, offsets);
-    initCabMData(particle_elements, particle_info);
+    initCabMData(particle_elements, particle_info); // initialize data
   }
 
   template <class DataTypes, typename MemSpace>
@@ -310,7 +321,7 @@ namespace pumipic {
     auto elmDegree_h = Kokkos::create_mirror_view_and_copy(host_space(), elmDegree_d);
 
     //prepare a new aosoa to store the shuffled particles
-    auto newOffset = buildOffset(elmDegree_h.data(), num_elems);
+    auto newOffset = buildOffset(elmDegree_h.data());
     const auto newNumSoa = newOffset[num_elems];
     const auto newCapacity = newNumSoa*soa_len;
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
@@ -340,7 +351,7 @@ namespace pumipic {
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
       //destroy the old aosoa and use the new one in the CabanaM object
       aosoa_ = newAosoa;
-      setActive(aosoa_, num_soa_, elmDegree_h.data(), parentElms_, offsets);
+      setActive(aosoa_, elmDegree_h.data(), parentElms_, offsets);
   }
 
   template <class DataTypes, typename MemSpace>

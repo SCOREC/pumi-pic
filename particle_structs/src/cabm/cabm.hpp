@@ -153,7 +153,7 @@ namespace pumipic {
 
       const auto activeSliceIdx = aosoa.number_of_members-1;
       auto active = Cabana::slice<activeSliceIdx>(aosoa);
-      Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity);
+      Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
       Cabana::simd_parallel_for(simd_policy,
         KOKKOS_LAMBDA( const int soa, const int ptcl ) {
           const auto elm = parentElms(soa);
@@ -273,7 +273,7 @@ namespace pumipic {
     offsets = buildOffset(particles_per_element); // build offset array
     num_soa_ = offsets[num_elements];
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    aosoa_ = makeAoSoA(capacity, num_soa_); // initialize AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_); // initialize AoSoA
     num_types = aosoa_.number_of_members-1;
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elements, num_soa_, offsets);

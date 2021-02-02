@@ -1,9 +1,7 @@
 #pragma once
 
 #include <particle_structs.hpp>
-
 #include <Cabana_Core.hpp>
-#include <cassert>
 
 namespace {
 
@@ -32,6 +30,7 @@ struct MemberTypesAppend<T, Cabana::MemberTypes<Types...> > {
 }//end anonymous
 
 namespace pumipic {
+
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
   public:
@@ -45,7 +44,6 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
     using host_space = Kokkos::HostSpace;
-
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
@@ -69,6 +67,20 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::nPtcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
+
+
+    void migrate(kkLidView new_element, kkLidView new_process,
+                 Distributor<MemSpace> dist = Distributor<MemSpace>(),
+                 kkLidView new_particle_elements = kkLidView(),
+                 MTVs new_particle_info = NULL);
+
+    void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
+                 MTVs new_particles = NULL);
+
+    template <typename FunctionType>
+    void parallel_for(FunctionType& fn, std::string s="");
+
+    void printMetrics() const;
 
 
     /**
@@ -227,20 +239,6 @@ namespace pumipic {
       fillAoSoA(particle_indices, particle_elements, particle_info);
     }
 
-
-    void migrate(kkLidView new_element, kkLidView new_process,
-                 Distributor<MemSpace> dist = Distributor<MemSpace>(),
-                 kkLidView new_particle_elements = kkLidView(),
-                 MTVs new_particle_info = NULL);
-
-    void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
-                 MTVs new_particles = NULL);
-
-    template <typename FunctionType>
-    void parallel_for(FunctionType& fn, std::string s="");
-
-    void printMetrics() const;
-
   private:
     //The User defined Kokkos policy
     PolicyType policy;
@@ -263,9 +261,9 @@ namespace pumipic {
   CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
                                    lid_t num_elements, lid_t num_particles,
                                    kkLidView particles_per_element,
-                                   kkGidView element_gids,
-                                   kkLidView particle_elements,
-                                   MTVs particle_info) : 
+                                   kkGidView element_gids,      // optional
+                                   kkLidView particle_elements, // optional
+                                   MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p)
   {

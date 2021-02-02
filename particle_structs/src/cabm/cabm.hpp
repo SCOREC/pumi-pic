@@ -10,7 +10,7 @@ struct AppendMT;
 
 //Append type to the end
 template <typename T, typename... Types>
-struct AppendMT<T, Cabana::MemberTypes<Types...> > {
+struct AppendMT<T, particle_structs::MemberTypes<Types...> > {
   static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
   using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
 };

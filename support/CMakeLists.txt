@@ -32,19 +32,16 @@ $<INSTALL_INTERFACE:include>)
 target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
-target_include_directories(support PRIVATE ${KOKKOS_INCLUDE_DIR})
-target_link_libraries(support PRIVATE
-${KOKKOS_LIBRARY})
+target_link_libraries(support PUBLIC Kokkos::kokkos)
 
-include(${CMAKE_SOURCE_DIR}/cmake/detect_kokkos_opts.cmake)
-detect_kokkos_opts()
-if (Kokkos_HAS_CUDA)
-add_definitions(-DPP_USE_CUDA)
-target_compile_definitions(support INTERFACE -DPP_USE_CUDA)
+cmake_policy(SET CMP0057 NEW)
+if ("CUDA" IN_LIST Kokkos_DEVICES)
+  add_definitions(-DPP_USE_CUDA)
+  target_compile_definitions(support INTERFACE -DPP_USE_CUDA)
 endif()
-if (Kokkos_HAS_OpenMP)
-add_definitions(-DPP_USE_OPENMP)
-target_compile_definitions(support INTERFACE -DPP_USE_OPENMP)
+if ("OpenMP" IN_LIST Kokkos_DEVICES)
+  add_definitions(-DPP_USE_OPENMP)
+  target_compile_definitions(support INTERFACE -DPP_USE_OPENMP)
 endif()
 
 pumipic_export_lib(support "${HEADERS}")

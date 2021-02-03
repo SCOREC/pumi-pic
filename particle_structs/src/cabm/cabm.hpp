@@ -192,22 +192,6 @@ namespace pumipic {
           soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id)) + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
-
-      // add data from particle_info to correct position in aosoa_
-      const lid_t league_size = num_types;
-      const lid_t team_size = AoSoA_t::vector_length;
-      const lid_t num_ptcls_cpy = num_ptcls;
-      const auto aosoa_copy = aosoa_;
-      const PolicyType policy(league_size, team_size);
-      Kokkos::parallel_for("fill_aosoa", policy,
-          KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
-          const lid_t member_type_ind = thread.league_rank();
-          const auto member_slice = Cabana::slice<member_type_ind>(aosoa_copy);
-          Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, num_ptcls_cpy), [=] (lid_t& ptcl_id) {
-            member_slice.access( soa_indices(ptcl_id), soa_ptcl_indices(ptcl_id) ) = (*particle_info[member_type_ind])(ptcl_id);
-          });
-      });
-      aosoa_ = aosoa_copy;
     }
 
     //---Attention User---  Do **not** call this function!

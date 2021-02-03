@@ -192,10 +192,13 @@ namespace pumipic {
           soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id)) + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
+      
+      /// @todo add in Variadic templated function for ViewstoAoSoA
     }
 
     //---Attention User---  Do **not** call this function!
     /**
+     * helper function: find indices for particle_info for fillAoSoA
      * @param[in] particle_elements - particle_elements[i] contains the id (index)
      *                          of the parent element * of particle i
      * @param[in] particle_info - 'member type views' containing the user's data to be
@@ -241,6 +244,18 @@ namespace pumipic {
     AoSoA_t aosoa_;
   };
 
+  /**
+   * Constructor
+   * @param[in] p
+   * @param[in] num_elements number of elements
+   * @param[in] num_particles number of particles
+   * @param[in] particle_per_element view of ints, representing number of particles
+   *    in each element
+   * @param[in] element_gids
+   * @param[in] particle_elements view of ints, representing which elements
+   *    particle reside in
+   * @param[in] particle_info array of views filled with particle data
+  */
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
                                    lid_t num_elements, lid_t num_particles,
@@ -270,15 +285,31 @@ namespace pumipic {
     fprintf(stderr, "[WARNING] CabM deconstructor not implemented\n");
   }
 
+  /**
+   * 
+   * @param[in] new_element
+   * @param[in] new_process
+   * @param[in] dist
+   * @param[in] new_particle_elements
+   * @param[in] new_particle_info
+  */
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
                                          Distributor<MemSpace> dist,
                                          kkLidView new_particle_elements,
                                          MTVs new_particle_info) {
+    /// @todo implement migrate
     fprintf(stderr, "[WARNING] CabM migrate(...) not implemented\n");
   }
   
-  /// @todo edit to add new particles
+  /**
+   * Fully rebuild the AoSoA with these new parent SoAs
+   *     by copying into a new AoSoA and overwriting the old one
+   * @param[in] new_element view of ints with new elements for each particle
+   * @param[in] new_particle_elements view of ints, representing which elements
+   *    particle reside in
+   * @param[in] new_particles array of views filled with particle data
+  */ 
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
@@ -333,8 +364,18 @@ namespace pumipic {
       //destroy the old aosoa and use the new one in the CabanaM object
       aosoa_ = newAosoa;
       setActive(aosoa_, elmDegree_d, parentElms_, offsets);
+
+      /// @todo add new particles
   }
 
+  /**
+   * a parallel for-loop that iterates through all particles
+   * @param[in] fn function of the form fn(elm, particle_id, mask), where
+   *    elm is the element the particle is in
+   *    particle_id is the overall index of the particle in the structure
+   *    mask is 0 if the particle is inactive and 1 if the particle is active
+   * @param[in] s string for labelling purposes
+  */
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CabM<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
@@ -353,12 +394,12 @@ namespace pumipic {
     auto parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
-    const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // check which particles are active
+    const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const int soa, const int ptcl ) {
-        const lid_t elm = parentElms_cpy(soa);
-        const lid_t particle_id = soa*soa_len + ptcl;
+        const lid_t elm = parentElms_cpy(soa); // calculate element
+        const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, "parallel_for");
   }
@@ -368,5 +409,6 @@ namespace pumipic {
     fprintf(stderr, "CabM capacity %d\n", capacity_);
     fprintf(stderr, "CabM num ptcls %d\n", num_ptcls);
     fprintf(stderr, "CabM num elements %d\n", num_elems);
+    fprintf(stderr, "CabM num SoA %d\n", num_soa_);
   }
 }

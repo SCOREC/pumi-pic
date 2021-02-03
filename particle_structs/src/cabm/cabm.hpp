@@ -89,13 +89,13 @@ namespace pumipic {
      * @return offset array (each element is the first index of each SoA block)
     */
     kkLidView buildOffset(const kkLidView particles_per_element) {
-      const lid_t num_elements = particles_per_element.size();
-      Kokkos::View<lid_t,host_space> offsets_h("offsets_host", num_elements+1);
+      auto particles_per_element_h = Kokkos::create_mirror_view_and_copy(host_space(), particles_per_element);
+      Kokkos::View<lid_t*,host_space> offsets_h("offsets_host", num_elems+1);
       // elem at i owns SoA offsets[i+1] - offsets[i]
       auto soa_len = AoSoA_t::vector_length;
       offsets_h(0) = 0;
-      for ( int i=0; i<num_elements; i++ ) {
-        const auto SoA_count = (particles_per_element(i)/soa_len) + 1;
+      for ( int i=0; i<num_elems; i++ ) {
+        const auto SoA_count = (particles_per_element_h(i)/soa_len) + 1;
         offsets_h(i+1) = SoA_count + offsets_h(i);
       }
       kkLidView offsets_d("offsets_device", offsets_h.size());
@@ -126,7 +126,7 @@ namespace pumipic {
      * @return parent array, each element is an int representing the parent element each SoA resides in
     */
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets ) {
-      Kokkos::View<lid_t,host_space> elms_h("parentElms_host", num_soa);
+      Kokkos::View<lid_t*,host_space> elms_h("parentElms_host", num_soa);
       kkLidHostMirror offsets_h = create_mirror_view(offsets);
       Kokkos::deep_copy( offsets_h, offsets );
       for ( int elm=0; elm<num_elements; elm++ )
@@ -269,6 +269,7 @@ namespace pumipic {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
     num_rows = num_elems;
+    num_ptcls = num_particles;
     offsets = buildOffset(particles_per_element); // build offset array
     num_soa_ = getLastValue(offsets);
     capacity_ = num_soa_*AoSoA_t::vector_length;
@@ -318,8 +319,8 @@ namespace pumipic {
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
     const auto soa_len = AoSoA_t::vector_length;
-    Kokkos::View<int*> elmDegree("elmDegree", num_elems);
-    Kokkos::View<int*> elmOffsets("elmOffsets", num_elems);
+    Kokkos::View<lid_t*> elmDegree("elmDegree", num_elems);
+    Kokkos::View<lid_t*> elmOffsets("elmOffsets", num_elems);
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(aosoa_);
     kkLidView elmDegree_d("elmDegree_device", elmDegree.size());
@@ -341,11 +342,11 @@ namespace pumipic {
     const auto newCapacity = newNumSoa*soa_len;
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
     //assign the particles from the current aosoa to the newAosoa 
-    Kokkos::View<int*,host_space> newOffset_h("newOffset_host",num_elems+1);
+    Kokkos::View<lid_t*,host_space> newOffset_h("newOffset_host",num_elems+1);
     for (int i=0; i<=num_elems; i++)
       newOffset_h(i) = newOffset[i];
     auto newOffset_d = Kokkos::create_mirror_view_and_copy(memory_space(), newOffset_h);
-    Kokkos::View<int*, host_space> elmPtclCounter_h("elmPtclCounter_device", num_elems); 
+    Kokkos::View<lid_t*, host_space> elmPtclCounter_h("elmPtclCounter_device", num_elems); 
     auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memory_space(), elmPtclCounter_h);
     auto newActive = Cabana::slice<activeSliceIdx>(newAosoa);
     auto aosoa_cpy = aosoa_; // copy of member variable aosoa_ (Kokkos doesn't like member variables)

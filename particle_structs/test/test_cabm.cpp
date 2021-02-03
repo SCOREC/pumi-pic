@@ -90,6 +90,14 @@ int main(int argc, char* argv[]) {
   ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
                                       ppe, element_gids); // temporary cabm without adding particles
 
+  // manually add particle data
+  /* won't work because don't want to expose AoSoA and get not for CabM
+  auto aosoa = cabm.getAoSoA();
+  cabm.parallel_for( PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask) {
+      /// @todo add content
+  
+  };)*/
+
   //insert parallel_for to copy data from MTV into cabm object - crappy pseudo code below
 //  foo = MTV<0>.get(); //device array for the first member type
 //  ourSlice = cabm<0>.get(); //device array for our storage for the first type

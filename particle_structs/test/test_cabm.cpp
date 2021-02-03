@@ -86,7 +86,17 @@ int main(int argc, char* argv[]) {
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
   ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids, particle_elements, particle_info);
+                                      ppe, element_gids, particle_elements);
+
+  //insert parallel_for to copy data from MTV into cabm object - crappy pseudo code below
+//  foo = MTV<0>.get(); //device array for the first member type
+//  ourSlice = cabm<0>.get(); //device array for our storage for the first type
+//  parallel_for(...., int e, int p) {
+//    if(e == 0 && p < 5) {
+//      ourSlice[p] = foo[p];
+//    }
+//  }
+
   //Run tests
   fails += testCounts(cabm, num_elems, num_ptcls);
   fails += testMetrics(cabm);

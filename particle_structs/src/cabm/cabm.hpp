@@ -253,8 +253,8 @@ namespace pumipic {
    *    in each element
    * @param[in] element_gids
    * @param[in] particle_elements view of ints, representing which elements
-   *    particle reside in
-   * @param[in] particle_info array of views filled with particle data
+   *    particle reside in (optional)
+   * @param[in] particle_info array of views filled with particle data (optional)
   */
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
@@ -277,7 +277,10 @@ namespace pumipic {
     parentElms_ = getParentElms(num_elements, num_soa_, offsets);
     // set active mask
     setActive(aosoa_, particles_per_element, parentElms_, offsets);
-    initCabMData(particle_elements, particle_info); // initialize data
+    /// @todo add usage of element_gids
+    if (particle_info != NULL) {
+      initCabMData(particle_elements, particle_info); // initialize data
+    }
   }
 
   template <class DataTypes, typename MemSpace>

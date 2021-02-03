@@ -85,8 +85,10 @@ int main(int argc, char* argv[]) {
                 particle_elements, particle_info);
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
+  /*ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
+                                      ppe, element_gids, particle_elements, particle_info);*/
   ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids, particle_elements);
+                                      ppe, element_gids); // temporary cabm without adding particles
 
   //insert parallel_for to copy data from MTV into cabm object - crappy pseudo code below
 //  foo = MTV<0>.get(); //device array for the first member type

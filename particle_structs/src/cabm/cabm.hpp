@@ -1,19 +1,10 @@
 #pragma once
 
 #include <particle_structs.hpp>
+#include "cabm_support.hpp"
 #include <Cabana_Core.hpp>
 
 namespace {
-
-template <typename T, typename... Types>
-struct AppendMT;
-
-//Append type to the end
-template <typename T, typename... Types>
-struct AppendMT<T, particle_structs::MemberTypes<Types...> > {
-  static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
-  using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
-};
 
 
 // class to append member types
@@ -47,8 +38,8 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
-    using CM_DT = AppendMT<int,DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemSpace>;
+    using CM_DT = CM_DTInt<DataTypes>;
+    using AoSoA_t = Cabana::AoSoA<CM_DT,MemSpace>;
 
     CabM() = delete;
     CabM(const CabM&) = delete;
@@ -147,7 +138,7 @@ namespace pumipic {
     */
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
         const kkLidView parentElms, const kkLidView offsets) {
-      
+
       const lid_t num_elements = particles_per_element.size();
       const auto soa_len = AoSoA_t::vector_length;
 
@@ -183,17 +174,18 @@ namespace pumipic {
     */
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info) {
       const auto soa_len = AoSoA_t::vector_length;
-      
+
       // calculate SoA and ptcl in SoA indices for next loop
       kkLidView soa_indices("soa_indices", num_ptcls);
       kkLidView soa_ptcl_indices("soa_ptcl_indices", num_ptcls);
       Kokkos::parallel_for("soa_and_ptcl", num_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
-          soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id)) + (particle_indices(ptcl_id)/soa_len);
+          soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id))
+            + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
-      
-      /// @todo add in Variadic templated function for ViewstoAoSoA
+      CopyMTVsToAoSoA<MemSpace, DataTypes>(aosoa_, particle_info, soa_indices,
+        soa_ptcl_indices);
     }
 
     //---Attention User---  Do **not** call this function!
@@ -216,7 +208,7 @@ namespace pumipic {
         KOKKOS_LAMBDA(const int& i) {
           ptcl_elm_indices(i) = 0;
         });
-      
+
       // atomic_fetch_add to increment from the beginning of each element
       Kokkos::parallel_for("fill_ptcl_indices", num_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -290,7 +282,7 @@ namespace pumipic {
   }
 
   /**
-   * 
+   *
    * @param[in] new_element
    * @param[in] new_process
    * @param[in] dist
@@ -305,7 +297,7 @@ namespace pumipic {
     /// @todo implement migrate
     fprintf(stderr, "[WARNING] CabM migrate(...) not implemented\n");
   }
-  
+
   /**
    * Fully rebuild the AoSoA with these new parent SoAs
    *     by copying into a new AoSoA and overwriting the old one
@@ -313,7 +305,7 @@ namespace pumipic {
    * @param[in] new_particle_elements view of ints, representing which elements
    *    particle reside in
    * @param[in] new_particles array of views filled with particle data
-  */ 
+  */
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
@@ -341,12 +333,12 @@ namespace pumipic {
     const auto newNumSoa = newOffset[num_elems];
     const auto newCapacity = newNumSoa*soa_len;
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
-    //assign the particles from the current aosoa to the newAosoa 
+    //assign the particles from the current aosoa to the newAosoa
     Kokkos::View<lid_t*,host_space> newOffset_h("newOffset_host",num_elems+1);
     for (int i=0; i<=num_elems; i++)
       newOffset_h(i) = newOffset[i];
     auto newOffset_d = Kokkos::create_mirror_view_and_copy(memory_space(), newOffset_h);
-    Kokkos::View<lid_t*, host_space> elmPtclCounter_h("elmPtclCounter_device", num_elems); 
+    Kokkos::View<lid_t*, host_space> elmPtclCounter_h("elmPtclCounter_device", num_elems);
     auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memory_space(), elmPtclCounter_h);
     auto newActive = Cabana::slice<activeSliceIdx>(newAosoa);
     auto aosoa_cpy = aosoa_; // copy of member variable aosoa_ (Kokkos doesn't like member variables)

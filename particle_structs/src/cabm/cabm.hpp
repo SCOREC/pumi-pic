@@ -252,8 +252,8 @@ namespace pumipic {
   CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
                                    lid_t num_elements, lid_t num_particles,
                                    kkLidView particles_per_element,
-                                   kkGidView element_gids,      // optional
-                                   kkLidView particle_elements, // optional
+                                   kkGidView element_gids,
+                                   kkLidView particle_elements,
                                    MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p)
@@ -262,16 +262,32 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
-    offsets = buildOffset(particles_per_element); // build offset array
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
+    if(!comm_rank)
+      fprintf(stderr, "building CabM\n");
+    
+    // build view of offsets for SoA indices within particle elements
+    offsets = buildOffset(particles_per_element);
+    // set num_soa_ from the last entry of offsets
     num_soa_ = getLastValue(offsets);
+    // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    aosoa_ = makeAoSoA(capacity_, num_soa_); // initialize AoSoA
+
+    // initialize appropriately-sized AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elements, num_soa_, offsets);
     // set active mask
     setActive(aosoa_, particles_per_element, parentElms_, offsets);
+
     /// @todo add usage of element_gids
-    if (particle_info != NULL) {
+
+    // populate AoSoA with input data if given
+    lid_t given_particles = particle_elements.size();
+    if (given_particles > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
       initCabMData(particle_elements, particle_info); // initialize data
     }
   }

@@ -465,13 +465,10 @@ namespace pumipic {
     #else
         fn_d = &fn;
     #endif
-    printf("parallel_1\n");
     auto parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
-    printf("parallel_2\n");
     const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
-    printf("parallel_3\n");
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const int soa, const int ptcl ) {

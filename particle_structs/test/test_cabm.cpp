@@ -41,20 +41,6 @@ int testCounts(PS* structure, lid_t num_elems, lid_t num_ptcls) {
   return fails;
 }
 
-//Functionality tests
-int testMetrics(PS* structure) {
-  int fails = 0;
-  try {
-    structure->printMetrics();
-  }
-  catch(...) {
-    fprintf(stderr, "[ERROR] Failed running printMetrics() on rank %d\n",
-            comm_rank);
-    ++fails;
-  }
-  return fails;
-}
-
 int testParticleExistence(PS* structure, lid_t num_ptcls) {
   int fails = 0;
   kkLidView count("count", 1);
@@ -70,6 +56,75 @@ int testParticleExistence(PS* structure, lid_t num_ptcls) {
             c, num_ptcls);
     ++fails;
   }
+  return fails;
+}
+
+int setValues(PS* structure) {
+  int fails = 0;
+  auto dbls = structure->get<1>();
+  auto bools = structure->get<2>();
+  auto nums = structure->get<3>();
+  int local_rank = comm_rank;
+  auto setValues = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    if (mask) {
+      dbls(p, 0) = p * e * 100.0;
+      dbls(p, 1) = M_PI * p + M_PI / 2.0;
+      dbls(p, 2) = M_E * 2.5;
+      nums(p) = local_rank;
+      bools(p) = true;
+    }
+    else {
+      dbls(p, 0) = 0;
+      dbls(p, 1) = 0;
+      dbls(p, 2) = 0;
+      nums(p) = -1;
+      bools(p) = false;
+    }
+  };
+  ps::parallel_for(structure, setValues, "setValues");
+  return fails;
+}
+
+//Functionality tests
+int testMetrics(PS* structure) {
+  int fails = 0;
+  try {
+    structure->printMetrics();
+  }
+  catch(...) {
+    fprintf(stderr, "[ERROR] Failed running printMetrics() on rank %d\n",
+            comm_rank);
+    ++fails;
+  }
+  return fails;
+}
+
+int testSegmentComp(PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  auto dbls = structure->get<1>();
+  auto setComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto dbl_seg = dbls.getComponents(p);
+    for (int i = 0; i < 3; ++i)
+      dbl_seg(i) = e * (i + 1);
+  };
+  pumipic::parallel_for(structure, setComponents, "Set components");
+
+  const double TOL = .00001;
+  auto checkComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+    auto comps = dbls.getComponents(p);
+    for (int i = 0; i < 3; ++i) {
+      if (abs(comps[i] - e * (i + 1)) > TOL) {
+        printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
+               p, i, comps[i], e * (i + 1));
+        Kokkos::atomic_add(&(failures[0]), 1);
+      }
+    }
+  };
+  pumipic::parallel_for(structure, checkComponents, "Check components");
+  fails += pumipic::getLastValue<lid_t>(failures);
+
   return fails;
 }
 
@@ -109,7 +164,9 @@ int main(int argc, char* argv[]) {
   //Run tests
   fails += testCounts(cabm, num_elems, num_ptcls);
   fails += testParticleExistence(cabm, num_ptcls);
+  fails += setValues(cabm);
   fails += testMetrics(cabm);
+  fails += testSegmentComp(cabm);
 
   //Cleanup
   ps::destroyViews<Types>(particle_info);

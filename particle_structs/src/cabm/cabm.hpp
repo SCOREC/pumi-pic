@@ -175,12 +175,13 @@ namespace pumipic {
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info) {
       const auto soa_len = AoSoA_t::vector_length;
 
-      // calculate SoA and ptcl in SoA indices for next loop
+      // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
       kkLidView soa_indices("soa_indices", num_ptcls);
       kkLidView soa_ptcl_indices("soa_ptcl_indices", num_ptcls);
+      auto offsets_cpy = offsets; // copy of offsets since GPUs don't like member variables
       Kokkos::parallel_for("soa_and_ptcl", num_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
-          soa_indices(ptcl_id) = offsets(particle_elements(ptcl_id))
+          soa_indices(ptcl_id) = offsets_cpy(particle_elements(ptcl_id))
             + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
@@ -402,11 +403,13 @@ namespace pumipic {
     #else
         fn_d = &fn;
     #endif
-
+    printf("parallel_1\n");
     auto parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
+    printf("parallel_2\n");
     const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
+    printf("parallel_3\n");
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const int soa, const int ptcl ) {

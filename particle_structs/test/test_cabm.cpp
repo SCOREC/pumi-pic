@@ -55,6 +55,24 @@ int testMetrics(PS* structure) {
   return fails;
 }
 
+int testParticleExistence(PS* structure, lid_t num_ptcls) {
+  int fails = 0;
+  kkLidView count("count", 1);
+  auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    Kokkos::atomic_fetch_add(&(count(0)), mask);
+  };
+  ps::parallel_for(structure, checkExistence, "check particle existence");
+  lid_t c = ps::getLastValue<lid_t>(count);
+  if (c != num_ptcls) {
+    fprintf(stderr, "[ERROR] Number of particles found in parallel_for "
+            "does not match the number of particles on rank %d"
+            "[(parallel_for)%d != %d(actual)]]n", comm_rank,
+            c, num_ptcls);
+    ++fails;
+  }
+  return fails;
+}
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
@@ -85,30 +103,12 @@ int main(int argc, char* argv[]) {
                 particle_elements, particle_info);
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
-  /*ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids, particle_elements, particle_info);*/
   ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids); // temporary cabm without adding particles
-
-  // manually add particle data
-  /* won't work because don't want to expose AoSoA and get not for CabM
-  auto aosoa = cabm.getAoSoA();
-  cabm.parallel_for( PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask) {
-      /// @todo add content
-  
-  };)*/
-
-  //insert parallel_for to copy data from MTV into cabm object - crappy pseudo code below
-//  foo = MTV<0>.get(); //device array for the first member type
-//  ourSlice = cabm<0>.get(); //device array for our storage for the first type
-//  parallel_for(...., int e, int p) {
-//    if(e == 0 && p < 5) {
-//      ourSlice[p] = foo[p];
-//    }
-//  }
+                                      ppe, element_gids, particle_elements, particle_info);
 
   //Run tests
   fails += testCounts(cabm, num_elems, num_ptcls);
+  fails += testParticleExistence(cabm, num_ptcls);
   fails += testMetrics(cabm);
 
   //Cleanup

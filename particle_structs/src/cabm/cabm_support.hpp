@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Cabana_Core.hpp>
-#include <psMemberType.h>
 namespace pumipic {
   /* Class which appends a type T to a pp::MemberType and provides it as a
        cabana::MemberType

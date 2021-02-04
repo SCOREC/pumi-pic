@@ -263,7 +263,7 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
 //template < typename ParticleType >
 //results in an error on get<> as an unresolved function.
 
-template < class ParticleType>
+template < class ParticleType, typename Segment3d, typename SegmentInt>
 bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
                  Segment3d x_ps_d, Segment3d xtgt_ps_d, SegmentInt pid_d,
                  o::Write<o::LO> elem_ids, o::Write<o::Real> xpoints_d,
@@ -430,7 +430,7 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
   return found;
 }
 
-template < class ParticleStruct>
+template < class ParticleStruct, typename Segment3d, typename SegmentInt>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                  ParticleStruct* ptcls, // (in) particle structure
                  Segment3d x_ps_d, // (in) starting particle positions

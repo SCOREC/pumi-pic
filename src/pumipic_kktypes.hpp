@@ -18,8 +18,6 @@ namespace pumipic {
 
   typedef Kokkos::DefaultExecutionSpace exe_space;
   typedef exe_space::device_type device_type;
-  typedef Segment<int, device_type> SegmentInt;
-  typedef Segment<Vector3d, device_type> Segment3d;
 
   typedef Kokkos::View<lid_t*, device_type> kkLidView;
   void hostToDeviceLid(kkLidView d, lid_t *h);

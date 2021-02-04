@@ -33,13 +33,15 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkLidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
+    template<std::size_t N>
+    using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
 
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
     using CM_DT = CM_DTInt<DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<CM_DT,MemSpace>;
+    using AoSoA_t = Cabana::AoSoA<CM_DT,device_type>;
 
     CabM() = delete;
     CabM(const CabM&) = delete;
@@ -59,6 +61,11 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
 
+    template <std::size_t N>
+    Slice<N> get() {
+      //TODO: write this function to return the pumipic::Slice for the Nth type given a Cabana::Slice
+      return Slice<N>(Cabana::slice<N, AoSoA_t>(aosoa_, "get<>()"));
+    }
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
@@ -185,7 +192,7 @@ namespace pumipic {
             + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
-      CopyMTVsToAoSoA<MemSpace, DataTypes>(aosoa_, particle_info, soa_indices,
+      CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, particle_info, soa_indices,
         soa_ptcl_indices);
     }
 
@@ -268,7 +275,7 @@ namespace pumipic {
 
     if(!comm_rank)
       fprintf(stderr, "building CabM\n");
-    
+
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(particles_per_element);
     // set num_soa_ from the last entry of offsets
@@ -404,7 +411,7 @@ namespace pumipic {
           ptcl_elm_indices(elm) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(elm),mask);
         };
         parallel_for( fill_elm_indices, "fill_elm_indices" );
-        
+
         kkLidView particle_indices("particle_indices", new_num_ptcls);
         // atomic_fetch_add to increment from the beginning of each element for NEW particles
         Kokkos::parallel_for("fill_ptcl_indices", new_num_ptcls,
@@ -418,13 +425,13 @@ namespace pumipic {
         kkLidView soa_ptcl_indices("soa_ptcl_indices", new_num_ptcls);
         Kokkos::parallel_for("soa_and_ptcl", new_num_ptcls,
           KOKKOS_LAMBDA(const lid_t ptcl_id) {
-            
+
             soa_indices(ptcl_id) = offsets_cpy(new_particle_elements(ptcl_id))
               + (particle_indices(ptcl_id)/soa_len);
             soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
-            
+
           });
-        CopyMTVsToAoSoA<MemSpace, DataTypes>(aosoa_, new_particles, soa_indices,
+        CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, new_particles, soa_indices,
           soa_ptcl_indices);
       }
 

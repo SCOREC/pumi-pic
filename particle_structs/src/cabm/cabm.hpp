@@ -279,7 +279,7 @@ namespace pumipic {
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
-    parentElms_ = getParentElms(num_elements, num_soa_, offsets);
+    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
     setActive(aosoa_, particles_per_element, parentElms_, offsets);
 
@@ -343,6 +343,16 @@ namespace pumipic {
     };
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_ );
     Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
+
+    // increase elmDegree_d for particles in new_particle_elements
+    if (new_particle_elements.size() > 0 && new_particles != NULL) {
+      Kokkos::parallel_for("add_particle_setup", new_particle_elements.size(),
+        KOKKOS_LAMBDA(const lid_t ptcl_id) {
+          auto parent = new_particle_elements(ptcl_id);
+          Kokkos::atomic_increment<int>(&elmDegree_d(parent));
+        });
+    }
+
     auto elmDegree_h = Kokkos::create_mirror_view_and_copy(host_space(), elmDegree_d);
 
     //prepare a new aosoa to store the shuffled particles
@@ -374,11 +384,56 @@ namespace pumipic {
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
+
+      num_soa_ = newNumSoa;
+      capacity_ = newCapacity;
+      offsets = newOffset;
+
+      // add new particles
+      if (new_particle_elements.size() > 0 && new_particles != NULL) {
+        auto new_num_ptcls = new_particle_elements.size();
+
+        // View for tracking particle index in elements
+        kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
+        Kokkos::parallel_for("fill_zeros", num_elems,
+          KOKKOS_LAMBDA(const lid_t& elm) {
+            ptcl_elm_indices(elm) = 0;
+          });
+        // add all CURRENTLY active particles
+        auto fill_elm_indices = PS_LAMBDA(const lid_t& elm, const lid_t& ptcl, const bool& mask) {
+          ptcl_elm_indices(elm) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(elm),mask);
+        };
+        parallel_for( fill_elm_indices, "fill_elm_indices" );
+        
+        kkLidView particle_indices("particle_indices", new_num_ptcls);
+        // atomic_fetch_add to increment from the beginning of each element for NEW particles
+        Kokkos::parallel_for("fill_ptcl_indices", new_num_ptcls,
+          KOKKOS_LAMBDA(const lid_t ptcl_id) {
+            particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(new_particle_elements(ptcl_id)),1);
+          });
+
+        auto offsets_cpy = offsets; // copy of offsets since GPUs don't like member variables
+        // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
+        kkLidView soa_indices("soa_indices", new_num_ptcls);
+        kkLidView soa_ptcl_indices("soa_ptcl_indices", new_num_ptcls);
+        Kokkos::parallel_for("soa_and_ptcl", new_num_ptcls,
+          KOKKOS_LAMBDA(const lid_t ptcl_id) {
+            
+            soa_indices(ptcl_id) = offsets_cpy(new_particle_elements(ptcl_id))
+              + (particle_indices(ptcl_id)/soa_len);
+            soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
+            
+          });
+        CopyMTVsToAoSoA<MemSpace, DataTypes>(aosoa_, new_particles, soa_indices,
+          soa_ptcl_indices);
+      }
+
+      num_ptcls = num_ptcls + new_particle_elements.size();
+      parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+
       //destroy the old aosoa and use the new one in the CabanaM object
       aosoa_ = newAosoa;
       setActive(aosoa_, elmDegree_d, parentElms_, offsets);
-
-      /// @todo add new particles
   }
 
   /**

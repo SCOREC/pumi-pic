@@ -31,20 +31,20 @@ namespace pumipic {
    */
   //Rank 0
   template <std::size_t M, typename SoA_t, typename View_t>
-  PP_INLINE CheckRank<View_t, 1> copyViewToSoa(SoA_t dst, lid_t dstind,
+  PP_INLINE CheckRank<View_t, 1> copyViewToSoa(SoA_t &dst, lid_t dstind,
                                                View_t src, lid_t srcind) {
     Cabana::get<M>(dst, dstind) = src(srcind);
   }
   //Rank 1
   template <std::size_t M, typename SoA_t, typename View_t>
-  PP_INLINE CheckRank<View_t, 2> copyViewToSoa(SoA_t dst, lid_t dstind,
+  PP_INLINE CheckRank<View_t, 2> copyViewToSoa(SoA_t &dst, lid_t dstind,
                                                View_t src, lid_t srcind) {
     for (lid_t i = 0; i < src.extent(1); ++i)
       Cabana::get<M>(dst, dstind, i) = src(srcind, i);
   }
   //Rank 2
   template <std::size_t M, typename SoA_t, typename View_t>
-  PP_INLINE CheckRank<View_t, 3> copyViewToSoa(SoA_t dst, lid_t dstind,
+  PP_INLINE CheckRank<View_t, 3> copyViewToSoa(SoA_t &dst, lid_t dstind,
                                                View_t src, lid_t srcind) {
     for (lid_t i = 0; i < src.extent(1); ++i)
       for (lid_t j = 0; j < src.extent(2); ++j)
@@ -52,7 +52,7 @@ namespace pumipic {
   }
   //Rank 3
   template <std::size_t M, typename SoA_t, typename View_t>
-  PP_INLINE CheckRank<View_t, 4> copyViewToSoa(SoA_t dst, lid_t dstind,
+  PP_INLINE CheckRank<View_t, 4> copyViewToSoa(SoA_t &dst, lid_t dstind,
                                                View_t src, lid_t srcind) {
     for (lid_t i = 0; i < src.extent(1); ++i)
       for (lid_t j = 0; j < src.extent(2); ++j)
@@ -75,14 +75,14 @@ namespace pumipic {
             typename T, typename... Types>
   struct CopyMTVsToAoSoAImpl<Device, M, CMDT, ViewT, T, Types...> {
     typedef Cabana::AoSoA<CMDT, Device> Aosoa;
-    CopyMTVsToAoSoAImpl(Aosoa dst, MemberTypeViewsConst srcs, ViewT soa_indices,
+    CopyMTVsToAoSoAImpl(Aosoa &dst, MemberTypeViewsConst srcs, ViewT soa_indices,
                         ViewT soa_ptcl_indices) {
       enclose(dst, srcs, soa_indices, soa_ptcl_indices);
       CopyMTVsToAoSoAImpl<Device, M+1, CMDT, ViewT, Types...>(dst, srcs+1,
                                                               soa_indices,
                                                               soa_ptcl_indices);
     }
-    void enclose(Aosoa dst, MemberTypeViewsConst srcs, ViewT soa_indices,
+    void enclose(Aosoa &dst, MemberTypeViewsConst srcs, ViewT soa_indices,
                  ViewT soa_ptcl_indices) {
       MemberTypeView<T, Device> src =
         *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
@@ -103,7 +103,7 @@ namespace pumipic {
     typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
     typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
 
-    CopyMTVsToAoSoA(Aosoa dst, MemberTypeViewsConst src,
+    CopyMTVsToAoSoA(Aosoa &dst, MemberTypeViewsConst src,
                     typename PS::kkLidView soa_indices,
                     typename PS::kkLidView soa_ptcl_indices) {
       if (src != NULL)

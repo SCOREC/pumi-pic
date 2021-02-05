@@ -66,11 +66,6 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::numRows;
     using ParticleStructure<DataTypes, MemSpace>::copy;
 
-    lid_t getNumPtcls() { return num_ptcls; }
-    kkLidView getOffsets() { return offsets; }
-    MTVs getPtcl_data() { return ptcl_data; }
-    lid_t getCapacity() { return capacity_; }
-
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
                  kkLidView new_particle_elements = kkLidView(),

@@ -128,6 +128,27 @@ int testSegmentComp(PS* structure) {
   return fails;
 }
 
+int checkPtclElem(ps::CabM<Types>* structure, kkLidView particle_elements){
+  //Fail count and accessing structure member variables
+  int fails = 0;
+  kkLidView failures("fails", 1);
+  auto pIDs = structure->get<0>();
+
+  //Parallel_for checking that all particles are in the correct
+  //element (row) inside structure (rows indexed by offsets)
+  auto checkPtclElems = PS_LAMBDA(const lid_t& elm, const lid_t& ptcl, const bool& mask) {
+    lid_t id = pIDs(ptcl);
+    if ( (mask == 1) && (particle_elements[id] != elm) ) {
+      failures[0] += 1;
+      printf("Particle %d\t assigned to incorrect element %d (should be element %d)\n", id, elm, particle_elements[id]);
+    }
+  };
+  structure->parallel_for(checkPtclElems, "checkPtclElems");
+  
+  fails += pumipic::getLastValue<lid_t>(failures);
+  return fails;
+}
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);

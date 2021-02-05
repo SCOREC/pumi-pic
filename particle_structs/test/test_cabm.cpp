@@ -188,6 +188,7 @@ int main(int argc, char* argv[]) {
   fails += setValues(cabm);
   fails += testMetrics(cabm);
   fails += testSegmentComp(cabm);
+  fails += checkPtclElem(cabm, particle_elements);
 
   //Cleanup
   ps::destroyViews<Types>(particle_info);

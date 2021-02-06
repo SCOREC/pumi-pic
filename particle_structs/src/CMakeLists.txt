@@ -25,6 +25,7 @@ set(HEADERS
   scs/SellCSigma.h
   scs/scs_input.hpp
   csr/CSR.hpp
+  csr/CSR_rebuild.hpp
   particle_structs.hpp
 )
 

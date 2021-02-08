@@ -18,6 +18,13 @@ add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
 add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
 add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
 
+add_test(NAME rebuild_cabm_small COMMAND ./rebuild_cabm 5 20 1)
+add_test(NAME rebuild_cabm_medium COMMAND ./rebuild_cabm 50 1000 1)
+add_test(NAME rebuild_cabm_large_0 COMMAND ./rebuild_cabm 2500 1000000 0)
+add_test(NAME rebuild_cabm_large_1 COMMAND ./rebuild_cabm 2500 1000000 1)
+add_test(NAME rebuild_cabm_large_2 COMMAND ./rebuild_cabm 2500 1000000 2)
+add_test(NAME rebuild_cabm_large_3 COMMAND ./rebuild_cabm 2500 1000000 3)
+
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
 
 add_test(NAME migrateNothing COMMAND ./migrateTest)
@@ -38,6 +45,7 @@ add_test(NAME test_csr_small COMMAND ./test_csr small_ptcls_e5_p25_r0)
 add_test(NAME test_csr_small2 COMMAND ./test_csr small_ptcls_e5_p25_r4)
 
 add_test(NAME test_cabm_small COMMAND ./test_cabm small_ptcls_e5_p25_r0)
+add_test(NAME test_cabm_small2 COMMAND ./test_cabm small_ptcls_e5_p25_r4)
 
 add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
 add_test(NAME test_structures_medium COMMAND ./test_structure medium_ptcls_e500_p10e5_r0)

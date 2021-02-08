@@ -5,32 +5,6 @@
 
 namespace ps = particle_structs;
 
-namespace {
-  // print the contents of a view for debugging
-  template <typename ppView>
-  void printView(ppView v){
-      //printf("view: %s\n", v.label().c_str());
-      Kokkos::parallel_for("print_view",
-          v.size(),
-          KOKKOS_LAMBDA (const int& i) {
-            printf("%d %d\n", i, v(i));
-      });
-  }
-
-  //helper function for rebuild to determine how much space to allocate
-  template <typename ppView>
-  int countParticlesOnProcess(ppView particle_elements){
-    int count = 0;
-    Kokkos::parallel_reduce("particle on process",
-        particle_elements.size(), KOKKOS_LAMBDA (const int& i, int& lsum){
-      if(particle_elements(i) > -1){
-        lsum += 1;
-      }
-    }, count);
-    return count;
-  }
-}
-
 namespace pumipic {
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>

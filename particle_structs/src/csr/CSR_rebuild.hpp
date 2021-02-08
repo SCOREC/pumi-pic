@@ -1,5 +1,21 @@
 #pragma once
 
+namespace {
+
+  //helper function for rebuild to determine how much space to allocate
+  template <typename ppView>
+  int countParticlesOnProcess(ppView particle_elements){
+    int count = 0;
+    Kokkos::parallel_reduce("particle on process",
+        particle_elements.size(), KOKKOS_LAMBDA (const int& i, int& lsum){
+      if(particle_elements(i) > -1){
+        lsum += 1;
+      }
+    }, count);
+    return count;
+  }
+}
+
 namespace pumipic{
   template<class DataTypes,typename MemSpace>
   void CSR<DataTypes,MemSpace>::rebuild(kkLidView new_element,
@@ -22,7 +38,7 @@ namespace pumipic{
 
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
-    
+
     Kokkos::fence();
     Kokkos::Timer time_ppe;
     //Fill ptcls per elem for exisitng ptcls
@@ -42,7 +58,7 @@ namespace pumipic{
 
     //time offsets and indices calc
     Kokkos::Timer time_off_ind;
-    //refill offset here 
+    //refill offset here
     auto offsets_new = kkLidView("offsets", num_elems+1); //CopyPSToPS uses orig offsets
     Kokkos::deep_copy(offsets_new, offsets);
     exclusive_scan(particles_per_element, offsets_new);
@@ -72,7 +88,7 @@ namespace pumipic{
 
     //Deallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
-    
+
     Kokkos::Timer time_newPtcls;
 
     //If there are new particles

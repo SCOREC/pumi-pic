@@ -10,8 +10,6 @@ namespace pumipic {
   public:
     //Delete default compilers
     Mesh() = delete;
-    Mesh(const Mesh&) = delete;
-    Mesh& operator=(const Mesh&) = delete;
 
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector);
@@ -88,6 +86,10 @@ namespace pumipic {
                    Omega_h::LOs picpart_ents_per_rank,
                    Omega_h::LOs ent_owners);
 
+    //Friend the read/write functions to
+    friend void write(Mesh& picparts, const char* prefix);
+    friend Mesh read(Omega_h::CommPtr comm, const char* prefix);
+
   private:
     Omega_h::CommPtr commptr;
     Omega_h::Mesh* picpart;
@@ -111,7 +113,7 @@ namespace pumipic {
      * 1 = partial
      * 0 = empty
      */
-    Omega_h::HostRead<Omega_h::LO> is_complete_part[4];
+    Omega_h::HostWrite<Omega_h::LO> is_complete_part[4];
     //Number of parts this part bounds
     int num_bounds[4];
     //Number of parts that have boundaries of this part
@@ -126,4 +128,8 @@ namespace pumipic {
 
     ParticleBalancer* ptcl_balancer = NULL;
   };
+
+  //Save picparts to a file
+  void write(Mesh& picparts, const char* prefix);
+  Mesh read(Omega_h::CommPtr comm, const char* prefix);
 }

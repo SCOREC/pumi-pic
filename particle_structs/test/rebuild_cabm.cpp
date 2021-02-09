@@ -62,15 +62,15 @@ int main(int argc, char* argv[]) {
     //check new elements are added properly and all elements assgined correct
     fprintf(stderr,"RebuildNewPtcls\n");
     fails += rebuildNewPtcls(number_elements,number_particles,distribution);
-    /*
+    
     //check for particles that were removed and the rest in their correct loc
     fprintf(stderr,"RebuildPtclsDestroyed\n");
     fails += rebuildPtclsDestroyed(number_elements,number_particles,distribution);
-
+    
     //complete check of rebuild functionality
     fprintf(stderr,"RebuildNewAndDestroyed\n");
     fails += rebuildNewAndDestroyed(number_elements,number_particles,distribution);
-    */
+    
   }
   //end Kokkos scope
   Kokkos::finalize();
@@ -377,12 +377,14 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
   CabM::kkLidView num_removed("num_removed", 1);
   //Remove every 7th particle, keep other particles in same element
   auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool mask){
-    new_element(p) = e;
-    if(p%7 == 0) {
-      new_element(p) = -1;
-      Kokkos::atomic_add(&(num_removed(0)), 1);
+    if (mask) {
+      new_element(p) = e;
+      if(p%7 == 0) {
+        new_element(p) = -1;
+        Kokkos::atomic_add(&(num_removed(0)), 1);
+      }
+      pID(p) = p;
     }
-    pID(p) = p;
   };
   cabm->parallel_for(assign_ptcl_elems, "assing ptcl elems");
   int nremoved = pumipic::getLastValue(num_removed);

@@ -107,6 +107,7 @@ namespace pumipic {
      * @param[in] num_soa total number of SoAs (can be greater than elem_count if
      * any element of particles_per_element is vector_length)
      * @return AoSoA of max capacity, capacity, and total number of SoAs, numSoa
+     * @exception num_soa != aosoa.numSoA()
     */
     AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa) {
       auto aosoa = AoSoA_t();
@@ -203,6 +204,7 @@ namespace pumipic {
      *                          of the parent element * of particle i
      * @param[in] particle_info - 'member type views' containing the user's data to be
      *                      associated with each particle
+     * @exception particle_elements.size() != num_ptcls
     */
     void initCabMData(kkLidView particle_elements, MTVs particle_info) {
       assert(particle_elements.size() == num_ptcls);
@@ -255,6 +257,9 @@ namespace pumipic {
    * @param[in] particle_elements view of ints, representing which elements
    *    particle reside in (optional)
    * @param[in] particle_info array of views filled with particle data (optional)
+   * @exception num_elements != particles_per_element.size(),
+   *    undefined behavior for new_particle_elements.size() != sizeof(new_particles),
+   *    undefined behavior for numberoftypes(new_particles) != numberoftypes(DataTypes)
   */
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::CabM( PolicyType& p,

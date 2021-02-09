@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 }
 
 //Rebuild test with no changes to structure
-bool rebuildNoChanges(int ne_in, int np_in,int distribution){
+bool rebuildNoChanges(int ne_in, int np_in, int distribution) {
   Kokkos::Profiling::pushRegion("rebuildNoChanges");
   int fails = 0;
 
@@ -169,7 +169,7 @@ bool rebuildNoChanges(int ne_in, int np_in,int distribution){
 }
 
 //Rebuild test with no new particles, but reassigned particle elements
-bool rebuildNewElems(int ne_in, int np_in,int distribution){
+bool rebuildNewElems(int ne_in, int np_in, int distribution) {
   Kokkos::Profiling::pushRegion("rebuildNewElems");
   int fails = 0;
 
@@ -258,7 +258,7 @@ bool rebuildNewElems(int ne_in, int np_in,int distribution){
 }
 
 //Rebuild test with new particles added only
-bool rebuildNewPtcls(int ne_in, int np_in,int distribution){
+bool rebuildNewPtcls(int ne_in, int np_in, int distribution) {
   Kokkos::Profiling::pushRegion("rebuildNewPtcls");
   int fails = 0;
 
@@ -350,7 +350,7 @@ bool rebuildNewPtcls(int ne_in, int np_in,int distribution){
 }
 
 //Rebuild test with existing particles destroyed only
-bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
+bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
   Kokkos::Profiling::pushRegion("rebuildPtclsDestroyed");
   int fails = 0;
 
@@ -427,7 +427,7 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
 }
 
 //Rebuild test with particles added and destroyed
-bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
+bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution) {
   Kokkos::Profiling::pushRegion("rebuildNewAndDestroyed");
   int fails = 0;
 
@@ -501,13 +501,13 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
     if (mask) {
       if (id < cap) { //Check old particles
         const lid_t dest_elem = new_element(id);
-        if (dest_elem != e) {
-          printf("[ERROR] Particle %d was moved to incorrect element %d "
-                 "(should be in element %d)\n", id, e, dest_elem);
+        if (id % 7 == 0) { //Check removed particles
+          printf("[ERROR] Particle %d in element %d was not removed during rebuild\n", id, e);
           failed(0) = 1;
         }
-        if (id % 7 == 0) { //Check removed particles
-          printf("[ERROR] Particle %d was not removed during rebuild\n", id);
+        else if (dest_elem != e) {
+          printf("[ERROR] Particle %d was moved to incorrect element %d "
+                 "(should be in element %d)\n", id, e, dest_elem);
           failed(0) = 1;
         }
       }

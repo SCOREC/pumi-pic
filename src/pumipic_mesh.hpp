@@ -97,8 +97,6 @@ namespace pumipic {
     //*********************PICpart information**********************/
     //Number of core parts that are buffered (doesn't include self)
     int num_cores[4];
-    //Safe tag defined on the mesh elements
-    Omega_h::LOs is_ent_safe;
 
     //Per Dimension communication information
     //List of core parts that are buffered (doesn't include self)

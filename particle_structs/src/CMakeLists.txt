@@ -27,6 +27,7 @@ set(HEADERS
   scs/scs_input.hpp
   csr/CSR.hpp
   cabm/cabm.hpp
+  csr/CSR_rebuild.hpp
   particle_structs.hpp
 )
 

@@ -249,4 +249,29 @@ namespace pumipic {
       Kokkos::deep_copy(view, hv);
     }
   };
+
+  //Print View function
+  template <typename ppView, typename T>
+  using CheckType =
+    typename std::enable_if<std::is_same<typename ppView::value_type, T>::value, void>::type;
+
+  //Print ints
+  template <typename ppView>
+  CheckType<ppView, int> printView(ppView v) {
+    //printf("view: %s\n", v.label().c_str());
+    Kokkos::parallel_for("print_view", v.size(),
+      KOKKOS_LAMBDA (const int& i) {
+        printf("%d %d\n", i, v(i));
+      });
+  }
+
+  //Print doubles
+  template <typename ppView>
+  CheckType<ppView, double> printView(ppView v) {
+    //printf("view: %s\n", v.label().c_str());
+    Kokkos::parallel_for("print_view", v.size(),
+      KOKKOS_LAMBDA (const int& i) {
+        printf("%d %f\n", i, v(i));
+      });
+  }
 }

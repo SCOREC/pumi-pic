@@ -14,6 +14,7 @@ namespace pumipic {
    * @exception new_particle_elements(ptcl) < 0,
    *    undefined behavior for new_particle_elements.size() != sizeof(new_particles),
    *    undefined behavior for numberoftypes(new_particles) != numberoftypes(DataTypes)
+   *    undefined behavior for new_element(ptcl) >= num_elms or new_particle_elements(ptcl) >= num_elems
   */
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
@@ -24,7 +25,6 @@ namespace pumipic {
 
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree("elmDegree", num_elems);
-    kkLidView elmOffsets("elmOffsets", num_elems);
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(aosoa_);
     auto elmDegree_d = Kokkos::create_mirror_view_and_copy(memory_space(), elmDegree);
@@ -42,8 +42,8 @@ namespace pumipic {
         }
       }
     };
-    Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_ );
-    Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
+    Cabana::simd_parallel_for(simd_policy, atomic, "atomic");
     lid_t num_removed = getLastValue(num_removed_d);
 
     // also add the number of particles in new_particle_elements for later (atomic)
@@ -59,7 +59,6 @@ namespace pumipic {
     RecordTime("CabM count active particles", overall_timer.seconds());
     Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
-    auto elmDegree_h = Kokkos::create_mirror_view_and_copy(host_space(), elmDegree_d);
     //prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d);
     const auto newNumSoa = getLastValue(newOffset_d);
@@ -67,7 +66,6 @@ namespace pumipic {
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
     Kokkos::View<lid_t*, host_space> elmPtclCounter_h("elmPtclCounter_device", num_elems);
     auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memory_space(), elmPtclCounter_h);
-    auto newActive = Cabana::slice<activeSliceIdx>(newAosoa);
     auto aosoa_cpy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     auto copyPtcls = KOKKOS_LAMBDA(const int& soa, const int& tuple) {
         if (active.access(soa,tuple) == 1) {
@@ -87,7 +85,9 @@ namespace pumipic {
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
 
-    // update member variables
+    //destroy the old aosoa and use the new one in the CabanaM object
+    aosoa_ = newAosoa;
+    // update member variables (note that these are set before particle addition)
     num_soa_ = newNumSoa;
     capacity_ = newCapacity;
     offsets = newOffset_d;
@@ -100,27 +100,28 @@ namespace pumipic {
 
     // add new particles
     if (new_particle_elements.size() > 0 && new_particles != NULL) {
-      auto new_num_ptcls = new_particle_elements.size();
-
       // View for tracking particle indices in elements
       kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
-      Kokkos::parallel_for("fill_zeros", num_elems,
-        KOKKOS_LAMBDA(const lid_t& elm) {
-          ptcl_elm_indices(elm) = 0;
-        });
+
+      // Add active particles
+      auto fill_elm_indices = PS_LAMBDA(const int& elm, const int& ptcl, const bool mask) {
+        if (mask)
+          Kokkos::atomic_increment<int>(&ptcl_elm_indices(elm));
+      };
+      parallel_for(fill_elm_indices, "fill_elm_indices");
       
-      // count all CURRENTLY active particles
-      Kokkos::parallel_for("fill_elm_indices", new_element.size(),
+      // Remove to-add particles from sum
+      Kokkos::parallel_for("fill_zeros", new_particle_elements.size(),
         KOKKOS_LAMBDA(const lid_t& ptcl) {
-          if ( new_element(ptcl) >= 0 )
-            Kokkos::atomic_fetch_add( &ptcl_elm_indices(new_element(ptcl)), 1);
+          Kokkos::atomic_decrement<int>(&ptcl_elm_indices(new_particle_elements(ptcl)));
         });
 
-      kkLidView particle_indices("particle_indices", new_num_ptcls);
       // increment through free spaces in elements for NEW particle indices (atomic)
+      auto new_num_ptcls = new_particle_elements.size();
+      kkLidView particle_indices("particle_indices", new_num_ptcls);
       Kokkos::parallel_for("fill_ptcl_indices", new_num_ptcls,
-        KOKKOS_LAMBDA(const lid_t ptcl_id) {
-          particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(new_particle_elements(ptcl_id)),1);
+        KOKKOS_LAMBDA(const lid_t ptcl) {
+          particle_indices(ptcl) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(new_particle_elements(ptcl)),1);
         });
 
       auto offsets_cpy = offsets; // copy of offsets (necessary, Kokkos doesn't like member variables)
@@ -128,21 +129,17 @@ namespace pumipic {
       kkLidView soa_indices("soa_indices", new_num_ptcls);
       kkLidView soa_ptcl_indices("soa_ptcl_indices", new_num_ptcls);
       Kokkos::parallel_for("soa_and_ptcl", new_num_ptcls,
-        KOKKOS_LAMBDA(const lid_t ptcl_id) {
-          soa_indices(ptcl_id) = offsets_cpy(new_particle_elements(ptcl_id))
-            + (particle_indices(ptcl_id)/soa_len);
-          soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
+        KOKKOS_LAMBDA(const lid_t ptcl) {
+          soa_indices(ptcl) = offsets_cpy(new_particle_elements(ptcl))
+            + (particle_indices(ptcl)/soa_len);
+          soa_ptcl_indices(ptcl) = particle_indices(ptcl)%soa_len;
         });
-      CopyMTVsToAoSoA<device_type, DataTypes>(newAosoa, new_particles, soa_indices,
+      CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, new_particles, soa_indices,
         soa_ptcl_indices); // copy data over
       num_ptcls = num_ptcls + new_particle_elements.size(); // update particle number
     }
 
     RecordTime("CabM add particles", add_timer.seconds());
-
-    //destroy the old aosoa and use the new one in the CabanaM object
-    aosoa_ = newAosoa;
-
     RecordTime("CSR rebuild", overall_timer.seconds());
     Kokkos::Profiling::popRegion();
   }

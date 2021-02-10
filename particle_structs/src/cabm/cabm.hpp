@@ -88,11 +88,11 @@ namespace pumipic {
     */
     kkLidView buildOffset(const kkLidView particles_per_element) {
       auto particles_per_element_h = Kokkos::create_mirror_view_and_copy(host_space(), particles_per_element);
-      Kokkos::View<lid_t*,host_space> offsets_h("offsets_host", num_elems+1);
+      Kokkos::View<lid_t*,host_space> offsets_h("offsets_host", particles_per_element.size()+1);
       // elem at i owns SoA offsets[i+1] - offsets[i]
       auto soa_len = AoSoA_t::vector_length;
       offsets_h(0) = 0;
-      for ( int i=0; i<num_elems; i++ ) {
+      for ( int i=0; i<particles_per_element.size(); i++ ) {
         const auto SoA_count = (particles_per_element_h(i)/soa_len) + 1;
         offsets_h(i+1) = SoA_count + offsets_h(i);
       }

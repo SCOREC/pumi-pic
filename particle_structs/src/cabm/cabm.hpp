@@ -92,8 +92,8 @@ namespace pumipic {
       // elem at i owns SoA offsets[i+1] - offsets[i]
       auto soa_len = AoSoA_t::vector_length;
       offsets_h(0) = 0;
-      for ( int i=0; i<particles_per_element.size(); i++ ) {
-        const auto SoA_count = (particles_per_element_h(i)/soa_len) + 1;
+      for ( lid_t i=0; i<particles_per_element.size(); i++ ) {
+        const lid_t SoA_count = (particles_per_element_h(i)/soa_len) + 1;
         offsets_h(i+1) = SoA_count + offsets_h(i);
       }
       kkLidView offsets_d("offsets_device", offsets_h.size());
@@ -122,14 +122,13 @@ namespace pumipic {
      * @param[in] num_soa total number of SoAs (can be greater than elem_count if
      * any element of deg is _vector_length)
      * @param[in] offsets offset array for AoSoA, built by buildOffset
-     * @return parent array, each element is an int representing the parent element each SoA resides in
+     * @return parent array, each element is an lid_t representing the parent element each SoA resides in
     */
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets ) {
       Kokkos::View<lid_t*,host_space> elms_h("parentElms_host", num_soa);
-      kkLidHostMirror offsets_h = create_mirror_view(offsets);
-      Kokkos::deep_copy( offsets_h, offsets );
-      for ( int elm=0; elm<num_elements; elm++ )
-        for ( int soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
+      kkLidHostMirror offsets_h = create_mirror_view_and_copy(host_space(), offsets);
+      for ( lid_t elm=0; elm<num_elements; elm++ )
+        for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
           elms_h(soa)=elm;
       kkLidView elms_d("elements_device", elms_h.size());
       hostToDevice(elms_d, elms_h.data());
@@ -154,13 +153,13 @@ namespace pumipic {
       auto active = Cabana::slice<activeSliceIdx>(aosoa);
       Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
       Cabana::simd_parallel_for(simd_policy,
-        KOKKOS_LAMBDA( const int soa, const int ptcl ) {
-          const auto elm = parentElms(soa);
-          const auto num_soa = offsets(elm+1)-offsets(elm);
-          const auto last_soa = offsets(elm+1)-1;
-          const auto elm_ppe = particles_per_element(elm);
-          const auto last_soa_ppe = soa_len - ((num_soa * soa_len) - elm_ppe);
-          int isActive = 0;
+        KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
+          const lid_t elm = parentElms(soa);
+          const lid_t num_soa = offsets(elm+1)-offsets(elm);
+          const lid_t last_soa = offsets(elm+1)-1;
+          const lid_t elm_ppe = particles_per_element(elm);
+          const lid_t last_soa_ppe = soa_len - ((num_soa * soa_len) - elm_ppe);
+          lid_t isActive = 0;
           if (soa < last_soa) {
             isActive = 1;
           }
@@ -184,12 +183,12 @@ namespace pumipic {
       const auto soa_len = AoSoA_t::vector_length;
 
       // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
-      kkLidView soa_indices("soa_indices", num_ptcls);
-      kkLidView soa_ptcl_indices("soa_ptcl_indices", num_ptcls);
-      auto offsets_cpy = offsets; // copy of offsets since GPUs don't like member variables
-      Kokkos::parallel_for("soa_and_ptcl", num_ptcls,
+      kkLidView soa_indices("soa_indices", particle_elements.size());
+      kkLidView soa_ptcl_indices("soa_ptcl_indices", particle_elements.size());
+      kkLidView offsets_copy = offsets; // copy of offsets since GPUs don't like member variables
+      Kokkos::parallel_for("soa_and_ptcl", particle_elements.size(),
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
-          soa_indices(ptcl_id) = offsets_cpy(particle_elements(ptcl_id))
+          soa_indices(ptcl_id) = offsets_copy(particle_elements(ptcl_id))
             + (particle_indices(ptcl_id)/soa_len);
           soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
         });
@@ -210,21 +209,15 @@ namespace pumipic {
       assert(particle_elements.size() == num_ptcls);
 
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
-      auto offset_copy = offsets;
+      kkLidView offset_copy = offsets;
       kkLidView particle_indices("particle_indices", num_ptcls);
       // View for tracking particle index in elements
       kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
-      Kokkos::parallel_for("fill_zeros", num_elems,
-        KOKKOS_LAMBDA(const int& i) {
-          ptcl_elm_indices(i) = 0;
-        });
-
       // atomic_fetch_add to increment from the beginning of each element
       Kokkos::parallel_for("fill_ptcl_indices", num_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
           particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
         });
-
       fillAoSoA(particle_indices, particle_elements, particle_info);
     }
 
@@ -349,13 +342,13 @@ namespace pumipic {
     #else
         fn_d = &fn;
     #endif
-    auto parentElms_cpy = parentElms_;
+    kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
-      KOKKOS_LAMBDA( const int soa, const int ptcl ) {
+      KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
         const lid_t elm = parentElms_cpy(soa); // calculate element
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));

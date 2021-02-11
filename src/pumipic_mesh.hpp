@@ -8,8 +8,11 @@ namespace pumipic {
 
   class Mesh {
   public:
-    //Delete default compilers
-    Mesh() = delete;
+    //default constructor to build empty mesh prior to reading the mesh from file
+    Mesh();
+    //Delete copy constructor/assignment operator
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     //Constucts PIC parts with a core and the entire mesh as buffer/safe
     Mesh(Omega_h::Mesh& full_mesh, Omega_h::LOs partition_vector);
@@ -88,7 +91,8 @@ namespace pumipic {
 
     //Friend the read/write functions to
     friend void write(Mesh& picparts, const char* prefix);
-    friend Mesh read(Omega_h::CommPtr comm, const char* prefix);
+    friend void read(Omega_h::Library* library, Omega_h::CommPtr comm,
+                     const char* prefix, Mesh* picparts);
 
   private:
     Omega_h::CommPtr commptr;
@@ -129,7 +133,15 @@ namespace pumipic {
     ParticleBalancer* ptcl_balancer = NULL;
   };
 
-  //Save picparts to a file
+  /* Save picparts and osh mesh to files
+     Files are saved in directory: <prefix>_<num_ranks>.ppm/
+       Omega_h mesh is saved to <prefix>_<num_ranks>/<prefix>_<rank>.osh
+       Pumipic mesh is saved to <prefix>_<num_ranks>/<prefix>_<rank>.ppm
+     Files are compressed and maintained for big/little endian using Omega_h routines
+   */
   void write(Mesh& picparts, const char* prefix);
-  Mesh read(Omega_h::CommPtr comm, const char* prefix);
+  /* Reads picparts and osh mesh from files into picparts
+   */
+  void read(Omega_h::Library* library, Omega_h::CommPtr comm, const char* prefix,
+            Mesh* picparts);
 }

@@ -9,9 +9,10 @@ int main(int argc, char** argv) {
   Omega_h::Library& lib = pic_lib.omega_h_lib();
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  if (argc != 4) {
+  if (argc != 6) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition filename> "
+      fprintf(stderr, "Usage: %s <mesh> <partition filename>"
+              "<buffer method=[bfs|full]> <safe method=[bfs|full]>"
               "<output prefix>\n", argv[0]);
     return EXIT_FAILURE;
   }
@@ -26,32 +27,21 @@ int main(int argc, char** argv) {
     printf("Mesh loaded with <v e f r> %d %d %d %d\n", mesh.nverts(), mesh.nedges(),
            mesh.nfaces(), mesh.nelems());
 
-  //********* Load the partition vector ***********//
-  Omega_h::HostWrite<Omega_h::LO> host_owners(ne);
-  std::ifstream in_str(argv[2]);
-  if (!in_str) {
-    if (!rank)
-      fprintf(stderr,"Cannot open file %s\n", argv[2]);
-    return EXIT_FAILURE;
-  }
-  int own;
-  int index = 0;
-  while(in_str >> own)
-    host_owners[index++] = own;
-  //Owner of each element
-  Omega_h::Write<Omega_h::LO> owner(host_owners);
+  const auto bufferMethod = pumipic::Input::getMethod(argv[3]);
+  const auto safeMethod = pumipic::Input::getMethod(argv[4]);
+  assert(bufferMethod>=0);
+  assert(safeMethod>=0);
 
-  pumipic::Input input(mesh, pumipic::Input::PARTITION, owner, pumipic::Input::FULL,
-                       pumipic::Input::BFS);
+  pumipic::Input input(mesh, argv[2], bufferMethod, safeMethod);
   pumipic::Mesh picparts(input);
 
   //Write picparts to a file
-  pumipic::write(picparts, argv[3]);
+  pumipic::write(picparts, argv[5]);
 
 
   //Reread the picparts from file to a new mesh
   pumipic::Mesh read_picparts;
-  pumipic::read(&lib, picparts.comm(), argv[3], &read_picparts);
+  pumipic::read(&lib, picparts.comm(), argv[5], &read_picparts);
 
   /************Compare picparts vs read_picparts***********/
   //Check basic values

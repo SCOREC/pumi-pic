@@ -21,6 +21,7 @@ namespace pumipic {
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
     Kokkos::Profiling::pushRegion("CabM Rebuild");
+    //SetTimingVerbosity(1); // Uncomment for rebuild timing output
     Kokkos::Timer overall_timer; // timer for rebuild
 
     const auto num_new_ptcls = new_particle_elements.size();
@@ -47,7 +48,7 @@ namespace pumipic {
     lid_t num_removed = getLastValue(num_removed_d);
 
     // count and index new particles (atomic)
-    kkLidView particle_indices("particle_indices", num_new_ptcls);
+    kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_new_ptcls);
     if (num_new_ptcls > 0 && new_particles != NULL) {
       Kokkos::parallel_for("fill_ptcl_indices", num_new_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl) {
@@ -66,19 +67,19 @@ namespace pumipic {
     const lid_t newCapacity = newNumSoa*soa_len;
     auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
-    auto aosoa_cpy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
+    auto aosoa_copy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
         if (active.access(soa,tuple) == 1) {
-          //Compute the destSoa based on the destParent and an array of
-          // counters for each destParent tracking which particle is the next
-          // free position. Use atomic fetch and incriment with the
-          // 'elmPtclCounter_d' array.
+          // Compute the destSoa based on the destParent and an array of
+          //   counters for each destParent tracking which particle is the next
+          //   free position. Use atomic fetch and incriment with the
+          //   'elmPtclCounter_d' array.
           lid_t destParent = new_element(soa*soa_len + tuple);
           if ( destParent >= 0 ) { // delete particles with negative destination element
             lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
-            auto oldTuple = aosoa_cpy.getTuple(soa*soa_len + tuple);
-            lid_t firstSoa = newOffset_d(destParent);
             // use newOffset_d to figure out which soa is the first for destParent
+            const lid_t firstSoa = newOffset_d(destParent);
+            auto oldTuple = aosoa_copy.getTuple(soa*soa_len + tuple);
             newAosoa.setTuple(firstSoa*soa_len + occupiedTuples, oldTuple);
           }
         }
@@ -95,6 +96,13 @@ namespace pumipic {
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     setActive(aosoa_, elmDegree_d, parentElms_, offsets);
 
+    /*
+    auto pID = Cabana::slice<0>(aosoa_);
+    auto printPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+      printf("elm: %d, ptcl: %d, active: %d, id: %d\n", e, p, mask, pID(p));
+    };
+    parallel_for(printPtcls, "printPtcls");*/
+
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles
 
@@ -102,8 +110,8 @@ namespace pumipic {
     if (num_new_ptcls > 0 && new_particles != NULL) {
       kkLidView offsets_cpy = offsets; // copy of offsets (necessary, Kokkos doesn't like member variables)
       // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
-      kkLidView soa_indices("soa_indices", num_new_ptcls);
-      kkLidView soa_ptcl_indices("soa_ptcl_indices", num_new_ptcls);
+      kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), num_new_ptcls);
+      kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), num_new_ptcls);
       Kokkos::parallel_for("soa_and_ptcl", num_new_ptcls,
         KOKKOS_LAMBDA(const lid_t ptcl) {
           soa_indices(ptcl) = offsets_cpy(new_particle_elements(ptcl))
@@ -116,7 +124,7 @@ namespace pumipic {
     }
 
     RecordTime("CabM add particles", add_timer.seconds());
-    RecordTime("CSR rebuild", overall_timer.seconds());
+    RecordTime("CabM rebuild", overall_timer.seconds());
     Kokkos::Profiling::popRegion();
   }
 

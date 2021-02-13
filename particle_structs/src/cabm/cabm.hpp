@@ -88,7 +88,7 @@ namespace pumipic {
     */
     kkLidView buildOffset(const kkLidView particles_per_element) {
       auto particles_per_element_h = Kokkos::create_mirror_view_and_copy(host_space(), particles_per_element);
-      Kokkos::View<lid_t*,host_space> offsets_h("offsets_host", particles_per_element.size()+1);
+      Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
       // elem at i owns SoA offsets[i+1] - offsets[i]
       auto soa_len = AoSoA_t::vector_length;
       offsets_h(0) = 0;
@@ -96,7 +96,7 @@ namespace pumipic {
         const lid_t SoA_count = (particles_per_element_h(i)/soa_len) + 1;
         offsets_h(i+1) = SoA_count + offsets_h(i);
       }
-      kkLidView offsets_d("offsets_device", offsets_h.size());
+      kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
       hostToDevice(offsets_d, offsets_h.data());
       return offsets_d;
     }
@@ -125,7 +125,7 @@ namespace pumipic {
      * @return parent array, each element is an lid_t representing the parent element each SoA resides in
     */
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets ) {
-      Kokkos::View<lid_t*,host_space> elms_h("parentElms_host", num_soa);
+      Kokkos::View<lid_t*,host_space> elms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), num_soa);
       kkLidHostMirror offsets_h = create_mirror_view_and_copy(host_space(), offsets);
       for ( lid_t elm=0; elm<num_elements; elm++ )
         for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
@@ -183,8 +183,8 @@ namespace pumipic {
       const auto soa_len = AoSoA_t::vector_length;
 
       // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
-      kkLidView soa_indices("soa_indices", particle_elements.size());
-      kkLidView soa_ptcl_indices("soa_ptcl_indices", particle_elements.size());
+      kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), particle_elements.size());
+      kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), particle_elements.size());
       kkLidView offsets_copy = offsets; // copy of offsets since GPUs don't like member variables
       Kokkos::parallel_for("soa_and_ptcl", particle_elements.size(),
         KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -210,7 +210,7 @@ namespace pumipic {
 
       // create a pointer to the offsets array that we can access in a kokkos parallel_for
       kkLidView offset_copy = offsets;
-      kkLidView particle_indices("particle_indices", num_ptcls);
+      kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_ptcls);
       // View for tracking particle index in elements
       kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
       // atomic_fetch_add to increment from the beginning of each element

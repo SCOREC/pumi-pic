@@ -79,8 +79,10 @@ namespace pumipic {
             lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
             // use newOffset_d to figure out which soa is the first for destParent
             const lid_t firstSoa = newOffset_d(destParent);
-            auto oldTuple = aosoa_copy.getTuple(soa*soa_len + tuple);
-            newAosoa.setTuple(firstSoa*soa_len + occupiedTuples, oldTuple);
+            const lid_t destIdx = occupiedTuples%soa_len;
+            Cabana::Impl::tupleCopy(
+              newAosoa.access(firstSoa + occupiedTuples/soa_len), destIdx, // dest
+              aosoa_copy.access(soa), tuple); // src
           }
         }
       };

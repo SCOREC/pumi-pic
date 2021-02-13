@@ -54,7 +54,7 @@ namespace pumipic {
         KOKKOS_LAMBDA(const lid_t ptcl) {
           lid_t parent = new_particle_elements(ptcl);
           assert(parent >= 0); // new particles should have a destination element
-          particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(new_particle_elements(ptcl)),1);
+          particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
         });
     }
 

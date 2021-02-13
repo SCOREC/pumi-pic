@@ -379,7 +379,7 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
   auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool mask){
     if (mask) {
       new_element(p) = e;
-      if(p%7 == 0) {
+      if (p%7 == 0) {
         new_element(p) = -1;
         Kokkos::atomic_add(&(num_removed(0)), 1);
       }
@@ -407,13 +407,13 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
     const lid_t id = pID(p);
     const lid_t dest_elem = new_element(id);
     if (mask) {
-      if (dest_elem != e) {
-        printf("[ERROR] Particle %d was moved to incorrect element %d "
-               "(should be in element %d)\n", id, e, dest_elem);
-        failed(0) = 1;
-      }
       if (id % 7 == 0) {
         printf("[ERROR] Particle %d was not removed during rebuild\n", id);
+        failed(0) = 1;
+      }
+      else if (dest_elem != e) {
+        printf("[ERROR] Particle %d was moved to incorrect element %d "
+               "(should be in element %d)\n", id, e, dest_elem);
         failed(0) = 1;
       }
     }

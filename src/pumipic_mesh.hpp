@@ -98,7 +98,12 @@ namespace pumipic {
     Omega_h::CommPtr commptr;
     Omega_h::Mesh* picpart;
 
+
+    //Flag if the mesh was built with full buffer
     bool is_full_mesh;
+
+    //The global entity count of each dimension
+    Omega_h::GO num_entites[4];
 
     //*********************PICpart information**********************/
     //Number of core parts that are buffered (doesn't include self)

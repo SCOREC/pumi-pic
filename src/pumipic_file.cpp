@@ -80,11 +80,13 @@ namespace pumipic {
 #endif
     bool swap = !is_little_endian_cpu();
     //Write Version
-    Omega_h::I8 version = 1;
+    Omega_h::I8 version = 2;
     Omega_h::binary::write_value(out_str, version, swap);
     //Write is_full_mesh
     Omega_h::binary::write_value(out_str, (Omega_h::I8)picparts.is_full_mesh, swap);
     for (int i = 0; i < 4; ++i) {
+      //Write the global number of entities
+      Omega_h::binary::write_value(out_str, picparts.num_entites[i], swap);
       //Write num_cores
       Omega_h::binary::write_value(out_str, picparts.num_cores[i], swap);
       //Write buffered_parts
@@ -152,6 +154,10 @@ namespace pumipic {
     mesh->is_full_mesh = is_full_mesh_int;
 
     for (int i = 0; i < 4; ++i) {
+      if (version >= 2) {
+        //Read num_entites
+        Omega_h::binary::read_value(in_str, mesh->num_entites[i], swap);
+      }
       //Read num_cores
       Omega_h::binary::read_value(in_str, mesh->num_cores[i], swap);
       //Read buffered_parts
@@ -179,8 +185,23 @@ namespace pumipic {
     }
 
     mesh->commptr = comm;
+
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    if (!world_rank) {
+      char buffer[1024];
+      char* ptr = buffer + sprintf(buffer, "PumiPIC Mesh read <v e f");
+      if (mesh->dim() == 3)
+        ptr += sprintf(ptr, " r");
+      ptr += sprintf(ptr, "> (%ld %ld %ld", mesh->num_entites[0], mesh->num_entites[1],
+                     mesh->num_entites[2]);
+      if (mesh->dim() == 3)
+        ptr += sprintf(ptr, " %ld", mesh->num_entites[3]);
+      ptr += sprintf(ptr, ")");
+      printf("%s\n", buffer);
+    }
+
     //Create load balancer after reading in the mesh
     mesh->ptcl_balancer = new ParticleBalancer(*mesh);
-
   }
 }

@@ -333,7 +333,7 @@ int main(int argc, char** argv) {
   const int numargs = 7;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
-    auto args = " <ppm mesh> <numPtcls> "
+    auto args = "<ppm mesh> <numPtcls> "
       "<max initial model face> <maxIterations> "
       "<degrees per elliptical push>"
       "<enable prebarrier>";
@@ -415,7 +415,8 @@ int main(int argc, char** argv) {
 
   long int totNumReqPtcls = 0;
   const long int numPtclsPerRank_li = numPtclsPerRank;
-  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
   if (!comm_rank)
     fprintf(stderr, "particles requested %ld %ld\n", numPtcls, totNumReqPtcls);
 

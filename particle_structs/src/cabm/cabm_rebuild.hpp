@@ -61,7 +61,7 @@ namespace pumipic {
     RecordTime("CabM count active particles", overall_timer.seconds());
     Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
-    //prepare a new aosoa to store the shuffled particles
+    // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d);
     const lid_t newNumSoa = getLastValue(newOffset_d);
     const lid_t newCapacity = newNumSoa*soa_len;
@@ -88,7 +88,7 @@ namespace pumipic {
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
 
-    //destroy the old aosoa and use the new one in the CabanaM object
+    // destroy the old aosoa and use the new one in the CabanaM object
     aosoa_ = newAosoa;
     // update member variables (note that these are set before particle addition)
     num_soa_ = newNumSoa;
@@ -103,7 +103,8 @@ namespace pumipic {
     auto printPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       printf("elm: %d, ptcl: %d, active: %d, id: %d\n", e, p, mask, pID(p));
     };
-    parallel_for(printPtcls, "printPtcls");*/
+    parallel_for(printPtcls, "printPtcls");
+    */
 
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles

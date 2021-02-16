@@ -135,6 +135,7 @@ namespace pumipic {
       return elms_d;
     }
 
+    //---Attention User---  Do **not** call this function!
     /**
      * helper function: initializes last SoAs in AoSoA as active mask
      * where 1 denotes an active particle and 0 denotes an inactive particle.
@@ -170,6 +171,7 @@ namespace pumipic {
         }, "set_active");
     }
 
+    //---Attention User---  Do **not** call this function!
     /**
      * helper function: fills aosoa_ with particle data
      * @param[in] particle_indices - particle_elements[i] contains the index of particle i

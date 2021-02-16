@@ -209,7 +209,7 @@ bool rebuildNewElems(int ne_in, int np_in, int distribution) {
   };
   ps::parallel_for(cabm, setElement, "setElement");
 
-  //Rebuild with no changes
+  //Rebuild with moving particles
   cabm->rebuild(new_element);
 
   if (cabm->nPtcls() != np) {

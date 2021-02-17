@@ -6,6 +6,7 @@
 
 PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
+PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -79,6 +80,8 @@ int main(int argc, char* argv[]) {
     if(test_num > 0){ //1 or 2
       structures.push_back(std::make_pair("CSR",
                                       createCSR(num_elems, num_ptcls, ppe, element_gids)));
+      structures.push_back(std::make_pair("CabM",
+                                      createCabM(num_elems, num_ptcls, ppe, element_gids)));
     }
 
     const int ITERS = 100;
@@ -165,4 +168,8 @@ PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, i
 PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
   return new pumipic::CSR<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+}
+PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+  Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
+  return new pumipic::CabM<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }

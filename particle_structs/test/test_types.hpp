@@ -14,7 +14,7 @@ typedef ps::MemberTypes<int, Vector3, short, int> Types;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef typename ExeSpace::memory_space MemSpace;
 typedef typename ExeSpace::device_type Device;
-typedef ps::ParticleStructure<Types, MemSpace> PS;
+typedef ps::ParticleStructure<ps::SellCSigma<Types, MemSpace> > PS;
 typedef PS::kkLidView kkLidView;
 typedef PS::kkGidView kkGidView;
 typedef PS::kkLidHostMirror kkLidHost;

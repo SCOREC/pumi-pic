@@ -26,34 +26,36 @@ double prebarrier();
 
 
 template<class DataTypes, typename MemSpace = DefaultMemSpace>
-class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
+class SellCSigma {
  public:
 
   template <typename MSpace> using Mirror = SellCSigma<DataTypes, MSpace>;
-  using typename ParticleStructure<DataTypes, MemSpace>::Types;
-  using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
-  using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
-  using typename ParticleStructure<DataTypes, MemSpace>::device_type;
-  using typename ParticleStructure<DataTypes, MemSpace>::kkLidView;
-  using typename ParticleStructure<DataTypes, MemSpace>::kkGidView;
-  using typename ParticleStructure<DataTypes, MemSpace>::kkLidHostMirror;
-  using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
-  using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
+  typedef DataTypes Types;
+  typedef MemSpace Space;
+  typedef typename MemSpace::execution_space execution_space;
+  typedef typename MemSpace::memory_space memory_space;
+  typedef typename MemSpace::device_type device_type;
+  template <class T> using View = Kokkos::View<T*, device_type>;
+  typedef View<lid_t> kkLidView;
+  typedef View<gid_t> kkGidView;
+  typedef typename kkLidView::HostMirror kkLidHostMirror;
+  typedef typename kkGidView::HostMirror kkGidHostMirror;
 
-#ifdef PP_USE_CUDA
+  typedef MemberTypeViews MTVs;
+  template <std::size_t N> using DataType =
+    typename MemberTypeAtIndex<N, Types>::type;
+  template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
+
   template <std::size_t N>
-  using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
-#else
-  template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
-template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
-#endif
+  using Slice = Segment<DataType<N>, device_type>;
+
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
   typedef SCS_Input<DataTypes, MemSpace> Input_T;
 
   SellCSigma() = delete;
-  SellCSigma(const SellCSigma&) = delete;
+  SellCSigma(const SellCSigma& old) : policy(old.policy) { copy<MemSpace>(old);}
   SellCSigma& operator=(const SellCSigma&) = delete;
   /* Constructor of SellCSigma as particle structure
     p - a Kokkos::TeamPolicy that defines the value of C based on the device
@@ -67,28 +69,32 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
     particle_info - Initial values for the particle information (optional)
   */
   SellCSigma(PolicyType& p,
-             lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
+             lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements,
+             lid_t num_particles,
              kkLidView particles_per_element, kkGidView element_gids,
              kkLidView particle_elements = kkLidView(),
              MTVs particle_info = NULL);
   SellCSigma(SCS_Input<DataTypes, MemSpace>&);
   ~SellCSigma();
 
-  template <class MSpace>
-  Mirror<MSpace>* copy();
-
-  //Functions from ParticleStructure
-  using ParticleStructure<DataTypes, MemSpace>::nElems;
-  using ParticleStructure<DataTypes, MemSpace>::nPtcls;
-  using ParticleStructure<DataTypes, MemSpace>::capacity;
-  using ParticleStructure<DataTypes, MemSpace>::numRows;
-  using ParticleStructure<DataTypes, MemSpace>::copy;
+  lid_t nElems() const {return num_elems;}
+  lid_t nPtcls() const {return num_ptcls;}
+  lid_t capacity() const {return capacity_;}
+  lid_t numRows() const {return num_rows;}
 
   //Returns the horizontal slicing(C)
   lid_t C() const {return C_;}
   //Returns the vertical slicing(V)
   lid_t V() const {return V_;}
 
+
+  template <std::size_t N>
+  Slice<N> get() {
+    if (num_ptcls == 0)
+      return Slice<N>();
+    MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
+    return Slice<N>(*view);
+  }
 
   //Change whether or not to try shuffling
   void setShuffling(bool newS) {tryShuffling = newS;}
@@ -159,15 +165,15 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
   template <typename DT, typename MSpace> friend class SellCSigma;
  private:
-
-  //Variables from ParticleStructure
-  using ParticleStructure<DataTypes, MemSpace>::name;
-  using ParticleStructure<DataTypes, MemSpace>::num_elems;
-  using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
-  using ParticleStructure<DataTypes, MemSpace>::capacity_;
-  using ParticleStructure<DataTypes, MemSpace>::num_rows;
-  using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
-  using ParticleStructure<DataTypes, MemSpace>::num_types;
+  //Reference counter for
+  int* ref_count;
+  std::string name;
+  lid_t num_elems;
+  lid_t num_ptcls;
+  lid_t capacity_;
+  lid_t num_rows;
+  MTVs ptcl_data;
+  static constexpr std::size_t num_types = DataTypes::size;
 
   //The User defined kokkos policy
   PolicyType policy;
@@ -219,9 +225,13 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
                  kkGidView element_gids,
                  kkLidView particle_elements,
                  MTVs particle_info);
+
+  template <class MSpace>
+  void copy(const SellCSigma<DataTypes, MSpace>& old);
+
   void destroy();
 
-  SellCSigma(lid_t Cmax) : ParticleStructure<DataTypes, MemSpace>(), policy(PolicyType(1000,Cmax)) {};
+  // SellCSigma(lid_t Cmax) : policy(PolicyType(1000,Cmax)) {};
 
 };
 
@@ -287,7 +297,9 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
                                             kkGidView element_gids,
                                             kkLidView particle_elements,
                                             MTVs particle_info) :
-  ParticleStructure<DataTypes, MemSpace>(), policy(p), element_gid_to_lid(ne) {
+  policy(p), element_gid_to_lid(ne) {
+  ref_count = new int;
+  ++(*ref_count);
   //Set variables
   sigma = sig;
   V_ = v;
@@ -301,8 +313,10 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
 
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
-    ParticleStructure<DataTypes, MemSpace>(input.name), policy(input.policy),
+  name(input.name), policy(input.policy),
     element_gid_to_lid(input.ne) {
+  ref_count = new int;
+  ++(*ref_count);
   sigma = input.sig;
   V_ = input.V;
   num_elems = input.ne;
@@ -313,51 +327,120 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
 }
 
-template<class DataTypes, typename MemSpace>
-template <class MSpace>
-SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
-  Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(C_max);
-  //Call Particle structures copy
-  mirror_copy->copy(this);
-  //Copy constants
-  mirror_copy->C_ = C_;
-  mirror_copy->C_max = C_max;
-  mirror_copy->V_ = V_;
-  mirror_copy->sigma = sigma;
-  mirror_copy->num_chunks = num_chunks;
-  mirror_copy->num_slices = num_slices;
-  mirror_copy->current_size = current_size;
-  mirror_copy->swap_size = swap_size;
-  mirror_copy->extra_padding = extra_padding;
-  mirror_copy->shuffle_padding = shuffle_padding;
-  mirror_copy->pad_strat = pad_strat;
-  mirror_copy->tryShuffling = tryShuffling;
-  mirror_copy->num_empty_elements = num_empty_elements;
+  template <typename DataTypes, typename MemSpace>
+  template <class MSpace>
+  void SellCSigma<DataTypes, MemSpace>::copy(const SellCSigma<DataTypes, MSpace>& old){
+    //Copy simple values
+    num_elems = old.num_elems;
+    num_ptcls = old.num_ptcls;
+    capacity_ = old.capacity_;
+    num_rows = old.num_rows;
+    C_ = old.C_;
+    C_max = old.C_max;
+    V_ = old.V_;
+    sigma = old.sigma;
+    num_chunks = old.num_chunks;
+    num_slices = old.num_slices;
+    current_size = old.current_size;
+    swap_size = old.swap_size;
+    extra_padding = old.extra_padding;
+    shuffle_padding = old.shuffle_padding;
+    pad_strat = old.pad_strat;
+    tryShuffling = old.tryShuffling;
+    num_empty_elements = old.num_empty_elements;
 
-  //Create the swap space
-  mirror_copy->scs_data_swap = createMemberViews<DataTypes, memory_space>(swap_size);
-  //Deep copy each view
-  mirror_copy->slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
-                                                                   slice_to_chunk.size());
-  Kokkos::deep_copy(mirror_copy->slice_to_chunk, slice_to_chunk);
-  mirror_copy->particle_mask = typename Mirror<MSpace>::kkLidView("mirror particle_mask",
-                                                                  particle_mask.size());
-  Kokkos::deep_copy(mirror_copy->particle_mask, particle_mask);
-  mirror_copy->offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
-  Kokkos::deep_copy(mirror_copy->offsets, offsets);
-  mirror_copy->row_to_element = typename Mirror<MSpace>::kkLidView("mirror row_to_element",
-                                                                   row_to_element.size());
-  Kokkos::deep_copy(mirror_copy->row_to_element, row_to_element);
-  mirror_copy->element_to_row = typename Mirror<MSpace>::kkLidView("mirror element_to_row",
-                                                                   element_to_row.size());
-  Kokkos::deep_copy(mirror_copy->element_to_row, element_to_row);
-  mirror_copy->element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
-                                                                   element_to_gid.size());
-  Kokkos::deep_copy(mirror_copy->element_to_gid, element_to_gid);
-  //Deep copy the gid mapping
-  mirror_copy->element_gid_to_lid.create_copy_view(element_gid_to_lid);
-  return mirror_copy;
-}
+    //Copy arrays from MSpace to MemSpace
+    //TODO: change to is_accessible from Kokkos
+    if (std::is_same<typename MSpace::memory_space,
+        typename MemSpace::memory_space>::value) {
+      //Reference counter copy
+      ref_count = old.ref_count;
+      ++(*ref_count);
+      ptcl_data = old.ptcl_data;
+      slice_to_chunk = old.slice_to_chunk;
+      particle_mask = old.particle_mask;
+      offsets = old.offsets;
+      row_to_element = old.row_to_element;
+      element_to_row = old.element_to_row;
+      element_to_gid = old.element_to_gid;
+      scs_data_swap = old.scs_data_swap;
+      element_gid_to_lid = old.element_gid_to_lid;
+    }
+    else {
+      //Deep copy arrays
+      ref_count = new int;
+      ++(*ref_count);
+      ptcl_data = createMemberViews<DataTypes, MemSpace>(current_size);
+      CopyMemSpaceToMemSpace<MemSpace, MSpace, DataTypes>(ptcl_data, old.ptcl_data);
+      scs_data_swap = createMemberViews<DataTypes, MemSpace>(swap_size);
+      CopyMemSpaceToMemSpace<MemSpace, MSpace, DataTypes>(scs_data_swap,
+                                                          old.scs_data_swap);
+      slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
+                                                          old.slice_to_chunk.size());
+      Kokkos::deep_copy(slice_to_chunk, old.slice_to_chunk);
+      particle_mask = typename Mirror<MSpace>::kkLidView("mirror particle_mask",
+                                                         old.particle_mask.size());
+      Kokkos::deep_copy(particle_mask, old.particle_mask);
+      offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
+      Kokkos::deep_copy(offsets, old.offsets);
+      row_to_element = typename Mirror<MSpace>::kkLidView("mirror row_to_element",
+                                                          old.row_to_element.size());
+      Kokkos::deep_copy(row_to_element, old.row_to_element);
+      element_to_row = typename Mirror<MSpace>::kkLidView("mirror element_to_row",
+                                                          old.element_to_row.size());
+      Kokkos::deep_copy(element_to_row, old.element_to_row);
+      element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
+                                                          old.element_to_gid.size());
+      Kokkos::deep_copy(element_to_gid, old.element_to_gid);
+      //Deep copy the gid mapping
+      element_gid_to_lid.create_copy_view(old.element_gid_to_lid);
+    }
+  }
+// template<class DataTypes, typename MemSpace>
+// template <class MSpace>
+// SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
+//   Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(C_max);
+//   //Call Particle structures copy
+//   mirror_copy->copy(this);
+//   //Copy constants
+//   mirror_copy->C_ = C_;
+//   mirror_copy->C_max = C_max;
+//   mirror_copy->V_ = V_;
+//   mirror_copy->sigma = sigma;
+//   mirror_copy->num_chunks = num_chunks;
+//   mirror_copy->num_slices = num_slices;
+//   mirror_copy->current_size = current_size;
+//   mirror_copy->swap_size = swap_size;
+//   mirror_copy->extra_padding = extra_padding;
+//   mirror_copy->shuffle_padding = shuffle_padding;
+//   mirror_copy->pad_strat = pad_strat;
+//   mirror_copy->tryShuffling = tryShuffling;
+//   mirror_copy->num_empty_elements = num_empty_elements;
+
+//   //Create the swap space
+//   mirror_copy->scs_data_swap = createMemberViews<DataTypes, memory_space>(swap_size);
+//   //Deep copy each view
+//   mirror_copy->slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
+//                                                                    slice_to_chunk.size());
+//   Kokkos::deep_copy(mirror_copy->slice_to_chunk, slice_to_chunk);
+//   mirror_copy->particle_mask = typename Mirror<MSpace>::kkLidView("mirror particle_mask",
+//                                                                   particle_mask.size());
+//   Kokkos::deep_copy(mirror_copy->particle_mask, particle_mask);
+//   mirror_copy->offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
+//   Kokkos::deep_copy(mirror_copy->offsets, offsets);
+//   mirror_copy->row_to_element = typename Mirror<MSpace>::kkLidView("mirror row_to_element",
+//                                                                    row_to_element.size());
+//   Kokkos::deep_copy(mirror_copy->row_to_element, row_to_element);
+//   mirror_copy->element_to_row = typename Mirror<MSpace>::kkLidView("mirror element_to_row",
+//                                                                    element_to_row.size());
+//   Kokkos::deep_copy(mirror_copy->element_to_row, element_to_row);
+//   mirror_copy->element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
+//                                                                    element_to_gid.size());
+//   Kokkos::deep_copy(mirror_copy->element_to_gid, element_to_gid);
+//   //Deep copy the gid mapping
+//   mirror_copy->element_gid_to_lid.create_copy_view(element_gid_to_lid);
+//   return mirror_copy;
+// }
 
 
 template<class DataTypes, typename MemSpace>
@@ -367,7 +450,14 @@ void SellCSigma<DataTypes, MemSpace>::destroy() {
 }
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::~SellCSigma() {
-  destroy();
+  --(*ref_count);
+  if (*ref_count == 0) {
+    destroy();
+    delete ref_count;
+  }
+  if (*ref_count < 0) {
+    fprintf(stderr, "[ERROR] SCS ref counter went negative!\n");
+  }
 }
 
 

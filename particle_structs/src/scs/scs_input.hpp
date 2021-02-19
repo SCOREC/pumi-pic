@@ -15,9 +15,9 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class SCS_Input {
   public:
-    typedef typename ParticleStructure<DataTypes, MemSpace>::kkLidView kkLidView;
-    typedef typename ParticleStructure<DataTypes, MemSpace>::kkGidView kkGidView;
-    typedef typename ParticleStructure<DataTypes, MemSpace>::MTVs MTVs;
+    typedef typename SellCSigma<DataTypes, MemSpace>::kkLidView kkLidView;
+    typedef typename SellCSigma<DataTypes, MemSpace>::kkGidView kkGidView;
+    typedef typename SellCSigma<DataTypes, MemSpace>::MTVs MTVs;
     typedef Kokkos::TeamPolicy<typename MemSpace::execution_space> PolicyType;
     SCS_Input(PolicyType& p, lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements,
               lid_t num_particles, kkLidView particles_per_elements, kkGidView element_gids,

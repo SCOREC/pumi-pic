@@ -20,9 +20,8 @@ namespace pumipic {
   template <typename PS, typename... Types> struct CopyPSToPS;
 
   //Forward definition of parallel_for for particle structures
-  template <typename FunctionType, typename DataTypes, typename MemSpace>
-  void parallel_for(ParticleStructure<DataTypes, MemSpace>* ps,
-                    FunctionType& fn, std::string s="");
+  template <typename ParticleStructure, typename FunctionType>
+  void parallel_for(ParticleStructure* ps, FunctionType& fn, std::string s="");
 
 //Copy Particles To Send Templated Struct
   template <typename PS, typename... Types> struct CopyParticlesToSendImpl;
@@ -55,7 +54,7 @@ namespace pumipic {
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
-      parallel_for(ps, copyPSToArray);
+      ps->parallel_for(copyPSToArray);
       CopyParticlesToSendImpl<PS, Types...>(ps, dsts+1, srcs+1, ps_to_array,
                                             array_indices);
     }
@@ -99,7 +98,7 @@ namespace pumipic {
           CopyViewToView<T,Device>(dst, index, src, ptcl_id);
         }
       };
-      parallel_for(ps, copyPSToPS);
+      ps->parallel_for(copyPSToPS);
       CopyPSToPSImpl<PS, Types...>(ps, dsts+1, srcs+1, new_element, ps_indices);
     }
 

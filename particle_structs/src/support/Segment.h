@@ -12,8 +12,9 @@ namespace pumipic {
   class SubSegment;
 
 
-  template <typename Type, typename Device, typename MemoryAccessType=void,
-            int VectorLength = 0, int Stride = 1>
+  template <typename Type, typename Device,
+            typename MemoryAccessType=Cabana::DefaultAccessMemory,
+            int VectorLength = 1, int Stride = 1>
   class Segment {
   public:
     using Base=typename BaseType<Type>::type;

@@ -102,6 +102,8 @@ int main(int argc, char* argv[]) {
 
 template <typename PS>
 int runTests(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) {
+  int comm_size;
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   int fails = 0;
   fails += testCounts(name, structure, num_elems, num_ptcls);
   fails += testParticleExistence(name, structure, num_ptcls);
@@ -113,8 +115,9 @@ int runTests(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) 
   fails += testRebuild(name, structure);
   fails += testMigration(name, structure);
   fails += testCopy(name, structure);
-  fails += testSegmentComp(name, structure);
-  fails += migrateToEmptyAndRefill(name, structure);
+  // fails += testSegmentComp(name, structure);
+  // if (comm_size > 1)
+  //   fails += migrateToEmptyAndRefill(name, structure);
 
   return fails;
 }
@@ -143,7 +146,7 @@ int testSCSs(lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
             test_name.c_str(), comm_rank);
     ++fails;
   }
-
+  return fails;
   //Build SCS with C = 32, sigma = 1, V = 10
   test_name = "scs_C32_S1_V10";
   try {
@@ -434,90 +437,92 @@ template <typename PS>
 int testCopy(const char* name, PS* structure) {
   int fails = 0;
   //Copy particle structure to the host
-  // PS::Mirror<Kokkos::HostSpace>* host_structure = ps::copy<Kokkos::HostSpace>(structure);
-  // if (host_structure->nElems() != structure->nElems()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (host_structure->nPtcls() != structure->nPtcls()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy nPtcls() on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (host_structure->capacity() != structure->capacity()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy capacity() on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (host_structure->numRows() != structure->numRows()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy numRows() on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
+  typename PS::Mirror<Kokkos::HostSpace>* host_structure =
+    new typename PS::Mirror<Kokkos::HostSpace>(*structure);
+  if (host_structure->nElems() != structure->nElems()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->nPtcls() != structure->nPtcls()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nPtcls() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->capacity() != structure->capacity()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy capacity() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (host_structure->numRows() != structure->numRows()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy numRows() on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
   // //Copy particle structure back to the device
-  // PS* device_structure = ps::copy<DeviceSpace>(host_structure);
-  // delete host_structure;
-  // if (device_structure->nElems() != structure->nElems()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() back to device on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (device_structure->nPtcls() != structure->nPtcls()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy nPtcls() back to device on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (device_structure->capacity() != structure->capacity()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy capacity() back to device on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // if (device_structure->numRows() != structure->numRows()) {
-  //   fprintf(stderr, "[ERROR] Test %s: Failed to copy numRows() back to device on rank %d\n",
-  //           name, comm_rank);
-  //   ++fails;
-  // }
-  // //Compare original and new particle structure on the device
-  // auto ids1 = structure->template get<0>();
-  // auto ids2 = device_structure->template get<0>();
-  // auto dbls1 = structure->template get<1>();
-  // auto dbls2 = device_structure->template get<1>();
-  // double EPSILON = .00001;
-  // kkLidView failure("failure", 1);
-  // int local_rank = comm_rank;
-  // auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool mask) {
-  //   if (mask) {
-  //     if (ids1(pid) != ids2(pid)) {
-  //       printf("[ERROR] Particle ids do not match for particle %d "
-  //              "[(old) %d != %d (copy)] on rank %d\n", pid, ids1(pid),
-  //              ids2(pid), local_rank);
-  //       failure(0) = 1;
-  //     }
-  //     for (int i = 0; i < 3; ++i)
-  //       if (fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
-  //         printf("[ERROR] Particle's dbl %d does not match for particle %d"
-  //                "[(old) %.4f != %.4f (copy)] on rank %d\n", i, pid, dbls1(pid,i),
-  //                dbls2(pid,i), local_rank);
-  //         failure(0) = 1;
-  //     }
-  //   }
-  // };
-  // ps::parallel_for(structure, testTypes, "testTypes on original structure");
-  // if (ps::getLastValue<lid_t>(failure)) {
-  //   fprintf(stderr, "[ERROR] Test %s: Parallel for on original structure had failures\n",
-  //           name);
-  //   ++fails;
-  // }
+  PS* device_structure = new PS(*host_structure);
+  delete host_structure;
+  if (device_structure->nElems() != structure->nElems()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() back to device on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (device_structure->nPtcls() != structure->nPtcls()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy nPtcls() back to device on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (device_structure->capacity() != structure->capacity()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy capacity() back to device on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
+  if (device_structure->numRows() != structure->numRows()) {
+    fprintf(stderr, "[ERROR] Test %s: Failed to copy numRows() back to device on rank %d\n",
+            name, comm_rank);
+    ++fails;
+  }
 
-  // Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& i) {failure(i) = 0;});
-  // ps::parallel_for(device_structure, testTypes, "testTypes on copy of structure");
-  // if (ps::getLastValue<lid_t>(failure)) {
-  //   fprintf(stderr, "[ERROR] Test %s: Parallel for on device structure had failures\n",
-  //           name);
-  //   ++fails;
-  // }
-  // delete device_structure;
+  //Compare original and new particle structure on the device
+  auto ids1 = structure->template get<0>();
+  auto ids2 = device_structure->template get<0>();
+  auto dbls1 = structure->template get<1>();
+  auto dbls2 = device_structure->template get<1>();
+  double EPSILON = .00001;
+  kkLidView failure("failure", 1);
+  int local_rank = comm_rank;
+  auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool mask) {
+    if (mask) {
+      if (ids1(pid) != ids2(pid)) {
+        printf("[ERROR] Particle ids do not match for particle %d "
+               "[(old) %d != %d (copy)] on rank %d\n", pid, ids1(pid),
+               ids2(pid), local_rank);
+        failure(0) = 1;
+      }
+      for (int i = 0; i < 3; ++i)
+        if (fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
+          printf("[ERROR] Particle's dbl %d does not match for particle %d"
+                 "[(old) %.4f != %.4f (copy)] on rank %d\n", i, pid, dbls1(pid,i),
+                 dbls2(pid,i), local_rank);
+          failure(0) = 1;
+      }
+    }
+  };
+  ps::parallel_for(structure, testTypes, "testTypes on original structure");
+  if (ps::getLastValue<lid_t>(failure)) {
+    fprintf(stderr, "[ERROR] Test %s: Parallel for on original structure had failures\n",
+            name);
+    ++fails;
+  }
+
+  Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& i) {failure(i) = 0;});
+  ps::parallel_for(device_structure, testTypes, "testTypes on copy of structure");
+  if (ps::getLastValue<lid_t>(failure)) {
+    fprintf(stderr, "[ERROR] Test %s: Parallel for on device structure had failures\n",
+            name);
+    ++fails;
+  }
+  delete device_structure;
   return fails;
 }
 

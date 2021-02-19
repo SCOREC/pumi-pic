@@ -23,16 +23,14 @@ namespace pumipic {
     typedef typename DataStructure::memory_space memory_space;
     typedef typename DataStructure::execution_space execution_space;
     typedef typename DataStructure::device_type device_type;
-    template <typename Space2> using Mirror = ParticleStructure<typename DataStructure::Mirror<Space2> >;
+    template <typename NewSpace> using Mirror =
+      ParticleStructure<typename DataStructure::Mirror<NewSpace>>;
 
     typedef typename DataStructure::kkLidView kkLidView;
     typedef typename DataStructure::kkGidView kkGidView;
     typedef typename DataStructure::kkLidHostMirror kkLidHostMirror;
     typedef typename DataStructure::kkGidHostMirror kkGidHostMirror;
     typedef typename DataStructure::MTVs MTVs;
-    // template <std::size_t N> using DataType =
-    //   typename MemberTypeAtIndex<N, Types>::type;
-    // template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
     //Cabana Values for defining generic slice
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
     // static constexpr int vector_length =
@@ -48,11 +46,26 @@ namespace pumipic {
     //Create an empty particle structure (this should likely not be used)
     ParticleStructure();
     //Create a particle structure with a prebuilt data structure
-    // This results in a deep copy of the memory
+    // This will potentially require a deep copy of the memory
     ParticleStructure(const DataStructure& ds);
     //Constructs a particle structure using the data structure's inputs
     // The best option to construct the data structure directly
     ParticleStructure(typename DataStructure::Input_T& input);
+
+    //Copy the ParticleStructure from one memory space to another
+    //Note: This constructor only works if NewDS is not the same as DataStructure
+    template <typename Space>
+    ParticleStructure(const Mirror<Space>& old) :
+      structure(old.structure) {}
+    template <typename NewDS, typename =
+              typename std::enable_if<!std::is_same<DataStructure, NewDS>::value>::type>
+    ParticleStructure<DataStructure>& operator=(const ParticleStructure<NewDS>& old) {
+      structure = old.structure;
+      return *this;
+    }
+    //Disallow copying/assigning when the templates are the same
+    ParticleStructure(const ParticleStructure& old) = delete;
+    ParticleStructure& operator=(const ParticleStructure& old) = delete;
     ~ParticleStructure() {}
 
     const std::string& getName() const {return structure.getName();}
@@ -96,27 +109,6 @@ namespace pumipic {
     };
   private:
     DataStructure structure;
-
-    /*
-      Copy a particle structure to another memory space
-      Note: if the same memory space is used then a the data is not duplicated
-    */
-    // template <class Space2>
-    // void copy(Mirror<Space2>* old) {
-    //   num_elems = old->num_elems;
-    //   num_ptcls = old->num_ptcls;
-    //   capacity_ = old->capacity_;
-    //   num_rows = old->num_rows;
-    //   if (std::is_same<memory_space, typename Space2::memory_space>::value) {
-    //     ptcl_data = old->ptcl_data;
-    //   }
-    //   else {
-    //     auto first_data_view = static_cast<MTV<0>*>(old->ptcl_data[0]);
-    //     int s = first_data_view->size() / BaseType<DataType<0> >::size;
-    //     ptcl_data = createMemberViews<DataTypes, Space>(s);
-    //     CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, old->ptcl_data);
-    //   }
-    // }
 
     /* Friend will all structures
        Note: We only need to friend with structures that are of the same class

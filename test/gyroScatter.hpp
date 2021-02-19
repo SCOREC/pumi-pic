@@ -49,10 +49,10 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   const int V = 64;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   PSpt::kkGidView empty_gids("empty_gids", 0);
-  PSpt* gyro_ps = new ps::SellCSigma<Point>(policy, sigma, V,
-                                            mesh->nelems(), num_points,
-                                            ptcls_per_elem, empty_gids,
-                                            point_element, point_info);
+  PSpt* gyro_ps = new PSpt(ps::SellCSigma<Point>(policy, sigma, V,
+                                                 mesh->nelems(), num_points,
+                                                 ptcls_per_elem, empty_gids,
+                                                 point_element, point_info));
   printf("created ps for gyro mapping with %d points and %d elms\n",
       num_points, mesh->nelems());
 

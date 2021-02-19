@@ -15,7 +15,7 @@ namespace p = pumipic;
 namespace ps = particle_structs;
 
 typedef MemberTypes<Vector3d, Vector3d, int> Point;
-typedef ps::ParticleStructure<Point> PSpt;
+typedef ps::ParticleStructure<SellCSigma<Point> > PSpt;
 
 //To demonstrate push and adjacency search we store:
 //-two fp_t[3] arrays, 'Vector3d', for the current and
@@ -25,6 +25,6 @@ typedef ps::ParticleStructure<Point> PSpt;
 // that defines the ellipse
 //-a float to store the angle of the particle in polar coordinates
 typedef MemberTypes<Vector3d, Vector3d, int, float, float> Particle;
-typedef ps::ParticleStructure<Particle> PS;
+typedef ps::ParticleStructure<SellCSigma<Particle> > PS;
 
 #endif

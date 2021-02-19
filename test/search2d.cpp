@@ -7,7 +7,6 @@
 #include <fstream>
 
 using particle_structs::lid_t;
-using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
 using pumipic::fp_t;
 using pumipic::Vector3d;
@@ -20,7 +19,7 @@ namespace p = pumipic;
 // computed (pre adjacency search) positions, and
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
-typedef ps::ParticleStructure<Particle> PS;
+typedef ps::ParticleStructure<ps::SellCSigma<Particle>> PS;
 
 void setPtclIds(PS* ptcls) {
   auto pid_d = ptcls->get<2>();
@@ -145,8 +144,8 @@ void particleSearch(p::Mesh& picparts,
   const int V = 32;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-                                       ptcls_per_elem, element_gids);
+  PS* ptcls = new PS(ps::SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+                                              ptcls_per_elem, element_gids));
   auto cells2nodes = mesh->get_adj(o::FACE, o::VERT).ab2b;
   auto nodes2coords = mesh->coords();
   //set particle positions

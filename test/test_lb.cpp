@@ -8,7 +8,7 @@
 
 
 typedef pumipic::MemberTypes<int> Particle;
-typedef pumipic::ParticleStructure<Particle> PS;
+typedef pumipic::ParticleStructure<pumipic::SellCSigma<Particle>> PS;
 
 void printImb(PS* ptcls);
 void balancePtcls(pumipic::Mesh& picparts, PS* ptcls, pumipic::ParticleBalancer& balancer);
@@ -85,8 +85,10 @@ int main(int argc, char** argv) {
   const int C = 32;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, C);
 
-  PS* ptcls = new pumipic::SellCSigma<Particle>(policy, sigma, V, picparts->nelems(),
-                                                num_ptcls, ptcls_per_elem, element_gids);
+  PS* ptcls = new PS(pumipic::SellCSigma<Particle>(policy, sigma, V,
+                                                   picparts->nelems(),
+                                                   num_ptcls, ptcls_per_elem,
+                                                   element_gids));
 
   printImb(ptcls);
 

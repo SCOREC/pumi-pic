@@ -142,8 +142,8 @@ int main(int argc, char** argv) {
   const int V = 32;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
-                                       ptcls_per_elem, element_gids);
+  PS* ptcls = new PS(ps::SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
+                                              ptcls_per_elem, element_gids));
   setInitialPtclCoords(picparts, ptcls);
   setPtclIds(ptcls);
 

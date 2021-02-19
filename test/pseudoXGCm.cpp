@@ -463,7 +463,8 @@ int main(int argc, char** argv) {
     //0% padding at the end -> rebuild will need to reallocate if the structure expands
     scs_input.extra_padding = 0;
     scs_input.name = "ps";
-    ps::ParticleStructure<Particle>* ptcls = new SellCSigma<Particle>(scs_input);
+    ps::ParticleStructure<SellCSigma<Particle> >* ptcls =
+      new ps::ParticleStructure<SellCSigma<Particle>>(scs_input);
     setInitialPtclCoords(picparts, ptcls, output);
     setPtclIds(ptcls);
 

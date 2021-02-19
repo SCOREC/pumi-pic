@@ -10,7 +10,6 @@
 #define NUM_ITERATIONS 30
 
 using particle_structs::lid_t;
-using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
 using pumipic::fp_t;
 using pumipic::Vector3d;
@@ -24,7 +23,7 @@ namespace ps = particle_structs;
 // computed (pre adjacency search) positions, and
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
-typedef ps::ParticleStructure<Particle> PS;
+typedef ps::ParticleStructure<ps::SellCSigma<Particle> > PS;
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
@@ -199,8 +198,8 @@ void search(p::Mesh& picparts, PS* ptcls, bool output) {
   auto pid = ptcls->get<2>();
   o::Write<o::Real> xpoints_d(3 * psCapacity, "intersection points");
   o::Write<o::LO> xface_id(psCapacity, "intersection faces");
-  bool isFound = p::search_mesh<Particle>(*mesh, ptcls, x, xtgt, pid, elem_ids,
-                                          xpoints_d, xface_id, maxLoops);
+  bool isFound = p::search_mesh(*mesh, ptcls, x, xtgt, pid, elem_ids,
+                                xpoints_d, xface_id, maxLoops);
   fprintf(stderr, "search_mesh (seconds) %f\n", timer.seconds());
   assert(isFound);
   //rebuild the PS to set the new element-to-particle lists
@@ -469,8 +468,8 @@ int main(int argc, char** argv) {
   const int V = 1024;
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
   //Create the particle structure
-  PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
-                                       ptcls_per_elem, element_gids);
+  PS* ptcls = new PS(ps::SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
+                                              ptcls_per_elem, element_gids));
   setInitialPtclCoords(picparts, ptcls, output);
   setPtclIds(ptcls);
 

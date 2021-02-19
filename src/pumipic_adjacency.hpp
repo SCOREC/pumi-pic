@@ -258,13 +258,9 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO,
   return o::gather_vectors<4, 3>(a, v);
 }
 
-//How to avoid redefining the MemberType? each application will define it
-//differently. Templating search_mesh with
-//template < typename ParticleType >
-//results in an error on get<> as an unresolved function.
 
-template < class ParticleType, typename Segment3d, typename SegmentInt>
-bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
+template < class ParticleStructure, typename Segment3d, typename SegmentInt>
+bool search_mesh(o::Mesh& mesh, ParticleStructure* ptcls,
                  Segment3d x_ps_d, Segment3d xtgt_ps_d, SegmentInt pid_d,
                  o::Write<o::LO> elem_ids, o::Write<o::Real> xpoints_d,
                  o::Write<o::LO> xface_id, int looplimit=0) {
@@ -432,12 +428,12 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
 
 template < class ParticleStruct, typename Segment3d, typename SegmentInt>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
-                 ParticleStruct* ptcls, // (in) particle structure
-                 Segment3d x_ps_d, // (in) starting particle positions
-                 Segment3d xtgt_ps_d, // (in) target particle positions
-                 SegmentInt pid_d, // (in) particle ids
-                 o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
-                 int looplimit=0) {
+                    ParticleStruct* ptcls, // (in) particle structure
+                    Segment3d x_ps_d, // (in) starting particle positions
+                    Segment3d xtgt_ps_d, // (in) target particle positions
+                    SegmentInt pid_d, // (in) particle ids
+                    o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
+                    int looplimit=0) {
   const auto btime = pumipic_prebarrier();
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
   Kokkos::Timer timer;

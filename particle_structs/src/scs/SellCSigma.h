@@ -7,13 +7,13 @@
 #include <mpi.h>
 #include <unordered_map>
 #include <climits>
-#include <particle_structure.hpp>
 #include <ppAssert.h>
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Sort.hpp>
 #include "SCSPair.h"
 #include "scs_input.hpp"
+#include <particle_structs.hpp>
 #ifdef PP_USE_CUDA
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
@@ -510,6 +510,9 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
       });
     });
   });
+#ifdef PP_USE_CUDA
+  cudaFree(fn_d);
+#endif
 }
 
 } // end namespace pumipic

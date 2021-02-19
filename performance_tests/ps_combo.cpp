@@ -72,14 +72,16 @@ int main(int argc, char* argv[]) {
 
     /* Create particle structure */
     ParticleStructures structures;
-    if(test_num % 2 == 0){ //0 or 2
+    if(test_num == 0){ //0 or 2
       structures.push_back(std::make_pair("Sell-"+std::to_string(team_size)+"-ne",
                                       createSCS(num_elems, num_ptcls, ppe, element_gids,
                                                 team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne")));
     }
-    if(test_num > 0){ //1 or 2
+    if(test_num == 1){ //1 or 2
       structures.push_back(std::make_pair("CSR",
                                       createCSR(num_elems, num_ptcls, ppe, element_gids)));
+    }
+    if(test_num == 2){
       structures.push_back(std::make_pair("CabM",
                                       createCabM(num_elems, num_ptcls, ppe, element_gids)));
     }

@@ -13,7 +13,7 @@ namespace pumipic {
     auto particles_per_element_h = Kokkos::create_mirror_view_and_copy(host_space(), particles_per_element);
     Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
     // elem at i owns SoA offsets[i+1] - offsets[i]
-    auto soa_len = AoSoA_t::vector_length;
+    const auto soa_len = AoSoA_t::vector_length;
     offsets_h(0) = 0;
     for ( lid_t i=0; i<particles_per_element.size(); i++ ) {
     const lid_t SoA_count = (particles_per_element_h(i)/soa_len) + 1;

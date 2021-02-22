@@ -1,24 +1,30 @@
 # build-...-pumipic/performance_tests/output_convert.py
 
 # Usage:    ./ps_combo $e $((e*1000)) $distribution -p $percent -n $struct
-#           python output_convert.py
-# Input: "filename"
+#           python output_convert.py input_filename rebuild_output_filename push_output_filename
 
+import sys
 
 # Formatting output from testing to comparison of rebuild/pseudopush
-filename = input("Name of testing file: ").strip()
-file = open(filename, "r")
+n = len(sys.argv)
+assert( n == 4 )
+
+inputfile = sys.argv[1]
+rebuildfile = sys.argv[2]
+pushfile = sys.argv[3]
+
+file = open(inputfile, "r")
 lines = file.readlines()
 file.close()
 
 edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push",
-              "CSR rebuild", "CSR pseudo-push",
-              "CabM rebuild", "CabM pseudo-push" ]
+            "CSR rebuild", "CSR pseudo-push",
+            "CabM rebuild", "CabM pseudo-push" ]
 
 elms = 0
 
-rebuild = open("rebuild_data.dat", "w")
-push = open("push_data.dat", "w")
+rebuild = open(rebuildfile, "w")
+push = open(pushfile, "w")
 for line in lines:
     # command line
     if "./" in line:

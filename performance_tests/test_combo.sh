@@ -1,7 +1,7 @@
 #!/bin/bash
 # Bash script to run a series of ps_combo tests
 
-for e in 1000 5000 #10000 25000 38000 50000 75000 100000
+for e in 1000 5000 10000 25000 38000 50000 75000 100000
 do
   for distribution in 3
   do 

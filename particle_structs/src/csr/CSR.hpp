@@ -154,14 +154,6 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-                                         Distributor<MemSpace> dist,
-                                         kkLidView new_particle_elements,
-                                         MTVs new_particle_info) {
-    fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
-  }
-
-  template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
     if (nPtcls() == 0)
@@ -203,3 +195,4 @@ namespace pumipic {
 } //end namespace pumipic
 
 #include "CSR_rebuild.hpp"
+#include "CSR_migrate.hpp"

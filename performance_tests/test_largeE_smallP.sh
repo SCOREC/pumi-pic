@@ -2,7 +2,7 @@
 # Bash script to run a series of ps_combo tests
 
 # large elm n, small ptcl n
-for e in 0 2500 5000 7500 10000 12500 15000 17500 20000
+for e in 2500 5000 7500 10000 12500 15000 17500 20000
 do
   for distribution in 1 2 3
   do 

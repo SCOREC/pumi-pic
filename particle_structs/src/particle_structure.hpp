@@ -51,6 +51,10 @@ namespace pumipic {
       return Slice<N>(*view);
     }
 
+    //CSR specific functions (no effect in SCS)
+    virtual void setTeamSize(lid_t size) = 0;
+    virtual lid_t getTeamSize() const = 0;
+
 
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;

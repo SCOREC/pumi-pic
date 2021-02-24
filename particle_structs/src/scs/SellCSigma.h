@@ -89,6 +89,9 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   //Returns the vertical slicing(V)
   lid_t V() const {return V_;}
 
+  lid_t getTeamSize() const { return C_; }
+  void setTeamSize(lid_t size) {}
+
 
   //Change whether or not to try shuffling
   void setShuffling(bool newS) {tryShuffling = newS;}

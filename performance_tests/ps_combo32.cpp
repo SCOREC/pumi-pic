@@ -4,9 +4,9 @@
 #include "../particle_structs/test/Distribute.h"
 #include <string>
 
-PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
-PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
-PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
+PS32* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
+PS32* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
+PS32* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
 
     /* Create particle structure */
-    ParticleStructures structures;
+    ParticleStructures32 structures;
     if(test_num == 0){
       structures.push_back(std::make_pair("Sell-"+std::to_string(team_size)+"-ne",
                                       createSCS(num_elems, num_ptcls, ppe, element_gids,
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     /* Perform push & rebuild on the particle structures */
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
-      PS* ptcls = structures[i].second;
+      PS32* ptcls = structures[i].second;
       printf("Beginning push on structure %s\n", name.c_str());
 
       //Per element data to access in pseudoPush
@@ -109,12 +109,10 @@ int main(int argc, char* argv[]) {
 
       auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
         if(mask){
-          dbls(p,0) = 10.3;
-          dbls(p,1) = 10.3;
-          dbls(p,2) = 10.3;
-          dbls(p,0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e);
-          dbls(p,1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e);
-          dbls(p,2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e);
+          for (int i = 0; i < 32; i++) {
+            dbls(p,i) = 10.3;
+            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
+          }
           nums(p) = p;
           dbl(p)  = parentElmData(e);
         }
@@ -161,17 +159,17 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-PS* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
+PS32* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(4, C);
-  pumipic::SCS_Input<PerfTypes> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::SCS_Input<PerfTypes32> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
   input.name = name;
-  return new pumipic::SellCSigma<PerfTypes, MemSpace>(input);
+  return new pumipic::SellCSigma<PerfTypes32, MemSpace>(input);
 }
-PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+PS32* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
-  return new pumipic::CSR<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+  return new pumipic::CSR<PerfTypes32, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }
-PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+PS32* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
-  return new pumipic::CabM<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+  return new pumipic::CabM<PerfTypes32, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }

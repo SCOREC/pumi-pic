@@ -17,7 +17,6 @@ set(SOURCES
   pumipic_input.cpp
   pumipic_part_construct.cpp
   pumipic_comm.cpp
-  pumipic_utils.cpp
   pumipic_kktypes.cpp
   pumipic_mesh.cpp
   pumipic_library.cpp

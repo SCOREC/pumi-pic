@@ -31,9 +31,9 @@ int main(int argc, char** argv) {
 
     Omega_h::Few<Omega_h::Vector<3>, 3> face; //{a,b,d};
 
-    g::get_face_coords( M, 1, face);
-    Omega_h::LO edge = -1;
-    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, edge);
+    //p::get_face_coords( M, 1, face);
+    //Omega_h::LO edge = -1;
+    bool res = false;// g::line_triangle_intx_simple(face, orig, dest, xpoint, edge);
     if(res)
     {
   #if DEBUG>0
@@ -87,8 +87,8 @@ int main(int argc, char** argv) {
   }
 
   Omega_h::Vector<3> xpoint;
-  Omega_h::LO edge=0;
-  bool res = pumipic::line_triangle_intx_simple(tri, orig, dest, xpoint, edge);
+  //Omega_h::LO edge=0;
+  bool res = false; //pumipic::line_triangle_intx_simple(tri, orig, dest, xpoint, edge);
 
 #if DEBUG>0
   if(res)

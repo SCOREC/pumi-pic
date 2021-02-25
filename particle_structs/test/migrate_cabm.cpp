@@ -5,12 +5,12 @@
 #include "Distribute.h"
 #include <mpi.h>
 
-using particle_structs::SellCSigma;
+using particle_structs::CabM;
 using particle_structs::MemberTypes;
 
 typedef MemberTypes<int, double[3]> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef SellCSigma<Type, exe_space> SCS;
+typedef CabM<Type, exe_space> CabanaM;
 
 bool sendToOne(int ne, int np);
 
@@ -34,25 +34,21 @@ int main(int argc, char* argv[]) {
   distribute_particles(ne, np, 2, ptcls_per_elem, ids);
   delete [] ids;
   {
-    SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-    SCS::kkGidView element_gids_v("element_gids_v", ne);
+    CabanaM::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+    CabanaM::kkGidView element_gids_v("element_gids_v", ne);
     particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
     particle_structs::hostToDevice(element_gids_v, gids);
     delete [] ptcls_per_elem;
     delete [] gids;
     Kokkos::TeamPolicy<exe_space> po(4, 32);
-    SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
+    CabanaM* cabm = new CabanaM(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
-    char rank_str[100];
-    sprintf(rank_str,"Format for rank %d", comm_rank);
-    scs->printFormat(rank_str);
+    typedef CabanaM::kkLidView kkLidView;
+    kkLidView new_element("new_element", cabm->capacity());
+    kkLidView new_process("new_process", cabm->capacity());
 
-    typedef SCS::kkLidView kkLidView;
-    kkLidView new_element("new_element", scs->capacity());
-    kkLidView new_process("new_process", scs->capacity());
-
-    auto int_slice = scs->get<0>();
-    auto double3_slice = scs->get<1>();
+    auto int_slice = cabm->get<0>();
+    auto double3_slice = cabm->get<1>();
 
     auto setValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       int_slice(ptcl_id) = comm_rank;
@@ -60,29 +56,29 @@ int main(int argc, char* argv[]) {
       double3_slice(ptcl_id, 1) = (comm_rank + 1) * elm_id;
       double3_slice(ptcl_id, 2) = mask;
     };
-    scs->parallel_for(setValues);
+    cabm->parallel_for(setValues);
     //Send half the particles right one process except on rank 0
     if (comm_rank > 0) {
       auto setElmProcess = PS_LAMBDA(int element_id, int particle_id, int mask) {
         new_element(particle_id) = element_id;
         new_process(particle_id) = (comm_rank + (element_id==4)) % comm_size;
       };
-      scs->parallel_for(setElmProcess);
+      cabm->parallel_for(setElmProcess);
     }
     else {
       auto setElmProcess = PS_LAMBDA(int element_id, int particle_id, int mask) {
         new_element(particle_id) = element_id;
         new_process(particle_id) = comm_rank;
       };
-      scs->parallel_for(setElmProcess);
+      cabm->parallel_for(setElmProcess);
     }
 
-    scs->migrate(new_element, new_process);
+    cabm->migrate(new_element, new_process);
 
 
-    int_slice = scs->get<0>();
-    double3_slice = scs->get<1>();
-    SCS::kkLidView fail("fail", 1);
+    int_slice = cabm->get<0>();
+    double3_slice = cabm->get<1>();
+    CabanaM::kkLidView fail("fail", 1);
     auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       if (mask && mask != double3_slice(ptcl_id, 2)) {
         printf("%d mask failure on ptcl %d (%d, %f)\n", comm_rank, ptcl_id, mask,
@@ -98,16 +94,15 @@ int main(int argc, char* argv[]) {
         fail(0) = 1;
       }
     };
-    scs->parallel_for(checkValues);
+    cabm->parallel_for(checkValues);
     MPI_Barrier(MPI_COMM_WORLD);
-    scs->printFormat(rank_str);
 
     int f = particle_structs::getLastValue(fail);
     if (f == 1) {
       printf("Migration of values failed on rank %d\n", comm_rank);
       fails++;
     }
-    delete scs;
+    delete cabm;
   }
 
   if (!sendToOne(5000, 100000)) {
@@ -120,7 +115,7 @@ int main(int argc, char* argv[]) {
   MPI_Finalize();
   if (comm_rank == 0 && total_fails == 0)
     printf("All tests passed\n");
-  return 0;
+  return fails;
 }
 
 bool sendToOne(int ne, int np) {
@@ -139,23 +134,21 @@ bool sendToOne(int ne, int np) {
   delete [] ids;
 
 
-  SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-  SCS::kkGidView element_gids_v("element_gids_v", ne);
+  CabanaM::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+  CabanaM::kkGidView element_gids_v("element_gids_v", ne);
   particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
   particle_structs::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
   Kokkos::TeamPolicy<exe_space> po(4, 32);
-  int sigma = ne;
-  int V = 100;
-  SCS* scs = new SCS(po, sigma, V, ne, np, ptcls_per_elem_v, element_gids_v);
+  CabanaM* cabm = new CabanaM(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
-  typedef SCS::kkLidView kkLidView;
-  kkLidView new_element("new_element", scs->capacity());
-  kkLidView new_process("new_process", scs->capacity());
+  typedef CabanaM::kkLidView kkLidView;
+  kkLidView new_element("new_element", cabm->capacity());
+  kkLidView new_process("new_process", cabm->capacity());
 
-  auto int_slice = scs->get<0>();
-  auto double_slice = scs->get<1>();
+  auto int_slice = cabm->get<0>();
+  auto double_slice = cabm->get<1>();
 
   auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
     int_slice(ptcl_id) = comm_rank;
@@ -166,11 +159,11 @@ bool sendToOne(int ne, int np) {
       new_process[ptcl_id] = comm_rank;
     new_element[ptcl_id] = elem_id;
   };
-  scs->parallel_for(setValues);
+  cabm->parallel_for(setValues);
 
-  scs->migrate(new_element, new_process);
+  cabm->migrate(new_element, new_process);
 
-  int nPtcls = scs->nPtcls();
+  int nPtcls = cabm->nPtcls();
   if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np * 1.0/100) {
     fprintf(stderr, "Rank 0 has incorrect number of particles (%d != %d)\n",
             nPtcls, np + (comm_size - 1) * np/100);
@@ -182,8 +175,8 @@ bool sendToOne(int ne, int np) {
     return false;
   }
 
-  int_slice = scs->get<0>();
-  double_slice = scs->get<1>();
+  int_slice = cabm->get<0>();
+  double_slice = cabm->get<1>();
   kkLidView fail("fail", 1);
   auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
     if (mask) {
@@ -195,7 +188,7 @@ bool sendToOne(int ne, int np) {
       }
     }
   };
-  scs->parallel_for(checkValues);
+  cabm->parallel_for(checkValues);
   int f = particle_structs::getLastValue(fail);
   return f == 0;
 }

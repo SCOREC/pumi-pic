@@ -56,6 +56,8 @@ namespace pumipic {
     lid_t getTeamSize() const { return team_size_; }
     void setTeamSize(lid_t size) { team_size_ = size; }
 
+    void histogram(std::string filename) const;
+
     //---Attention User---  Do **not** call this function! {
     /**
      * (in) particle_elements - particle_elements[i] contains the id (index)
@@ -106,6 +108,22 @@ namespace pumipic {
 
     lid_t team_size_;
   };
+
+  template <class DataTypes, typename MemSpace>
+  void CSR<DataTypes, MemSpace>::histogram(std::string filename) const {
+    kkLidView elemCap("elemCap",num_elems);
+    auto calc_hist = PS_LAMBDA(lid_t e, lid_t p, bool mask){
+      Kokkos::atomic_increment(&elemCap(e));
+    };
+
+    //std::ofstream hist;
+    //hist.open(filename+".txt");
+    for(lid_t i = 0; i < offsets.size()/1000; i++){
+      //hist<< elemCap(i) << std::endl;
+      printf("Elem %d : %d", i, elemCap(i));
+    }
+    //hist.close();
+  }
 
 
   template <class DataTypes, typename MemSpace>

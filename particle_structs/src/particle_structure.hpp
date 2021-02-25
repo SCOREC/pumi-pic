@@ -38,6 +38,8 @@ namespace pumipic {
     lid_t capacity() const {return capacity_;}
     lid_t numRows() const {return num_rows;}
 
+    virtual void histogram(std::string filename) const = 0;
+
     /* Provides access to the particle info for Nth time of each particle
 
        The segment is indexed by particle index first followed by indices for each

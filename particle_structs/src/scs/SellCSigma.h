@@ -92,6 +92,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   lid_t getTeamSize() const { return C_; }
   void setTeamSize(lid_t size) {}
 
+  void histogram(std::string filename) const;
+
 
   //Change whether or not to try shuffling
   void setShuffling(bool newS) {tryShuffling = newS;}
@@ -227,6 +229,21 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   SellCSigma(lid_t Cmax) : ParticleStructure<DataTypes, MemSpace>(), policy(PolicyType(1000,Cmax)) {};
 
 };
+
+template<class DataTypes, typename MemSpace>
+void SellCSigma<DataTypes,MemSpace>::histogram(std::string filename) const {
+  kkLidView elemCap("elemCap",num_elems);
+  auto calc_hist = PS_LAMBDA(lid_t e, lid_t p, bool mask){
+    Kokkos::atomic_fetch_add(&elemCap(e), mask);
+  };
+
+  std::ofstream histogram;
+  histogram.open(filename+".txt");
+  for(lid_t i = 0; i < offsets.size(); i++){
+    histogram << elemCap(i) << std::endl;
+  }
+  histogram.close();
+}
 
 template<class DataTypes, typename MemSpace>
 void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,

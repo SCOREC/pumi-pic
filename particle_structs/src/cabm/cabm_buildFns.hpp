@@ -5,7 +5,7 @@ namespace pumipic {
   /**
    * helper function: Builds the offset array for the CSR structure
    * @param[in] particles_per_element View representing the number of active elements in each SoA
-   * @return offset array (each element is the first index of each SoA block)
+   * @return offset view (each element is the first index of each SoA block)
   */
   template<class DataTypes, typename MemSpace>
   typename ParticleStructure<DataTypes, MemSpace>::kkLidView
@@ -46,8 +46,8 @@ namespace pumipic {
    * @param[in] num_elements total number of element SoAs in AoSoA
    * @param[in] num_soa total number of SoAs (can be greater than elem_count if
    * any element of deg is _vector_length)
-   * @param[in] offsets offset array for AoSoA, built by buildOffset
-   * @return parent array, each element is an lid_t representing the parent element each SoA resides in
+   * @param[in] offsets offset view for AoSoA, built by buildOffset
+   * @return parent view, each element is an lid_t representing the parent element each SoA resides in
   */
   template<class DataTypes, typename MemSpace>
   typename ParticleStructure<DataTypes, MemSpace>::kkLidView
@@ -66,7 +66,7 @@ namespace pumipic {
    * helper function: initializes last SoAs in AoSoA as active mask
    * where 1 denotes an active particle and 0 denotes an inactive particle.
    * @param[out] aosoa the AoSoA to be edited
-   * @param[in] particles_per_element pointer to an array of ints, representing the number of active elements in each SoA
+   * @param[in] particles_per_element view representing the number of active elements in each SoA
    * @param[in] parentElms parent view for AoSoA, built by getParentElms
    * @param[in] offsets offset array for AoSoA, built by buildOffset
   */
@@ -96,6 +96,22 @@ namespace pumipic {
         }
         active.access(soa,ptcl) = isActive;
       }, "set_active");
+  }
+
+  /**
+   * helper function: copies element_gids and creates a map for converting in the opposite direction
+   * @param[in] element_gids view of global ids for each element
+   * @param[out] lid_to_gid view to copy elmGid to
+   * @param[out] gid_to_lid unordered map with elements global ids as keys and local ids as values
+  */
+  template<class DataTypes, typename MemSpace>
+  void CabM<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
+    lid_to_gid = kkGidView("row to element gid", num_elems);
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+      const gid_t gid = element_gids(i);
+      lid_to_gid(i) = gid; // deep copy
+      gid_to_lid.insert(gid, i);
+    });
   }
 
   /**

@@ -36,6 +36,7 @@ namespace pumipic {
 
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
+    typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
     using CM_DT = CM_DTInt<DataTypes>;
@@ -81,6 +82,7 @@ namespace pumipic {
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
       const kkLidView parentElms, const kkLidView offsets);
+    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info);
     void initCabMData(kkLidView particle_elements, MTVs particle_info);
 
@@ -96,6 +98,9 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
+    //mappings from row to element gid and back to row
+    kkGidView element_to_gid;
+    GID_Mapping element_gid_to_lid;
     lid_t num_soa_; // number of SoA
     kkLidView offsets; // Offsets array into CabM
     kkLidView parentElms_; // Parent elements for each SoA
@@ -109,7 +114,7 @@ namespace pumipic {
    * @param[in] num_particles number of particles
    * @param[in] particle_per_element view of ints, representing number of particles
    *    in each element
-   * @param[in] element_gids
+   * @param[in] element_gids view of ints, representing the global ids of each element
    * @param[in] particle_elements view of ints, representing which elements
    *    particle reside in (optional)
    * @param[in] particle_info array of views filled with particle data (optional)
@@ -133,26 +138,25 @@ namespace pumipic {
     num_ptcls = num_particles;
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
     if(!comm_rank)
       fprintf(stderr, "building CabM\n");
-
+    
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(particles_per_element);
     // set num_soa_ from the last entry of offsets
     num_soa_ = getLastValue(offsets);
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
     setActive(aosoa_, particles_per_element, parentElms_, offsets);
-
-    /// @todo add usage of element_gids
-
+    // get global ids
+    if (element_gids.size() > 0) {
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    }
     // populate AoSoA with input data if given
     lid_t given_particles = particle_elements.size();
     if (given_particles > 0 && particle_info != NULL) {

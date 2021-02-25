@@ -30,6 +30,7 @@ set(HEADERS
   cabm/cabm_support.hpp
   cabm/cabm.hpp
   cabm/cabm_buildFns.hpp
+  cabm/cabm_migrate.hpp
   cabm/cabm_rebuild.hpp
   particle_structs.hpp
 )

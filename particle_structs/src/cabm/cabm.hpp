@@ -171,23 +171,6 @@ namespace pumipic {
   }
 
   /**
-   *
-   * @param[in] new_element
-   * @param[in] new_process
-   * @param[in] dist
-   * @param[in] new_particle_elements
-   * @param[in] new_particle_info
-  */
-  template <class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-                                         Distributor<MemSpace> dist,
-                                         kkLidView new_particle_elements,
-                                         MTVs new_particle_info) {
-    /// @todo implement migrate
-    fprintf(stderr, "[WARNING] CabM migrate(...) not implemented\n");
-  }
-
-  /**
    * a parallel for-loop that iterates through all particles
    * @param[in] fn function of the form fn(elm, particle_id, mask), where
    *    elm is the element the particle is in
@@ -234,3 +217,4 @@ namespace pumipic {
 // Separate files with CabM member function implementations
 #include "cabm_buildFns.hpp"
 #include "cabm_rebuild.hpp"
+#include "cabm_migrate.hpp"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cabana_Core.hpp>
+
 namespace pumipic {
   /* Class which appends a type T to a pp::MemberType and provides it as a
        cabana::MemberType
@@ -9,6 +10,8 @@ namespace pumipic {
   template <typename T, typename... Types> struct AppendMT;
 
   template <typename PS, typename... Types> struct CopyMTVsToAoSoA;
+
+  template <typename PS, typename... Types> struct CopyParticlesToSendFromAoSoA;
 
 //Append type to the end
   template <typename T, typename... Types>
@@ -111,4 +114,39 @@ namespace pumipic {
                             Types...>(dst, src, soa_indices, soa_ptcl_indices);
     }
   };
+
+  /*
+    Copy Soa to View functions
+  */
+  //Rank 0
+  template <std::size_t M, typename View_t, typename SoA_t>
+  PP_INLINE CheckRank<View_t, 1> copySoaToView(View_t &dst, lid_t dstind,
+                                               SoA_t src, lid_t srcind) {
+    dst(dstind) = Cabana::get<M>(src, srcind);
+  }
+  //Rank 1
+  template <std::size_t M, typename View_t, typename SoA_t>
+  PP_INLINE CheckRank<View_t, 2> copySoaToView(View_t &dst, lid_t dstind,
+                                               SoA_t src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      dst(dstind, i) = Cabana::get<M>(src, srcind, i);
+  }
+  //Rank 2
+  template <std::size_t M, typename View_t, typename SoA_t>
+  PP_INLINE CheckRank<View_t, 3> copySoaToView(View_t &dst, lid_t dstind,
+                                               SoA_t src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      for (lid_t j = 0; j < dst.extent(2); ++j)
+        dst(dstind, i, j) = Cabana::get<M>(src, srcind, i, j);
+  }
+  //Rank 3
+  template <std::size_t M, typename View_t, typename SoA_t>
+  PP_INLINE CheckRank<View_t, 4> copySoaToView(View_t &dst, lid_t dstind,
+                                               SoA_t src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      for (lid_t j = 0; j < dst.extent(2); ++j)
+        for (lid_t k = 0; k < dst.extent(3); ++k)
+          dst(dstind, i, j, k) = Cabana::get<M>(src, srcind, i, j, k);
+  }
+
 }

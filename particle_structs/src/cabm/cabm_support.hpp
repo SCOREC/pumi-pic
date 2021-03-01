@@ -115,38 +115,62 @@ namespace pumipic {
     }
   };
 
-  /*
-    Copy Soa to View functions
-  */
-  //Rank 0
-  template <std::size_t M, typename View_t, typename SoA_t>
-  PP_INLINE CheckRank<View_t, 1> copySoaToView(View_t &dst, lid_t dstind,
-                                               SoA_t src, lid_t srcind) {
-    dst(dstind) = Cabana::get<M>(src, srcind);
-  }
-  //Rank 1
-  template <std::size_t M, typename View_t, typename SoA_t>
-  PP_INLINE CheckRank<View_t, 2> copySoaToView(View_t &dst, lid_t dstind,
-                                               SoA_t src, lid_t srcind) {
-    for (lid_t i = 0; i < dst.extent(1); ++i)
-      dst(dstind, i) = Cabana::get<M>(src, srcind, i);
-  }
-  //Rank 2
-  template <std::size_t M, typename View_t, typename SoA_t>
-  PP_INLINE CheckRank<View_t, 3> copySoaToView(View_t &dst, lid_t dstind,
-                                               SoA_t src, lid_t srcind) {
-    for (lid_t i = 0; i < dst.extent(1); ++i)
-      for (lid_t j = 0; j < dst.extent(2); ++j)
-        dst(dstind, i, j) = Cabana::get<M>(src, srcind, i, j);
-  }
-  //Rank 3
-  template <std::size_t M, typename View_t, typename SoA_t>
-  PP_INLINE CheckRank<View_t, 4> copySoaToView(View_t &dst, lid_t dstind,
-                                               SoA_t src, lid_t srcind) {
-    for (lid_t i = 0; i < dst.extent(1); ++i)
-      for (lid_t j = 0; j < dst.extent(2); ++j)
-        for (lid_t k = 0; k < dst.extent(3); ++k)
-          dst(dstind, i, j, k) = Cabana::get<M>(src, srcind, i, j, k);
-  }
+  //Copy Particles To Send Templated Struct
+  template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename... Types>
+  struct CopyParticlesToSendFromAoSoAImpl;
+
+  template <typename PS, std::size_t M, typename CMDT, typename ViewT>
+  struct CopyParticlesToSendFromAoSoAImpl<PS, M, CMDT, ViewT> {
+    typedef typename PS::device_type Device;
+    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViewsConst, Aosoa,
+                            typename PS::kkLidView, typename PS::kkLidView) {}
+  };
+
+  template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename T, typename... Types>
+  struct CopyParticlesToSendFromAoSoAImpl<PS, M, CMDT, ViewT, T, Types...> {
+    typedef typename PS::device_type Device;
+    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+
+    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+                            typename PS::kkLidView ps_to_array,
+                            typename PS::kkLidView array_indices) {
+      enclose(ps, dsts, src, ps_to_array, array_indices);
+      /// @todo the below line breaks everything, fix it
+      //CopyParticlesToSendFromAoSoAImpl<PS, M+1, CMDT, ViewT, T,
+      //                            Types...>(ps, dsts+1, src, ps_to_array, array_indices);
+    }
+
+    void enclose(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+                 typename PS::kkLidView ps_to_array,
+                 typename PS::kkLidView array_indices) {
+      int comm_rank;
+      MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+      MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
+      auto sliceM = Cabana::slice<M>(src);
+      auto copyPSToArray = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+        const int arr_index = ps_to_array(ptcl_id);
+        if (mask && arr_index != comm_rank) {
+          const int index = array_indices(ptcl_id);
+          dst(ptcl_id) = sliceM(index);
+        }
+      };
+      parallel_for(ps, copyPSToArray);
+    }
+
+  };
+  template <typename PS, typename... Types>
+  struct CopyParticlesToSendFromAoSoA<PS, MemberTypes<Types...> > {
+    typedef typename PS::device_type Device;
+    typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
+    typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
+
+    CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+                        typename PS::kkLidView ps_to_array,
+                        typename PS::kkLidView array_indices) {
+      CopyParticlesToSendFromAoSoAImpl<PS, 0, CM_DT, typename PS::kkLidView,
+                            Types...>(ps, dsts, src, ps_to_array, array_indices);
+    }
+  };
 
 }

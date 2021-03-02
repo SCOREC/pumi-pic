@@ -115,6 +115,40 @@ namespace pumipic {
     }
   };
 
+  /*
+    Copy Slice to View functions
+  */
+  //Rank 0
+  template <std::size_t M, typename View_t, typename Slice_t>
+  PP_INLINE CheckRank<View_t, 1> copySliceToView(View_t dst, lid_t dstind,
+                                               Slice_t &src, lid_t srcind) {
+    dst(dstind) = src(srcind);
+  }
+  //Rank 1
+  template <std::size_t M, typename View_t, typename Slice_t>
+  PP_INLINE CheckRank<View_t, 2> copySliceToView(View_t dst, lid_t dstind,
+                                               Slice_t &src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      dst(dstind, i) = src(srcind, i);
+  }
+  //Rank 2
+  template <std::size_t M, typename View_t, typename Slice_t>
+  PP_INLINE CheckRank<View_t, 3> copySliceToView(View_t dst, lid_t dstind,
+                                               Slice_t &src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      for (lid_t j = 0; j < dst.extent(2); ++j)
+        dst(dstind, i, j) = src(srcind, i, j);
+  }
+  //Rank 3
+  template <std::size_t M, typename View_t, typename Slice_t>
+  PP_INLINE CheckRank<View_t, 4> copySliceToView(View_t dst, lid_t dstind,
+                                               Slice_t &src, lid_t srcind) {
+    for (lid_t i = 0; i < dst.extent(1); ++i)
+      for (lid_t j = 0; j < dst.extent(2); ++j)
+        for (lid_t k = 0; k < dst.extent(3); ++k)
+          dst(dstind, i, j, k) = src(srcind, i, j, k);
+  }
+
   //Copy Particles To Send Templated Struct
   template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename... Types>
   struct CopyParticlesToSendFromAoSoAImpl;
@@ -136,9 +170,8 @@ namespace pumipic {
                             typename PS::kkLidView ps_to_array,
                             typename PS::kkLidView array_indices) {
       enclose(ps, dsts, src, ps_to_array, array_indices);
-      /// @todo the below line breaks everything, fix it
-      //CopyParticlesToSendFromAoSoAImpl<PS, M+1, CMDT, ViewT, T,
-      //                            Types...>(ps, dsts+1, src, ps_to_array, array_indices);
+      CopyParticlesToSendFromAoSoAImpl<PS, M+1, CMDT, ViewT,
+                                  Types...>(ps, dsts+1, src, ps_to_array, array_indices);
     }
 
     void enclose(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
@@ -152,7 +185,7 @@ namespace pumipic {
         const int arr_index = ps_to_array(ptcl_id);
         if (mask && arr_index != comm_rank) {
           const int index = array_indices(ptcl_id);
-          dst(ptcl_id) = sliceM(index);
+          copySliceToView<M>(dst, ptcl_id, sliceM, index);
         }
       };
       parallel_for(ps, copyPSToArray);

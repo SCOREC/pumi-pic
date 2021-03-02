@@ -149,7 +149,7 @@ namespace pumipic {
           dst(dstind, i, j, k) = src(srcind, i, j, k);
   }
 
-  //Copy Particles To Send Templated Struct
+  //Per type copy from AoSoA to MTVs
   template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename... Types>
   struct CopyParticlesToSendFromAoSoAImpl;
 
@@ -157,7 +157,7 @@ namespace pumipic {
   struct CopyParticlesToSendFromAoSoAImpl<PS, M, CMDT, ViewT> {
     typedef typename PS::device_type Device;
     typedef Cabana::AoSoA<CMDT, Device> Aosoa;
-    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViewsConst, Aosoa,
+    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews, const Aosoa,
                             typename PS::kkLidView, typename PS::kkLidView) {}
   };
 
@@ -166,7 +166,7 @@ namespace pumipic {
     typedef typename PS::device_type Device;
     typedef Cabana::AoSoA<CMDT, Device> Aosoa;
 
-    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews dsts, const Aosoa src,
                             typename PS::kkLidView ps_to_array,
                             typename PS::kkLidView array_indices) {
       enclose(ps, dsts, src, ps_to_array, array_indices);
@@ -174,12 +174,12 @@ namespace pumipic {
                                   Types...>(ps, dsts+1, src, ps_to_array, array_indices);
     }
 
-    void enclose(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+    void enclose(PS* ps, MemberTypeViews dsts, const Aosoa src,
                  typename PS::kkLidView ps_to_array,
                  typename PS::kkLidView array_indices) {
       int comm_rank;
       MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-      MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
+      MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device>*>(dsts[0]);
       auto sliceM = Cabana::slice<M>(src);
       auto copyPSToArray = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
         const int arr_index = ps_to_array(ptcl_id);
@@ -192,13 +192,15 @@ namespace pumipic {
     }
 
   };
+
+  //High level copy from AoSoA to MTVs
   template <typename PS, typename... Types>
   struct CopyParticlesToSendFromAoSoA<PS, MemberTypes<Types...> > {
     typedef typename PS::device_type Device;
     typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
     typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
 
-    CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViewsConst dsts, Aosoa src,
+    CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa src,
                         typename PS::kkLidView ps_to_array,
                         typename PS::kkLidView array_indices) {
       CopyParticlesToSendFromAoSoAImpl<PS, 0, CM_DT, typename PS::kkLidView,

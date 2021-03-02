@@ -98,10 +98,15 @@ namespace pumipic {
     parallel_for(gatherParticlesToSend);
     
     //Copy the values from ptcl_data[type][particle_id] into send_particle[type](index) for each data type
-    CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle,
-                                                                    aosoa_,
-                                                                    new_process,
-                                                                    send_index);
+    CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle, aosoa_,
+                                                                    new_process, send_index);
+    
+    // DEBUG PRINT
+    /*auto temp = *static_cast<MemberTypeView<int, device_type>*>(send_particle[0]);
+    Kokkos::parallel_for("debug_print", temp.size(),
+      KOKKOS_LAMBDA(const lid_t i) {
+        printf("i: %d\n", temp(i));
+      });*/
     
     //Wait until all counts are received
     PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
@@ -219,7 +224,7 @@ namespace pumipic {
     delete [] send_requests;
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
-
+    
     //RecordTime("CabM particle migration", timer.seconds(), btime);
     RecordTime("CabM particle migration", timer.seconds());
 

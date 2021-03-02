@@ -98,14 +98,6 @@ namespace pumipic {
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     setActive(aosoa_, elmDegree_d, parentElms_, offsets);
 
-    /*
-    auto pID = Cabana::slice<0>(aosoa_);
-    auto printPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-      printf("elm: %d, ptcl: %d, active: %d, id: %d\n", e, p, mask, pID(p));
-    };
-    parallel_for(printPtcls, "printPtcls");
-    */
-
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles
 

@@ -15,6 +15,7 @@ typedef CabM<Type, exe_space> CabanaM;
 bool sendToOne(int ne, int np);
 
 int main(int argc, char* argv[]) {
+  Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
 
   int comm_rank;
@@ -26,9 +27,6 @@ int main(int argc, char* argv[]) {
   int ne = 5;
   int np = 20;
   int fails = 0;
-  Kokkos::initialize(argc, argv);
-  { // scope guard to make sure deallocation happens
-
   particle_structs::gid_t* gids = new particle_structs::gid_t[ne];
   distribute_elements(ne, 0, comm_rank, comm_size, gids);
   int* ptcls_per_elem = new int[ne];
@@ -112,7 +110,6 @@ int main(int argc, char* argv[]) {
     fails++;
   }*/
 
-  }
   Kokkos::finalize();
   int total_fails;
   MPI_Reduce(&fails, &total_fails, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);

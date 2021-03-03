@@ -166,7 +166,7 @@ namespace pumipic {
     typedef typename PS::device_type Device;
     typedef Cabana::AoSoA<CMDT, Device> Aosoa;
 
-    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews dsts, const Aosoa src,
+    CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                             typename PS::kkLidView ps_to_array,
                             typename PS::kkLidView array_indices) {
       enclose(ps, dsts, src, ps_to_array, array_indices);
@@ -174,7 +174,7 @@ namespace pumipic {
                                   Types...>(ps, dsts+1, src, ps_to_array, array_indices);
     }
 
-    void enclose(PS* ps, MemberTypeViews dsts, const Aosoa src,
+    void enclose(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                  typename PS::kkLidView ps_to_array,
                  typename PS::kkLidView array_indices) {
       int comm_rank;
@@ -185,7 +185,7 @@ namespace pumipic {
         const int arr_index = ps_to_array(ptcl_id);
         if (mask && arr_index != comm_rank) {
           const int index = array_indices(ptcl_id);
-          copySliceToView<M>(dst, ptcl_id, sliceM, index);
+          copySliceToView<M>(dst, index, sliceM, ptcl_id);
         }
       };
       parallel_for(ps, copyPSToArray);
@@ -200,7 +200,7 @@ namespace pumipic {
     typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
     typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
 
-    CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa src,
+    CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                         typename PS::kkLidView ps_to_array,
                         typename PS::kkLidView array_indices) {
       CopyParticlesToSendFromAoSoAImpl<PS, 0, CM_DT, typename PS::kkLidView,

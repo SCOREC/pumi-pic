@@ -101,13 +101,6 @@ namespace pumipic {
     CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle, aosoa_,
                                                                     new_process, send_index);
     
-    // DEBUG PRINT
-    /*auto temp = *static_cast<MemberTypeView<int, device_type>*>(send_particle[0]);
-    Kokkos::parallel_for("debug_print", temp.size(),
-      KOKKOS_LAMBDA(const lid_t i) {
-        printf("i: %d\n", temp(i));
-      });*/
-    
     //Wait until all counts are received
     PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
@@ -131,7 +124,7 @@ namespace pumipic {
       Kokkos::Profiling::popRegion();
       return;
     }
-
+    
     //Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_recv_particles, offset_recv_particles);
@@ -144,6 +137,7 @@ namespace pumipic {
       delete [] count_send_requests;
     }
 
+    /// @todo finish/fix rest of errors
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     kkLidView recv_element("recv_element", np_recv + new_ptcls);

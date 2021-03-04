@@ -16,8 +16,8 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
     offsets_h(0) = 0;
     for ( lid_t i=0; i<particles_per_element.size(); i++ ) {
-    const lid_t SoA_count = (particles_per_element_h(i)/soa_len) + 1;
-    offsets_h(i+1) = SoA_count + offsets_h(i);
+      const lid_t SoA_count = ceil( double(particles_per_element_h(i))/soa_len );
+      offsets_h(i+1) = SoA_count + offsets_h(i);
     }
     kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
     hostToDevice(offsets_d, offsets_h.data());
@@ -55,8 +55,8 @@ namespace pumipic {
     Kokkos::View<lid_t*,host_space> elms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), num_soa);
     kkLidHostMirror offsets_h = create_mirror_view_and_copy(host_space(), offsets);
     for ( lid_t elm=0; elm<num_elements; elm++ )
-    for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
-        elms_h(soa)=elm;
+      for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
+          elms_h(soa)=elm;
     kkLidView elms_d("elements_device", elms_h.size());
     hostToDevice(elms_d, elms_h.data());
     return elms_d;

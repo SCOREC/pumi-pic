@@ -9,7 +9,7 @@ do
     do 
       for struct in 0 1 2
       do
-        ./ps_combo $e $((e*1000)) $distribution -n $struct
+        ./ps_combo36 $e $((e*1000)) $distribution -n $struct
       done
     done
   done

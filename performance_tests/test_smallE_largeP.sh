@@ -10,8 +10,8 @@ do
     do 
       for struct in 0 1 2
       do
-        ./ps_combo $e $((e*10000)) $distribution -p $percent -n $struct # Blockade
-        #mpirun -np 1 ./ps_combo $e $((e*10000)) $distribution -p $percent -n $struct # AiMOS
+        ./ps_combo36 $e $((e*10000)) $distribution -p $percent -n $struct # Blockade
+        #mpirun -np 1 ./ps_combo36 $e $((e*10000)) $distribution -p $percent -n $struct # AiMOS
       done
     done
   done

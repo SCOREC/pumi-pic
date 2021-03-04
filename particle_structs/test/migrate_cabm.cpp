@@ -104,11 +104,11 @@ int main(int argc, char* argv[]) {
     }
     delete cabm;
   }
-  /// @todo add back in large test
-  /* if (!sendToOne(5000, 100000)) {
+  
+  if (!sendToOne(5000, 100000)) { // Big Test
     printf("SendToOne failed on rank %d\n", comm_rank);
     fails++;
-  }*/
+  }
 
   Kokkos::finalize();
   int total_fails;

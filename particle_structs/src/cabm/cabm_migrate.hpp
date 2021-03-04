@@ -136,8 +136,8 @@ namespace pumipic {
       PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
       delete [] count_send_requests;
     }
-
-    /// @todo finish/fix rest of errors
+    
+    
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     kkLidView recv_element("recv_element", np_recv + new_ptcls);
@@ -189,9 +189,9 @@ namespace pumipic {
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
-        recv_element(i) = element_gid_to_lid_local.value_at(index);
+        recv_element(i) = element_gid_to_lid_local.value_at(index); // here?
       });
-
+    
     // ********** Set particles that were sent to non existent on this process *********
     auto removeSentParticles = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
       const bool sent = new_process(particle_id) != comm_rank;
@@ -212,7 +212,7 @@ namespace pumipic {
 
     // ********** Combine and shift particles to their new destination **********
     rebuild(new_element, recv_element, recv_particle);
-
+    
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
     delete [] send_requests;

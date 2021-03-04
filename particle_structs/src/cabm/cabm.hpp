@@ -130,7 +130,8 @@ namespace pumipic {
                                    kkLidView particle_elements,
                                    MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
-    policy(p)
+    policy(p),
+    element_gid_to_lid(num_elements)
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;

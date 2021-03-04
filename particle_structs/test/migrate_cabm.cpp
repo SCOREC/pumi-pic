@@ -150,12 +150,13 @@ bool sendToOne(int ne, int np) {
 
   auto int_slice = cabm->get<0>();
   auto double_slice = cabm->get<1>();
-
+  kkLidView ptcls_set("ptcls_set", 1);
   auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
     int_slice(ptcl_id) = comm_rank;
     double_slice(ptcl_id,0) = comm_rank * 5;
-    if (ptcl_id < np/100)
+    if (Kokkos::atomic_fetch_add(&ptcls_set(0), mask) < np/100) {
       new_process[ptcl_id] = 0;
+    }
     else
       new_process[ptcl_id] = comm_rank;
     new_element[ptcl_id] = elem_id;

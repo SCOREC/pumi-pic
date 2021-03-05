@@ -483,7 +483,7 @@ namespace pumipic {
     agi::gid_t global_edges = weightGraph->numGlobalEdges();
     agi::gid_t global_pins = weightGraph->numGlobalPins();
     if (!comm_rank) {
-      printf("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n", 
+      printf("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n",
              global_vtx,  global_edges, global_pins);
     }
   }
@@ -493,6 +493,10 @@ namespace pumipic {
   }
 
   ParticlePlan ParticleBalancer::balance(double tol, double step_factor) {
+    int comm_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    if (comm_size == 1)
+      return ParticlePlan();
     engpar::WeightInput* input = engpar::createWeightInput(weightGraph, tol, step_factor, 0);
     engpar::balanceWeights(input, 0);
     agi::WeightPartitionMap* ptn = weightGraph->getWeightPartition();
@@ -524,6 +528,9 @@ namespace pumipic {
                         Omega_h::Write<Omega_h::Real>(wgts_host));
   }
 
+  ParticlePlan::ParticlePlan(){
+
+  }
   ParticlePlan::ParticlePlan(std::unordered_map<LO, LO>& sbar_index_map,
                              Omega_h::Write<LO> tgt_parts, Omega_h::Write<Omega_h::Real> wgts)
     : sbar_to_index(sbar_index_map.size()), part_ids(tgt_parts), send_wgts(wgts){

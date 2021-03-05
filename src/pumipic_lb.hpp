@@ -98,6 +98,7 @@ namespace pumipic {
 
   class ParticlePlan {
   public:
+    ParticlePlan();
     ParticlePlan(std::unordered_map<Omega_h::LO, Omega_h::LO>& sbar_index_map,
                  Omega_h::Write<Omega_h::LO> tgt_parts, Omega_h::Write<Omega_h::Real> wgts);
     friend class ParticleBalancer;
@@ -192,7 +193,9 @@ namespace pumipic {
                                          ParticlePlan plan,
                                          typename PS::kkLidView new_parts) {
 
-
+    int comm_size = picparts.comm()->size();
+    if (comm_size == 1)
+      return;
     int comm_rank = picparts.comm()->rank();
     Omega_h::LOs sbars = getSbarIDs(picparts);
     auto send_wgts = plan.send_wgts;
@@ -202,20 +205,22 @@ namespace pumipic {
     auto selectNonCoreParticles = PS_LAMBDA(const int elm, int ptcl, const bool mask) {
       const Omega_h::LO new_e = new_elems(ptcl);
       const Omega_h::LO new_p = new_parts(ptcl);
-      const Omega_h::LO owner = owners[new_e]; 
-      if (mask && new_p == comm_rank && new_e != -1 && owner != comm_rank) {
-        const Omega_h::LO sbar = sbars[new_e];
-        if (sbar_to_index.exists(sbar)) {
-          const auto map_index = sbar_to_index.find(sbar);
-          const Omega_h::LO index = sbar_to_index.value_at(map_index);
-          const Omega_h::LO part = part_ids[index];
-          const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
-          if (part >= 0) {
-            if (wgt == 0)
-              Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
-            if (wgt > 0)
-              new_parts[ptcl] = part;
-          }          
+      if (mask && new_p == comm_rank && new_e != -1) {
+        const Omega_h::LO owner = owners[new_e];
+        if (owner != comm_rank) {
+          const Omega_h::LO sbar = sbars[new_e];
+          if (sbar_to_index.exists(sbar)) {
+            const auto map_index = sbar_to_index.find(sbar);
+            const Omega_h::LO index = sbar_to_index.value_at(map_index);
+            const Omega_h::LO part = part_ids[index];
+            const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+            if (part >= 0) {
+              if (wgt == 0)
+                Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+              if (wgt > 0)
+                new_parts[ptcl] = part;
+            }
+          }
         }
       }
     };

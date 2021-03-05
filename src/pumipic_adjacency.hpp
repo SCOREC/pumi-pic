@@ -289,6 +289,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     o::Write<o::Real>& xpoints_d, // (out) particle-boundary intersection points
     o::Write<o::LO>& xface_d, // (out) face ids of boundary-intersecting points
     int looplimit=0, int debug=0) {
+  const auto btime = pumipic_prebarrier();
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh3d");
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_Init");
 
@@ -510,6 +511,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   } //while
   Kokkos::Profiling::popRegion(); //whole
   //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  pumipic::RecordTime("Search Mesh 3d", timer.seconds(), btime);
   return found;   
 }
 

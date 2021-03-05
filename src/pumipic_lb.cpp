@@ -478,6 +478,14 @@ namespace pumipic {
     delete [] pins;
     delete [] degs;
     delete [] edges;
+
+    agi::gid_t global_vtx = weightGraph->numGlobalVtxs();
+    agi::gid_t global_edges = weightGraph->numGlobalEdges();
+    agi::gid_t global_pins = weightGraph->numGlobalPins();
+    if (!comm_rank) {
+      printf("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n", 
+             global_vtx,  global_edges, global_pins);
+    }
   }
 
   Omega_h::LOs ParticleBalancer::getSbarIDs(Mesh& picparts) const {

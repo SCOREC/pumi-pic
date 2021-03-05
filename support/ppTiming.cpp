@@ -12,7 +12,7 @@ namespace {
 
   const double PREBARRIER_TOL = .000001;
   struct TimeInfo {
-    TimeInfo(std::string s, int index) : str(s), time(0), hasPrebarrier(false), 
+    TimeInfo(std::string s, int index) : str(s), time(0), hasPrebarrier(false),
                                          prebarrier(0), count(0), orig_index(index) {}
     std::string str;
     double time;
@@ -22,7 +22,7 @@ namespace {
     int orig_index;
   };
   std::vector<TimeInfo> time_per_op;
-  
+
   bool isTiming() {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
@@ -123,7 +123,13 @@ namespace pumipic {
     }
   }
 
-  void determineLengths(int& name_length, int& tt_length, int& cc_length, 
+  int length(int x) {
+    if (x== 0)
+      return 1;
+    else
+      return trunc(log10(x)) + 1;
+  }
+  void determineLengths(int& name_length, int& tt_length, int& cc_length,
                         int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       if (time_per_op[index].str.size() > name_length)
@@ -137,7 +143,7 @@ namespace pumipic {
       len = log10(time_per_op[index].time / time_per_op[index].count) + 8;
       if (len > at_length)
         len = at_length;
-    }    
+    }
   }
   void SummarizeTime(TimingSortOption sort) {
     int comm_rank;
@@ -153,7 +159,7 @@ namespace pumipic {
         char buffer[8192];
         char* ptr = buffer + sprintf(buffer, "Timing Summary %d\n", comm_rank);
         ptr += sprintf(ptr, "Operation   %*sTotal Time   %*sCall Count   "
-                       "%*sAverage Time\n", name_length - 9 , "", 
+                       "%*sAverage Time\n", name_length - 9 , "",
                        tt_length - 10, "", cc_length - 10, "");
         for (int index = 0; index < time_per_op.size(); ++index) {
           ptr += sprintf(ptr, "%s   %*s%*.6f   %*d   %*.6f",
@@ -191,33 +197,44 @@ namespace pumipic {
           name_length = time_per_op[index].str.size();
       }
       int tt_length = 15;
+      int proc_length = 8;
       int one = 1;
       if (!comm_rank) {
         sortTimeInfo(sort);
         char buffer[8192];
-        char* ptr = buffer + sprintf(buffer, "Reduced Timing Summary with %d ranks\n", 
+        char* ptr = buffer + sprintf(buffer, "Reduced Timing Summary with %d ranks\n",
                                      total_timing);
-        ptr += sprintf(ptr, "Operation   %*sMax Time   %*sMin Time   "
-                       "%*sAverage Time\n", name_length - 9 , "", 
-                       tt_length - 12, "", tt_length - 12, "");
+        ptr += sprintf(ptr, "Operation   %*sMax Time (max proc)   %*sMin Time (min proc)   "
+                       "%*sAverage Time\n", name_length - 9, "",
+                       tt_length - 8, "", tt_length - 8, "");
         for (std::size_t index = 0; index < time_per_op.size(); ++index) {
           auto& op = time_per_op[index];
           int size = op.str.size() + 1;
           MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(&(op.str[0]), size, MPI_CHAR, 0, MPI_COMM_WORLD);
-          double max_time, min_time, avg_time;
+          //Code adapted from here: https://www.mpi-forum.org/docs/mpi-1.1/mpi-11-html/node79.html
+          struct {
+            double val;
+            int rank;
+          } time_rank, max_time, min_time;
+          double avg_time;
+          time_rank.val = op.time;
+          time_rank.rank = comm_rank;
           int num_procs;
           MPI_Reduce(&one, &num_procs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-          MPI_Reduce(&(op.time), &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-          MPI_Reduce(&(op.time), &min_time, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+          MPI_Reduce(&time_rank, &max_time, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
+          MPI_Reduce(&time_rank, &min_time, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
           MPI_Reduce(&(op.time), &avg_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           avg_time /= num_procs;
-          ptr += sprintf(ptr, "%s   %*s%*.2f   %*.2f   %*.2f\n",
+          ptr += sprintf(ptr, "%s   %*s%*.2f (%d)%*s   %*.2f (%d)%*s   %*.2f\n",
                          time_per_op[index].str.c_str(),
                          (int)(name_length - time_per_op[index].str.size()), "",
-                         tt_length, max_time, tt_length, min_time,
+                         tt_length, max_time.val, max_time.rank,
+                         proc_length - length(max_time.rank), "",
+                         tt_length, min_time.val, min_time.rank,
+                         proc_length - length(min_time.rank), "",
                          tt_length, avg_time);
-          
+
         }
         char end[1]; end[0] = '~';
         int size = 1;
@@ -228,7 +245,12 @@ namespace pumipic {
       }
       else if (comm_rank) {
         int size;
-        int zero_int = 0;
+        struct {
+          double val;
+          int rank;
+        } time_rank;
+        time_rank.rank = comm_rank;
+        int zero = 0;
         char op_name[128];
         MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(op_name, size, MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -237,18 +259,20 @@ namespace pumipic {
           if (itr != timing_index.end()) {
             int index = timing_index[std::string(op_name)];
             const auto& op = time_per_op[index];
+            time_rank.val = op.time;
             MPI_Reduce(&one, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&(op.time), NULL, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&(op.time), NULL, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
             MPI_Reduce(&(op.time), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           }
           else {
-            double zero=0;
-            double max=pow(10,10); 
-            MPI_Reduce(&zero_int, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&zero, NULL, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&max, NULL, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-            MPI_Reduce(&zero, NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&zero, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+            time_rank.val = 0;
+            MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
+            time_rank.val = pow(10,10);
+            MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
+            time_rank.val = 0;
+            MPI_Reduce(&(time_rank.val), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
           }
           MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(op_name, size, MPI_CHAR, 0, MPI_COMM_WORLD);

@@ -540,7 +540,7 @@ int main(int argc, char** argv) {
     delete ptcls;
 
   }
-  pumipic::SummarizeTime(pumipic::SORT_ORDER);
+  pumipic::SummarizeTimeAcrossProcesses(pumipic::SORT_ORDER);
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

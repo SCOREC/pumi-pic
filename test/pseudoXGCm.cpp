@@ -330,12 +330,11 @@ int main(int argc, char** argv) {
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-  const int numargs = 10;
+  const int numargs = 7;
   if( argc != numargs ) {
     printf("numargs %d expected %d\n", argc, numargs);
-    auto args = " <mesh> <owner_file> <numPtcls> "
+    auto args = "<ppm mesh> <numPtcls> "
       "<max initial model face> <maxIterations> "
-      "<buffer method=[bfs|full]> <safe method=[bfs|full]> "
       "<degrees per elliptical push>"
       "<enable prebarrier>";
     std::cout << "Usage: " << argv[0] << args << "\n";
@@ -359,33 +358,33 @@ int main(int argc, char** argv) {
   if (comm_rank == comm_size / 2) {
     pumipic::EnableTiming();
   }
-  auto full_mesh = readMesh(argv[1], lib);
 
-  MPI_Barrier(MPI_COMM_WORLD);
 
-  if(!comm_rank)
-    printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
-        full_mesh.nfaces());
+  // auto full_mesh = readMesh(argv[1], lib);
 
-  const auto vtx_to_elm = full_mesh.ask_up(0, 2);
-  const auto edge_to_elm = full_mesh.ask_up(1, 2);
+  // MPI_Barrier(MPI_COMM_WORLD);
 
-  if(!comm_rank) {
-    fprintf(stderr, "done mesh topo checks\n");
-    fprintf(stderr, "partition file %s\n", argv[2]);
-    fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
-  }
+  // if(!comm_rank)
+  //   printf("Mesh loaded with <v e f> %d %d %d\n",full_mesh.nverts(),full_mesh.nedges(),
+  //       full_mesh.nfaces());
 
-  const auto bufferMethod = pumipic::Input::getMethod(argv[6]);
-  const auto safeMethod = pumipic::Input::getMethod(argv[7]);
-  assert(bufferMethod>=0);
-  assert(safeMethod>=0);
-  //Create picparts using classification with the full mesh buffered and minimum safe zone
-  p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
-  if(!comm_rank)
-    input.printInfo();
-  MPI_Barrier(MPI_COMM_WORLD);
-  p::Mesh picparts(input);
+  // const auto vtx_to_elm = full_mesh.ask_up(0, 2);
+  // const auto edge_to_elm = full_mesh.ask_up(1, 2);
+
+  // if(!comm_rank) {
+  //   fprintf(stderr, "done mesh topo checks\n");
+  //   fprintf(stderr, "partition file %s\n", argv[2]);
+  //   fprintf(stderr, "input buffer method %s safe method %s\n", argv[6], argv[7]);
+  // }
+
+  // //Create picparts using classification with the full mesh buffered and minimum safe zone
+  // p::Input input(full_mesh, argv[2], bufferMethod, safeMethod);
+  // if(!comm_rank)
+  //   input.printInfo();
+  // MPI_Barrier(MPI_COMM_WORLD);
+  // p::Mesh picparts(input);
+  p::Mesh picparts;
+  pumipic::read(&lib, lib.world(), argv[1], &picparts);
   o::Mesh* mesh = picparts.mesh();
   mesh->ask_elem_verts(); //caching adjacency info
 
@@ -410,13 +409,14 @@ int main(int argc, char** argv) {
   createGyroRingMappings(mesh, forward_map, backward_map);
 
   /* Particle data */
-  const long int numPtcls = atol(argv[3]);
+  const long int numPtcls = atol(argv[2]);
   const int numPtclsPerRank = numPtcls / comm_size;
   const bool output = numPtclsPerRank <= 30;
 
   long int totNumReqPtcls = 0;
   const long int numPtclsPerRank_li = numPtclsPerRank;
-  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&numPtclsPerRank_li, &totNumReqPtcls, 1, MPI_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
   if (!comm_rank)
     fprintf(stderr, "particles requested %ld %ld\n", numPtcls, totNumReqPtcls);
 
@@ -429,7 +429,7 @@ int main(int argc, char** argv) {
     Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
         element_gids(i) = mesh_element_gids[i];
       });
-    const int mdlFace = atoi(argv[4]);
+    const int mdlFace = atoi(argv[3]);
     int actualParticles = setSourceElements(picparts,ptcls_per_elem,mdlFace,numPtclsPerRank);
     Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
         const int np = ptcls_per_elem(i);
@@ -443,7 +443,7 @@ int main(int argc, char** argv) {
     if (!comm_rank)
       fprintf(stderr, "particles created %ld\n", totNumPtcls);
 
-    const auto maxIter = atoi(argv[5]);
+    const auto maxIter = atoi(argv[4]);
     if (!comm_rank)
       fprintf(stderr, "max iterations: %d\n", maxIter);
 
@@ -472,7 +472,7 @@ int main(int argc, char** argv) {
     const auto k = .020558260;
     const auto d = 0.6;
     ellipticalPush::setup(ptcls, h, k, d);
-    const auto degPerPush = atof(argv[8]);
+    const auto degPerPush = atof(argv[5]);
     if (!comm_rank)
       fprintf(stderr, "degrees per elliptical push %f\n", degPerPush);
 
@@ -490,7 +490,7 @@ int main(int argc, char** argv) {
     mesh->add_tag(o::VERT, syncTagName, 2, o::Reals(mesh->nverts()*2, 0));
     tagParentElements(picparts, ptcls, 0);
 
-    const auto enable_prebarrier = atoi(argv[9]);
+    const auto enable_prebarrier = atoi(argv[6]);
     if(enable_prebarrier) {
       if(!comm_rank)
         fprintf(stderr, "pre-barrier enabled\n");

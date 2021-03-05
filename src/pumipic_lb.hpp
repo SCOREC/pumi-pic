@@ -198,25 +198,43 @@ namespace pumipic {
     auto send_wgts = plan.send_wgts;
     auto sbar_to_index = plan.sbar_to_index;
     auto part_ids = plan.part_ids;
-
+    auto owners = picparts.entOwners(picparts->dim());
+    auto selectNonCoreParticles = PS_LAMBDA(const int elm, int ptcl, const bool mask) {
+      const Omega_h::LO new_e = new_elems(ptcl);
+      const Omega_h::LO new_p = new_parts(ptcl);
+      const Omega_h::LO owner = owners[new_e]; 
+      if (mask && new_p == comm_rank && new_e != -1 && owner != comm_rank) {
+        const Omega_h::LO sbar = sbars[new_e];
+        if (sbar_to_index.exists(sbar)) {
+          const auto map_index = sbar_to_index.find(sbar);
+          const Omega_h::LO index = sbar_to_index.value_at(map_index);
+          const Omega_h::LO part = part_ids[index];
+          const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+          if (part >= 0) {
+            if (wgt == 0)
+              Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+            if (wgt > 0)
+              new_parts[ptcl] = part;
+          }          
+        }
+      }
+    };
+    parallel_for(ptcls, selectNonCoreParticles, "selectNonCoreParticles");
     auto selectParticles = PS_LAMBDA(const int elm, const int ptcl, const bool mask) {
-      if (mask) {
-        if (new_parts(ptcl) == comm_rank) {
-          const int e = new_elems(ptcl);
-          if (e != -1) {
-            const Omega_h::LO sbar = sbars[e];
-            if (sbar_to_index.exists(sbar)) {
-              const auto map_index = sbar_to_index.find(sbar);
-              const Omega_h::LO index = sbar_to_index.value_at(map_index);
-              const Omega_h::LO part = part_ids[index];
-              const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
-              if (part >= 0) {
-                if (wgt == 0)
-                  Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
-                if (wgt > 0)
-                  new_parts[ptcl] = part;
-              }
-            }
+      const Omega_h::LO new_e = new_elems(ptcl);
+      const Omega_h::LO new_p = new_parts(ptcl);
+      if (mask && new_p == comm_rank && new_e != -1) {
+        const Omega_h::LO sbar = sbars[new_e];
+        if (sbar_to_index.exists(sbar)) {
+          const auto map_index = sbar_to_index.find(sbar);
+          const Omega_h::LO index = sbar_to_index.value_at(map_index);
+          const Omega_h::LO part = part_ids[index];
+          const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+          if (part >= 0) {
+            if (wgt == 0)
+              Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+            if (wgt > 0)
+              new_parts[ptcl] = part;
           }
         }
       }

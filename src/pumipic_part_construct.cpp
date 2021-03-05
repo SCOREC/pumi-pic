@@ -117,6 +117,12 @@ namespace pumipic {
     int comm_size = comm->size();
     int dim = mesh.dim();
 
+    //Get global entity counts from full mesh
+    num_entites[3] = 0;
+    for (int i = 0; i <= dim; ++i) {
+      num_entites[i] = mesh.nents(i);
+    }
+
     /************* Define Ownership of each lower dimension entity ************/
     Omega_h::LOs owner_dim[4];
     for (int i = 0; i < dim; ++i) {

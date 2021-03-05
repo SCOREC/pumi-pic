@@ -206,13 +206,13 @@ namespace pumipic {
                      new_capacity);
 
     //Allocate the SCS
-    lid_t new_cap = getLastValue<lid_t>(new_offsets);
-    kkLidView new_particle_mask("new_particle_mask", new_cap);
-    if (swap_size < new_cap) {
+    kkLidView new_particle_mask("new_particle_mask", new_capacity);
+    if (swap_size < new_capacity || swap_size * .8 < new_capacity) {
       destroyViews<DataTypes, memory_space>(scs_data_swap);
-      CreateViews<device_type, DataTypes>(scs_data_swap, new_cap*1.1);
-      swap_size = new_cap * 1.1;
+      CreateViews<device_type, DataTypes>(scs_data_swap, new_capacity * 1.1);
+      swap_size = new_capacity * 1.1;
     }
+
 
 
     /* //Fill the SCS */

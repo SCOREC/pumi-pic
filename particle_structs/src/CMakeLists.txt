@@ -1,8 +1,8 @@
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/support
   ${CMAKE_CURRENT_SOURCE_DIR}/scs
-#  ${CMAKE_CURRENT_SOURCE_DIR}/csr
-#  ${CMAKE_CURRENT_SOURCE_DIR}/cabm
+  ${CMAKE_CURRENT_SOURCE_DIR}/csr
+  ${CMAKE_CURRENT_SOURCE_DIR}/cabm
   ${CMAKE_CURRENT_SOURCE_DIR}
 
   )
@@ -25,8 +25,8 @@ set(HEADERS
   scs/SCS_buildFns.h
   scs/SellCSigma.h
   scs/scs_input.hpp
-#  csr/CSR.hpp
-#  csr/CSR_rebuild.hpp
+  csr/CSR.hpp
+  csr/CSR_rebuild.hpp
 #  cabm/cabm_support.hpp
 #  cabm/cabm.hpp
 #  cabm/cabm_buildFns.hpp
@@ -49,9 +49,9 @@ target_include_directories(particleStructs INTERFACE
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/scs>
   $<INSTALL_INTERFACE:include>)
-#target_include_directories(particleStructs INTERFACE
-#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/csr>
-#  $<INSTALL_INTERFACE:include>)
+target_include_directories(particleStructs INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/csr>
+  $<INSTALL_INTERFACE:include>)
 #target_include_directories(particleStructs INTERFACE
 #  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/cabm>
 #  $<INSTALL_INTERFACE:include>)

@@ -35,9 +35,8 @@ class SellCSigma {
   typedef typename MemSpace::execution_space execution_space;
   typedef typename MemSpace::memory_space memory_space;
   typedef typename MemSpace::device_type device_type;
-  template <class T> using View = Kokkos::View<T*, device_type>;
-  typedef View<lid_t> kkLidView;
-  typedef View<gid_t> kkGidView;
+  typedef Kokkos::View<lid_t*, device_type> kkLidView;
+  typedef Kokkos::View<gid_t*, device_type> kkGidView;
   typedef typename kkLidView::HostMirror kkLidHostMirror;
   typedef typename kkGidView::HostMirror kkGidHostMirror;
 

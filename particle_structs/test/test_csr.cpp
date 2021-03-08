@@ -11,8 +11,9 @@ void finalize() {
   MPI_Finalize();
 }
 
+typedef ps::CSR<Types, MemSpace> CSR;
 int comm_rank, comm_size;
-int testCounts(PS* structure, lid_t num_elems, lid_t num_ptcls) {
+int testCounts(CSR* structure, lid_t num_elems, lid_t num_ptcls) {
   int fails = 0;
   if (structure->nElems() != num_elems) {
     fprintf(stderr, "[ERROR] Element count mismatch on rank %d "
@@ -41,7 +42,7 @@ int testCounts(PS* structure, lid_t num_elems, lid_t num_ptcls) {
   return fails;
 }
 
-int testParticleExistence(PS* structure, lid_t num_ptcls) {
+int testParticleExistence(CSR* structure, lid_t num_ptcls) {
   int fails = 0;
   kkLidView count("count", 1);
   auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
@@ -59,7 +60,7 @@ int testParticleExistence(PS* structure, lid_t num_ptcls) {
   return fails;
 }
 
-int setValues(PS* structure) {
+int setValues(CSR* structure) {
   int fails = 0;
   auto dbls = structure->get<1>();
   auto bools = structure->get<2>();
@@ -86,7 +87,7 @@ int setValues(PS* structure) {
 }
 
 //Functionality tests
-int testMetrics(PS* structure) {
+int testMetrics(CSR* structure) {
   int fails = 0;
   try {
     structure->printMetrics();
@@ -99,7 +100,7 @@ int testMetrics(PS* structure) {
   return fails;
 }
 
-int testSegmentComp(PS* structure) {
+int testSegmentComp(CSR* structure) {
   int fails = 0;
   kkLidView failures("fails", 1);
 
@@ -176,13 +177,13 @@ int main(int argc, char* argv[]) {
   kkLidView ppe;
   kkGidView element_gids;
   kkLidView particle_elements;
-  PS::MTVs particle_info;
+  CSR::MTVs particle_info;
   readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                 particle_elements, particle_info);
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
-  ps::CSR<Types,MemSpace>* csr = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls,
-                                      ppe, element_gids, particle_elements, particle_info);
+  CSR* csr = new CSR(policy, num_elems, num_ptcls, ppe, element_gids,
+                     particle_elements, particle_info);
   //Run tests
   fails += testCounts(csr, num_elems, num_ptcls);
   fails += testParticleExistence(csr, num_ptcls);

@@ -140,6 +140,7 @@ int testSCSs(lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
           element_gids, particle_elements, particle_info));
 
     runTests(test_name.c_str(), s, num_elems, num_ptcls);
+    delete s;
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Tests crashed for %s on rank %d\n",
@@ -158,6 +159,7 @@ int testSCSs(lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       SCS(policy, sigma, V, num_elems, num_ptcls, ppe,
           element_gids, particle_elements, particle_info));
     runTests(test_name.c_str(), s, num_elems, num_ptcls);
+    delete s;
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Tests crashed for %s on rank %d\n",

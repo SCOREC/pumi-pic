@@ -38,23 +38,23 @@ namespace pumipic {
     //Bracket operator for 1-dimentional arrays
     template <class U = T>
     PP_INLINE typename std::enable_if<BaseType<U>::rank == 1, BT>::type&
-    operator[](const int& i) const {return view_[i];}
+    operator[](const int i) const {return view_[i];}
     //Parenthesis operator for 1-dimentional arrays
     template <class U = T>
     PP_INLINE typename std::enable_if<BaseType<U>::rank == 1, BT>::type&
-    operator()(const int& i) const {return view_(i);}
+    operator()(const int i) const {return view_(i);}
     //Parenthesis operator for 2-dimentional arrays
     template <class U = T>
     PP_INLINE typename std::enable_if<BaseType<U>::rank == 2, BT>::type&
-    operator()(const int& i, const int& j) const {return view_(i,j);}
+    operator()(const int i, const int j) const {return view_(i,j);}
     //Parenthesis operator for 3-dimentional arrays
     template <class U = T>
     PP_INLINE typename std::enable_if<BaseType<U>::rank == 3, BT>::type&
-    operator()(const int& i, const int& j, const int& k) const {return view_(i,j,k);}
+    operator()(const int i, const int j, const int k) const {return view_(i,j,k);}
     //Parenthesis operator for 4-dimentional arrays
     template <class U = T>
     PP_INLINE typename std::enable_if<BaseType<U>::rank == 4, BT>::type&
-    operator()(const int& i, const int& j, const int& k, const int& m) const {return view_(i,j,k,m);}
+    operator()(const int i, const int j, const int k, const int m) const {return view_(i,j,k,m);}
 
   private:
     KView view_;

@@ -8,16 +8,26 @@ namespace ps = particle_structs;
 namespace pumipic {
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
-  class CSR : public ParticleStructure<DataTypes, MemSpace> {
+  class CSR {
   public:
-    using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
-    using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
-    using typename ParticleStructure<DataTypes, MemSpace>::device_type;
-    using typename ParticleStructure<DataTypes, MemSpace>::kkLidView;
-    using typename ParticleStructure<DataTypes, MemSpace>::kkGidView;
-    using typename ParticleStructure<DataTypes, MemSpace>::kkLidHostMirror;
-    using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
-    using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
+    template <typename MSpace> using Mirror = CSR<DataTypes, MSpace>;
+    typedef DataTypes Types;
+    typedef typename MemSpace::execution_space execution_space;
+    typedef typename MemSpace::memory_space memory_space;
+    typedef typename MemSpace::device_type device_type;
+    typedef Kokkos::View<lid_t*, device_type> kkLidView;
+    typedef Kokkos::View<gid_t*, device_type> kkGidView;
+    typedef typename kkLidView::HostMirror kkLidHostMirror;
+    typedef typename kkGidView::HostMirror kkGidHostMirror;
+    typedef MemberTypeViews MTVs;
+    //Defining a useless Input_T for ParticleStructure
+    typedef int Input_T;
+
+    template <std::size_t N> using DataType =
+      typename MemberTypeAtIndex<N, Types>::type;
+    template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
+    template <std::size_t N>
+    using Slice = Segment<DataType<N>, device_type>;
 
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
 
@@ -34,11 +44,18 @@ namespace pumipic {
     ~CSR();
 
     //Functions from ParticleStructure
-    using ParticleStructure<DataTypes, MemSpace>::nElems;
-    using ParticleStructure<DataTypes, MemSpace>::nPtcls;
-    using ParticleStructure<DataTypes, MemSpace>::capacity;
-    using ParticleStructure<DataTypes, MemSpace>::numRows;
-    using ParticleStructure<DataTypes, MemSpace>::copy;
+    lid_t nElems() const {return num_elems;}
+    lid_t nPtcls() const {return num_ptcls;}
+    lid_t capacity() const {return capacity_;}
+    lid_t numRows() const {return num_rows;}
+
+    template <std::size_t N>
+    Slice<N> get() {
+      if (num_ptcls == 0)
+        return Slice<N>();
+      MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
+      return Slice<N>(*view);
+    }
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
@@ -72,12 +89,13 @@ namespace pumipic {
       kkLidView particle_indices("particle_indices", num_ptcls);
       //SS3 insert code to set the entries of particle_indices>
       kkLidView row_indices("row indces", num_elems+1);
-      Kokkos::deep_copy(row_indices, offset_cpy);
+      deep_copy(row_indices, offset_cpy);
 
       //atomic_fetch_add to increment from the beginning of each element
       //when filling (offset[element] is start of element)
       auto fill_ptcl_indices = PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask){
-        particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(ptcl_id)),1);
+        const lid_t row_index = particle_elements(ptcl_id);
+        particle_indices(ptcl_id) =Kokkos::atomic_fetch_add(&row_indices(row_index),1);
       };
       parallel_for(fill_ptcl_indices);
 
@@ -91,12 +109,12 @@ namespace pumipic {
     PolicyType policy;
 
     //Variables from ParticleStructure
-    using ParticleStructure<DataTypes, MemSpace>::num_elems;
-    using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
-    using ParticleStructure<DataTypes, MemSpace>::capacity_;
-    using ParticleStructure<DataTypes, MemSpace>::num_rows;
-    using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
-    using ParticleStructure<DataTypes, MemSpace>::num_types;
+    lid_t num_elems;
+    lid_t num_ptcls;
+    lid_t capacity_;
+    lid_t num_rows;
+    MTVs ptcl_data;
+    static constexpr std::size_t num_types = DataTypes::size;
 
     //Offsets array into CSR
     kkLidView offsets;
@@ -110,7 +128,6 @@ namespace pumipic {
                                 kkGidView element_gids,      //optional
                                 kkLidView particle_elements, //optional
                                 MTVs particle_info) :        //optional
-      ParticleStructure<DataTypes, MemSpace>(),
       policy(p)
   {
     Kokkos::Profiling::pushRegion("csr_construction");

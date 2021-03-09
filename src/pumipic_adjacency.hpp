@@ -465,7 +465,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> lastEdge(psCapacity,-1);
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
+      if (elem_ids[pid] == -1) {
+        elem_ids[pid] = e;
+      }
       ptcl_done[pid] = 0;
     } else {
       elem_ids[pid] = -1;

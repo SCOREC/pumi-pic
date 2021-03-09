@@ -1,30 +1,35 @@
 # build-...-pumipic/performance_tests/output_convert.py
 
-# Usage:    ./ps_combo $e $((e*1000)) $distribution -p $percent -n $struct
-#           python output_convert.py input_filename rebuild_output_filename push_output_filename
+# Usage:    ./ps_combo $e $((e*1000)) $distribution -p $percent -n $struct &> input_filename
+#           OR
+#           ./ps_migrate $e $((e*1000)) $distribution -p $percent -n $struct &> input_filename
+#
+#           python output_convert.py input_filename rebuild_output_filename push_output_filename migrate_output_filename
 
 import sys
 
-# Formatting output from testing to comparison of rebuild/pseudopush
+# Formatting output from testing to comparison of rebuild/pseudopush/migration
 n = len(sys.argv)
-assert( n == 4 )
+assert( n >= 4 )
 
 inputfile = sys.argv[1]
 rebuildfile = sys.argv[2]
 pushfile = sys.argv[3]
+if (n >= 5): migratefile = sys.argv[4]
 
 file = open(inputfile, "r")
 lines = file.readlines()
 file.close()
 
-edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push",
-            "CSR rebuild", "CSR pseudo-push",
-            "CabM rebuild", "CabM pseudo-push" ]
+edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push", "Sell-32-ne particle migration",
+              "CSR rebuild", "CSR pseudo-push", "CSR particle migration",
+              "CabM rebuild", "CabM pseudo-push", "CabM particle migration" ]
 
 elms = 0
 
 rebuild = open(rebuildfile, "w")
 push = open(pushfile, "w")
+if (n >= 5): migrate = open(migratefile, "w")
 for line in lines:
     # command line
     if "./" in line:
@@ -38,12 +43,19 @@ for line in lines:
         if check in line:
             line = line.split()
             function = line[1]
-            average = line[4]
+            if "particle" in function:
+                function = function + line[2]
+                average = line[5]
+            else:
+                average = line[4]
 
             if "rebuild" in function:
                 rebuild.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
             elif "pseudo-push" in function:
                 push.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
+            elif "migration" in function and (n >= 5):
+                migrate.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
 
 rebuild.close()
 push.close()
+migrate.close()

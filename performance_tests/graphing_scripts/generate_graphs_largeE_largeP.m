@@ -118,7 +118,7 @@ elseif bytes == 268
             elms, scs_uni_50./cabm_uni_50, 'r--', ... % CabM Rebuild 50%
             elms, scs_uni_push./cabm_uni_push, 'r-.', ... % CabM Migrate
             elms, ones(size(elms)), 'k', 'LineWidth', 0.75 ) % Reference
-        legend('CabM Rebuild 50%', 'CabM Pseudo-Push', ...
+        legend('CabM Rebuild 50%', 'CabM Migrate', ...
         'SCS (Reference)')
     end
 end
@@ -129,7 +129,6 @@ ax.XTick = [1000,10000,100000];
 ax.XTickLabel = {'1,000', '10,000', '100,000'};
 ax.YTick = [1,10,100]; 
 ax.YTickLabel = {'1x', '10x','100x'}; 
-ax.XAxis.Exponent = 0;
 xlabel( {'Number Elements','Number Particles (Thousands)'} )
 ylabel("Structure Speedup (SCS/Structure)")
 title({'Speedup (Uniform Distribution)','1:1,000 Element to Particle Ratio'})
@@ -163,7 +162,7 @@ elseif bytes == 268
             elms, scs_gauss_50./cabm_gauss_50, 'r--', ... % CabM Rebuild 50%
             elms, scs_gauss_push./cabm_gauss_push, 'r-.', ... % CabM Migrate
             elms, ones(size(elms)), 'k', 'LineWidth', 0.75 ) % Reference
-        legend('CabM Rebuild 50%', 'CabM Pseudo-Push', ...
+        legend('CabM Rebuild 50%', 'CabM Migrate', ...
             'SCS (Reference)')
     end
 end
@@ -173,7 +172,6 @@ ax.XTick = [1000,10000,100000];
 ax.XTickLabel = {'1,000', '10,000', '100,000'};
 ax.YTick = [1,10,100]; 
 ax.YTickLabel = {'1x', '10x', '100x'}; 
-ax.XAxis.Exponent = 0;
 xlabel( {'Number Elements','Number Particles (Thousands)'} )
 ylabel("Structure Speedup (SCS/Structure)")
 title({'Speedup (Gaussian Distribution)','1:1,000 Element to Particle Ratio'})
@@ -207,7 +205,7 @@ elseif bytes == 268
             elms, scs_exp_50./cabm_exp_50, 'r--', ... % CabM Rebuild 50%
             elms, scs_exp_push./cabm_exp_push, 'r-.', ... % CabM Migrate
             elms, ones(size(elms)), 'k', 'LineWidth', 0.75 )
-        legend('CabM Rebuild 50%', 'CabM Pseudo-Push', ...
+        legend('CabM Rebuild 50%', 'CabM Migrate', ...
             'SCS (Reference)')
     end
 end
@@ -218,7 +216,6 @@ ax.XTick = [1000,10000,100000];
 ax.XTickLabel = {'1,000', '10,000', '100,000'}; 
 ax.YTick = [1,10,100]; 
 ax.YTickLabel = {'1x', '10x','100x'}; 
-ax.XAxis.Exponent = 0;
 xlabel( {'Number Elements','Number Particles (Thousands)'} )
 ylabel("Structure Speedup (SCS/Structure)")
 title({'Speedup (Exponential Distribution)','1:1,000 Element to Particle Ratio'})

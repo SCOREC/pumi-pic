@@ -111,7 +111,6 @@ else
         'SCS (Reference)')
 end
 ax = gca;
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:2500:20000;
 ax.YTick = [1,10]; 
 ax.YTickLabel = {'1x', '10x'}; 
@@ -142,7 +141,6 @@ else
         'SCS (Reference)')
 end
 ax = gca;
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:2500:20000;
 ax.YTick = [1,10]; 
 ax.YTickLabel = {'1x', '10x'}; 
@@ -169,11 +167,10 @@ else
         elms, scs_exp_50./cabm_exp_50, 'r--', ... % CabM Rebuild 50%
         elms, scs_exp_push./cabm_exp_push, 'r-.', ... % CabM Migrate
         elms, ones(size(elms)), 'k', 'LineWidth', 0.75 )
-    legend('CabM Rebuild 50%', 'CabM Pseudo-Push', ...
+    legend('CabM Rebuild 50%', 'CabM Migrate', ...
         'SCS (Reference)')
 end
 ax = gca;
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:2500:20000;
 ax.YTick = [1,10]; 
 ax.YTickLabel = {'1x', '10x'}; 

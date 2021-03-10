@@ -114,7 +114,6 @@ end
 ax = gca;
 ax.YTick = [0.1,1,10]; 
 ax.YTickLabel = {'0.1x','1x', '10x'};
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:250:2000;
 ax.YGrid = 'on';
 xlabel( {'Number Particles (Ten Thousands)','Number Elements'} )
@@ -144,7 +143,6 @@ else
         'Location', 'southeast')
 end
 ax = gca;
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:250:2000;
 ax.YTick = [0.1,1,10]; 
 ax.YTickLabel = {'0.1x','1x', '10x'}; 
@@ -176,7 +174,6 @@ else
         'Location', 'southeast')
 end
 ax = gca;
-ax.XAxis.Exponent = 0;
 ax.XTick = 0:250:2000;
 ax.YTick = [0.1,1,10]; 
 ax.YTickLabel = {'0.1x','1x', '10x'}; 

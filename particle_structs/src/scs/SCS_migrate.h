@@ -17,8 +17,8 @@ namespace pumipic {
 
     //If serial, skip migration
     if (comm_size == 1) {
-      rebuild(new_element, new_particle_elements, new_particle_info);
       RecordTime(name + " particle migration", timer.seconds(), btime);
+      rebuild(new_element, new_particle_elements, new_particle_info);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -199,7 +199,9 @@ namespace pumipic {
 
 
     /********** Combine and shift particles to their new destination **********/
+    Kokkos::Timer rebuild_subtract;
     rebuild(new_element, recv_element, recv_particle);
+    const auto temp = rebuild_subtract.seconds();
 
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
@@ -207,7 +209,7 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
 
-    RecordTime(name +" particle migration", timer.seconds(), btime);
+    RecordTime(name +" particle migration", timer.seconds() - temp, btime);
 
     Kokkos::Profiling::popRegion();
   }

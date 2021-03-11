@@ -17,6 +17,10 @@ namespace pumipic {
                                          MTVs new_particle_info) {
     /// @todo add prebarrier to main ParticleStructure files
     //const auto btime = prebarrier();
+    Kokkos::Timer barrier_timer;
+    MPI_Barrier(MPI_COMM_WORLD);
+    const auto btime = barrier_timer.seconds();
+
     Kokkos::Profiling::pushRegion("cabm_migrate");
     Kokkos::Timer timer;
     
@@ -27,9 +31,8 @@ namespace pumipic {
 
     //If serial, skip migration
     if (comm_size == 1) {
+      RecordTime("CabM particle migration", timer.seconds(), btime);
       rebuild(new_element, new_particle_elements, new_particle_info);
-      //RecordTime("CabM particle migration", timer.seconds(), btime);
-      RecordTime("CabM particle migration", timer.seconds());
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -211,7 +214,9 @@ namespace pumipic {
 
 
     // ********** Combine and shift particles to their new destination **********
+    Kokkos::Timer rebuild_subtract;
     rebuild(new_element, recv_element, recv_particle);
+    const auto temp = rebuild_subtract.seconds();
     
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
@@ -219,8 +224,7 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
     
-    //RecordTime("CabM particle migration", timer.seconds(), btime);
-    RecordTime("CabM particle migration", timer.seconds());
+    RecordTime("CabM particle migration", timer.seconds() - temp, btime);
 
     Kokkos::Profiling::popRegion();
   }

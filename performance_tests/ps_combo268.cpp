@@ -26,35 +26,35 @@ int main(int argc, char* argv[]) {
   bool optimal = false;
 
   //Optional arguments specified with flags
-  for(int i = 4; i < argc; i+=2){
+  for (int i = 4; i < argc; i+=2) {
     // -p = percent_moved
-    if(std::string(argv[i]) == "-p"){
+    if (std::string(argv[i]) == "-p") {
       percentMoved = atoi(argv[i+1]);
     }
     // -n = test_num
-    else if(std::string(argv[i]) == "-n"){
+    else if (std::string(argv[i]) == "-n") {
       test_num = atoi(argv[i+1]);
     }
     // -s = team_size (/chunk width)
-    else if(std::string(argv[i]) == "-s"){
+    else if (std::string(argv[i]) == "-s") {
       team_size = atoi(argv[i+1]);
     }
     // -v = vertical slicing
-    else if(std::string(argv[i]) == "-v"){
+    else if (std::string(argv[i]) == "-v") {
       vert_slice = atoi(argv[i+1]);
     }
-    else if(std::string(argv[i]) == "--optimal"){
+    else if (std::string(argv[i]) == "--optimal") {
       optimal = true;
       i--;
     }
-    else{
+    else {
       fprintf(stderr, "Illegal argument: %s", argv[i]);
       // insert usage statement
     }
   }
 
   fprintf(stderr, "Test Command:\n");
-  for(int i = 0; i < argc; i++){
+  for (int i = 0; i < argc; i++) {
     fprintf(stderr, " %s", argv[i]);
   }
   fprintf(stderr, "\n");
@@ -76,16 +76,16 @@ int main(int argc, char* argv[]) {
 
     /* Create particle structure */
     ParticleStructures32 structures;
-    if(test_num == 0){
+    if (test_num == 0) {
       structures.push_back(std::make_pair("Sell-"+std::to_string(team_size)+"-ne",
                                       createSCS(num_elems, num_ptcls, ppe, element_gids,
                                                 team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne")));
     }
-    if(test_num == 1){
+    if (test_num == 1) {
       structures.push_back(std::make_pair("CSR",
                                       createCSR(num_elems, num_ptcls, ppe, element_gids)));
     }
-    if(test_num == 2){
+    if (test_num == 2) {
       structures.push_back(std::make_pair("CabM",
                                       createCabM(num_elems, num_ptcls, ppe, element_gids)));
     }
@@ -150,10 +150,14 @@ int main(int argc, char* argv[]) {
         Kokkos::Timer t;
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
         pumipic::RecordTime("redistribute", t.seconds());
-
-        kkLidView new_process("new_process", ptcls->capacity());
-        Kokkos::fill_random(new_process, pool, comm_size);
-        ptcls->migrate(new_elms, new_process);
+        if ( name == "CSR" ) {
+          ptcls->rebuild(new_elms);
+        }
+        else {
+          kkLidView new_process("new_process", ptcls->capacity());
+          Kokkos::fill_random(new_process, pool, comm_size);
+          ptcls->migrate(new_elms, new_process);
+        }
       }
 
     } //end loop over structures

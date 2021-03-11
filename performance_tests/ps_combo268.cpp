@@ -136,13 +136,18 @@ int main(int argc, char* argv[]) {
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
 
-      printf("Beginning rebuild on structure %s\n", name.c_str());
+      //printf("Beginning rebuild on structure %s\n", name.c_str());
+      printf("Beginning migrate on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
         Kokkos::Timer t;
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
         pumipic::RecordTime("redistribute", t.seconds());
-        ptcls->rebuild(new_elms);
+
+        kkLidView new_process("new_process", ptcls->capacity());
+        Kokkos::fill_random(new_process, pool, comm_size);
+        ptcls->migrate(new_elms, new_process);
+        //ptcls->rebuild(new_elms);
       }
 
     } //end loop over structures

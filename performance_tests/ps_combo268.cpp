@@ -1,5 +1,6 @@
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
+#include <Kokkos_Random.hpp>
 #include "perfTypes.hpp"
 #include "../particle_structs/test/Distribute.h"
 #include <string>
@@ -70,6 +71,9 @@ int main(int argc, char* argv[]) {
     printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
 
+    int comm_size; // get number of processes
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
     /* Create particle structure */
     ParticleStructures32 structures;
     if(test_num == 0){
@@ -92,6 +96,10 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS32* ptcls = structures[i].second;
+
+      int seed = 0; // set seed for uniformly random processes
+      Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+
       printf("Beginning push on structure %s\n", name.c_str());
 
       //Per element data to access in pseudoPush
@@ -136,7 +144,6 @@ int main(int argc, char* argv[]) {
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
 
-      //printf("Beginning rebuild on structure %s\n", name.c_str());
       printf("Beginning migrate on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
@@ -147,7 +154,6 @@ int main(int argc, char* argv[]) {
         kkLidView new_process("new_process", ptcls->capacity());
         Kokkos::fill_random(new_process, pool, comm_size);
         ptcls->migrate(new_elms, new_process);
-        //ptcls->rebuild(new_elms);
       }
 
     } //end loop over structures

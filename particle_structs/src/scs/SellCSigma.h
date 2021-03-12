@@ -209,6 +209,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   double extra_padding;
   double shuffle_padding;
   PaddingStrategy pad_strat;
+  double minimize_size;
+  bool always_realloc;
   //True - try shuffling every rebuild, false - only rebuild
   bool tryShuffling;
   //Metric Info
@@ -295,6 +297,8 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   num_ptcls = np;
   shuffle_padding = 0.0;
   extra_padding = 0.1;
+  minimize_size = 0.8;
+  always_realloc = false;
   pad_strat = PAD_EVENLY;
   construct(ptcls_per_elem, element_gids, particle_elements, particle_info);
 }
@@ -309,7 +313,9 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   num_ptcls = input.np;
   shuffle_padding = input.shuffle_padding;
   extra_padding = input.extra_padding;
+  minimize_size = input.minimize_size;
   pad_strat = input.padding_strat;
+  always_realloc = input.always_realloc;
   construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
 }
 
@@ -331,6 +337,8 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
   mirror_copy->extra_padding = extra_padding;
   mirror_copy->shuffle_padding = shuffle_padding;
   mirror_copy->pad_strat = pad_strat;
+  mirror_copy->minimize_size = minimize_size;
+  mirror_copy->always_realloc = always_realloc;
   mirror_copy->tryShuffling = tryShuffling;
   mirror_copy->num_empty_elements = num_empty_elements;
 

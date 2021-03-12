@@ -149,7 +149,7 @@ namespace pumipic {
     Kokkos::parallel_reduce(numRows(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
         sum+= new_particles_per_elem(i);
       }, activePtcls);
-    
+
     Kokkos::fence();
     RecordTime(name + " count active particles", timer.seconds());
 
@@ -207,10 +207,12 @@ namespace pumipic {
 
     //Allocate the SCS
     kkLidView new_particle_mask("new_particle_mask", new_capacity);
-    if (swap_size < new_capacity || swap_size * .8 < new_capacity) {
+    if (always_realloc || swap_size < new_capacity ||
+        swap_size * minimize_size < new_capacity) {
       destroyViews<DataTypes, memory_space>(scs_data_swap);
-      CreateViews<device_type, DataTypes>(scs_data_swap, new_capacity * 1.1);
-      swap_size = new_capacity * 1.1;
+      CreateViews<device_type, DataTypes>(scs_data_swap,
+                                          new_capacity * (1 + extra_padding));
+      swap_size = new_capacity * (1 + extra_padding);
     }
 
 
@@ -256,7 +258,7 @@ namespace pumipic {
     RecordTime(name + " PSToPs", time_pstops.seconds());
 
     Kokkos::Timer time_newPtcls;
-    
+
     //Add new particles
     lid_t num_new_ptcls = new_particle_elements.size();
     kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);

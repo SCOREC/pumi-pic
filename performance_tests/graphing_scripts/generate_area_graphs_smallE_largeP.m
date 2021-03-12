@@ -1,12 +1,12 @@
 % MATLAB file for graph generation
 clear
 
-% Excluded: CSR Migrate, Even Distribution
+% Excluded: CSR, Even Distribution
 
 %% Data Reading
-fileID_rebuild = fopen('data/largeE_smallP_rebuild.dat');
-fileID_push = fopen('data/largeE_smallP_push.dat');
-fileID_migrate = fopen('data/largeE_smallP_migrate.dat');
+fileID_rebuild = fopen('data/smallE_largeP_rebuild.dat');
+fileID_push = fopen('data/smallE_largeP_push.dat');
+fileID_migrate = fopen('data/smallE_largeP_migrate.dat');
 
 % struct, element_number, distribution, particles_moved, average_time
 rebuild_data = fscanf(fileID_rebuild, "%d %d %d %d %f", [5 Inf])';
@@ -21,15 +21,15 @@ fclose(fileID_migrate);
 % find length of graphs
 elms = unique(rebuild_data( rebuild_data(:,1) == 0, 2 ));
 scs_length = length(unique(rebuild_data( rebuild_data(:,1) == 0, 2 )));
-csr_length = length(unique(rebuild_data( rebuild_data(:,1) == 1, 2 )));
+%csr_length = length(unique(rebuild_data( rebuild_data(:,1) == 1, 2 )));
 cabm_length = length(unique(rebuild_data( rebuild_data(:,1) == 2, 2 )));
 
 % Only take instances with 50% particles moved, pull distribution and time
 scs_rebuild = rebuild_data( rebuild_data(:,1) == 0,[3,5] );
-csr_rebuild = rebuild_data( rebuild_data(:,1) == 1, [3,5] );
+%csr_rebuild = rebuild_data( rebuild_data(:,1) == 1, [3,5] );
 cabm_rebuild = rebuild_data( rebuild_data(:,1) == 2, [3,5] );
 scs_push = push_data( push_data(:,1) == 0, [3,5] );
-csr_push = push_data( push_data(:,1) == 1, [3,5] );
+%csr_push = push_data( push_data(:,1) == 1, [3,5] );
 cabm_push = push_data( push_data(:,1) == 2, [3,5] );
 scs_migrate = migrate_data( migrate_data(:,1) == 0, [3,5] );
 %csr_migrate = migrate_data( migrate_data(:,1) == 1, [3,5] );
@@ -42,11 +42,11 @@ cabm_migrate = migrate_data( migrate_data(:,1) == 2, [3,5] );
 scs_rebuild_uni = scs_rebuild( scs_rebuild(:,1) == 1, 2);
 scs_rebuild_gauss = scs_rebuild( scs_rebuild(:,1) == 2, 2);
 scs_rebuild_exp = scs_rebuild( scs_rebuild(:,1) == 3, 2);
-% CSR Rebuild
-%csr_rebuild_even = csr_rebuild( csr_rebuild(:,1) == 0, 2);
-csr_rebuild_uni = csr_rebuild( csr_rebuild(:,1) == 1, 2);
-csr_rebuild_gauss = csr_rebuild( csr_rebuild(:,1) == 2, 2);
-csr_rebuild_exp = csr_rebuild( csr_rebuild(:,1) == 3, 2);
+% % CSR Rebuild
+% %csr_rebuild_even = csr_rebuild( csr_rebuild(:,1) == 0, 2);
+% csr_rebuild_uni = csr_rebuild( csr_rebuild(:,1) == 1, 2);
+% csr_rebuild_gauss = csr_rebuild( csr_rebuild(:,1) == 2, 2);
+% csr_rebuild_exp = csr_rebuild( csr_rebuild(:,1) == 3, 2);
 % CabM Rebuild
 %cabm_rebuild_even = cabm_rebuild( cabm_rebuild(:,1) == 0, 2);
 cabm_rebuild_uni = cabm_rebuild( cabm_rebuild(:,1) == 1, 2);
@@ -58,11 +58,11 @@ cabm_rebuild_exp = cabm_rebuild( cabm_rebuild(:,1) == 3, 2);
 scs_push_uni = scs_push( scs_push(:,1) == 1, 2);
 scs_push_gauss = scs_push( scs_push(:,1) == 2, 2);
 scs_push_exp = scs_push( scs_push(:,1) == 3, 2);
-% CSR Pseudo-Push
-%csr_push_even = csr_push( csr_push(:,1) == 0, 2);
-csr_push_uni = csr_push( csr_push(:,1) == 1, 2);
-csr_push_gauss = csr_push( csr_push(:,1) == 2, 2);
-csr_push_exp = csr_push( csr_push(:,1) == 3, 2);
+% % CSR Pseudo-Push
+% %csr_push_even = csr_push( csr_push(:,1) == 0, 2);
+% csr_push_uni = csr_push( csr_push(:,1) == 1, 2);
+% csr_push_gauss = csr_push( csr_push(:,1) == 2, 2);
+% csr_push_exp = csr_push( csr_push(:,1) == 3, 2);
 % CabM Pseudo-Push
 %cabm_push_even = cabm_push( cabm_push(:,1) == 0, 2);
 cabm_push_uni = cabm_push( cabm_push(:,1) == 1, 2);
@@ -87,82 +87,83 @@ cabm_migrate_exp = cabm_migrate( cabm_migrate(:,1) == 3, 2);
 
 %% Graph Generation
 
+% SCS Graphs
 % figure setup
 f = figure;
-f.Position(3:4) = [1100,350];
+f.Position(3:4) = [1000,300];
 t = tiledlayout(1,3, 'TileSpacing', 'Compact', 'Padding', 'Compact');
-title(t, 'Particle Structure Speedup')
-xlabel(t, {'Number Particles (Thousands)','Number Elements'})
-ylabel(t, {'Average Structure Speedup','(SCS Time/Structure Time)'})
-
-% Even (excluded)
-
-
+title(t, 'SCS Average Function Times')
+xlabel(t, {'Number Particles (Ten Thousands)','Number Elements'})
+ylabel(t, 'Seconds')
+% Even (Excluded)
 % Uniform
 ax2 = nexttile;
-loglog( ...
-    elms(1:cabm_length), scs_push_uni(1:cabm_length)./cabm_push_uni, 'r:', ...
-    elms(1:cabm_length), scs_rebuild_uni(1:cabm_length)./cabm_rebuild_uni, 'r--', ...
-    elms(1:cabm_length), scs_migrate_uni(1:cabm_length)./cabm_migrate_uni, 'r-.', ...
-    elms(1:csr_length), scs_push_uni(1:csr_length)./csr_push_uni, 'b:', ...
-    elms(1:csr_length), scs_rebuild_uni(1:csr_length)./csr_rebuild_uni, 'b--', ...
-    elms, ones(size(elms)), 'k', ...
-    'LineWidth', 0.75 );
+tile2 = area(elms, [scs_push_uni, scs_rebuild_uni, scs_migrate_uni]);
 ax = gca;
-ax.XTick = [100, 1000, 10000];
-ax.XTickLabel = {'100', '1000', '10000'};
-ax.YTick = [0.01,0.1,1,10,100]; 
-ax.YTickLabel = {'0.01','0.1x','1x', '10x', '100x'};
-ax.YGrid = 'on';
-title({'Uniform Distribution'})
+ax.XAxis.Exponent = 0;
 lim2 = axis;
-
+title({'Uniform Distribution'})
 % Gaussian
 ax3 = nexttile;
-loglog( ...
-    elms(1:cabm_length), scs_push_gauss(1:cabm_length)./cabm_push_gauss, 'r:', ...
-    elms(1:cabm_length), scs_rebuild_gauss(1:cabm_length)./cabm_rebuild_gauss, 'r--', ...
-    elms(1:cabm_length), scs_migrate_gauss(1:cabm_length)./cabm_migrate_gauss, 'r-.', ...
-    elms(1:csr_length), scs_push_gauss(1:csr_length)./csr_push_gauss, 'b:', ...
-    elms(1:csr_length), scs_rebuild_gauss(1:csr_length)./csr_rebuild_gauss, 'b--', ...
-    elms, ones(size(elms)), 'k', ...
-    'LineWidth', 0.75 );
+tile3 = area(elms, [scs_push_gauss, scs_rebuild_gauss, scs_migrate_gauss]);
 ax = gca;
-ax.XTick = [100, 1000, 10000];
-ax.XTickLabel = {'100', '1000', '10000'};
-ax.YTick = [0.01,0.1,1,10,100]; 
-ax.YTickLabel = {'0.01','0.1x','1x', '10x', '100x'};
-ax.YGrid = 'on';
-title({'Gaussian Distribution'})
+ax.XAxis.Exponent = 0;
 lim3 = axis;
-
+title({'Gaussian Distribution'})
 % Exponential
 ax4 = nexttile;
-loglog( ...
-    elms(1:cabm_length), scs_push_exp(1:cabm_length)./cabm_push_exp, 'r:', ...
-    elms(1:cabm_length), scs_rebuild_exp(1:cabm_length)./cabm_rebuild_exp, 'r--', ...
-    elms(1:cabm_length), scs_migrate_exp(1:cabm_length)./cabm_migrate_exp, 'r-.', ...
-    elms(1:csr_length), scs_push_exp(1:csr_length)./csr_push_exp, 'b:', ...
-    elms(1:csr_length), scs_rebuild_exp(1:csr_length)./csr_rebuild_exp, 'b--', ...
-    elms, ones(size(elms)), 'k', ...
-    'LineWidth', 0.75 );
+tile4 = area(elms, [scs_push_exp, scs_rebuild_exp, scs_migrate_exp]);
 ax = gca;
-ax.XTick = [100, 1000, 10000];
-ax.XTickLabel = {'100', '1000', '10000'};
-ax.YTick = [0.01,0.1,1,10,100]; 
-ax.YTickLabel = {'0.01x','0.1x','1x', '10x', '100x'};
-ax.YGrid = 'on';
-title({'Exponential Distribution'})
+ax.XAxis.Exponent = 0;
 lim4 = axis;
+title({'Exponential Distribution'})
 
-lg = legend(nexttile(3), {'CabM pseudo-push'; 'CabM rebuild'; 'CabM migrate'; ...
-                          'CSR pseudo-push'; 'CSR rebuild'; ...
-                          'SCS (reference)'});
+lg = legend(nexttile(3), {'SCS pseudo-push'; 'SCS rebuild'; 'SCS migrate'});
 lg.Location = 'northeastoutside';
-
 % align axes
 limits = [lim2; lim3; lim4];
 limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
 axis([ax2 ax3 ax4], limits )
 
-saveas(f,'largeE_smallP.png')
+saveas(f,'smallE_largeP_AreaSCS.png')
+
+
+% CabM Graphs
+% figure setup
+f = figure;
+f.Position(3:4) = [1000,300];
+t = tiledlayout(1,3, 'TileSpacing', 'Compact', 'Padding', 'Compact');
+title(t, 'CabM Average Function Times')
+xlabel(t, {'Number Particles (Ten Thousands)','Number Elements'})
+ylabel(t, 'Seconds')
+% Even (Excluded)
+% Uniform
+ax2 = nexttile;
+area(elms, [cabm_push_uni, cabm_rebuild_uni, cabm_migrate_uni]);
+ax = gca;
+ax.XAxis.Exponent = 0;
+lim2 = axis;
+title({'Uniform Distribution'})
+% Gaussian
+ax3 = nexttile;
+area(elms, [cabm_push_gauss, cabm_rebuild_gauss, cabm_migrate_gauss]);
+ax = gca;
+ax.XAxis.Exponent = 0;
+lim3 = axis;
+title({'Gaussian Distribution'})
+% Exponential
+ax4 = nexttile;
+area(elms, [cabm_push_exp, cabm_rebuild_exp, cabm_migrate_exp]);
+ax = gca;
+ax.XAxis.Exponent = 0;
+lim4 = axis;
+title({'Exponential Distribution'})
+
+lg = legend(nexttile(3), {'CabM pseudo-push'; 'CabM rebuild'; 'CabM migrate'});
+lg.Location = 'northeastoutside';
+% align axes
+limits = [lim2; lim3; lim4];
+limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+axis([ax2 ax3 ax4], limits )
+
+saveas(f,'smallE_largeP_AreaCabM.png')

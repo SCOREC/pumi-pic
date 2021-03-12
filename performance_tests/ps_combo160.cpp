@@ -61,13 +61,18 @@ int main(int argc, char* argv[]) {
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
+  /// @todo Add prebarrier to all classes (Only on SCS at the moment)
+  pumipic::enable_prebarrier();
 
   { //Begin Kokkos region
 
     /* Create initial distribution of particles */
     kkLidView ppe("ptcls_per_elem", num_elems);
     kkLidView ptcl_elems("ptcl_elems", num_ptcls);
-    kkGidView element_gids("",0);
+    kkGidView element_gids("element_gids", num_elems);
+    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
+        element_gids(i) = i;
+    });
     printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
 
@@ -110,30 +115,29 @@ int main(int argc, char* argv[]) {
       });
 
       /* Begin Push Setup */
-
-      auto nums = ptcls->get<0>();
-      auto dbls = ptcls->get<1>();
-      auto dbl = ptcls->get<2>();
+      auto dbls = ptcls->get<0>();
+      auto nums = ptcls->get<1>();
+      auto lint = ptcls->get<2>();
 
       auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-        if(mask){
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = 4*p + i;
-          }
+        if (mask) {
           for (int i = 0; i < 17; i++) {
             dbls(p,i) = 10.3;
             dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
           }
-          dbl(p)  = parentElmData(e);
+          for (int i = 0; i < 4; i++) {
+            nums(p,i) = 4*p + i;
+          }
+          lint(p) = p;
         }
         else{
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = -1;
-          }
           for (int i = 0; i < 17; i++) {
             dbls(p,i) = 0;
           }
-          dbl(p)  = 0;
+          for (int i = 0; i < 4; i++) {
+            nums(p,i) = -1;
+          }
+          lint(p) = 0;
         }
       };
 

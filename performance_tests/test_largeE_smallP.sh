@@ -4,7 +4,7 @@
 # Medium-Sparsity Testing Script for AiMOS: large elm n, small ptcl n
 for e in 100 200 500 1000 2000 5000 10000 20000 50000 100000
 do
-  for distribution in 1 2 3
+  for distribution in 1 2 3 # Even Distribution currently BAD on CabM
   do 
     for percent in 50 # 10% and 50% should be very similar
     do 

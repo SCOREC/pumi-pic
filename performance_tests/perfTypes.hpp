@@ -4,9 +4,9 @@
 
 typedef double Vector3d[3];
 typedef pumipic::MemberTypes<int, Vector3d, double> PerfTypes;
-typedef double Vector4i[4];
 typedef double Vector17d[17];
-typedef pumipic::MemberTypes<Vector4i, Vector17d, double> PerfTypes160;
+typedef int Vector4i[4];
+typedef pumipic::MemberTypes<Vector17d, Vector4i, long int> PerfTypes160;
 
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef typename ExeSpace::memory_space MemSpace;

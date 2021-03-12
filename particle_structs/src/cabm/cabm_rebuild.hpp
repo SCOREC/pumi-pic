@@ -20,8 +20,13 @@ namespace pumipic {
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
+    /// @todo add prebarrier to main ParticleStructure files
+    //const auto btime = prebarrier();
+    Kokkos::Timer barrier_timer;
+    MPI_Barrier(MPI_COMM_WORLD);
+    const auto btime = barrier_timer.seconds();
+
     Kokkos::Profiling::pushRegion("CabM Rebuild");
-    //SetTimingVerbosity(1); // Uncomment for rebuild timing output
     Kokkos::Timer overall_timer; // timer for rebuild
 
     const auto num_new_ptcls = new_particle_elements.size();
@@ -119,7 +124,7 @@ namespace pumipic {
     }
 
     RecordTime("CabM add particles", add_timer.seconds());
-    RecordTime("CabM rebuild", overall_timer.seconds());
+    RecordTime("CabM rebuild", overall_timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

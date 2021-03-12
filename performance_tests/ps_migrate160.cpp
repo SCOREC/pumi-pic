@@ -26,24 +26,24 @@ int main(int argc, char* argv[]) {
   bool optimal = false;
 
   //Optional arguments specified with flags
-  for(int i = 4; i < argc; i+=2){
+  for (int i = 4; i < argc; i+=2) {
     // -p = percent_moved
-    if(std::string(argv[i]) == "-p"){
+    if (std::string(argv[i]) == "-p") {
       percentMoved = atoi(argv[i+1]);
     }
     // -n = test_num
-    else if(std::string(argv[i]) == "-n"){
+    else if (std::string(argv[i]) == "-n") {
       test_num = atoi(argv[i+1]);
     }
     // -s = team_size (/chunk width)
-    else if(std::string(argv[i]) == "-s"){
+    else if (std::string(argv[i]) == "-s") {
       team_size = atoi(argv[i+1]);
     }
     // -v = vertical slicing
-    else if(std::string(argv[i]) == "-v"){
+    else if (std::string(argv[i]) == "-v") {
       vert_slice = atoi(argv[i+1]);
     }
-    else if(std::string(argv[i]) == "--optimal"){
+    else if (std::string(argv[i]) == "--optimal") {
       optimal = true;
       i--;
     }

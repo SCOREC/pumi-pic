@@ -11,9 +11,8 @@ make_test(ps_rebuild ps_rebuild.cpp)
 
 make_test(ps_pseudopush ps_pseudopush.cpp)
 
-make_test(ps_combo36 ps_combo36.cpp)
-make_test(ps_combo268 ps_combo268.cpp)
+make_test(ps_combo160 ps_combo160.cpp)
 
-make_test(ps_migrate268 ps_migrate268.cpp)
+make_test(ps_migrate160 ps_migrate160.cpp)
 
 bob_end_subdir()

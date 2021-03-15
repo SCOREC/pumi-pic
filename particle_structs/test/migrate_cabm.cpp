@@ -43,6 +43,10 @@ int main(int argc, char* argv[]) {
     Kokkos::TeamPolicy<exe_space> po(4, 32);
     CabanaM* cabm = new CabanaM(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
+    char rank_str[100];
+    sprintf(rank_str,"Format for rank %d", comm_rank);
+    cabm->printFormat(rank_str);
+
     typedef CabanaM::kkLidView kkLidView;
     kkLidView new_element("new_element", cabm->capacity());
     kkLidView new_process("new_process", cabm->capacity());
@@ -96,6 +100,7 @@ int main(int argc, char* argv[]) {
     };
     cabm->parallel_for(checkValues);
     MPI_Barrier(MPI_COMM_WORLD);
+    cabm->printFormat(rank_str);
 
     int f = particle_structs::getLastValue(fail);
     if (f == 1) {

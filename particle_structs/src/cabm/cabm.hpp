@@ -75,6 +75,7 @@ namespace pumipic {
     void parallel_for(FunctionType& fn, std::string s="");
 
     void printMetrics() const;
+    void printFormat(const char* prefix) const;
 
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element);
@@ -167,9 +168,7 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::~CabM() {
-    fprintf(stderr, "[WARNING] CabM deconstructor not implemented\n");
-  }
+  CabM<DataTypes, MemSpace>::~CabM() { }
 
   /**
    * a parallel for-loop that iterates through all particles
@@ -213,6 +212,49 @@ namespace pumipic {
     fprintf(stderr, "CabM num elements %d\n", num_elems);
     fprintf(stderr, "CabM num SoA %d\n", num_soa_);
   }
+
+  template <class DataTypes, typename MemSpace>
+  void CabM<DataTypes, MemSpace>::printFormat(const char* prefix) const {
+    kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
+    kkLidHostMirror offsets_host = deviceToHost(offsets);
+    kkLidHostMirror parents_host = deviceToHost(parentElms_);
+    const auto soa_len = AoSoA_t::vector_length;
+
+    kkLidView active(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
+    const auto activeSliceIdx = aosoa_.number_of_members-1;
+    auto active_slice = Cabana::slice<activeSliceIdx>(aosoa_);
+    Kokkos::parallel_for("copy_active", capacity_,
+      KOKKOS_LAMBDA(const lid_t ptcl_id) {
+        active(ptcl_id) = active_slice(ptcl_id);
+      });
+    kkLidHostMirror active_host = deviceToHost(active);
+
+    char message[10000];
+    char* cur = message;
+    cur += sprintf(cur, "%s\n", prefix);
+    cur += sprintf(cur,"Particle Structures CabM\n");
+    cur += sprintf(cur,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
+    int last_soa = -1;
+    int last_elm = -1;
+    for (int i = 0; i < capacity_; i++) {
+      int soa = i / soa_len;
+      int elm = parents_host(soa);
+      if (last_soa == soa)
+        cur += sprintf(cur," %d", active_host(i));
+      else {
+        if (last_elm != elm)
+          cur += sprintf(cur,"\n  Element %d(%d) | %d", elm, element_to_gid_host(elm), active_host(i));
+        else
+          cur += sprintf(cur,"\n                 | %d", active_host(i));
+      }
+
+      last_soa = soa;
+      last_elm = elm;
+    }
+    cur += sprintf(cur,"\n");
+    printf("%s", message);
+  }
+
 }
 
 // Separate files with CabM member function implementations

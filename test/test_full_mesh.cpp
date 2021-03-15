@@ -1,7 +1,7 @@
 #include <fstream>
 
 #include <Omega_h_file.hpp>
-
+#include <Omega_h_for.hpp>
 #include <pumipic_mesh.hpp>
 
 int main(int argc, char** argv) {
@@ -40,9 +40,24 @@ int main(int argc, char** argv) {
     }
   }
 
+  //Test the global tag to be converted to global_serial
+  Omega_h::TagBase const* new_tag = picparts->get_tagbase(3, "global_serial");
+
+  Omega_h::GOs global_old = mesh.get_array<Omega_h::GO>(3, "global");
+  Omega_h::GOs global_new = picparts->get_array<Omega_h::GO>(3, "global_serial");
+  Omega_h::Write<Omega_h::LO> fails(1,0);
+  auto checkGlobals = OMEGA_H_LAMBDA(const Omega_h::LO ent) {
+    if (global_old[ent] != global_new[ent]) {
+      printf("global ids do not match on entity %d [%ld != %ld]", ent, global_old[ent],
+        global_old[ent]);
+      fails[0] = 1;
+    }
+  };
+  Omega_h::parallel_for(mesh.nelems(), checkGlobals, "checkGlobals");
+
   char vtk_name[100];
   sprintf(vtk_name, "picpart%d", rank);
   Omega_h::vtk::write_parallel(vtk_name, picparts.mesh(), dim);
 
-  return EXIT_SUCCESS;
+  return Omega_h::HostWrite<Omega_h::LO>(fails)[0];
 }

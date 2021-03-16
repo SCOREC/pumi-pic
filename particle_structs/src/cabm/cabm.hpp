@@ -207,10 +207,46 @@ namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::printMetrics() const {
-    fprintf(stderr, "CabM capacity %d\n", capacity_);
-    fprintf(stderr, "CabM num ptcls %d\n", num_ptcls);
-    fprintf(stderr, "CabM num elements %d\n", num_elems);
-    fprintf(stderr, "CabM num SoA %d\n", num_soa_);
+    // Sum number of empty cells
+    const auto activeSliceIdx = aosoa_.number_of_members-1;
+    auto mask = Cabana::slice<activeSliceIdx>(aosoa_);
+    kkLidView padded_cells("num_padded_cells",1);
+    Kokkos::parallel_for("count_padding", capacity_,
+      KOKKOS_LAMBDA(const lid_t ptcl_id) {
+        Kokkos::atomic_fetch_add(&padded_cells(0), !mask(ptcl_id));
+      });
+    // Sum number of empty elements
+    kkLidHostMirror offsets_host = deviceToHost(offsets);
+    lid_t num_empty_elements = 0;
+    if (num_soa_ == 0)
+      num_empty_elements = num_elems;
+    else {
+      for (int i = 0; i < num_elems; i++) {
+        if (i != 0 && (offsets_host(i) == offsets_host(i-1)) )
+          num_empty_elements++;
+      }
+    }
+
+    lid_t num_padded = getLastValue<lid_t>(padded_cells);
+
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    char buffer[1000];
+    char* ptr = buffer;
+
+    // Header
+    ptr += sprintf(ptr, "Metrics (Rank %d)\n", comm_rank);
+    // Sizes
+    ptr += sprintf(ptr, "Number of Elements %d, Number of SoA %d, Number of Particles %d, Capacity %d\n",
+                   num_elems, num_soa_, num_ptcls, capacity_);
+    // Padded Cells
+    ptr += sprintf(ptr, "Padded Cells <Tot %%> %d %.3f%%\n", num_padded,
+                   num_padded * 100.0 / capacity_);
+    // Empty Elements
+    ptr += sprintf(ptr, "Empty Elements <Tot %%> %d %.3f%%\n", num_empty_elements,
+                   num_empty_elements * 100.0 / num_elems);
+
+    printf("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -220,39 +256,38 @@ namespace pumipic {
     kkLidHostMirror parents_host = deviceToHost(parentElms_);
     const auto soa_len = AoSoA_t::vector_length;
 
-    kkLidView active(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
+    kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
     const auto activeSliceIdx = aosoa_.number_of_members-1;
-    auto active_slice = Cabana::slice<activeSliceIdx>(aosoa_);
-    Kokkos::parallel_for("copy_active", capacity_,
+    auto mask_slice = Cabana::slice<activeSliceIdx>(aosoa_);
+    Kokkos::parallel_for("copy_mask", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
-        active(ptcl_id) = active_slice(ptcl_id);
+        mask(ptcl_id) = mask_slice(ptcl_id);
       });
-    kkLidHostMirror active_host = deviceToHost(active);
+    kkLidHostMirror mask_host = deviceToHost(mask);
 
-    char message[10000];
-    char* cur = message;
-    cur += sprintf(cur, "%s\n", prefix);
-    cur += sprintf(cur,"Particle Structures CabM\n");
-    cur += sprintf(cur,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
-    int last_soa = -1;
-    int last_elm = -1;
+    char buffer[10000];
+    char* ptr = buffer;
+    ptr += sprintf(ptr, "%s\n", prefix);
+    ptr += sprintf(ptr,"Particle Structures CabM\n");
+    ptr += sprintf(ptr,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
+    lid_t last_soa = -1;
+    lid_t last_elm = -1;
     for (int i = 0; i < capacity_; i++) {
-      int soa = i / soa_len;
-      int elm = parents_host(soa);
+      lid_t soa = i / soa_len;
+      lid_t elm = parents_host(soa);
       if (last_soa == soa)
-        cur += sprintf(cur," %d", active_host(i));
+        ptr += sprintf(ptr," %d", mask_host(i));
       else {
         if (last_elm != elm)
-          cur += sprintf(cur,"\n  Element %d(%d) | %d", elm, element_to_gid_host(elm), active_host(i));
+          ptr += sprintf(ptr,"\n  Element %d(%d) | %d", elm, element_to_gid_host(elm), mask_host(i));
         else
-          cur += sprintf(cur,"\n                 | %d", active_host(i));
+          ptr += sprintf(ptr,"\n                 | %d", mask_host(i));
       }
 
       last_soa = soa;
       last_elm = elm;
     }
-    cur += sprintf(cur,"\n");
-    printf("%s", message);
+    printf("%s\n", buffer);
   }
 
 }

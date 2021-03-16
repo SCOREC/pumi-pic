@@ -279,7 +279,7 @@ namespace pumipic {
         ptr += sprintf(ptr," %d", mask_host(i));
       else {
         if (last_elm != elm)
-          ptr += sprintf(ptr,"\n  Element %d(%d) | %d", elm, element_to_gid_host(elm), mask_host(i));
+          ptr += sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
         else
           ptr += sprintf(ptr,"\n                 | %d", mask_host(i));
       }

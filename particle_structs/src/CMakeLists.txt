@@ -27,6 +27,7 @@ set(HEADERS
   scs/scs_input.hpp
   csr/CSR.hpp
   csr/CSR_buildFns.hpp
+  csr/CSR_migrate.hpp
   csr/CSR_rebuild.hpp
   cabm/cabm_support.hpp
   cabm/cabm.hpp

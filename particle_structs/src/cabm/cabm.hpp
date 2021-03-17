@@ -278,10 +278,18 @@ namespace pumipic {
       if (last_soa == soa)
         ptr += sprintf(ptr," %d", mask_host(i));
       else {
-        if (last_elm != elm)
-          ptr += sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
-        else
-          ptr += sprintf(ptr,"\n                 | %d", mask_host(i));
+        if (element_to_gid_host.size() > 0) {
+          if (last_elm != elm)
+            ptr += sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
+          else
+            ptr += sprintf(ptr,"\n                 | %d", mask_host(i));
+        }
+        else {
+          if (last_elm != elm)
+            ptr += sprintf(ptr,"\n  Element %2d | %d", elm, element_to_gid_host(elm), mask_host(i));
+          else
+            ptr += sprintf(ptr,"\n             | %d", mask_host(i));
+        }
       }
 
       last_soa = soa;

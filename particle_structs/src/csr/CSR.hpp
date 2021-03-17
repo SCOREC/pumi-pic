@@ -20,6 +20,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
+    typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
     CSR() = delete;
     CSR(const CSR&) = delete;
@@ -52,6 +53,19 @@ namespace pumipic {
     void parallel_for(FunctionType& fn, std::string name="");
 
     void printMetrics() const;
+    void printFormat(const char* prefix) const;
+
+    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
+      lid_to_gid = kkGidView("row to element gid", num_rows);
+      Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+        const gid_t gid = element_gids(i);
+        lid_to_gid(i) = gid;
+        gid_to_lid.insert(gid, i);
+      });
+      Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, num_rows), KOKKOS_LAMBDA(const lid_t& i) {
+        lid_to_gid(i) = -1;
+      });
+    }
 
     //---Attention User---  Do **not** call this function! {
     /**
@@ -98,6 +112,9 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
+    //Data types for keeping track of global IDs
+    kkGidView element_to_gid;
+    GID_Mapping element_gid_to_lid;
     //Offsets array into CSR
     kkLidView offsets;
   };
@@ -129,6 +146,11 @@ namespace pumipic {
     offsets = kkLidView("offsets", num_elems+1);
     Kokkos::resize(particles_per_element, particles_per_element.size()+1);
     exclusive_scan(particles_per_element, offsets);
+
+    // get global ids
+    if (element_gids.size() > 0) {
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    }
 
     //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     //pumi-pic/support/SupportKK.h has a helper function for this
@@ -209,6 +231,30 @@ namespace pumipic {
     
     printf("%s\n", buffer);
   }
+
+  template <class DataTypes, typename MemSpace>
+  void CSR<DataTypes, MemSpace>::printFormat(const char* prefix) const {
+    kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
+    kkLidHostMirror offsets_host = deviceToHost(offsets);
+
+    char buffer[10000];
+    char* ptr = buffer;
+    ptr += sprintf(ptr, "%s\n", prefix);
+    ptr += sprintf(ptr,"Particle Structures CSR\n");
+    ptr += sprintf(ptr,"Number of Elements: %d.\nNumber of Particles: %d.", num_elems, num_ptcls);
+    for (int i = 1; i < offsets_host.size(); i++) {
+      if ( offsets_host[i] != offsets_host[i-1] ) {
+        if (element_to_gid_host.size() > 0)
+          ptr += sprintf(ptr,"\n  Element %2d(%2d) |", i, element_to_gid_host(i));
+        else
+          ptr += sprintf(ptr,"\n  Element %2d |", i);
+        for (int j = offsets_host[i-1]; j < offsets_host[i]; j++)
+          ptr += sprintf(ptr," 1");
+      }
+    }
+    printf("%s\n", buffer);
+  }
+
 } //end namespace pumipic
 
 #include "CSR_rebuild.hpp"

@@ -53,11 +53,18 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  fprintf(stderr, "Test Command:\n");
-  for (int i = 0; i < argc; i++) {
-    fprintf(stderr, " %s", argv[i]);
+  int comm_rank; // get process rank
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  int comm_size; // get number of processes
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+  if (!comm_rank) {
+    fprintf(stderr, "Test Command:\n");
+    for (int i = 0; i < argc; i++) {
+      fprintf(stderr, " %s", argv[i]);
+    }
+    fprintf(stderr, "\n");
   }
-  fprintf(stderr, "\n");
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
@@ -73,11 +80,9 @@ int main(int argc, char* argv[]) {
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
         element_gids(i) = i;
     });
-    printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
+    if (!comm_rank)
+      printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
-
-    int comm_size; // get number of processes
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
     /* Create particle structure */
     ParticleStructures160 structures;
@@ -96,7 +101,8 @@ int main(int argc, char* argv[]) {
     }
 
     const int ITERS = 100;
-    printf("Performing %d iterations of rebuild on each structure\n", ITERS);
+    if (!comm_rank)
+      printf("Performing %d iterations of rebuild on each structure\n", ITERS);
     /* Perform push & rebuild on the particle structures */
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
@@ -105,7 +111,8 @@ int main(int argc, char* argv[]) {
       int seed = 0; // set seed for uniformly random processes
       Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
 
-      printf("Beginning push on structure %s\n", name.c_str());
+      if (!comm_rank)
+        printf("Beginning push on structure %s\n", name.c_str());
 
       //Per element data to access in pseudoPush
       Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
@@ -152,20 +159,17 @@ int main(int argc, char* argv[]) {
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
 
-      printf("Beginning migrate on structure %s\n", name.c_str());
+      if (!comm_rank)
+        printf("Beginning migrate on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
         Kokkos::Timer t;
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
         pumipic::RecordTime("redistribute", t.seconds());
-        if ( name == "CSR" ) {
-          ptcls->rebuild(new_elms);
-        }
-        else {
-          kkLidView new_process("new_process", ptcls->capacity());
-          Kokkos::fill_random(new_process, pool, comm_size);
-          ptcls->migrate(new_elms, new_process);
-        }
+
+        kkLidView new_process("new_process", ptcls->capacity());
+        Kokkos::fill_random(new_process, pool, comm_size);
+        ptcls->migrate(new_elms, new_process);
       }
 
     } //end loop over structures

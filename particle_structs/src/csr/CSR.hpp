@@ -196,9 +196,18 @@ namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::printMetrics() const {
-    fprintf(stderr, "csr capacity %d\n", capacity_);
-    fprintf(stderr, "num ptcls    %d\n", num_ptcls);
-    fprintf(stderr, "num elements %d\n", num_elems);
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    char buffer[1000];
+    char* ptr = buffer;
+
+    // Header
+    ptr += sprintf(ptr, "Metrics (Rank %d)\n", comm_rank);
+    // Sizes
+    ptr += sprintf(ptr, "Number of Elements %d, Number of Particles %d, Capacity %d\n",
+                   num_elems, num_ptcls, capacity_);
+    
+    printf("%s\n", buffer);
   }
 } //end namespace pumipic
 

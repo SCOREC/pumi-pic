@@ -192,7 +192,7 @@ namespace pumipic {
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
-        recv_element(i) = element_gid_to_lid_local.value_at(index); // here?
+        recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
     
     // ********** Set particles that were sent to non existent on this process *********

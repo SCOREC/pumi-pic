@@ -4,14 +4,11 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
-    lid_to_gid = kkGidView("row to element gid", num_rows);
+    lid_to_gid = kkGidView("row to element gid", num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const gid_t gid = element_gids(i);
       lid_to_gid(i) = gid;
       gid_to_lid.insert(gid, i);
-    });
-    Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, num_rows), KOKKOS_LAMBDA(const lid_t& i) {
-      lid_to_gid(i) = -1;
     });
   }
 

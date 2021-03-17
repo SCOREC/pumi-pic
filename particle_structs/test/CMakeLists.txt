@@ -29,6 +29,7 @@ make_test(test_structure test_structure.cpp)
 
 make_test(test_csr test_csr.cpp)
 make_test(rebuild_csr rebuild_csr.cpp)
+make_test(migrate_csr migrate_csr.cpp)
 
 make_test(test_cabm test_cabm.cpp)
 make_test(rebuild_cabm rebuild_cabm.cpp)

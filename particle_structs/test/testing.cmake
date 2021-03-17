@@ -29,6 +29,8 @@ add_test(NAME lambdaTest COMMAND ./lambdaTest)
 
 add_test(NAME migrateNothing_scs COMMAND ./migrate_scs)
 add_test(NAME migrate4_scs COMMAND mpirun -np 4 ./migrate_scs)
+add_test(NAME migrateNothing_csr COMMAND ./migrate_csr)
+add_test(NAME migrate4_csr COMMAND mpirun -np 4 ./migrate_csr)
 add_test(NAME migrateNothing_cabm COMMAND ./migrate_cabm)
 add_test(NAME migrate4_cabm COMMAND mpirun -np 4 ./migrate_cabm)
 

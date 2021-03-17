@@ -87,7 +87,8 @@ namespace pumipic {
                                 kkLidView particle_elements, //optional
                                 MTVs particle_info) :        //optional
       ParticleStructure<DataTypes, MemSpace>(),
-      policy(p)
+      policy(p),
+      element_gid_to_lid(num_elements)
   {
     Kokkos::Profiling::pushRegion("csr_construction");
     num_elems = num_elements;
@@ -196,9 +197,9 @@ namespace pumipic {
     for (int i = 1; i < offsets_host.size(); i++) {
       if ( offsets_host[i] != offsets_host[i-1] ) {
         if (element_to_gid_host.size() > 0)
-          ptr += sprintf(ptr,"\n  Element %2d(%2d) |", i, element_to_gid_host(i));
+          ptr += sprintf(ptr,"\n  Element %2d(%2d) |", i-1, element_to_gid_host(i-1));
         else
-          ptr += sprintf(ptr,"\n  Element %2d |", i);
+          ptr += sprintf(ptr,"\n  Element %2d |", i-1);
         for (int j = offsets_host[i-1]; j < offsets_host[i]; j++)
           ptr += sprintf(ptr," 1");
       }

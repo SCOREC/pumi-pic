@@ -60,10 +60,10 @@ namespace pumipic {
     void initCsrData(kkLidView particle_elements, MTVs particle_info);
 
   private:
-    //The User defined Kokkos policy
+    // The User defined Kokkos policy
     PolicyType policy;
 
-    //Variables from ParticleStructure
+    // Variables from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::num_elems;
     using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity_;
@@ -71,21 +71,35 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    //Data types for keeping track of global IDs
+    // Data types for keeping track of global IDs
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
-    //Offsets array into CSR
+    // Offsets array into CSR
     kkLidView offsets;
   };
 
-
+  /**
+   * Constructor
+   * @param[in] p
+   * @param[in] num_elements number of elements
+   * @param[in] num_particles number of particles
+   * @param[in] particle_per_element view of ints, representing number of particles
+   *    in each element
+   * @param[in] element_gids view of ints, representing the global ids of each element
+   * @param[in] particle_elements view of ints, representing which elements
+   *    particle reside in (optional)
+   * @param[in] particle_info array of views filled with particle data (optional)
+   * @exception num_elements != particles_per_element.size(),
+   *    undefined behavior for new_particle_elements.size() != sizeof(new_particles),
+   *    undefined behavior for numberoftypes(new_particles) != numberoftypes(DataTypes)
+  */
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::CSR(PolicyType& p,
                                 lid_t num_elements, lid_t num_particles,
                                 kkLidView particles_per_element,
-                                kkGidView element_gids,      //optional
-                                kkLidView particle_elements, //optional
-                                MTVs particle_info) :        //optional
+                                kkGidView element_gids,      // optional
+                                kkLidView particle_elements, // optional
+                                MTVs particle_info) :        // optional
       ParticleStructure<DataTypes, MemSpace>(),
       policy(p),
       element_gid_to_lid(num_elements)
@@ -100,9 +114,9 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
 
-    //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
-    //to fill the entries of the offsets array.
-    //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
+    // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
+    // to fill the entries of the offsets array.
+    // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
     offsets = kkLidView("offsets", num_elems+1);
     Kokkos::resize(particles_per_element, particles_per_element.size()+1);
     exclusive_scan(particles_per_element, offsets);
@@ -112,21 +126,19 @@ namespace pumipic {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
     }
 
-    //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
-    //pumi-pic/support/SupportKK.h has a helper function for this
+    // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
+    // pumi-pic/support/SupportKK.h has a helper function for this
     capacity_ = getLastValue(offsets);
-    //allocate storage for user particle data
+    // allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
 
-    //If particle info is provided then enter the information
+    // If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
     if (given_particles > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
       initCsrData(particle_elements, particle_info);
     }
 
-    //if(!comm_rank)
-    //  fprintf(stderr, "Building CSR done\n");
     Kokkos::Profiling::popRegion();
   }
 
@@ -135,6 +147,14 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(ptcl_data);
   }
 
+  /**
+   * a parallel for-loop that iterates through all particles
+   * @param[in] fn function of the form fn(elm, particle_id, mask), where
+   *    elm is the element the particle is in
+   *    particle_id is the overall index of the particle in the structure
+   *    mask is 0 if the particle is inactive and 1 if the particle is active
+   * @param[in] s string for labelling purposes
+  */
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
@@ -147,11 +167,12 @@ namespace pumipic {
 #else
     fn_d = &fn;
 #endif
+    /// @todo set team_size by template parameter/input
     const lid_t league_size = num_elems;
-    const lid_t team_size = 32;  //hack
+    const lid_t team_size = 32;  // hack
     const PolicyType policy(league_size, team_size);
     auto offsets_cpy = offsets;
-    const lid_t mask = 1; //all particles are active
+    const lid_t mask = 1; // all particles are active
     Kokkos::parallel_for(name, policy,
         KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
         const lid_t elm = thread.league_rank();
@@ -207,7 +228,7 @@ namespace pumipic {
     printf("%s\n", buffer);
   }
 
-} //end namespace pumipic
+} // end namespace pumipic
 
 #include "CSR_buildFns.hpp"
 #include "CSR_rebuild.hpp"

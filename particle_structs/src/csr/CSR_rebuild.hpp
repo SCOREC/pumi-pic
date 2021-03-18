@@ -38,6 +38,12 @@ namespace pumipic {
   void CSR<DataTypes,MemSpace>::rebuild(kkLidView new_element,
                                         kkLidView new_particle_elements,
                                         MTVs new_particles) {
+    /// @todo add prebarrier to main ParticleStructure files
+    //const auto btime = prebarrier();
+    Kokkos::Timer barrier_timer;
+    MPI_Barrier(MPI_COMM_WORLD);
+    const auto btime = barrier_timer.seconds();
+    
     Kokkos::Profiling::pushRegion("CSR Rebuild");
     Kokkos::Timer timer;
 
@@ -132,7 +138,7 @@ namespace pumipic {
     num_ptcls = capacity_;
     offsets   = offsets_new;
 
-    RecordTime("CSR rebuild", timer.seconds());
+    RecordTime("CSR rebuild", timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

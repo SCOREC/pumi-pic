@@ -19,13 +19,13 @@ int main(int argc, char* argv[]) {
   int vert_slice = 1024;
 
   /* Check commandline arguments */
-  //Required arguments
+  // Required arguments
   int num_elems = atoi(argv[1]);
   int num_ptcls = atoi(argv[2]);
   int strat = atoi(argv[3]);
   bool optimal = false;
 
-  //Optional arguments specified with flags
+  // Optional arguments specified with flags
   for (int i = 4; i < argc; i+=2) {
     // -p = percent_moved
     if (std::string(argv[i]) == "-p") {
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   /// @todo Add prebarrier to all classes (Only on SCS at the moment)
   pumipic::enable_prebarrier();
 
-  { //Begin Kokkos region
+  { // Begin Kokkos region
     
     /* Create initial distribution of particles */
     kkLidView ppe("ptcls_per_elem", num_elems);
@@ -118,13 +118,13 @@ int main(int argc, char* argv[]) {
         ptcls->migrate(new_elms, new_process);
       }
 
-    } //end loop over structures
+    } // end loop over structures
 
     for (size_t i = 0; i < structures.size(); ++i)
       delete structures[i].second;
     structures.clear();
 
-  } //end Kokkos region
+  } // end Kokkos region
 
   pumipic::SummarizeTime();
   Kokkos::finalize();

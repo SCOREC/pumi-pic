@@ -63,6 +63,7 @@ namespace pumipic {
      */
     template <std::size_t N>
     Slice<N> get() {
+      assert(N < num_types);
       if (num_ptcls == 0)
         return Slice<N>();
       if (dynamic_cast<CabM<DataTypes, Space>*>(this) != NULL)

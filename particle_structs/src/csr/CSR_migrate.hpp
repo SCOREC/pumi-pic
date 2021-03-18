@@ -21,7 +21,7 @@ namespace pumipic {
     MPI_Barrier(MPI_COMM_WORLD);
     const auto btime = barrier_timer.seconds();
 
-    Kokkos::Profiling::pushRegion("scs_migrate");
+    Kokkos::Profiling::pushRegion("csr_migrate");
     Kokkos::Timer timer;
 
     // Distributor size & rank for performing migration

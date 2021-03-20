@@ -167,9 +167,8 @@ namespace pumipic {
 #else
     fn_d = &fn;
 #endif
-    /// @todo set team_size by template parameter/input
     const lid_t league_size = num_elems;
-    const lid_t team_size = 32;  // hack
+    const lid_t team_size = policy.team_size();
     const PolicyType policy(league_size, team_size);
     auto offsets_cpy = offsets;
     const lid_t mask = 1; // all particles are active

@@ -6,8 +6,8 @@
 #include <string>
 
 PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids);
+PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
+PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -82,17 +82,31 @@ int main(int argc, char* argv[]) {
     /* Create particle structure */
     ParticleStructures160 structures;
     if (test_num == 0) {
+      if (optimal) {
+        if (strat == 1) {
+          team_size = 512;
+          vert_slice = 8;
+        }
+        else if (strat == 2) {
+          team_size = 512;
+          vert_slice = 4;
+        }
+        else if (strat == 3) {
+          team_size = 128;
+          vert_slice = 8;
+        }
+      }
       structures.push_back(std::make_pair("Sell-"+std::to_string(team_size)+"-ne",
                                       createSCS(num_elems, num_ptcls, ppe, element_gids,
                                                 team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne")));
     }
     else if (test_num == 1) {
       structures.push_back(std::make_pair("CSR",
-                                      createCSR(num_elems, num_ptcls, ppe, element_gids)));
+                                      createCSR(num_elems, num_ptcls, ppe, element_gids, team_size)));
     }
     else if (test_num == 2) {
       structures.push_back(std::make_pair("CabM",
-                                      createCabM(num_elems, num_ptcls, ppe, element_gids)));
+                                      createCabM(num_elems, num_ptcls, ppe, element_gids, team_size)));
     }
 
     const int ITERS = 100;
@@ -137,11 +151,11 @@ PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids
   input.name = name;
   return new pumipic::SellCSigma<PerfTypes160, MemSpace>(input);
 }
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
-  Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
-  return new pumipic::CSR<PerfTypes160, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  return new pumipic::CSR<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
-  Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
-  return new pumipic::CabM<PerfTypes160, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  return new pumipic::CabM<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }

@@ -64,7 +64,7 @@ namespace pumipic {
 
     Kokkos::fence();
     Kokkos::Timer time_ppe;
-    // Fill ptcls per elem for exisitng ptcls
+    // Fill ptcls per elem for existing ptcls
     auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
       if (new_element[ptcl_id] > -1)
         Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);

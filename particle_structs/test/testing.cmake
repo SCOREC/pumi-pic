@@ -61,3 +61,7 @@ add_test(NAME test_structures_empty COMMAND mpirun -np 4
   ./test_structure empty_ptcls)
 add_test(NAME test_structures_noptcls COMMAND mpirun -np 4
   ./test_structure no_ptcls_e100)
+
+add_test(NAME destroy_scs COMMAND ./destroy_scs)
+add_test(NAME destroy_csr COMMAND ./destroy_csr)
+add_test(NAME destroy_cabm COMMAND ./destroy_cabm)

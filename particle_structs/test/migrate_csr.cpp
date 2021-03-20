@@ -5,12 +5,11 @@
 #include "Distribute.h"
 #include <mpi.h>
 
-using particle_structs::CSR;
 using particle_structs::MemberTypes;
 
 typedef MemberTypes<int, double[3]> Type;
 typedef Kokkos::DefaultExecutionSpace exe_space;
-typedef CSR<Type, exe_space> _CSR;
+typedef particle_structs::CSR<Type, exe_space> CSR;
 
 bool sendToOne(int ne, int np);
 
@@ -34,20 +33,20 @@ int main(int argc, char* argv[]) {
   distribute_particles(ne, np, 2, ptcls_per_elem, ids);
   delete [] ids;
   {
-    _CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-    _CSR::kkGidView element_gids_v("element_gids_v", ne);
+    CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+    CSR::kkGidView element_gids_v("element_gids_v", ne);
     particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
     particle_structs::hostToDevice(element_gids_v, gids);
     delete [] ptcls_per_elem;
     delete [] gids;
     Kokkos::TeamPolicy<exe_space> po(4, 32);
-    _CSR* csr = new _CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
+    CSR* csr = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
     char rank_str[100];
     sprintf(rank_str,"Format for rank %d", comm_rank);
     csr->printFormat(rank_str);
 
-    typedef _CSR::kkLidView kkLidView;
+    typedef CSR::kkLidView kkLidView;
     kkLidView new_element("new_element", csr->capacity());
     kkLidView new_process("new_process", csr->capacity());
 
@@ -82,7 +81,7 @@ int main(int argc, char* argv[]) {
 
     int_slice = csr->get<0>();
     double3_slice = csr->get<1>();
-    _CSR::kkLidView fail("fail", 1);
+    CSR::kkLidView fail("fail", 1);
     auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
       if (mask && mask != double3_slice(ptcl_id, 2)) {
         printf("%d mask failure on ptcl %d (%d, %f)\n", comm_rank, ptcl_id, mask,
@@ -140,16 +139,16 @@ bool sendToOne(int ne, int np) {
   delete [] ids;
 
 
-  _CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
-  _CSR::kkGidView element_gids_v("element_gids_v", ne);
+  CSR::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
+  CSR::kkGidView element_gids_v("element_gids_v", ne);
   particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
   particle_structs::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
   Kokkos::TeamPolicy<exe_space> po(4, 32);
-  _CSR* csr = new _CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
+  CSR* csr = new CSR(po, ne, np, ptcls_per_elem_v, element_gids_v);
 
-  typedef _CSR::kkLidView kkLidView;
+  typedef CSR::kkLidView kkLidView;
   kkLidView new_element("new_element", csr->capacity());
   kkLidView new_process("new_process", csr->capacity());
 

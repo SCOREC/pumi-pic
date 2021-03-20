@@ -10,7 +10,7 @@ namespace pumipic {
   */
   template<class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
-    lid_to_gid = kkGidView("row to element gid", num_elems);
+    lid_to_gid = kkGidView(Kokkos::ViewAllocateWithoutInitializing("row to element gid"), num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const gid_t gid = element_gids(i);
       lid_to_gid(i) = gid;
@@ -35,9 +35,9 @@ namespace pumipic {
 
     // create a pointer to the offsets array that we can access in a kokkos parallel_for
     auto offset_cpy = offsets;
-    kkLidView particle_indices("particle_indices", num_ptcls);
+    kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_ptcls);
     // SS3 insert code to set the entries of particle_indices>
-    kkLidView row_indices("row indces", num_elems+1);
+    kkLidView row_indices(Kokkos::ViewAllocateWithoutInitializing("row_indices"), num_elems+1);
     Kokkos::deep_copy(row_indices, offset_cpy);
 
     // atomic_fetch_add to increment from the beginning of each element

@@ -86,10 +86,10 @@ namespace pumipic {
     Kokkos::deep_copy(offsets_new, offsets);
     exclusive_scan(particles_per_element, offsets_new);
 
-    // Determine new_indices for all of the exisitng particles
-    kkLidView row_indices("row indices", num_elems+1);
+    // Determine new_indices for all of the existing particles
+    kkLidView row_indices(Kokkos::ViewAllocateWithoutInitializing("row indices"), num_elems+1);
     Kokkos::deep_copy(row_indices,offsets_new);
-    kkLidView new_indices("new indices", new_element.size());
+    kkLidView new_indices(Kokkos::ViewAllocateWithoutInitializing("new indices"), new_element.size());
 
     auto existing_ptcl_new_indices = PS_LAMBDA(const lid_t elm_id, lid_t ptcl_id, bool mask) {
       const lid_t new_elem = new_element[ptcl_id];
@@ -116,7 +116,7 @@ namespace pumipic {
 
     // If there are new particles
     lid_t num_new_ptcls = new_particle_elements.size();
-    kkLidView new_particle_indices("new_particle_indices", num_new_ptcls);
+    kkLidView new_particle_indices(Kokkos::ViewAllocateWithoutInitializing("new_particle_indices"), num_new_ptcls);
 
     // Determine new particle indices in the MTVs
     Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
@@ -132,7 +132,7 @@ namespace pumipic {
     Kokkos::fence();
     RecordTime("CSR ViewsToViews", time_newPtcls.seconds());
 
-    // Resassign all member variables
+    // Reassign all member variables
     ptcl_data = particle_info;
     capacity_ = getLastValue<lid_t>(offsets_new);
     num_ptcls = capacity_;

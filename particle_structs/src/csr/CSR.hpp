@@ -117,7 +117,7 @@ namespace pumipic {
     // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     // to fill the entries of the offsets array.
     // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView("offsets", num_elems+1);
+    offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
     Kokkos::resize(particles_per_element, particles_per_element.size()+1);
     exclusive_scan(particles_per_element, offsets);
 

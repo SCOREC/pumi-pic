@@ -4,6 +4,7 @@
 #include "perfTypes.hpp"
 #include "../particle_structs/test/Distribute.h"
 #include <string>
+#include "gitrm_distribution.cpp"
 
 PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
@@ -80,9 +81,20 @@ int main(int argc, char* argv[]) {
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
         element_gids(i) = i;
     });
-    if (!comm_rank)
-      printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
-    distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
+    if (strat == 4) {
+      if (!comm_rank)
+        printf("Generating particle distribution with strategy: Gitrm\n");
+      gitrm_distribute(num_ptcls, 2*num_elems/5, 0.85, ppe);
+      Kokkos::parallel_for(ppe.size(), KOKKOS_LAMBDA(const int i) {
+        printf("%d ", ppe(i));
+      });
+      printf("\n");
+    }
+    else {
+      if (!comm_rank)
+        printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
+      distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
+    }
 
     /* Create particle structure */
     ParticleStructures160 structures;
@@ -171,6 +183,10 @@ int main(int argc, char* argv[]) {
         /* End push */
         float pseudo_push_time = pseudo_push_timer.seconds();
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
+      }
+
+      if (strat == 4) { // set strategy for redistribution
+        strat = 3;
       }
 
       if (!comm_rank)

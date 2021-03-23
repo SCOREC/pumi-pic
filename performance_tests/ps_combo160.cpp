@@ -85,10 +85,6 @@ int main(int argc, char* argv[]) {
       if (!comm_rank)
         printf("Generating particle distribution with strategy: Gitrm\n");
       gitrm_distribute(num_ptcls, 2*num_elems/5, 0.85, ppe);
-      Kokkos::parallel_for(ppe.size(), KOKKOS_LAMBDA(const int i) {
-        printf("%d ", ppe(i));
-      });
-      printf("\n");
     }
     else {
       if (!comm_rank)
@@ -147,6 +143,8 @@ int main(int argc, char* argv[]) {
         parentElmData(e) = sqrt(e) * e;
       });
 
+      { // include guards for push (to make sure ptcls->get data is properly deallocated later)
+
       /* Begin Push Setup */
       auto dbls = ptcls->get<0>();
       auto nums = ptcls->get<1>();
@@ -184,6 +182,8 @@ int main(int argc, char* argv[]) {
         float pseudo_push_time = pseudo_push_timer.seconds();
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
+
+      } // end include guards around push
 
       if (strat == 4) { // set strategy for redistribution
         strat = 3;

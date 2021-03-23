@@ -170,6 +170,8 @@ bool rebuildNoChanges(int ne_in, int np_in,int distribution){
   };
   Kokkos::parallel_for(csr->nElems(), checkElementSums, "checkElementSums");
   fails += getLastValue<lid_t>(failed);
+
+  delete csr;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -246,19 +248,20 @@ bool rebuildNewElems(int ne_in, int np_in,int distribution){
   ps::parallel_for(csr, checkElement, "checkElement");
   fails += getLastValue<lid_t>(failed);
 
-    CSR::kkLidView failed2("failed2", 1);
-    auto checkElementSums = KOKKOS_LAMBDA(const int i) {
-      const lid_t old_sum = element_sums(i);
-      const lid_t new_sum = new_element_sums(i);
-      if (old_sum != new_sum) {
-        printf("Sum of particle ids on element %d do not match. Old: %d New: %d\n",
-               i, old_sum, new_sum);
-        failed2(0) = 1;
-      }
-    };
-    Kokkos::parallel_for(csr->nElems(), checkElementSums, "checkElementSums");
-    fails += getLastValue<lid_t>(failed);
+  CSR::kkLidView failed2("failed2", 1);
+  auto checkElementSums = KOKKOS_LAMBDA(const int i) {
+    const lid_t old_sum = element_sums(i);
+    const lid_t new_sum = new_element_sums(i);
+    if (old_sum != new_sum) {
+      printf("Sum of particle ids on element %d do not match. Old: %d New: %d\n",
+             i, old_sum, new_sum);
+      failed2(0) = 1;
+    }
+  };
+  Kokkos::parallel_for(csr->nElems(), checkElementSums, "checkElementSums");
+  fails += getLastValue<lid_t>(failed);
 
+  delete csr;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -316,6 +319,7 @@ bool rebuildNewPtcls(int ne_in, int np_in,int distribution){
   //Rebuild with new ptcls
   csr->rebuild(new_element, new_particle_elements, new_particles);
 
+  particle_structs::destroyViews<Type>(new_particles);
   if (csr->nPtcls() != np + nnp) {
     fprintf(stderr, "[ERROR] CSR does not have the correct number of particles after "
             "rebuild with new particles %d (should be %d)\n", csr->nPtcls(), np + nnp);
@@ -351,6 +355,7 @@ bool rebuildNewPtcls(int ne_in, int np_in,int distribution){
 
   fails += getLastValue<lid_t>(failed);
 
+  delete csr;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -426,6 +431,7 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
 
   fails += getLastValue<lid_t>(failed);
 
+  delete csr;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -486,6 +492,7 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
 
   //Rebuild with elements removed
   csr->rebuild(new_element,new_particle_elements,new_particles);
+  particle_structs::destroyViews<Type>(new_particles);
 
   if (csr->nPtcls() != np + nnp - nremoved) {
     fprintf(stderr, "[ERROR] CSR does not have the correct number of particles after "
@@ -530,7 +537,7 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution){
   ps::parallel_for(csr, checkElement, "checkElement");
 
   fails += getLastValue<lid_t>(failed);
-
+  delete csr;
   Kokkos::Profiling::popRegion();
   return fails;
 }

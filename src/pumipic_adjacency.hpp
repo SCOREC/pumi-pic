@@ -430,11 +430,11 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
   return found;
 }
 
-template < class ParticleStruct>
+template < class ParticleStruct, typename CurrentCoordView, typename TargetCoordView>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     ParticleStruct* ptcls, // (in) particle structure
-                    Segment3d x_ps_d, // (in) starting particle positions
-                    Segment3d xtgt_ps_d, // (in) target particle positions
+                    CurrentCoordView x_ps_d, // (in) starting particle positions
+                    TargetCoordView xtgt_ps_d, // (in) target particle positions
                     SegmentInt pid_d, // (in) particle ids
                     o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
                     int looplimit=0,  // (in) [optional] number of loops before giving up

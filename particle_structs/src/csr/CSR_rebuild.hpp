@@ -27,11 +27,9 @@ namespace pumipic {
     Kokkos::Profiling::pushRegion("CSR Rebuild");
     Kokkos::Timer timer;
 
+    Kokkos::Timer time_ppe;
     // fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
-
-    Kokkos::fence();
-    Kokkos::Timer time_ppe;
     kkLidView num_removed_d("num_removed_d",1);
     // Fill ptcls per elem for existing ptcls
     auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
@@ -48,7 +46,6 @@ namespace pumipic {
           assert(new_particle_elements[i] > -1);
           Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
         });
-    Kokkos::fence();
     RecordTime("CSR calc ppe", time_ppe.seconds());
 
     // time offsets and indices calc
@@ -71,51 +68,41 @@ namespace pumipic {
         new_indices[ptcl_id] = -1;
     };
     parallel_for(existing_ptcl_new_indices,"calc row indices");
-    Kokkos::fence();
-
     RecordTime("CSR offsets and indices", time_off_ind.seconds());
 
-    Kokkos::Timer time_pstops;
-
-    lid_t num_added = new_particle_elements.size();
-    lid_t particles_on_process = num_ptcls - num_removed + num_added;
-
+    lid_t num_new_ptcls = new_particle_elements.size();
+    lid_t particles_on_process = num_ptcls - num_removed + num_new_ptcls;
     // Alocate new (temp) MTV
     MTVs particle_info;
     CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
+    
+    Kokkos::Timer time_pstops;
     // Copy existing particles to their new location in the temp MTV
     CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
-    Kokkos::fence();
-
     RecordTime("CSR PSToPS", time_pstops.seconds());
 
     // Deallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
 
     Kokkos::Timer time_newPtcls;
-
     // If there are new particles
-    lid_t num_new_ptcls = new_particle_elements.size();
     kkLidView new_particle_indices(Kokkos::ViewAllocateWithoutInitializing("new_particle_indices"), num_new_ptcls);
-
     // Determine new particle indices in the MTVs
     Kokkos::parallel_for("new_patricles_indices", num_new_ptcls,
                             KOKKOS_LAMBDA(const int& i) {
       lid_t new_elem = new_particle_elements(i);
       new_particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
     });
-
-    if (num_new_ptcls > 0) {
+    if (num_new_ptcls > 0 && new_particles != NULL) {
       CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
                                                           new_particle_indices);
     }
-    Kokkos::fence();
     RecordTime("CSR ViewsToViews", time_newPtcls.seconds());
 
     // Reassign all member variables
     ptcl_data = particle_info;
     capacity_ = getLastValue<lid_t>(offsets_new);
-    num_ptcls = capacity_;
+    num_ptcls = particles_on_process;
     offsets   = offsets_new;
 
     RecordTime("CSR rebuild", timer.seconds(), btime);

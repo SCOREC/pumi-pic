@@ -1,25 +1,5 @@
 #pragma once
 
-namespace {
-
-  /**
-   * helper function: counts number of non-negative entries in View
-   * @param[in] particle_elements the view to count
-   * @returns number of non-negative entries in particle_elements
-  */
-  template <typename ppView>
-  int countParticlesOnProcess(ppView particle_elements){
-    int count = 0;
-    Kokkos::parallel_reduce("particle on process",
-        particle_elements.size(), KOKKOS_LAMBDA (const int& i, int& lsum) {
-      if (particle_elements(i) > -1) {
-        lsum += 1;
-      }
-    }, count);
-    return count;
-  }
-}
-
 namespace pumipic {
 
   /**
@@ -47,29 +27,21 @@ namespace pumipic {
     Kokkos::Profiling::pushRegion("CSR Rebuild");
     Kokkos::Timer timer;
 
-    // Counting of particles on process
-    lid_t particles_on_process = countParticlesOnProcess(new_element) +
-                                 countParticlesOnProcess(new_particle_elements);
-    // Needs to be assigned here for later methods used
-    num_ptcls = particles_on_process;
-
-    RecordTime("CSR count active particles", timer.seconds());
-
-    // Alocate new (temp) MTV
-    MTVs particle_info;
-    CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
-
     // fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
 
     Kokkos::fence();
     Kokkos::Timer time_ppe;
+    kkLidView num_removed_d("num_removed_d",1);
     // Fill ptcls per elem for existing ptcls
     auto count_existing = PS_LAMBDA(lid_t elm_id, lid_t ptcl_id, bool mask) {
       if (new_element[ptcl_id] > -1)
         Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);
+      else
+        Kokkos::atomic_increment(&num_removed_d(0));
     };
     parallel_for(count_existing,"fill particle Per Element existing");
+    lid_t num_removed = getLastValue(num_removed_d); // save number of removed particles for later
 
     Kokkos::parallel_for("fill particlesPerElementNew", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i) {
@@ -104,9 +76,17 @@ namespace pumipic {
     RecordTime("CSR offsets and indices", time_off_ind.seconds());
 
     Kokkos::Timer time_pstops;
+
+    lid_t num_added = new_particle_elements.size();
+    lid_t particles_on_process = num_ptcls - num_removed + num_added;
+
+    // Alocate new (temp) MTV
+    MTVs particle_info;
+    CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
     // Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
     Kokkos::fence();
+
     RecordTime("CSR PSToPS", time_pstops.seconds());
 
     // Deallocate ptcl_data

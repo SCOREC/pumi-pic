@@ -39,7 +39,7 @@ namespace pumipic {
     assert(new_element.size() == capacity_);
     kkLidView num_removed_d("num_removed_d", 1); // for counting particles to be removed
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-      if (active.access(soa,tuple) == 1){
+      if (active.access(soa,tuple) == 1) {
         lid_t parent = new_element((soa*soa_len)+tuple);
         if (parent >= 0) { // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
@@ -54,14 +54,12 @@ namespace pumipic {
 
     // count and index new particles (atomic)
     kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_new_ptcls);
-    if (num_new_ptcls > 0 && new_particles != NULL) {
-      Kokkos::parallel_for("fill_ptcl_indices", num_new_ptcls,
-        KOKKOS_LAMBDA(const lid_t ptcl) {
-          lid_t parent = new_particle_elements(ptcl);
-          assert(parent >= 0); // new particles should have a destination element
-          particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
-        });
-    }
+    Kokkos::parallel_for("fill_ptcl_indices", num_new_ptcls,
+      KOKKOS_LAMBDA(const lid_t ptcl) {
+        lid_t parent = new_particle_elements(ptcl);
+        assert(parent > -1); // new particles should have a destination element
+        particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
+      });
 
     RecordTime("CabM count active particles", overall_timer.seconds());
     Kokkos::Timer existing_timer; // timer for moving/deleting particles

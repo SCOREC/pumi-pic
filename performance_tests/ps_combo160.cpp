@@ -143,36 +143,34 @@ int main(int argc, char* argv[]) {
         parentElmData(e) = sqrt(e) * e;
       });
 
-      { // include guards for push (to make sure ptcls->get data is properly deallocated later)
-
-      /* Begin Push Setup */
-      auto dbls = ptcls->get<0>();
-      auto nums = ptcls->get<1>();
-      auto lint = ptcls->get<2>();
-
-      auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-        if (mask) {
-          for (int i = 0; i < 17; i++) {
-            dbls(p,i) = 10.3;
-            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
-          }
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = 4*p + i;
-          }
-          lint(p) = p;
-        }
-        else {
-          for (int i = 0; i < 17; i++) {
-            dbls(p,i) = 0;
-          }
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = -1;
-          }
-          lint(p) = 0;
-        }
-      };
-
       for (int i = 0; i < ITERS; ++i) {
+        /* Begin Push Setup */
+        auto dbls = ptcls->get<0>();
+        auto nums = ptcls->get<1>();
+        auto lint = ptcls->get<2>();
+
+        auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+          if (mask) {
+            for (int i = 0; i < 17; i++) {
+              dbls(p,i) = 10.3;
+              dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
+            }
+            for (int i = 0; i < 4; i++) {
+              nums(p,i) = 4*p + i;
+            }
+            lint(p) = p;
+          }
+          else {
+            for (int i = 0; i < 17; i++) {
+              dbls(p,i) = 0;
+            }
+            for (int i = 0; i < 4; i++) {
+              nums(p,i) = -1;
+            }
+            lint(p) = 0;
+          }
+        };
+
         Kokkos::fence();
         Kokkos::Timer pseudo_push_timer;
         /* Begin push operations */
@@ -183,8 +181,7 @@ int main(int argc, char* argv[]) {
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
 
-      } // end include guards around push
-
+      /// @todo make gitrm_distribution work with distribute/redistribute functions
       if (strat == 4) { // set strategy for redistribution
         strat = 3;
       }

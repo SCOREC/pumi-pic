@@ -65,10 +65,22 @@ namespace pumipic {
     Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
     // prepare a new aosoa to store the shuffled particles
-    kkLidView newOffset_d = buildOffset(elmDegree_d);
-    const lid_t newNumSoa = getLastValue(newOffset_d);
-    const lid_t newCapacity = newNumSoa*soa_len;
-    auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
+    kkLidView newOffset_d = buildOffset(elmDegree_d, -1, padding_start); // -1 signifies to fill to num_soa
+    lid_t newNumSoa = getLastValue(newOffset_d);
+    bool swap;
+    AoSoA_t newAosoa;
+    lid_t newCapacity;
+    if (newNumSoa > num_soa_) { // if need extra space, update
+      swap = false;
+      newOffset_d = buildOffset(elmDegree_d, extra_padding, padding_start);
+      newNumSoa = getLastValue(newOffset_d);
+      newCapacity = newNumSoa*soa_len;
+      newAosoa = makeAoSoA(newCapacity, newNumSoa);
+    } else { // if we don't need extra space
+      swap = true;
+      newCapacity = capacity_;
+      newAosoa = aosoa_swap;
+    }
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
     auto aosoa_copy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
@@ -91,15 +103,22 @@ namespace pumipic {
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
 
-    // destroy the old aosoa and use the new one in the CabanaM object
-    aosoa_ = newAosoa;
+    // swap the old aosoa and use the new one in the CabanaM object
+    if (swap) {
+      auto temp = aosoa_;
+      aosoa_ = newAosoa;
+      aosoa_swap = temp;
+    } else { // destroy old aosoas and make new ones
+      aosoa_ = newAosoa;
+      aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
+    }
     // update member variables (note that these are set before particle addition)
     num_soa_ = newNumSoa;
     capacity_ = newCapacity;
     offsets = newOffset_d;
     num_ptcls = num_ptcls - num_removed;
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-    setActive(aosoa_, elmDegree_d, parentElms_, offsets);
+    setActive(aosoa_, elmDegree_d, parentElms_, offsets, padding_start);
 
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles

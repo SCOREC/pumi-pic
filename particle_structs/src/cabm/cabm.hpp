@@ -78,11 +78,11 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element);
+    kkLidView buildOffset(const kkLidView particles_per_element, const double padding, lid_t &padding_start);
     AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
-      const kkLidView parentElms, const kkLidView offsets);
+      const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start);
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info);
     void initCabMData(kkLidView particle_elements, MTVs particle_info);
@@ -103,9 +103,13 @@ namespace pumipic {
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
     lid_t num_soa_; // number of SoA
+    lid_t padding_start; // SoA index for start of padding
+    double extra_padding; // percentage of original capacity to add padding
     kkLidView offsets; // Offsets array into CabM
     kkLidView parentElms_; // Parent elements for each SoA
-    AoSoA_t aosoa_;
+    AoSoA_t aosoa_; // particle data
+    AoSoA_t aosoa_swap; // extra aosoa copy for swapping
+    
   };
 
   /**
@@ -132,7 +136,8 @@ namespace pumipic {
                                    MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
-    element_gid_to_lid(num_elements)
+    element_gid_to_lid(num_elements),
+    extra_padding(0.1) // default extra padding at 10%
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
@@ -144,17 +149,18 @@ namespace pumipic {
       fprintf(stderr, "building CabM\n");
     
     // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(particles_per_element);
+    offsets = buildOffset(particles_per_element, extra_padding, padding_start);
     // set num_soa_ from the last entry of offsets
     num_soa_ = getLastValue(offsets);
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
+    aosoa_swap = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, particles_per_element, parentElms_, offsets);
+    setActive(aosoa_, particles_per_element, parentElms_, offsets, padding_start);
     // get global ids
     if (element_gids.size() > 0) {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
@@ -196,7 +202,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
-    Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
         const lid_t elm = parentElms_cpy(soa); // calculate element
@@ -286,7 +292,7 @@ namespace pumipic {
         }
         else {
           if (last_elm != elm)
-            ptr += sprintf(ptr,"\n  Element %2d | %d", elm, element_to_gid_host(elm), mask_host(i));
+            ptr += sprintf(ptr,"\n  Element %2d | %d", elm, mask_host(i));
           else
             ptr += sprintf(ptr,"\n             | %d", mask_host(i));
         }

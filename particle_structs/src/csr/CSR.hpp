@@ -5,6 +5,17 @@
 
 namespace ps = particle_structs;
 
+namespace {
+template <typename ppView>
+  void printHistogram(ppView v){
+    Kokkos::parallel_for("printHistogram",
+      v.size(),
+      KOKKOS_LAMBDA(const int& i){
+      printf("%d\t%d\n",i,v(i));
+    });
+  }
+}
+
 namespace pumipic {
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
@@ -56,7 +67,7 @@ namespace pumipic {
     lid_t getTeamSize() const { return team_size_; }
     void setTeamSize(lid_t size) { team_size_ = size; }
 
-    void histogram(std::string filename) const;
+    void histogram(std::string filename) ;
 
     //---Attention User---  Do **not** call this function! {
     /**
@@ -110,19 +121,27 @@ namespace pumipic {
   };
 
   template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::histogram(std::string filename) const {
+  void CSR<DataTypes, MemSpace>::histogram(std::string filename) {
+    
     kkLidView elemCap("elemCap",num_elems);
-    auto calc_hist = PS_LAMBDA(lid_t e, lid_t p, bool mask){
+    auto calc_hist = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
       Kokkos::atomic_increment(&elemCap(e));
     };
+    printf("Made lambda\n");
+    parallel_for(calc_hist, "calc_hist");
+    printf("Executed lambda\n");
+    printHistogram(elemCap);
+
+    Kokkos::fence();
 
     //std::ofstream hist;
     //hist.open(filename+".txt");
-    for(lid_t i = 0; i < offsets.size()/1000; i++){
+    //for(lid_t i = 0; i < offsets.size()/1000; i++){
       //hist<< elemCap(i) << std::endl;
-      printf("Elem %d : %d", i, elemCap(i));
-    }
+      //printf("Elem %d : %d", i, elemCap(i));
+    //}
     //hist.close();
+   
   }
 
 

@@ -19,6 +19,20 @@
 #include <thrust/device_ptr.h>
 #endif
 #include <ppTiming.hpp>
+
+namespace {
+  template <typename ppView>
+  void printView(ppView v){
+
+    Kokkos::parallel_for("print_view", v.size(), KOKKOS_LAMBDA(const int& i){
+      printf("%d\t%d\n", i, v(i));
+    });
+
+  }
+
+}
+
+
 namespace pumipic {
 
 void enable_prebarrier();
@@ -92,7 +106,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   lid_t getTeamSize() const { return C_; }
   void setTeamSize(lid_t size) {}
 
-  void histogram(std::string filename) const;
+  void histogram(std::string filename) ;
 
 
   //Change whether or not to try shuffling
@@ -231,18 +245,24 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 };
 
 template<class DataTypes, typename MemSpace>
-void SellCSigma<DataTypes,MemSpace>::histogram(std::string filename) const {
+void SellCSigma<DataTypes,MemSpace>::histogram(std::string filename) {
+  
   kkLidView elemCap("elemCap",num_elems);
   auto calc_hist = PS_LAMBDA(lid_t e, lid_t p, bool mask){
     Kokkos::atomic_fetch_add(&elemCap(e), mask);
   };
+  parallel_for(calc_hist,"calc hist");
 
-  std::ofstream histogram;
-  histogram.open(filename+".txt");
-  for(lid_t i = 0; i < offsets.size(); i++){
-    histogram << elemCap(i) << std::endl;
+  auto printing = deviceToHost(elemCap);
+  printf("Host view created\n");
+  
+  std::ofstream hist;
+  hist.open(filename+".txt");
+  printf("File stream open\n");
+  for(lid_t i = 0; i < num_elems; i++){
+    hist << i << "\t" << printing(i) << "\n";
   }
-  histogram.close();
+  hist.close();
 }
 
 template<class DataTypes, typename MemSpace>
@@ -251,7 +271,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
                                                 kkLidView particle_elements,
                                                 MTVs particle_info) {
   Kokkos::Profiling::pushRegion("scs_construction");
-  tryShuffling = true;
+  tryShuffling = false;
   int comm_size;
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   int comm_rank;

@@ -38,7 +38,7 @@ namespace pumipic {
     lid_t capacity() const {return capacity_;}
     lid_t numRows() const {return num_rows;}
 
-    virtual void histogram(std::string filename) const = 0;
+    virtual void histogram(std::string filename) = 0;
 
     /* Provides access to the particle info for Nth time of each particle
 

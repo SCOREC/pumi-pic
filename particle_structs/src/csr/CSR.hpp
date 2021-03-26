@@ -117,6 +117,8 @@ namespace pumipic {
     //Offsets array into CSR
     kkLidView offsets;
 
+    MTVs ptcl_data_swap;
+
     lid_t team_size_;
   };
 
@@ -179,6 +181,7 @@ namespace pumipic {
     capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
+    CreateViews<device_type, DataTypes>(ptcl_data_swap, capacity_);
 
     //If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
@@ -195,6 +198,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::~CSR() {
     destroyViews<DataTypes, memory_space>(ptcl_data);
+    destroyViews<DataTypes, memory_space>(ptcl_data_swap);
   }
 
   template <class DataTypes, typename MemSpace>

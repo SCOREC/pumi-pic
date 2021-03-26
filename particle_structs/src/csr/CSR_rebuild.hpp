@@ -32,9 +32,17 @@ namespace pumipic{
 
     RecordTime("CSR count active particles", timer.seconds());
 
+    /*
     //Alocate new (temp) MTV
     MTVs particle_info;
     CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
+    */
+    //ResizeViews(ptcl_data_swap,particles_on_process);
+
+    if(particles_on_process > capacity_){
+      destroyViews<DataTypes>(ptcl_data_swap);
+      CreateViews<device_type,DataTypes>(ptcl_data_swap,particles_on_process);
+    }
 
     //fresh filling of particles_per_element
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
@@ -82,12 +90,14 @@ namespace pumipic{
 
     Kokkos::Timer time_pstops;
     //Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    CopyPSToPS< CSR<DataTypes,MemSpace> , DataTypes >(this, ptcl_data_swap, ptcl_data, new_element, new_indices);
     Kokkos::fence();
     RecordTime("CSR PSToPS", time_pstops.seconds());
 
+    /*
     //Deallocate ptcl_data
     destroyViews<DataTypes>(ptcl_data);
+    */
 
     Kokkos::Timer time_newPtcls;
 
@@ -103,14 +113,14 @@ namespace pumipic{
     });
 
     if(num_new_ptcls > 0){
-      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
+      CopyViewsToViews<kkLidView,DataTypes>(ptcl_data_swap, new_particles,
                                                           new_particle_indices);
     }
     Kokkos::fence();
     RecordTime("CSR ViewsToViews", time_newPtcls.seconds());
 
     //Resassign all member variables
-    ptcl_data = particle_info;
+    ptcl_data = ptcl_data_swap;
     capacity_ = getLastValue<lid_t>(offsets_new);
     num_ptcls = capacity_;
     offsets   = offsets_new;

@@ -19,11 +19,11 @@ typedef Kokkos::DefaultExecutionSpace exe_space;
 typedef MemberTypes<int> Type;
 typedef particle_structs::CabM<Type> CabM;
 
-bool rebuildNoChanges(int ne_in, int np_in,int distribution);
-bool rebuildNewElems(int ne_in, int np_in,int distribution);
-bool rebuildNewPtcls(int ne_in, int np_in,int distribution);
-bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution);
-bool rebuildNewAndDestroyed(int ne_in, int np_in,int distribution);
+bool rebuildNoChanges(int ne_in, int np_in, int distribution);
+bool rebuildNewElems(int ne_in, int np_in, int distribution);
+bool rebuildNewPtcls(int ne_in, int np_in, int distribution, int nnp);
+bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution);
+bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution, int nnp);
 
 
 int main(int argc, char* argv[]) {
@@ -37,15 +37,16 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD,&comm_rank);
     MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
     
-    if(argc != 4){
+    if (argc != 5) {
       printf("[ERROR] Too few command line arguments (%d supplied, 4 required)\n", argc);
       return 1;
     }
-    int number_elements  = atoi(argv[1]);
-    int number_particles = atoi(argv[2]);
-    int distribution     = atoi(argv[3]);
-    printf("Rebuild CabM Test: \nne = %d\nnp = %d\ndistribution = %d\n",
-        number_elements, number_particles, distribution);
+    int number_elements      = atoi(argv[1]);
+    int number_particles     = atoi(argv[2]);
+    int distribution         = atoi(argv[3]);
+    int number_new_particles = atoi(argv[4]);
+    printf("Rebuild CabM Test: \nne = %d\nnp = %d\ndistribution = %d\nnpp = %d\n",
+        number_elements, number_particles, distribution, number_new_particles);
     
     ///////////////////////////////////////////////////////////////////////////
     //Tests to run go here
@@ -61,7 +62,7 @@ int main(int argc, char* argv[]) {
     
     //check new elements are added properly and all elements assgined correct
     fprintf(stderr,"RebuildNewPtcls\n");
-    fails += rebuildNewPtcls(number_elements,number_particles,distribution);
+    fails += rebuildNewPtcls(number_elements,number_particles,distribution,number_new_particles);
     
     //check for particles that were removed and the rest in their correct loc
     fprintf(stderr,"RebuildPtclsDestroyed\n");
@@ -69,7 +70,7 @@ int main(int argc, char* argv[]) {
     
     //complete check of rebuild functionality
     fprintf(stderr,"RebuildNewAndDestroyed\n");
-    fails += rebuildNewAndDestroyed(number_elements,number_particles,distribution);
+    fails += rebuildNewAndDestroyed(number_elements,number_particles,distribution,number_new_particles);
     
   }
   //end Kokkos scope
@@ -258,7 +259,7 @@ bool rebuildNewElems(int ne_in, int np_in, int distribution) {
 }
 
 //Rebuild test with new particles added only
-bool rebuildNewPtcls(int ne_in, int np_in, int distribution) {
+bool rebuildNewPtcls(int ne_in, int np_in, int distribution, int nnp) {
   Kokkos::Profiling::pushRegion("rebuildNewPtcls");
   int fails = 0;
 
@@ -295,7 +296,6 @@ bool rebuildNewPtcls(int ne_in, int np_in, int distribution) {
 
   //////////////////////////////////////////////////////////////
   //Introduce new particles
-  int nnp = 5; //number new ptcls
   CabM::kkLidView new_particle_elements("new_particle_elements", nnp);
   auto new_particles = particle_structs::createMemberViews<Type>(nnp);
   auto new_particle_access = particle_structs::getMemberView<Type,0>(new_particles);
@@ -427,7 +427,7 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
 }
 
 //Rebuild test with particles added and destroyed
-bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution) {
+bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution, int nnp) {
   Kokkos::Profiling::pushRegion("rebuildNewAndDestroyed");
   int fails = 0;
 
@@ -468,7 +468,6 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution) {
 
   //////////////////////////////////////////////////////////////
   //Introduce new particles
-  int nnp = 5;
   CabM::kkLidView new_particle_elements("new_particle_elements", nnp);
   auto new_particles = particle_structs::createMemberViews<Type>(nnp);
   auto new_particle_access = particle_structs::getMemberView<Type,0>(new_particles);

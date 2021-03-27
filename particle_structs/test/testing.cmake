@@ -18,12 +18,12 @@ add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
 add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
 add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
 
-add_test(NAME rebuild_cabm_small COMMAND ./rebuild_cabm 5 20 1)
-add_test(NAME rebuild_cabm_medium COMMAND ./rebuild_cabm 50 1000 1)
-add_test(NAME rebuild_cabm_large_0 COMMAND ./rebuild_cabm 2500 1000000 0)
-add_test(NAME rebuild_cabm_large_1 COMMAND ./rebuild_cabm 2500 1000000 1)
-add_test(NAME rebuild_cabm_large_2 COMMAND ./rebuild_cabm 2500 1000000 2)
-add_test(NAME rebuild_cabm_large_3 COMMAND ./rebuild_cabm 2500 1000000 3)
+add_test(NAME rebuild_cabm_small COMMAND ./rebuild_cabm 5 20 1 5)
+add_test(NAME rebuild_cabm_medium COMMAND ./rebuild_cabm 50 1000 1 500)
+add_test(NAME rebuild_cabm_large_0 COMMAND ./rebuild_cabm 2500 1000000 0 500000)
+add_test(NAME rebuild_cabm_large_1 COMMAND ./rebuild_cabm 2500 1000000 1 500000)
+add_test(NAME rebuild_cabm_large_2 COMMAND ./rebuild_cabm 2500 1000000 2 500000)
+add_test(NAME rebuild_cabm_large_3 COMMAND ./rebuild_cabm 2500 1000000 3 500000)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
 
@@ -62,6 +62,6 @@ add_test(NAME test_structures_empty COMMAND mpirun -np 4
 add_test(NAME test_structures_noptcls COMMAND mpirun -np 4
   ./test_structure no_ptcls_e100)
 
-add_test(NAME destroy_scs COMMAND ./destroy_scs)
-add_test(NAME destroy_csr COMMAND ./destroy_csr)
-add_test(NAME destroy_cabm COMMAND ./destroy_cabm)
+add_test(NAME destroy_scs COMMAND mpirun -np 4 ./destroy_scs)
+add_test(NAME destroy_csr COMMAND mpirun -np 4 ./destroy_csr)
+add_test(NAME destroy_cabm COMMAND mpirun -np 4 ./destroy_cabm)

@@ -99,16 +99,23 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    //mappings from row to element gid and back to row
+    // mappings from row to element gid and back to row
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
-    lid_t num_soa_; // number of SoA
-    lid_t padding_start; // SoA index for start of padding
-    double extra_padding; // percentage of original capacity to add padding
-    kkLidView offsets; // Offsets array into CabM
-    kkLidView parentElms_; // Parent elements for each SoA
-    AoSoA_t aosoa_; // particle data
-    AoSoA_t aosoa_swap; // extra aosoa copy for swapping
+     // number of SoA
+    lid_t num_soa_;
+    // SoA index for start of padding
+    lid_t padding_start;
+    // percentage of capacity to add as padding
+    double extra_padding;
+    // offsets array for CSR structure
+    kkLidView offsets; 
+    // parent elements for each SoA
+    kkLidView parentElms_;
+    // particle data
+    AoSoA_t aosoa_;
+    // extra AoSoA copy for swapping (same size as aosoa_)
+    AoSoA_t aosoa_swap;
     
   };
 
@@ -132,7 +139,7 @@ namespace pumipic {
                                    lid_t num_elements, lid_t num_particles,
                                    kkLidView particles_per_element,
                                    kkGidView element_gids,
-                                   kkLidView particle_elements,
+                                   kkLidView particle_elements, // optional
                                    MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
@@ -154,7 +161,7 @@ namespace pumipic {
     num_soa_ = getLastValue(offsets);
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
+    // initialize appropriately-sized AoSoA and copy for swapping
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     aosoa_swap = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles

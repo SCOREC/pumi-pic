@@ -40,7 +40,7 @@ namespace pumipic {
     kkLidView num_removed_d("num_removed_d", 1); // for counting particles to be removed
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
       if (active.access(soa,tuple) == 1) {
-        lid_t parent = new_element((soa*soa_len)+tuple);
+        lid_t parent = new_element(soa*soa_len + tuple);
         if (parent >= 0) { // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
         } else {
@@ -71,12 +71,15 @@ namespace pumipic {
     AoSoA_t newAosoa;
     lid_t newCapacity;
     if (newNumSoa > num_soa_) { // if need extra space, update
+      printf("FULL\n");
       swap = false;
       newOffset_d = buildOffset(elmDegree_d, extra_padding, padding_start);
       newNumSoa = getLastValue(newOffset_d);
       newCapacity = newNumSoa*soa_len;
+      aosoa_swap.resize(0);
       newAosoa = makeAoSoA(newCapacity, newNumSoa);
     } else { // if we don't need extra space
+      printf("SWAP\n");
       swap = true;
       newCapacity = capacity_;
       newAosoa = aosoa_swap;
@@ -89,6 +92,7 @@ namespace pumipic {
           //   counters for each destParent tracking which particle is the next
           //   free position. Use atomic fetch and incriment with the
           //   'elmPtclCounter_d' array.
+          //printf("soa: %d, tuple: %d, index: %d\n", soa, tuple, soa*soa_len + tuple);
           lid_t destParent = new_element(soa*soa_len + tuple);
           if ( destParent >= 0 ) { // delete particles with negative destination element
             lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);

@@ -14,7 +14,8 @@ int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   // Default values if not specified on command line
   int test_num = 2;
-  double percentMoved = 10;
+  double percentMoved = 0.5;
+  double percentMovedProcess = 0.1;
   int team_size = 32;
   int vert_slice = 1024;
 
@@ -29,7 +30,11 @@ int main(int argc, char* argv[]) {
   for (int i = 4; i < argc; i+=2) {
     // -p = percent_moved
     if (std::string(argv[i]) == "-p") {
-      percentMoved = atoi(argv[i+1]);
+      percentMoved = atof(argv[i+1]);
+    }
+    // -pp = percent_moved_to_new_process
+    else if (std::string(argv[i]) == "-pp") {
+      percentMovedProcess = atof(argv[i+1]);
     }
     // -n = test_num
     else if (std::string(argv[i]) == "-n") {
@@ -122,9 +127,6 @@ int main(int argc, char* argv[]) {
       std::string name = structures[i].first;
       PS160* ptcls = structures[i].second;
 
-      int seed = 0; // set seed for uniformly random processes
-      Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
-
       if (!comm_rank)
         printf("Beginning push on structure %s\n", name.c_str());
 
@@ -173,6 +175,18 @@ int main(int argc, char* argv[]) {
         pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
       }
 
+      int seed = 0; // set seed for uniformly random processes
+      Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+
+      int* other_ranks = new int[comm_size-1];
+      int counter = 0;
+      for (int i = 0; i < comm_size; i++) {
+        if (i != comm_rank)
+          other_ranks[counter++] = i;
+      }
+      kkLidView other_ranks_d("other_ranks_d", comm_size-1);
+      pumipic::hostToDevice(other_ranks_d, other_ranks);
+
       if (!comm_rank)
         printf("Beginning migrate on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
@@ -181,8 +195,25 @@ int main(int argc, char* argv[]) {
         redistribute_particles(ptcls, strat, percentMoved, new_elms);
         pumipic::RecordTime("redistribute", t.seconds());
 
+        Kokkos::Timer tp;
         kkLidView new_process("new_process", ptcls->capacity());
-        Kokkos::fill_random(new_process, pool, comm_size);
+        //Kokkos::fill_random(new_process, pool, comm_size);
+        if (comm_size > 1) {
+          auto to_new_processes = PS_LAMBDA(const int e, const int p, const bool mask) {
+            if (mask) {
+              auto generator = pool.get_state();
+              double prob = generator.drand(1.0);
+              if (prob < percentMovedProcess)
+                new_process(p) = other_ranks_d( generator.urand(comm_size-1) ); // send particle to a different process
+              else
+                new_process(p) = comm_rank;
+              pool.free_state(generator);
+            }
+          };
+          pumipic::parallel_for(ptcls, to_new_processes, "to_new_processes");
+        }
+        pumipic::RecordTime("redistribute processes", tp.seconds());
+
         ptcls->migrate(new_elms, new_process);
       }
 

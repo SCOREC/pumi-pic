@@ -6,7 +6,7 @@ for e in 100 200 500 1000 1200 1500 2000
 do
   for distribution in 1 2 3 # Even Distribution currently BAD on CabM
   do 
-    for percent in 50 # 10% and 50% should be very similar
+    for percent in 0.5
     do 
       for struct in 0 1 2
       do

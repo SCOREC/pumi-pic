@@ -13,10 +13,6 @@ bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipi
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,
                           std::vector<int>* ids);
 
-
-//bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
-//                          Kokkos::View<int*> elem_per_ptcl);
-
 bool distribute_particles(int ne, int np, int strat, Kokkos::View<int*> ptcls_per_elem,
                           Kokkos::View<int*> elem_per_ptcl,float param=1.0);
 
@@ -32,6 +28,8 @@ const char* distribute_name(int strat);
 template <typename PS>
 bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
                             typename PS::kkLidView new_elems) {
+  assert(0 <= percentMoved);
+  assert(percentMoved <= 1);
   Kokkos::Random_XorShift64_Pool<typename PS::execution_space> pool(DISTRIBUTE_SEED);
   typename PS::kkLidView is_moving("is_moving", ptcls->capacity());
   auto decideMovers = PS_LAMBDA(const int e, const int p, const bool mask) {
@@ -81,7 +79,6 @@ bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
     }
   };
   pumipic::parallel_for(ptcls, assignMoves, "assignMoves");
-  //delete [] new_moves;
   return true;
 }
 

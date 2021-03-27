@@ -404,11 +404,11 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
   lid_t particles = cabm->capacity();
   kkLidView failed = kkLidView("failed", 1);
   auto checkElement = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
-    const lid_t id = pID(p);
-    const lid_t dest_elem = new_element(id);
     if (mask) {
-      if (id % 7 == 0) {
-        printf("[ERROR] Particle %d was not removed during rebuild\n", id);
+      const lid_t id = pID(p);
+      const lid_t dest_elem = new_element(id);
+      if (id%7 == 0) {
+        printf("[ERROR] Particle %d (%d, %d) was not removed during rebuild\n", id, e, p);
         failed(0) = 1;
       }
       else if (dest_elem != e) {

@@ -402,9 +402,9 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in,int distribution){
   lid_t particles = csr->capacity();
   kkLidView failed = kkLidView("failed", 1);
   auto checkElement = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
-    const lid_t id = pID(p);
-    const lid_t dest_elem = new_element(id);
     if (mask) {
+      const lid_t id = pID(p);
+      const lid_t dest_elem = new_element(id);
       if (dest_elem != e) {
         printf("[ERROR] Particle %d was moved to incorrect element %d "
                "(should be in element %d)\n", id, e, dest_elem);

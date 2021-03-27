@@ -179,8 +179,8 @@ int main(int argc, char* argv[]) {
                 particle_elements, particle_info);
 
   Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32); //league_size, team_size
-  ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, 
-                                      ppe, element_gids, particle_elements, particle_info);
+  ps::CabM_Input<Types,MemSpace> input(policy, num_elems, num_ptcls, ppe, element_gids, particle_elements, particle_info);
+  ps::CabM<Types,MemSpace>* cabm = new ps::CabM<Types, MemSpace>(input);
 
   //Run tests
   fails += testCounts(cabm, num_elems, num_ptcls);

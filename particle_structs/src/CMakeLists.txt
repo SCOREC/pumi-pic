@@ -16,6 +16,7 @@ set(HEADERS
   particle_structure.hpp
   ps_for.hpp
   psMemberType.h
+
   scs/SCS_Macros.h
   scs/SCS_Types.h
   scs/SCSPair.h
@@ -25,15 +26,19 @@ set(HEADERS
   scs/SCS_buildFns.h
   scs/SellCSigma.h
   scs/scs_input.hpp
+
   csr/CSR.hpp
   csr/CSR_buildFns.hpp
   csr/CSR_migrate.hpp
   csr/CSR_rebuild.hpp
+  
   cabm/cabm_support.hpp
   cabm/cabm.hpp
   cabm/cabm_buildFns.hpp
   cabm/cabm_migrate.hpp
   cabm/cabm_rebuild.hpp
+  cabm/cabm_input.hpp
+
   particle_structs.hpp
 )
 

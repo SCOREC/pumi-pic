@@ -1,14 +1,12 @@
 # build-...-pumipic/performance_tests/output_convert.py
 
-# Usage:    ./ps_combo $e $((e*1000)) $distribution -p $percent -n $struct &> input_filename
+# Usage:    ./tests ... &> input_filename
 #           OR
-#           ./ps_migrate $e $((e*1000)) $distribution -p $percent -n $struct &> input_filename
-#
 #           python output_convert.py input_filename rebuild_output_filename push_output_filename migrate_output_filename
 
 import sys
 
-# Formatting output from testing to comparison of rebuild/pseudopush/migration
+# Formatting output from testing for usage in MATLAB
 n = len(sys.argv)
 assert( n >= 4 )
 

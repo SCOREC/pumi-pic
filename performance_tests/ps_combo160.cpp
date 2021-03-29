@@ -13,7 +13,6 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
   // Default values if not specified on command line
-  int test_num = 2;
   double percentMoved = 0.5;
   double percentMovedProcess = 0.1;
   int team_size = 32;
@@ -21,13 +20,15 @@ int main(int argc, char* argv[]) {
 
   /* Check commandline arguments */
   // Required arguments
+  assert(argc >= 5);
   int num_elems = atoi(argv[1]);
   int num_ptcls = atoi(argv[2]);
   int strat = atoi(argv[3]);
+  int structure = atoi(argv[4]);
   bool optimal = false;
 
   // Optional arguments specified with flags
-  for (int i = 4; i < argc; i+=2) {
+  for (int i = 5; i < argc; i+=2) {
     // -p = percent_moved
     if (std::string(argv[i]) == "-p") {
       percentMoved = atof(argv[i+1]);
@@ -35,10 +36,6 @@ int main(int argc, char* argv[]) {
     // -pp = percent_moved_to_new_process
     else if (std::string(argv[i]) == "-pp") {
       percentMovedProcess = atof(argv[i+1]);
-    }
-    // -n = test_num
-    else if (std::string(argv[i]) == "-n") {
-      test_num = atoi(argv[i+1]);
     }
     // -s = team_size (/chunk width)
     else if (std::string(argv[i]) == "-s") {
@@ -54,7 +51,7 @@ int main(int argc, char* argv[]) {
     }
     else {
       fprintf(stderr, "Illegal argument: %s", argv[i]);
-      // insert usage statement
+      fprintf(stderr, "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]");
     }
   }
 
@@ -89,9 +86,11 @@ int main(int argc, char* argv[]) {
       printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
 
+    std::string name;
+    PS160* ptcls;
+
     /* Create particle structure */
-    ParticleStructures160 structures;
-    if (test_num == 0) {
+    if (structure == 0) {
       if (optimal) {
         if (strat == 1) {
           team_size = 512;
@@ -106,123 +105,114 @@ int main(int argc, char* argv[]) {
           vert_slice = 8;
         }
       }
-      structures.push_back(std::make_pair("Sell-"+std::to_string(team_size)+"-ne",
-                                      createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne")));
+      name = ("Sell-"+std::to_string(team_size)+"-ne");
+      ptcls = createSCS(num_elems, num_ptcls, ppe, element_gids,
+                                                team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne");
     }
-    if (test_num == 1) {
-      structures.push_back(std::make_pair("CSR",
-                                      createCSR(num_elems, num_ptcls, ppe, element_gids, team_size)));
+    else if (structure == 1) {
+      name = "CSR";
+      ptcls = createCSR(num_elems, num_ptcls, ppe, element_gids, team_size);
     }
-    if (test_num == 2) {
-      structures.push_back(std::make_pair("CabM",
-                                      createCabM(num_elems, num_ptcls, ppe, element_gids, team_size)));
+    else if (structure == 2) {
+      name = "CabM";
+      ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size);
     }
 
     const int ITERS = 100;
     if (!comm_rank)
       printf("Performing %d iterations of rebuild on each structure\n", ITERS);
     /* Perform push & rebuild on the particle structures */
-    for (int i = 0; i < structures.size(); ++i) {
-      std::string name = structures[i].first;
-      PS160* ptcls = structures[i].second;
+    if (!comm_rank)
+      printf("Beginning push on structure %s\n", name.c_str());
 
-      if (!comm_rank)
-        printf("Beginning push on structure %s\n", name.c_str());
+    // Per element data to access in pseudoPush
+    Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
+    Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
+        KOKKOS_LAMBDA(const int& e){
+      parentElmData(e) = sqrt(e) * e;
+    });
 
-      // Per element data to access in pseudoPush
-      Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
-      Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
-          KOKKOS_LAMBDA(const int& e){
-        parentElmData(e) = sqrt(e) * e;
-      });
+    for (int i = 0; i < ITERS; ++i) {
+      /* Begin Push Setup */
+      auto dbls = ptcls->get<0>();
+      auto nums = ptcls->get<1>();
+      auto lint = ptcls->get<2>();
 
-      for (int i = 0; i < ITERS; ++i) {
-        /* Begin Push Setup */
-        auto dbls = ptcls->get<0>();
-        auto nums = ptcls->get<1>();
-        auto lint = ptcls->get<2>();
-
-        auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-          if (mask) {
-            for (int i = 0; i < 17; i++) {
-              dbls(p,i) = 10.3;
-              dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
-            }
-            for (int i = 0; i < 4; i++) {
-              nums(p,i) = 4*p + i;
-            }
-            lint(p) = p;
+      auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+        if (mask) {
+          for (int i = 0; i < 17; i++) {
+            dbls(p,i) = 10.3;
+            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
           }
-          else {
-            for (int i = 0; i < 17; i++) {
-              dbls(p,i) = 0;
-            }
-            for (int i = 0; i < 4; i++) {
-              nums(p,i) = -1;
-            }
-            lint(p) = 0;
+          for (int i = 0; i < 4; i++) {
+            nums(p,i) = 4*p + i;
+          }
+          lint(p) = p;
+        }
+        else {
+          for (int i = 0; i < 17; i++) {
+            dbls(p,i) = 0;
+          }
+          for (int i = 0; i < 4; i++) {
+            nums(p,i) = -1;
+          }
+          lint(p) = 0;
+        }
+      };
+
+      Kokkos::fence();
+      Kokkos::Timer pseudo_push_timer;
+      /* Begin push operations */
+      ps::parallel_for(ptcls,pseudoPush,"pseudo push");
+      Kokkos::fence();
+      /* End push */
+      float pseudo_push_time = pseudo_push_timer.seconds();
+      pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
+    }
+
+    int seed = 0; // set seed for uniformly random processes
+    Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+
+    int* other_ranks = new int[comm_size-1];
+    int counter = 0;
+    for (int i = 0; i < comm_size; i++) {
+      if (i != comm_rank)
+        other_ranks[counter++] = i;
+    }
+    kkLidView other_ranks_d("other_ranks_d", comm_size-1);
+    pumipic::hostToDevice(other_ranks_d, other_ranks);
+
+    if (!comm_rank)
+      printf("Beginning migrate on structure %s\n", name.c_str());
+    for (int i = 0; i < ITERS; ++i) {
+      kkLidView new_elms("new elems", ptcls->capacity());
+      Kokkos::Timer t;
+      redistribute_particles(ptcls, strat, percentMoved, new_elms);
+      pumipic::RecordTime("redistribute", t.seconds());
+
+      Kokkos::Timer tp;
+      kkLidView new_process("new_process", ptcls->capacity());
+      //Kokkos::fill_random(new_process, pool, comm_size);
+      if (comm_size > 1) {
+        auto to_new_processes = PS_LAMBDA(const int e, const int p, const bool mask) {
+          if (mask) {
+            auto generator = pool.get_state();
+            double prob = generator.drand(1.0);
+            if (prob < percentMovedProcess)
+              new_process(p) = other_ranks_d( generator.urand(comm_size-1) ); // send particle to a different process
+            else
+              new_process(p) = comm_rank;
+            pool.free_state(generator);
           }
         };
-
-        Kokkos::fence();
-        Kokkos::Timer pseudo_push_timer;
-        /* Begin push operations */
-        ps::parallel_for(ptcls,pseudoPush,"pseudo push");
-        Kokkos::fence();
-        /* End push */
-        float pseudo_push_time = pseudo_push_timer.seconds();
-        pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
+        pumipic::parallel_for(ptcls, to_new_processes, "to_new_processes");
       }
+      pumipic::RecordTime("redistribute processes", tp.seconds());
 
-      int seed = 0; // set seed for uniformly random processes
-      Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+      ptcls->migrate(new_elms, new_process);
+    }
 
-      int* other_ranks = new int[comm_size-1];
-      int counter = 0;
-      for (int i = 0; i < comm_size; i++) {
-        if (i != comm_rank)
-          other_ranks[counter++] = i;
-      }
-      kkLidView other_ranks_d("other_ranks_d", comm_size-1);
-      pumipic::hostToDevice(other_ranks_d, other_ranks);
-
-      if (!comm_rank)
-        printf("Beginning migrate on structure %s\n", name.c_str());
-      for (int i = 0; i < ITERS; ++i) {
-        kkLidView new_elms("new elems", ptcls->capacity());
-        Kokkos::Timer t;
-        redistribute_particles(ptcls, strat, percentMoved, new_elms);
-        pumipic::RecordTime("redistribute", t.seconds());
-
-        Kokkos::Timer tp;
-        kkLidView new_process("new_process", ptcls->capacity());
-        //Kokkos::fill_random(new_process, pool, comm_size);
-        if (comm_size > 1) {
-          auto to_new_processes = PS_LAMBDA(const int e, const int p, const bool mask) {
-            if (mask) {
-              auto generator = pool.get_state();
-              double prob = generator.drand(1.0);
-              if (prob < percentMovedProcess)
-                new_process(p) = other_ranks_d( generator.urand(comm_size-1) ); // send particle to a different process
-              else
-                new_process(p) = comm_rank;
-              pool.free_state(generator);
-            }
-          };
-          pumipic::parallel_for(ptcls, to_new_processes, "to_new_processes");
-        }
-        pumipic::RecordTime("redistribute processes", tp.seconds());
-
-        ptcls->migrate(new_elms, new_process);
-      }
-
-    } // end loop over structures
-
-
-    for (size_t i = 0; i < structures.size(); ++i)
-      delete structures[i].second;
-    structures.clear();
+    delete ptcls;
 
   } // end Kokkos region
 

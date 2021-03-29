@@ -39,7 +39,7 @@ namespace pumipic {
     assert(new_element.size() == capacity_);
     kkLidView num_removed_d("num_removed_d", 1); // for counting particles to be removed
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-      if (active.access(soa,tuple) == 1) {
+      if (active.access(soa,tuple)) {
         lid_t parent = new_element(soa*soa_len + tuple);
         if (parent > -1) { // count particles to be kept
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
@@ -62,7 +62,7 @@ namespace pumipic {
       });
 
     RecordTime("CabM count active particles", overall_timer.seconds());
-    Kokkos::Timer existing_timer; // timer for moving/deleting particles
+    Kokkos::Timer setup_timer; // timer for aosoa setup
 
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, -1, padding_start); // -1 signifies to fill to num_soa
@@ -82,24 +82,27 @@ namespace pumipic {
       newCapacity = capacity_;
       newAosoa = aosoa_swap;
     }
+
+    RecordTime("CabM move/destroy setup", setup_timer.seconds());
+    Kokkos::Timer existing_timer; // timer for moving/deleting particles
+
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
     auto aosoa_copy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-        if (active.access(soa,tuple) == 1) {
+        const lid_t destParent = new_element(soa*soa_len + tuple);
+        if (active.access(soa,tuple) && destParent != -1) {
           // Compute the destSoa based on the destParent and an array of
           //   counters for each destParent tracking which particle is the next
           //   free position. Use atomic fetch and incriment with the
           //   'elmPtclCounter_d' array.
-          lid_t destParent = new_element(soa*soa_len + tuple);
-          if ( destParent > -1 ) { // delete particles with negative destination element
-            lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
-            // use newOffset_d to figure out which soa is the first for destParent
-            const lid_t firstSoa = newOffset_d(destParent);
-            const lid_t destIdx = occupiedTuples%soa_len;
-            Cabana::Impl::tupleCopy(
-              newAosoa.access(firstSoa + occupiedTuples/soa_len), destIdx, // dest
-              aosoa_copy.access(soa), tuple); // src
-          }
+          const lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
+          // use newOffset_d to figure out which soa is the first for destParent
+          const lid_t firstSoa = newOffset_d(destParent);
+          const lid_t destSoa = firstSoa + occupiedTuples/soa_len;
+          const lid_t destTuple = occupiedTuples%soa_len;
+          Cabana::Impl::tupleCopy(
+            newAosoa.access(destSoa), destTuple, // dest
+            aosoa_copy.access(soa), tuple); // src
         }
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");

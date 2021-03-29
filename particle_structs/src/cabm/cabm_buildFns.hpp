@@ -104,11 +104,11 @@ namespace pumipic {
         }
         const lid_t elm_ppe = particles_per_element(elm);
         const lid_t last_soa_ppe = soa_len - ((num_soa * soa_len) - elm_ppe);
-        lid_t isActive = 0;
+        bool isActive = false;
         if (soa < last_soa)
-          isActive = 1;
+          isActive = true;
         else if (soa == last_soa && ptcl < last_soa_ppe)
-          isActive = 1;
+          isActive = true;
         active.access(soa,ptcl) = isActive;
       }, "set_active");
   }

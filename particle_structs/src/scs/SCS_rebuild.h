@@ -4,6 +4,8 @@ namespace pumipic {
     bool SellCSigma<DataTypes,MemSpace>::reshuffle(kkLidView new_element,
                                                    kkLidView new_particle_elements,
                                                    MTVs new_particles) {
+    Kokkos::timer reshuffle_time;
+
     //Count current/new particles per row
     kkLidView new_particles_per_row("new_particles_per_row", numRows()+1);
     kkLidView num_holes_per_row("num_holes_per_row", numRows());
@@ -39,6 +41,7 @@ namespace pumipic {
 
     if (getLastValue<lid_t>(fail)) {
       //Reshuffle fails
+      RecordTime(name+ " failed reshuffle",timer.seconds());
       return false;
     }
 
@@ -53,6 +56,7 @@ namespace pumipic {
       Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
           sum += particle_mask_local(i);
         }, num_ptcls);
+      RecordTime(name+ " successful reshuffle",timer.seconds());
       return true;
     }
     kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
@@ -115,6 +119,8 @@ namespace pumipic {
     Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
         sum += particle_mask_local(i);
       }, num_ptcls);
+
+    RecordTime(name+ " successful reshuffle",timer.seconds());
     return true;
   }
 

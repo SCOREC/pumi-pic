@@ -41,10 +41,10 @@ int main(int argc, char** argv) {
   }
 
   //Test the global tag to be converted to global_serial
-  Omega_h::TagBase const* new_tag = picparts->get_tagbase(3, "global_serial");
+  Omega_h::TagBase const* new_tag = picparts->get_tagbase(dim, "global_serial");
 
-  Omega_h::GOs global_old = mesh.get_array<Omega_h::GO>(3, "global");
-  Omega_h::GOs global_new = picparts->get_array<Omega_h::GO>(3, "global_serial");
+  Omega_h::GOs global_old = mesh.get_array<Omega_h::GO>(dim, "global");
+  Omega_h::GOs global_new = picparts->get_array<Omega_h::GO>(dim, "global_serial");
   Omega_h::Write<Omega_h::LO> fails(1,0);
   auto checkGlobals = OMEGA_H_LAMBDA(const Omega_h::LO ent) {
     if (global_old[ent] != global_new[ent]) {

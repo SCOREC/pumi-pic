@@ -156,24 +156,31 @@ namespace pumipic {
         int at_length = 12;
         determineLengths(name_length, tt_length, cc_length, at_length);
         sortTimeInfo(sort);
-        char buffer[8192];
-        char* ptr = buffer + sprintf(buffer, "Timing Summary %d\n", comm_rank);
-        ptr += sprintf(ptr, "Operation   %*sTotal Time   %*sCall Count   "
-                       "%*sAverage Time\n", name_length - 9 , "",
-                       tt_length - 10, "", cc_length - 10, "");
+        std::stringstream buffer;
+        //Header
+        buffer << "Timing Summary " << comm_rank << "\n";
+        //Column heads
+        buffer << "Operation" << std::string(name_length - 6, ' ')
+               << "Total Time" << std::string(tt_length - 7, ' ')
+               << "Call Count" << std::string(cc_length - 7, ' ')
+               << "Average Time\n";
         for (int index = 0; index < time_per_op.size(); ++index) {
-          ptr += sprintf(ptr, "%s   %*s%*.6f   %*d   %*.6f",
-                         time_per_op[index].str.c_str(),
-                         (int)(name_length - time_per_op[index].str.size()), "",
-                         tt_length, time_per_op[index].time,
-                         cc_length, time_per_op[index].count,
-                         at_length, time_per_op[index].time / time_per_op[index].count);
-          if (time_per_op[index].hasPrebarrier) {
-            ptr += sprintf(ptr, "  Total Prebarrier=%f", time_per_op[index].prebarrier);
-          }
-          ptr += sprintf(ptr, "\n");
+          //Operation name
+          buffer << time_per_op[index].str.c_str()
+          //Fill space after operation name
+                 << std::string(name_length - time_per_op[index].str.size()+3, ' ')
+          //Total time spent on operation
+                 << std::setw(tt_length+3) << time_per_op[index].time
+          //Number of calls of operation
+                 << std::setw(cc_length+3) << time_per_op[index].count
+          //Average time per call
+                 << std::setw(at_length+3)
+                 << time_per_op[index].time / time_per_op[index].count;
+          if (time_per_op[index].hasPrebarrier)
+            buffer <<"  Total Perbarrier=" << time_per_op[index].prebarrier;
+          buffer <<'\n';
         }
-        fprintf(stderr, "%s\n", buffer);
+        fprintf(stderr, "%s\n", buffer.str().c_str());
       }
     }
   }
@@ -252,16 +259,6 @@ namespace pumipic {
           buffer << std::setw(avg_length) << avg_time;
           //Print the number of calls
           buffer << std::setw(call_length) << op_counts << '\n';
-
-
-          // ptr += sprintf(ptr, "%s   %*s%*.2f (%d)%*s   %*.2f (%d)%*s   %*.2f\n",
-          //                time_per_op[index].str.c_str(),
-          //                (int)(name_length - time_per_op[index].str.size()), "",
-          //                tt_length, max_time.val, max_time.rank,
-          //                proc_length - length(max_time.rank), "",
-          //                tt_length, min_time.val, min_time.rank,
-          //                proc_length - length(min_time.rank), "",
-          //                tt_length, avg_time);
 
         }
         char end[1]; end[0] = '~';

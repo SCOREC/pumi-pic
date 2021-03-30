@@ -198,16 +198,18 @@ namespace pumipic {
       }
       int tt_length = 15;
       int proc_length = 8;
+      int avg_length = 12;
+      int call_length = 13;
       int one = 1;
       if (!comm_rank) {
         sortTimeInfo(sort);
         std::stringstream buffer;
-        //TODO add max call counts
         buffer << "Reduced Timing Summary with " << total_timing << " ranks\n"
                << "Operation" << std::string(name_length - 6, ' ')
                << "Max Time (max proc)" << std::string(tt_length + proc_length - 18, ' ')
                << "Min Time (min proc)" << std::string(tt_length + proc_length - 18, ' ')
-               << "Average Time\n";
+               << "Average Time" << std::string(avg_length - 9, ' ')
+               << "Call Count\n";
         for (std::size_t index = 0; index < time_per_op.size(); ++index) {
           auto& op = time_per_op[index];
           int size = op.str.size() + 1;
@@ -222,10 +224,12 @@ namespace pumipic {
           time_rank.val = op.time;
           time_rank.rank = comm_rank;
           int num_procs;
+          int op_counts;
           MPI_Reduce(&one, &num_procs, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
           MPI_Reduce(&time_rank, &max_time, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
           MPI_Reduce(&time_rank, &min_time, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
           MPI_Reduce(&(op.time), &avg_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce(&(op.count), &op_counts, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
           avg_time /= num_procs;
 
           //Name of Operation
@@ -245,10 +249,9 @@ namespace pumipic {
             //Fill space after min time/rank
                  << std::string(proc_length - length(min_time.rank), ' ');
           //The average time spent on the operation
-          buffer.width(tt_length);
-          buffer << avg_time;
-          buffer.width(0);
-          buffer << '\n';
+          buffer << std::setw(avg_length) << avg_time;
+          //Print the number of calls
+          buffer << std::setw(call_length) << op_counts << '\n';
 
 
           // ptr += sprintf(ptr, "%s   %*s%*.2f (%d)%*s   %*.2f (%d)%*s   %*.2f\n",
@@ -289,6 +292,8 @@ namespace pumipic {
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
             MPI_Reduce(&(op.time), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&(op.count), NULL, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+
           }
           else {
             MPI_Reduce(&zero, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -298,6 +303,8 @@ namespace pumipic {
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
             time_rank.val = 0;
             MPI_Reduce(&(time_rank.val), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&zero, NULL, 1, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+
           }
           MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(op_name, size, MPI_CHAR, 0, MPI_COMM_WORLD);

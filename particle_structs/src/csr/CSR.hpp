@@ -98,6 +98,8 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
+    MTVs ptcl_data_swap;
+
     //Offsets array into CSR
     kkLidView offsets;
   };
@@ -135,6 +137,7 @@ namespace pumipic {
     capacity_ = getLastValue(offsets);
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
+    CreateViews<device_type, DataTypes>(ptcl_data_swap, capacity_);
 
     //If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
@@ -151,6 +154,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::~CSR() {
     destroyViews<DataTypes, memory_space>(ptcl_data);
+    destroyViews<DataTypes, memory_space>(ptcl_data_swap);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -158,7 +162,7 @@ namespace pumipic {
                                          Distributor<MemSpace> dist,
                                          kkLidView new_particle_elements,
                                          MTVs new_particle_info) {
-    fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
+    rebuild(new_element,new_particle_elements,new_particle_info);
   }
 
   template <class DataTypes, typename MemSpace>

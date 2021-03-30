@@ -192,7 +192,6 @@ int main(int argc, char* argv[]) {
 
       Kokkos::Timer tp;
       kkLidView new_process("new_process", ptcls->capacity());
-      //Kokkos::fill_random(new_process, pool, comm_size);
       if (comm_size > 1) {
         auto to_new_processes = PS_LAMBDA(const int e, const int p, const bool mask) {
           if (mask) {

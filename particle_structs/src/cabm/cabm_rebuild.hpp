@@ -41,11 +41,10 @@ namespace pumipic {
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
       if (active.access(soa,tuple)) {
         lid_t parent = new_element(soa*soa_len + tuple);
-        if (parent > -1) { // count particles to be kept
+        if (parent > -1) // count particles to be kept
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
-        } else { // count particles to be deleted
+        else // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
-        }
       }
     };
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
@@ -95,7 +94,7 @@ namespace pumipic {
           //   counters for each destParent tracking which particle is the next
           //   free position. Use atomic fetch and incriment with the
           //   'elmPtclCounter_d' array.
-          const lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
+          const lid_t occupiedTuples = Kokkos::atomic_fetch_add(&elmPtclCounter_d(destParent), 1);
           // use newOffset_d to figure out which soa is the first for destParent
           const lid_t firstSoa = newOffset_d(destParent);
           const lid_t destSoa = firstSoa + occupiedTuples/soa_len;

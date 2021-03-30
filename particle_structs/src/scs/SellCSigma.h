@@ -24,7 +24,6 @@ namespace pumipic {
 void enable_prebarrier();
 double prebarrier();
 
-
 template<class DataTypes, typename MemSpace = DefaultMemSpace>
 class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
  public:

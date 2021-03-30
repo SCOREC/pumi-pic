@@ -20,11 +20,7 @@ namespace pumipic {
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
-    /// @todo add prebarrier to main ParticleStructure files
-    //const auto btime = prebarrier();
-    Kokkos::Timer barrier_timer;
-    MPI_Barrier(MPI_COMM_WORLD);
-    const auto btime = barrier_timer.seconds();
+    const auto btime = prebarrier();
 
     Kokkos::Profiling::pushRegion("CabM Rebuild");
     Kokkos::Timer overall_timer; // timer for rebuild

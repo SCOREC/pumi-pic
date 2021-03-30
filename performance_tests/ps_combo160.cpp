@@ -70,7 +70,6 @@ int main(int argc, char* argv[]) {
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
-  /// @todo Add prebarrier to all classes (Only on SCS at the moment)
   pumipic::enable_prebarrier();
 
   { // Begin Kokkos region

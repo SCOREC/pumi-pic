@@ -43,7 +43,7 @@ set(HEADERS
 )
 
 set(SOURCES
-  scs/SellCSigma.cpp
+  support/prebarrier.cpp
 )
 
 add_library(particleStructs ${SOURCES})

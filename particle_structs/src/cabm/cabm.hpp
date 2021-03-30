@@ -21,6 +21,9 @@ namespace {
 
 namespace pumipic {
 
+  void enable_prebarrier();
+  double prebarrier();
+
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
   public:

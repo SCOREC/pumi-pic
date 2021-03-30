@@ -7,6 +7,9 @@ namespace ps = particle_structs;
 
 namespace pumipic {
 
+  void enable_prebarrier();
+  double prebarrier();
+
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CSR : public ParticleStructure<DataTypes, MemSpace> {
   public:

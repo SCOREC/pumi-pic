@@ -165,6 +165,8 @@ bool rebuildNoChanges(int ne_in, int np_in, int distribution) {
   };
   Kokkos::parallel_for(cabm->nElems(), checkElementSums, "checkElementSums");
   fails += getLastValue<lid_t>(failed);
+
+  delete cabm;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -227,9 +229,9 @@ bool rebuildNewElems(int ne_in, int np_in, int distribution) {
 
   kkLidView failed = kkLidView("failed", 1);
   auto checkElement = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
-    const lid_t id = pID(p);
-    const lid_t dest_elem = new_element(id);
     if (mask) {
+      const lid_t id = pID(p);
+      const lid_t dest_elem = new_element(id);
       Kokkos::atomic_add(&(new_element_sums[e]), id);
       if (dest_elem != e) {
         printf("[ERROR] Particle %d was moved to incorrect element %d "
@@ -241,19 +243,20 @@ bool rebuildNewElems(int ne_in, int np_in, int distribution) {
   ps::parallel_for(cabm, checkElement, "checkElement");
   fails += getLastValue<lid_t>(failed);
 
-    CabM::kkLidView failed2("failed2", 1);
-    auto checkElementSums = KOKKOS_LAMBDA(const int i) {
-      const lid_t old_sum = element_sums(i);
-      const lid_t new_sum = new_element_sums(i);
-      if (old_sum != new_sum) {
-        printf("Sum of particle ids on element %d do not match. Old: %d New: %d\n",
-               i, old_sum, new_sum);
-        failed2(0) = 1;
-      }
-    };
-    Kokkos::parallel_for(cabm->nElems(), checkElementSums, "checkElementSums");
-    fails += getLastValue<lid_t>(failed);
+  CabM::kkLidView failed2("failed2", 1);
+  auto checkElementSums = KOKKOS_LAMBDA(const int i) {
+    const lid_t old_sum = element_sums(i);
+    const lid_t new_sum = new_element_sums(i);
+    if (old_sum != new_sum) {
+      printf("Sum of particle ids on element %d do not match. Old: %d New: %d\n",
+              i, old_sum, new_sum);
+      failed2(0) = 1;
+    }
+  };
+  Kokkos::parallel_for("checkElementSums", cabm->nElems(), checkElementSums);
+  fails += getLastValue<lid_t>(failed);
 
+  delete cabm;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -345,6 +348,7 @@ bool rebuildNewPtcls(int ne_in, int np_in, int distribution, int nnp) {
 
   fails += getLastValue<lid_t>(failed);
 
+  delete cabm;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -422,6 +426,7 @@ bool rebuildPtclsDestroyed(int ne_in, int np_in, int distribution) {
 
   fails += getLastValue<lid_t>(failed);
 
+  delete cabm;
   Kokkos::Profiling::popRegion();
   return fails;
 }
@@ -526,6 +531,7 @@ bool rebuildNewAndDestroyed(int ne_in, int np_in, int distribution, int nnp) {
 
   fails += getLastValue<lid_t>(failed);
 
+  delete cabm;
   Kokkos::Profiling::popRegion();
   return fails;
 }

@@ -59,6 +59,7 @@ if(ENABLE_CABANA)
   set(Cabana_PREFIX ${Cabana_PREFIX})
   bob_public_dep(Cabana)
   # }
+  add_definitions(-DPP_ENABLE_CABM)
 endif()
 
 set(pumipic_USE_Kokkos_DEFAULT ON)

@@ -5,6 +5,17 @@
 
 namespace ps = particle_structs;
 
+namespace {
+template <typename ppView>
+  void printHistogram(ppView v){
+    Kokkos::parallel_for("printHistogram",
+      v.size(),
+      KOKKOS_LAMBDA(const int& i){
+      printf("%d\t%d\n",i,v(i));
+    });
+  }
+}
+
 namespace pumipic {
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
@@ -52,6 +63,11 @@ namespace pumipic {
     void parallel_for(FunctionType& fn, std::string name="");
 
     void printMetrics() const;
+
+    lid_t getTeamSize() const { return team_size_; }
+    void setTeamSize(lid_t size) { team_size_ = size; }
+
+    void histogram(std::string filename) ;
 
     //---Attention User---  Do **not** call this function! {
     /**
@@ -102,7 +118,35 @@ namespace pumipic {
 
     //Offsets array into CSR
     kkLidView offsets;
+
+    MTVs ptcl_data_swap;
+
+    lid_t team_size_;
   };
+
+  template <class DataTypes, typename MemSpace>
+  void CSR<DataTypes, MemSpace>::histogram(std::string filename) {
+    
+    kkLidView elemCap("elemCap",num_elems);
+    auto calc_hist = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
+      Kokkos::atomic_increment(&elemCap(e));
+    };
+    printf("Made lambda\n");
+    parallel_for(calc_hist, "calc_hist");
+    printf("Executed lambda\n");
+    printHistogram(elemCap);
+
+    Kokkos::fence();
+
+    //std::ofstream hist;
+    //hist.open(filename+".txt");
+    //for(lid_t i = 0; i < offsets.size()/1000; i++){
+      //hist<< elemCap(i) << std::endl;
+      //printf("Elem %d : %d", i, elemCap(i));
+    //}
+    //hist.close();
+   
+  }
 
 
   template <class DataTypes, typename MemSpace>
@@ -121,6 +165,8 @@ namespace pumipic {
     num_ptcls = num_particles;
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
+    team_size_ = 512; //default value
 
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
@@ -158,14 +204,6 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-                                         Distributor<MemSpace> dist,
-                                         kkLidView new_particle_elements,
-                                         MTVs new_particle_info) {
-    rebuild(new_element,new_particle_elements,new_particle_info);
-  }
-
-  template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
     if (nPtcls() == 0)
@@ -178,7 +216,7 @@ namespace pumipic {
     fn_d = &fn;
 #endif
     const lid_t league_size = num_elems;
-    const lid_t team_size = 32;  //hack
+    const lid_t team_size = team_size_;
     const PolicyType policy(league_size, team_size);
     auto offsets_cpy = offsets;
     const lid_t mask = 1; //all particles are active
@@ -207,3 +245,4 @@ namespace pumipic {
 } //end namespace pumipic
 
 #include "CSR_rebuild.hpp"
+#include "CSR_migrate.hpp"

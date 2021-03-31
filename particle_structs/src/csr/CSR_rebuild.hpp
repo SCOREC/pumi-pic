@@ -89,8 +89,6 @@ namespace pumipic{
     Kokkos::fence();
     RecordTime("CSR PSToPS", time_pstops.seconds());
 
-    //Deallocate ptcl_data
-    //destroyViews<DataTypes>(ptcl_data);
 
     Kokkos::Timer time_newPtcls;
 

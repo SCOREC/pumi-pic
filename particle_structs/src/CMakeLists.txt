@@ -26,6 +26,7 @@ set(HEADERS
   scs/scs_input.hpp
   csr/CSR.hpp
   csr/CSR_rebuild.hpp
+  csr/CSR_migrate.hpp
   particle_structs.hpp
 )
 

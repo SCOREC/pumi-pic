@@ -38,6 +38,8 @@ namespace pumipic {
     lid_t capacity() const {return capacity_;}
     lid_t numRows() const {return num_rows;}
 
+    virtual void histogram(std::string filename) = 0;
+
     /* Provides access to the particle info for Nth time of each particle
 
        The segment is indexed by particle index first followed by indices for each
@@ -50,6 +52,10 @@ namespace pumipic {
       MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);
     }
+
+    //CSR specific functions (no effect in SCS)
+    virtual void setTeamSize(lid_t size) = 0;
+    virtual lid_t getTeamSize() const = 0;
 
 
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),

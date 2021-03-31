@@ -175,13 +175,16 @@ namespace pumipic {
     }
 
     Kokkos::Timer time_shuffle;
+    Kokkos::Profiling::pushRegion("Try Shuffling");
     //If tryShuffling is on and shuffling works then rebuild is complete
     if (tryShuffling && reshuffle(new_element, new_particle_elements, new_particles)) {
       RecordTime(name + " rebuild", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
+      Kokkos::Profiling::popRegion();
       return;
     }
     RecordTime(name + " shuffle attempt", time_shuffle.seconds());
+    Kokkos::Profiling::popRegion();
 
     lid_t new_num_ptcls = activePtcls;
 

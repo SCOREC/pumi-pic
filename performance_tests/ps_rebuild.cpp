@@ -129,6 +129,8 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS* ptcls = structures[i].second;
+      if (!ptcls)
+        continue;
       printf("Beginning rebuild on structure %s\n", name.c_str());
       for (int i = 0; i < ITERS; ++i) {
         kkLidView new_elms("new elems", ptcls->capacity());
@@ -146,7 +148,7 @@ int main(int argc, char* argv[]) {
           kkGidView element_gids_new("",0);
           printf("Generating new particle distribution with strategy: %s\n", distribute_name(strat));
           distribute_particles(num_elems, num_new_ptcls, strat, ppe_new, ptcl_elems_new);
-  
+
           //MTVs ptcl_info_new;
           //CreateViews<device_type, PerfTypes>(ptcl_info_new,num_new_ptcls);
 
@@ -165,7 +167,8 @@ int main(int argc, char* argv[]) {
     }
 
     for (size_t i = 0; i < structures.size(); ++i)
-      delete structures[i].second;
+      if (structures[i].second)
+        delete structures[i].second;
     structures.clear();
   }
 
@@ -186,6 +189,10 @@ PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
 }
 
 PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+#ifdef PP_ENABLE_CABM
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
   return new pumipic::CabM<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+  #else
+  return NULL;
+  #endif
 }

@@ -7,6 +7,18 @@
 #include <type_traits>
 
 namespace pumipic {
+#ifndef PP_ENABLE_CABM
+  //Dummy slice for when pumi-pic is build without Cabana
+  //This is a hack that will go away in PSv2.0
+  template <typename T>
+  struct DummySlice {
+    PP_INLINE T& access(int, int) const {return *x;}
+    PP_INLINE T& access(int, int, int) const {return *x;}
+    PP_INLINE T& access(int, int, int, int) const {return *x;}
+    PP_INLINE T& access(int, int, int, int, int) const {return *x;}
+    T* x;
+  };
+#endif
 
   //Forware declare subsegment
   template <typename Type, typename Device, typename MemoryAccessType,
@@ -15,7 +27,7 @@ namespace pumipic {
 
 
   template <typename Type, typename Device, typename MemoryAccessType=void,
-            int VectorLength = 0, int Stride = 1>
+            int VectorLength=1, int Stride=1>
   class Segment {
   public:
     using Base=typename BaseType<Type>::type;
@@ -25,12 +37,11 @@ namespace pumipic {
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
 #else
-    using SliceType = std::vector<int>; //GD
+    using SliceType = DummySlice<Base>;
 #endif
     Segment() : is_view(false) {}
     Segment(ViewType v) : is_view(true), view(v) {}
     Segment(SliceType s) : is_view(false), slice(s) {}
-
     template <typename U, std::size_t N>
     using checkRank = typename std::enable_if<std::rank<Type>::value == N &&
                                               std::is_same<Type, U>::value,
@@ -60,7 +71,6 @@ namespace pumipic {
       else
         return slice.access(particle_index/VectorLength, particle_index%VectorLength,
                             i, j);
-
     }
     template <typename U = Type>
     PP_INLINE checkRank<U, 3>& operator()(const int& particle_index,
@@ -92,13 +102,13 @@ namespace pumipic {
   class SubSegment {
   public:
     using ViewType=View<Type*, Device>;
+    using Base=typename BaseType<Type>::type;
 #ifdef PP_ENABLE_CABM
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
 #else
-    using SliceType = std::vector<int>; //GD
+    using SliceType = DummySlice<Base>;
 #endif
-    using Base=typename BaseType<Type>::type;
 
     PP_INLINE SubSegment(bool is_v, const ViewType& view,
                          const SliceType& slice, const int& particle_index)

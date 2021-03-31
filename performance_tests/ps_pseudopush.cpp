@@ -117,12 +117,14 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS* ptcls = structures[i].second;
+      if (!ptcls)
+        continue;
       printf("Beginning pseudo-push on structure %s\n", name.c_str());
 
       /* Begin Push Setup */
       //Per element data to access in pseudoPush
       Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
-      Kokkos::parallel_for("parent_elem_data", parentElmData.size(), 
+      Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
           KOKKOS_LAMBDA(const int& e){
         parentElmData(e) = sqrt(e) * e;
       });
@@ -150,12 +152,12 @@ int main(int argc, char* argv[]) {
           dbl(p)  = 0;
         }
       };
-      
+
       for (int i = 0; i < ITERS; ++i) {
         Kokkos::fence();
         Kokkos::Timer pseudo_push_timer;
         /* Begin push operations */
-        ps::parallel_for(ptcls,pseudoPush,"pseudo push"); 
+        ps::parallel_for(ptcls,pseudoPush,"pseudo push");
         /* End push */
         Kokkos::fence();
         float pseudo_push_time = pseudo_push_timer.seconds();
@@ -164,7 +166,8 @@ int main(int argc, char* argv[]) {
     }
 
     for (size_t i = 0; i < structures.size(); ++i)
-      delete structures[i].second;
+      if (structures[i].second)
+        delete structures[i].second;
     structures.clear();
   }
 
@@ -183,6 +186,10 @@ PS* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
   return new pumipic::CSR<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }
 PS* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+#ifdef PP_ENABLE_CABM
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
   return new pumipic::CabM<PerfTypes, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+#else
+  return NULL;
+#endif
 }

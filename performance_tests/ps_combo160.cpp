@@ -101,7 +101,8 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < structures.size(); ++i) {
       std::string name = structures[i].first;
       PS160* ptcls = structures[i].second;
-
+      if (!ptcls)
+        continue;
       int seed = 0; // set seed for uniformly random processes
       Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
 
@@ -172,7 +173,8 @@ int main(int argc, char* argv[]) {
 
 
     for (size_t i = 0; i < structures.size(); ++i)
-      delete structures[i].second;
+      if (structures[i].second)
+        delete structures[i].second;
     structures.clear();
 
   } //end Kokkos region
@@ -193,6 +195,10 @@ PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids
   return new pumipic::CSR<PerfTypes160, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
 }
 PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids) {
+#ifdef PP_ENABLE_CABM
   Kokkos::TeamPolicy<ExeSpace> po(32,Kokkos::AUTO);
   return new pumipic::CabM<PerfTypes160, MemSpace>(po, num_elems, num_ptcls, ppe, elm_gids);
+#else
+  return NULL;
+#endif
 }

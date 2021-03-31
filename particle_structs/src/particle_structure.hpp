@@ -37,8 +37,6 @@ namespace pumipic {
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
     static constexpr int vector_length =
       Cabana::Impl::PerformanceTraits<execution_space>::vector_length;
-#else
-    static constexpr int vector_length = 32; //GD
 #endif
     template <std::size_t M>
     using member_value_type =
@@ -50,6 +48,8 @@ namespace pumipic {
     template <std::size_t N> using Slice =
       Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
+#else
+    template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 #endif
 
     ParticleStructure();
@@ -71,8 +71,10 @@ namespace pumipic {
     Slice<N> get() {
       if (num_ptcls == 0)
         return Slice<N>();
+#ifdef PP_ENABLE_CABM
       if (dynamic_cast<CabM<DataTypes, Space>*>(this) != NULL)
         return dynamic_cast<CabM<DataTypes, Space>*>(this)->template get<N>();
+#endif
       MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);
     }

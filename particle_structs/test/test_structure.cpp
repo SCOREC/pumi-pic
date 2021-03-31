@@ -20,6 +20,9 @@ int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
 int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
             lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
+int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
 
 //Simple tests of construction
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
@@ -75,8 +78,10 @@ int main(int argc, char* argv[]) {
     fails += addSCSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
     //Add CSR
-    // Uncomment when CSR is being implemented
     fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
+                     particle_elements, particle_info);
+    //Add CabM
+    fails += addCabMs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
 
 
@@ -84,18 +89,18 @@ int main(int argc, char* argv[]) {
 
     //Run each structure on every test
     for (int i = 0; i < structures.size(); ++i) {
-      //fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
-      //fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
+      fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
+      fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
       fails += setValues(names[i].c_str(), structures[i]);
       Kokkos::fence();
       fails += pseudoPush(names[i].c_str(), structures[i]);
       Kokkos::fence();
-      //fails += testMetrics(names[i].c_str(), structures[i]);
+      fails += testMetrics(names[i].c_str(), structures[i]);
       //fails += testRebuild(names[i].c_str(), structures[i]);
       //fails += testMigration(names[i].c_str(), structures[i]);
       //fails += testCopy(names[i].c_str(), structures[i]);
-      //fails += testSegmentComp(names[i].c_str(), structures[i]);
-      //fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
+      fails += testSegmentComp(names[i].c_str(), structures[i]);
+      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
     }
 
     //Cleanup
@@ -171,6 +176,24 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Construction of CSR failed on rank %d\n", comm_rank);
+    ++fails;
+  }
+  return fails;
+}
+
+int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
+  int fails = 0;
+  try {
+    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+    PS* s = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                         element_gids, particle_elements, particle_info);
+    structures.push_back(s);
+    names.push_back("cabm");
+  }
+  catch(...) {
+    fprintf(stderr, "[ERROR] Construction of CabM failed on rank %d\n", comm_rank);
     ++fails;
   }
   return fails;
@@ -265,14 +288,14 @@ int pseudoPush(const char* name, PS* structure){
       KOKKOS_LAMBDA(const lid_t& e){
     parentElmData(e) = 2+3*e;
   });
-  pumipic::printView(parentElmData);
+  //pumipic::printView(parentElmData);
 
   auto dbls = structure->get<1>();
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
   int local_rank = comm_rank;
   auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
-    printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
+    //printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
     if(mask){
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;

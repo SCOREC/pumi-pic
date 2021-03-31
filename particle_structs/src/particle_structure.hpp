@@ -32,19 +32,25 @@ namespace pumipic {
       typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef MemberTypeViews MTVs;
     template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
+#ifdef PP_ENABLE_CABM
     //Cabana Values for defining generic slice
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
     static constexpr int vector_length =
       Cabana::Impl::PerformanceTraits<execution_space>::vector_length;
+#else
+    static constexpr int vector_length = 32; //GD
+#endif
     template <std::size_t M>
     using member_value_type =
       typename std::remove_all_extents<DataType<M>>::type;
 
+#ifdef PP_ENABLE_CABM
     using CM_DT=CM_DTInt<Types>;
     using soa_type = Cabana::SoA<CM_DT, vector_length>;
     template <std::size_t N> using Slice =
       Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
+#endif
 
     ParticleStructure();
     ParticleStructure(const std::string& name_);

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "MemberTypeLibraries.h"
-#include <Cabana_Core.hpp>
+#ifdef PP_ENABLE_CABM
+  #include <Cabana_Core.hpp>
+#endif
 #include <type_traits>
 
 namespace pumipic {
@@ -19,8 +21,12 @@ namespace pumipic {
     using Base=typename BaseType<Type>::type;
 
     using ViewType = View<Type*, Device>;
+#ifdef PP_ENABLE_CABM
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
+#else
+    using SliceType = std::vector<int>; //GD
+#endif
     Segment() : is_view(false) {}
     Segment(ViewType v) : is_view(true), view(v) {}
     Segment(SliceType s) : is_view(false), slice(s) {}
@@ -86,8 +92,12 @@ namespace pumipic {
   class SubSegment {
   public:
     using ViewType=View<Type*, Device>;
+#ifdef PP_ENABLE_CABM
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
+#else
+    using SliceType = std::vector<int>; //GD
+#endif
     using Base=typename BaseType<Type>::type;
 
     PP_INLINE SubSegment(bool is_v, const ViewType& view,

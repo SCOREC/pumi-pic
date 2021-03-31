@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef PP_ENABLE_CABM
 #include <Cabana_Core.hpp>
 #include <particle_structs.hpp>
 #include "cabm_support.hpp"
@@ -296,3 +296,4 @@ namespace pumipic {
 #include "cabm_buildFns.hpp"
 #include "cabm_rebuild.hpp"
 #include "cabm_migrate.hpp"
+#endif // PP_ENABLE_CABM

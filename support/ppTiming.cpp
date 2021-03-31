@@ -123,7 +123,7 @@ namespace pumipic {
         int at_length = 12;
         sortTimeInfo(sort);
         for (std::size_t index = 0; index < time_per_op.size(); ++index) {
-          if (time_per_op[index].str.size() > name_length)
+          if (time_per_op[index].str.size() > static_cast<size_t>(name_length))
             name_length = time_per_op[index].str.size();
           int len = log10(time_per_op[index].time) + 8;
           if (len > tt_length)
@@ -140,7 +140,7 @@ namespace pumipic {
         ptr += sprintf(ptr, "Operation   %*sTotal Time   %*sCall Count   %*sAverage Time\n",
                        name_length - 9 , "", tt_length - 10, "",
                        cc_length - 10, "");
-        for (int index = 0; index < time_per_op.size(); ++index) {
+        for (size_t index = 0; index < time_per_op.size(); ++index) {
           ptr += sprintf(ptr, "%s   %*s%*.6f   %*d   %*.6f",
                          time_per_op[index].str.c_str(),
                          (int)(name_length - time_per_op[index].str.size()), "",

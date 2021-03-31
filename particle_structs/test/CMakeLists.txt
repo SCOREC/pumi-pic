@@ -35,9 +35,7 @@ make_test(test_cabm test_cabm.cpp)
 make_test(rebuild_cabm rebuild_cabm.cpp)
 make_test(migrate_cabm migrate_cabm.cpp)
 
-make_test(destroy_scs destroy_scs.cpp)
-make_test(destroy_csr destroy_csr.cpp)
-make_test(destroy_cabm destroy_cabm.cpp)
+make_test(destroy_test destroy_test.cpp)
 
 include(testing.cmake)
 

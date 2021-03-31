@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
   MPI_Reduce(&fails, &total_fails, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
   finalize();
   if (comm_rank == 0) {
-    if(total_fails == 0)
+    if (total_fails == 0)
       printf("All tests passed\n");
     else
       printf("%d tests failed\n", total_fails);
@@ -294,9 +294,9 @@ int pseudoPush(const char* name, PS* structure){
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
   int local_rank = comm_rank;
-  auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask){
+  auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     //printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
-    if(mask){
+    if (mask) {
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;
       dbls(p, 2) += 10;
@@ -306,7 +306,7 @@ int pseudoPush(const char* name, PS* structure){
       nums(p) = local_rank;
       bools(p) = true;
     }
-    else{
+    else {
       dbls(p, 0) = 0;
       dbls(p, 1) = 0;
       dbls(p, 2) = 0;
@@ -422,6 +422,7 @@ int testMigration(const char* name, PS* structure) {
 
   return fails;
 }
+
 int testMetrics(const char* name, PS* structure) {
   int fails = 0;
   try {

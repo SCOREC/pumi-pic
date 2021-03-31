@@ -37,9 +37,12 @@ int main(int argc, char* argv[]) {
 
   Kokkos::finalize();
   MPI_Finalize();
-  if (passed)
+  if (passed) {
     printf("All tests passed\n");
-  return 0;
+    return 0;
+  }
+  else
+    return 1;
 }
 
 
@@ -291,9 +294,11 @@ bool reshuffleTests() {
     }
     if (pids(particle_id) == 100 && element_id != 2) {
       printf("[ERROR] New particle 100 was not inserted into correct element\n");
+      fail(0) = 1;
     }
     if (pids(particle_id) == 200 && element_id != 3) {
       printf("[ERROR] New particle 200 was not inserted into correct element\n");
+      fail(0) = 1;
     }
     if (element_id % 2 == 0)
       new_element(particle_id) = -1;
@@ -309,13 +314,15 @@ bool reshuffleTests() {
     if (mask) {
       if (element_id % 2 == 1) {
         printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);
+        fail(0) = 1;
       }
       if (pids(particle_id) % 2 != 0) {
         printf("[ERROR] Odd Particle %d remains on element %d\n", particle_id, element_id);
+        fail(0) = 1;
       }
     }
   };
   scs->parallel_for(checkFinal);
   int f = particle_structs::getLastValue<lid_t>(fail);
-  return !f;
+  return f == 0;
 }

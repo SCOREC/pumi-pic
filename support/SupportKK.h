@@ -155,6 +155,26 @@ namespace pumipic {
     return lastVal;
   }
 
+  template <typename T, typename Device>
+  T getFirst(Kokkos::View<T*, Device> view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    T lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,0));
+    return lastVal;
+  }
+
+  template <typename ViewT>
+  typename ViewT::value_type getFirstValue(ViewT view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    typename ViewT::non_const_value_type lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,0));
+    return lastVal;
+  }
+
   template <typename ViewT>
   PP_INLINE typename std::enable_if<ViewT::rank == 1>::type copyViewToView(ViewT dst, int dstind,
                                                                            ViewT src, int srcind){

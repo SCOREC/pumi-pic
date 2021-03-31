@@ -300,7 +300,9 @@ bool reshuffleTests() {
       printf("[ERROR] New particle 200 was not inserted into correct element\n");
       fail(0) = 1;
     }
-    if (element_id % 2 == 0)
+    if (element_id % 2 == 0) // remove odd elements
+      new_element(particle_id) = -1;
+    else if (pids(particle_id) % 2 == 1) // remove odd particles
       new_element(particle_id) = -1;
     else
       new_element(particle_id) = element_id / 2 * 2;
@@ -313,11 +315,11 @@ bool reshuffleTests() {
   auto checkFinal = PS_LAMBDA(const int& element_id, const int& particle_id, const bool mask) {
     if (mask) {
       if (element_id % 2 == 1) {
-        printf("[ERROR] Particle %d remains on element %d\n", particle_id, element_id);
+        printf("[ERROR] Particle %d remains on Odd Element %d\n", particle_id, element_id);
         fail(0) = 1;
       }
-      if (pids(particle_id) % 2 != 0) {
-        printf("[ERROR] Odd Particle %d remains on element %d\n", particle_id, element_id);
+      if (pids(particle_id) % 2 == 1) {
+        printf("[ERROR] Odd Particle %d remains on Element %d\n", particle_id, element_id);
         fail(0) = 1;
       }
     }

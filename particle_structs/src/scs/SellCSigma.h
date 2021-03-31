@@ -19,6 +19,8 @@
 #include <thrust/device_ptr.h>
 #endif
 #include <ppTiming.hpp>
+#include <sstream>
+
 namespace pumipic {
 
 void enable_prebarrier();
@@ -379,39 +381,58 @@ void SellCSigma<DataTypes,MemSpace>::printFormat(const char* prefix) const {
   kkLidHostMirror row_to_element_host = deviceToHost(row_to_element);
   kkLidHostMirror offsets_host = deviceToHost(offsets);
   kkLidHostMirror particle_mask_host = deviceToHost(particle_mask);
-  char message[10000];
-  char* cur = message;
-  cur += sprintf(cur, "%s\n", prefix);
-  cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C_, sigma, V_);
-  cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
-  cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+
+  std::stringstream ss;
+  char buffer[1000];
+  char* ptr = buffer;
+  int num_chars;
+
+  num_chars = sprintf(ptr, "%s\n", prefix);
+  num_chars += sprintf(ptr+num_chars,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C_, sigma, V_);
+  num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
+  num_chars += sprintf(ptr+num_chars,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+  buffer[num_chars] = '\0';
+  ss << buffer;
+
   lid_t last_chunk = -1;
   for (lid_t i = 0; i < num_slices; ++i) {
     lid_t chunk = slice_to_chunk_host(i);
     if (chunk != last_chunk) {
       last_chunk = chunk;
-      cur += sprintf(cur,"  Chunk %d. Elements", chunk);
+      num_chars = sprintf(ptr,"  Chunk %d. Elements", chunk);
       if (element_to_gid_host.size() > 0)
-        cur += sprintf(cur,"(GID)");
-      cur += sprintf(cur,":");
+        num_chars += sprintf(ptr+num_chars,"(GID)");
+      num_chars += sprintf(ptr+num_chars,":");
+      buffer[num_chars] = '\0';
+      ss << buffer;
+
       for (lid_t row = chunk*C_; row < (chunk+1)*C_; ++row) {
         lid_t elem = row_to_element_host(row);
-        cur += sprintf(cur," %d", elem);
-        if (element_to_gid_host.size() > 0) {
-          cur += sprintf(cur,"(%ld)", element_to_gid_host(elem));
-        }
+        num_chars = sprintf(ptr," %d", elem);
+        if (element_to_gid_host.size() > 0)
+          num_chars += sprintf(ptr+num_chars,"(%ld)", element_to_gid_host(elem));
+        buffer[num_chars] = '\0';
+        ss << buffer;
       }
-      cur += sprintf(cur,"\n");
+      num_chars = sprintf(ptr,"\n");
+      buffer[num_chars] = '\0';
+      ss << buffer;
     }
-    cur += sprintf(cur,"    Slice %d", i);
+    num_chars = sprintf(ptr,"    Slice %d", i);
+    buffer[num_chars] = '\0';
+    ss << buffer;
     for (lid_t j = offsets_host(i); j < offsets_host(i+1); ++j) {
       if ((j - offsets_host(i)) % C_ == 0)
-        cur += sprintf(cur," |");
-      cur += sprintf(cur," %d", particle_mask_host(j));
+        num_chars = sprintf(ptr," |");
+      num_chars += sprintf(ptr+num_chars," %d", particle_mask_host(j));
+      buffer[num_chars] = '\0';
+      ss << buffer;
     }
-    cur += sprintf(cur,"\n");
+    num_chars = sprintf(ptr,"\n");
+    buffer[num_chars] = '\0';
+    ss << buffer;
   }
-  printf("%s", message);
+  std::cout << ss.str();
 }
 
 template <class DataTypes, typename MemSpace>
@@ -452,6 +473,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
   char buffer[1000];
   char* ptr = buffer;
 

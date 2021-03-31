@@ -2,6 +2,7 @@
 
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
+#include <sstream>
 
 namespace ps = particle_structs;
 
@@ -195,6 +196,7 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::printMetrics() const {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
     char buffer[1000];
     char* ptr = buffer;
 
@@ -212,22 +214,35 @@ namespace pumipic {
     kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
     kkLidHostMirror offsets_host = deviceToHost(offsets);
 
-    char buffer[10000];
+    std::stringstream ss;
+    char buffer[1000];
     char* ptr = buffer;
-    ptr += sprintf(ptr, "%s\n", prefix);
-    ptr += sprintf(ptr,"Particle Structures CSR\n");
-    ptr += sprintf(ptr,"Number of Elements: %d.\nNumber of Particles: %d.", num_elems, num_ptcls);
+    int num_chars;
+
+    num_chars = sprintf(ptr, "%s\n", prefix);
+    num_chars += sprintf(ptr+num_chars,"Particle Structures CSR\n");
+    num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of Particles: %d.", num_elems, num_ptcls);
+    buffer[num_chars] = '\0';
+    ss << buffer;
+
     for (int i = 1; i < offsets_host.size(); i++) {
       if ( offsets_host[i] != offsets_host[i-1] ) {
         if (element_to_gid_host.size() > 0)
-          ptr += sprintf(ptr,"\n  Element %2d(%2d) |", i-1, element_to_gid_host(i-1));
+          num_chars = sprintf(ptr,"\n  Element %2d(%2d) |", i-1, element_to_gid_host(i-1));
         else
-          ptr += sprintf(ptr,"\n  Element %2d |", i-1);
-        for (int j = offsets_host[i-1]; j < offsets_host[i]; j++)
-          ptr += sprintf(ptr," 1");
+          num_chars = sprintf(ptr,"\n  Element %2d |", i-1);
+        buffer[num_chars] = '\0';
+        ss << buffer;
+
+        for (int j = offsets_host[i-1]; j < offsets_host[i]; j++) {
+          num_chars = sprintf(ptr," 1");
+          buffer[num_chars] = '\0';
+          ss << buffer;
+        }
       }
     }
-    printf("%s\n", buffer);
+    ss << "\n";
+    std::cout << ss.str();
   }
 
 } // end namespace pumipic

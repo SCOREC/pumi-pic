@@ -27,11 +27,9 @@ make_test(test_scs_padding scs_padding.cpp)
 make_test(write_particles write_particle_file.cpp)
 make_test(test_structure test_structure.cpp)
 
-make_test(test_csr test_csr.cpp)
 make_test(rebuild_csr rebuild_csr.cpp)
 make_test(migrate_csr migrate_csr.cpp)
 
-make_test(test_cabm test_cabm.cpp)
 make_test(rebuild_cabm rebuild_cabm.cpp)
 make_test(migrate_cabm migrate_cabm.cpp)
 

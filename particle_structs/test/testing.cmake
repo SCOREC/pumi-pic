@@ -44,12 +44,6 @@ add_test(NAME write_ptcl_noptcls COMMAND mpirun -np 4 ./write_particles 100 0 0 
 add_test(NAME write_ptcl_medium COMMAND ./write_particles 500 100000 0 2 medium_ptcls_e500_p10e5_r0)
 add_test(NAME write_ptcl_large COMMAND ./write_particles 2500 1000000 0 2 large_ptcls_e2500_p10e6_r0)
 
-add_test(NAME test_csr_small COMMAND ./test_csr small_ptcls_e5_p25_r0)
-add_test(NAME test_csr_small2 COMMAND ./test_csr small_ptcls_e5_p25_r4)
-
-add_test(NAME test_cabm_small COMMAND ./test_cabm small_ptcls_e5_p25_r0)
-add_test(NAME test_cabm_small2 COMMAND ./test_cabm small_ptcls_e5_p25_r4)
-
 add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
 add_test(NAME test_structures_medium COMMAND ./test_structure medium_ptcls_e500_p10e5_r0)
 #add_test(NAME test_structures_large COMMAND ./test_structure large_ptcls_e2500_p10e6_r0)

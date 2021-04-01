@@ -6,24 +6,7 @@ add_test(NAME initParticles COMMAND ./initParticles)
 
 add_test(NAME buildSCS COMMAND ./buildSCSTest)
 
-
 add_test(NAME scs_padding COMMAND ./test_scs_padding)
-
-add_test(NAME rebuild_scs COMMAND ./rebuild_scs)
-
-add_test(NAME rebuild_csr_small COMMAND ./rebuild_csr 5 20 1)
-add_test(NAME rebuild_csr_medium COMMAND ./rebuild_csr 50 1000 1)
-add_test(NAME rebuild_csr_large_0 COMMAND ./rebuild_csr 2500 1000000 0)
-add_test(NAME rebuild_csr_large_1 COMMAND ./rebuild_csr 2500 1000000 1)
-add_test(NAME rebuild_csr_large_2 COMMAND ./rebuild_csr 2500 1000000 2)
-add_test(NAME rebuild_csr_large_3 COMMAND ./rebuild_csr 2500 1000000 3)
-
-add_test(NAME rebuild_cabm_small COMMAND ./rebuild_cabm 5 20 1 5)
-add_test(NAME rebuild_cabm_medium COMMAND ./rebuild_cabm 50 1000 1 500)
-add_test(NAME rebuild_cabm_large_0 COMMAND ./rebuild_cabm 2500 1000000 0 500000)
-add_test(NAME rebuild_cabm_large_1 COMMAND ./rebuild_cabm 2500 1000000 1 500000)
-add_test(NAME rebuild_cabm_large_2 COMMAND ./rebuild_cabm 2500 1000000 2 500000)
-add_test(NAME rebuild_cabm_large_3 COMMAND ./rebuild_cabm 2500 1000000 3 500000)
 
 add_test(NAME lambdaTest COMMAND ./lambdaTest)
 

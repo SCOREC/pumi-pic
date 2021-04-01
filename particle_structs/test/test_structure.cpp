@@ -1,6 +1,7 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 #include <cmath>
+#include "test_rebuild.cpp"
 
 #ifdef PP_USE_CUDA
 typedef Kokkos::CudaSpace DeviceSpace;
@@ -32,6 +33,12 @@ int pseudoPush(const char* name, PS* structure);
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure);
+int rebuildNoChanges(const char* name, PS* structure);
+int rebuildNewElems(const char* name, PS* structure);
+int rebuildNewPtcls(const char* name, PS* structure);
+int rebuildPtclsDestroyed(const char* name, PS* structure);
+int rebuildNewAndDestroyed(const char* name, PS* structure);
+
 int testMigration(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
@@ -97,7 +104,7 @@ int main(int argc, char* argv[]) {
       Kokkos::fence();
       fails += testMetrics(names[i].c_str(), structures[i]);
       //fails += testRebuild(names[i].c_str(), structures[i]);
-      //fails += testMigration(names[i].c_str(), structures[i]);
+      fails += testMigration(names[i].c_str(), structures[i]);
       //fails += testCopy(names[i].c_str(), structures[i]);
       fails += testSegmentComp(names[i].c_str(), structures[i]);
       fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
@@ -201,6 +208,8 @@ int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
 
 
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) {
+  printf("testCounts %s\n", name);
+
   int fails = 0;
   if (structure->nElems() != num_elems) {
     fprintf(stderr, "[ERROR] Test %s: Element count mismatch on rank %d "
@@ -228,7 +237,10 @@ int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls
   }
   return fails;
 }
+
 int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
+  printf("testParticleExistence %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   kkLidView count("count", 1);
   auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
@@ -247,6 +259,8 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
 }
 
 int setValues(const char* name, PS* structure) {
+  printf("setValues %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   auto dbls = structure->get<1>();
   auto bools = structure->get<2>();
@@ -277,7 +291,9 @@ int setValues(const char* name, PS* structure) {
   return fails;
 }
 
-int pseudoPush(const char* name, PS* structure){
+int pseudoPush(const char* name, PS* structure) {
+  printf("pseudoPush %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
 
   int elements = structure->nElems();
@@ -327,11 +343,22 @@ int pseudoPush(const char* name, PS* structure){
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure) {
+  printf("testRebuild %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
+
+  fails += rebuildNoChanges(name, structure);
+  fails += rebuildNewElems(name, structure);
+  fails += rebuildNewPtcls(name, structure);
+  fails += rebuildPtclsDestroyed(name, structure);
+  fails += rebuildNewAndDestroyed(name, structure);
+
   return fails;
 }
 
 int testMigration(const char* name, PS* structure) {
+  printf("testMigration %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   kkLidView failures("fails", 1);
 
@@ -424,6 +451,8 @@ int testMigration(const char* name, PS* structure) {
 }
 
 int testMetrics(const char* name, PS* structure) {
+  printf("testMetrics %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   try {
     structure->printMetrics();
@@ -437,6 +466,8 @@ int testMetrics(const char* name, PS* structure) {
 }
 
 int testCopy(const char* name, PS* structure) {
+  printf("testCopy %s\n", name);
+
   int fails = 0;
   //Copy particle structure to the host
   PS::Mirror<Kokkos::HostSpace>* host_structure = ps::copy<Kokkos::HostSpace>(structure);
@@ -527,6 +558,8 @@ int testCopy(const char* name, PS* structure) {
 }
 
 int testSegmentComp(const char* name, PS* structure) {
+  printf("testSegmentComp %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   kkLidView failures("fails", 1);
 
@@ -556,6 +589,8 @@ int testSegmentComp(const char* name, PS* structure) {
 }
 
 int migrateToEmptyAndRefill(const char* name, PS* structure) {
+  printf("migrateToEmptyAndRefill %s, rank %d\n", name, comm_rank);
+
   int fails = 0;
   kkLidView failures("fails", 1);
 

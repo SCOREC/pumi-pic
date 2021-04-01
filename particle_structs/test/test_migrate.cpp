@@ -20,9 +20,8 @@ int testMigration(const char* name, PS* structure) {
   auto sendRight = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
     if (mask) {
       new_element(p) = e;
-      if (e == num_elems - 1) {
+      if (e == num_elems - 1)
         new_process(p) = (local_rank + 1) % local_csize;
-      }
       else
         new_process(p) = local_rank;
       rnks(p) = local_rank;

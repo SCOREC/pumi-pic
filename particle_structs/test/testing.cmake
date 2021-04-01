@@ -29,7 +29,7 @@ add_test(NAME write_ptcl_large COMMAND ./write_particles 2500 1000000 0 2 large_
 
 add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
 add_test(NAME test_structures_medium COMMAND ./test_structure medium_ptcls_e500_p10e5_r0)
-#add_test(NAME test_structures_large COMMAND ./test_structure large_ptcls_e2500_p10e6_r0)
+add_test(NAME test_structures_large COMMAND ./test_structure large_ptcls_e2500_p10e6_r0)
 add_test(NAME test_structures_small_4 COMMAND mpirun -np 4
   ./test_structure small_ptcls_e5_p25_r4)
 add_test(NAME test_structures_4 COMMAND mpirun -np 4

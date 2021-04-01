@@ -21,8 +21,8 @@ namespace pumipic {
 #endif
 
   //Forware declare subsegment
-  template <typename Type, typename Device, typename MemoryAccessType,
-            int VectorLength, int Stride>
+  template <typename Type, typename Device, typename MemoryAccessType=void,
+            int VectorLength=1, int Stride=1>
   class SubSegment;
 
 

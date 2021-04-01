@@ -1,9 +1,7 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 
-int testMigration(const char* name, PS* structure) {
-  printf("testMigration %s, rank %d\n", name, comm_rank);
-
+int migrateSendRight(const char* name, PS* structure) {
   int fails = 0;
   kkLidView failures("fails", 1);
 
@@ -90,9 +88,63 @@ int testMigration(const char* name, PS* structure) {
     printf("[ERROR] Test %s: Structure does not have all of the particles it started with on rank %d\n", name, comm_rank);
     ++fails;
   }
-
   return fails;
 }
+
+int migrateSendToOne(const char* name, PS* structure) {
+  int fails = 0;
+  kkLidView failures("fails", 1);
+
+  int np = structure->nPtcls();
+  kkLidView new_element("new_element", structure->capacity());
+  kkLidView new_process("new_process", structure->capacity());
+
+  auto int_slice = structure->get<0>();
+  auto double_slice = structure->get<1>();
+  kkLidView ptcls_set("ptcls_set", 1);
+  auto comm_rank_local = comm_rank;
+  auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
+    int_slice(ptcl_id) = comm_rank_local;
+    double_slice(ptcl_id,0) = comm_rank_local * 5;
+    if (Kokkos::atomic_fetch_add(&ptcls_set(0), mask) < np/100) {
+      new_process[ptcl_id] = 0;
+    }
+    else
+      new_process[ptcl_id] = comm_rank_local;
+    new_element[ptcl_id] = elem_id;
+  };
+  ps::parallel_for(structure, setValues, "setValues");
+  structure->migrate(new_element, new_process);
+
+  int nPtcls = structure->nPtcls();
+  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np * 1.0/100) {
+    fprintf(stderr, "%s Rank 0 has incorrect number of particles (%d != %d)\n",
+            name, nPtcls, np + (comm_size - 1) * np/100);
+    fails++;
+  }
+  else if (comm_rank != 0 && nPtcls != np*99/100) {
+    fprintf(stderr, "%s Rank %d has incorrect number of particles (%d != %d)\n",
+            name, comm_rank, nPtcls, np* 99/100);
+    fails++;
+  }
+
+  int_slice = structure->get<0>();
+  double_slice = structure->get<1>();
+  auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+    if (mask) {
+      int rank = int_slice(ptcl_id);
+      double val = double_slice(ptcl_id, 0);
+      if (fabs(rank*5 - val) > .0005) {
+        printf("%d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
+        failures(0) = 1;
+      }
+    }
+  };
+  ps::parallel_for(structure, checkValues, "checkValues");
+  fails += particle_structs::getLastValue(failures);
+  return fails;
+}
+
 
 int migrateToEmptyAndRefill(const char* name, PS* structure) {
   printf("migrateToEmptyAndRefill %s, rank %d\n", name, comm_rank);

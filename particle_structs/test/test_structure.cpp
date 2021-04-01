@@ -40,6 +40,9 @@ int rebuildPtclsDestroyed(const char* name, PS* structure);
 int rebuildNewAndDestroyed(const char* name, PS* structure);
 
 int testMigration(const char* name, PS* structure);
+int migrateSendRight(const char* name, PS* structure);
+int migrateSendToOne(const char* name, PS* structure);
+
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
 int testSegmentComp(const char* name, PS* structure);
@@ -210,12 +213,21 @@ int testRebuild(const char* name, PS* structure) {
   printf("testRebuild %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
-
   fails += rebuildNoChanges(name, structure);
   fails += rebuildNewElems(name, structure);
   fails += rebuildNewPtcls(name, structure);
   fails += rebuildPtclsDestroyed(name, structure);
   fails += rebuildNewAndDestroyed(name, structure);
+
+  return fails;
+}
+
+int testMigration(const char* name, PS* structure) {
+  printf("testMigration %s, rank %d\n", name, comm_rank);
+
+  int fails = 0;
+  fails += migrateSendRight(name, structure);
+  fails += migrateSendToOne(name, structure);
 
   return fails;
 }

@@ -18,10 +18,6 @@ make_test(initParticles initParticles.cpp)
 
 make_test(lambdaTest lambdaTest.cpp)
 
-make_test(migrate_scs migrate_scs.cpp)
-make_test(migrate_csr migrate_csr.cpp)
-make_test(migrate_cabm migrate_cabm.cpp)
-
 make_test(test_scs_padding scs_padding.cpp)
 
 make_test(write_particles write_particle_file.cpp)

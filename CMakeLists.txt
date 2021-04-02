@@ -67,10 +67,7 @@ bob_public_dep(Kokkos)
 if( NOT Kokkos_PREFIX )
   get_filename_component(Kokkos_PREFIX ${Kokkos_INCLUDE_DIRS} DIRECTORY)
 endif()
-if(NOT ENABLE_CABANA)
-  #get kokkos device var, cabana cmake includes it when enabled
-  include(${Kokkos_PREFIX}/kokkos_generated_settings.cmake)
-endif()
+include(${Kokkos_PREFIX}/kokkos_generated_settings.cmake)
 set(KOKKOS_ENABLED true)
 
 set(debug_flag)

@@ -8,8 +8,9 @@ namespace pumipic {
 
   class Mesh {
   public:
-    //Delete default compilers
-    Mesh() = delete;
+    //default constructor to build empty mesh prior to reading the mesh from file
+    Mesh();
+    //Delete copy constructor/assignment operator
     Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
 
@@ -88,17 +89,25 @@ namespace pumipic {
                    Omega_h::LOs picpart_ents_per_rank,
                    Omega_h::LOs ent_owners);
 
+    //Friend the read/write functions to
+    friend void write(Mesh& picparts, const char* prefix);
+    friend void read(Omega_h::Library* library, Omega_h::CommPtr comm,
+                     const char* prefix, Mesh* picparts);
+
   private:
     Omega_h::CommPtr commptr;
     Omega_h::Mesh* picpart;
 
+
+    //Flag if the mesh was built with full buffer
     bool is_full_mesh;
+
+    //The global entity count of each dimension
+    Omega_h::GO num_entites[4];
 
     //*********************PICpart information**********************/
     //Number of core parts that are buffered (doesn't include self)
     int num_cores[4];
-    //Safe tag defined on the mesh elements
-    Omega_h::LOs is_ent_safe;
 
     //Per Dimension communication information
     //List of core parts that are buffered (doesn't include self)
@@ -113,7 +122,7 @@ namespace pumipic {
      * 1 = partial
      * 0 = empty
      */
-    Omega_h::HostRead<Omega_h::LO> is_complete_part[4];
+    Omega_h::HostWrite<Omega_h::LO> is_complete_part[4];
     //Number of parts this part bounds
     int num_bounds[4];
     //Number of parts that have boundaries of this part
@@ -128,4 +137,16 @@ namespace pumipic {
 
     ParticleBalancer* ptcl_balancer = NULL;
   };
+
+  /* Save picparts and osh mesh to files
+     Files are saved in directory: <prefix>_<num_ranks>.ppm/
+       Omega_h mesh is saved to <prefix>_<num_ranks>/<prefix>_<rank>.osh
+       Pumipic mesh is saved to <prefix>_<num_ranks>/<prefix>_<rank>.ppm
+     Files are compressed and maintained for big/little endian using Omega_h routines
+   */
+  void write(Mesh& picparts, const char* prefix);
+  /* Reads picparts and osh mesh from files into picparts
+   */
+  void read(Omega_h::Library* library, Omega_h::CommPtr comm, const char* prefix,
+            Mesh* picparts);
 }

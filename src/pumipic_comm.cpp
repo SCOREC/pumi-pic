@@ -83,7 +83,7 @@ namespace pumipic {
 
     offset_ents_per_rank_per_dim[edim] = Omega_h::LOs(picpart_ents_per_rank);
     ent_to_comm_arr_index_per_dim[edim] = Omega_h::LOs(comm_arr_index);
-    is_complete_part[edim] = Omega_h::HostRead<Omega_h::LO>(is_complete);
+    is_complete_part[edim] = Omega_h::HostWrite<Omega_h::LO>(is_complete);
     num_boundaries[edim] = 0;
     num_bounds[edim] = 0;
     if (edim == dim()) {
@@ -97,8 +97,8 @@ namespace pumipic {
     Omega_h::LO num_bounded = num_cores[edim] - num_cores[dim()];
     num_bounds[edim] = num_bounded;
     //Alltoall the number of boundary entities to each owner
-    Omega_h::HostRead<Omega_h::LO> is_complete_host = is_complete_part[edim];
-    Omega_h::HostRead<Omega_h::LO> boundary_degree_host(boundary_degree);
+    Omega_h::HostWrite<Omega_h::LO> is_complete_host = is_complete_part[edim];
+    Omega_h::HostWrite<Omega_h::LO> boundary_degree_host(boundary_degree);
     Omega_h::HostWrite<Omega_h::LO> recv_boundary_degree_host(comm_size);
     MPI_Request alltoall_request;
     MPI_Ialltoall(boundary_degree_host.data(), 1, MPI_INT,

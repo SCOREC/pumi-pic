@@ -2,6 +2,7 @@
 #include "read_particles.hpp"
 
 int migrateSendRight(const char* name, PS* structure) {
+  printf("migrateSendRight %s, rank %d\n", name, comm_rank);
   int fails = 0;
   kkLidView failures("fails", 1);
 
@@ -53,6 +54,8 @@ int migrateSendRight(const char* name, PS* structure) {
     ps::parallel_for(structure, checkPostMigrate, "checkPostMigrate");
   fails += ps::getLastValue<lid_t>(failures);
 
+  printf("migrateSendRight (Reverse) %s, rank %d\n", name, comm_rank);
+
   //Make a distributor
   int neighbors[3];
   neighbors[0] = comm_rank;
@@ -92,6 +95,7 @@ int migrateSendRight(const char* name, PS* structure) {
 }
 
 int migrateSendToOne(const char* name, PS* structure) {
+  printf("migrateSendToOne %s, rank %d\n", name, comm_rank);
   int fails = 0;
   kkLidView failures("fails", 1);
 

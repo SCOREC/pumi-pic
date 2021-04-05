@@ -3,6 +3,7 @@
 
 //Rebuild test with no changes to structure
 int rebuildNoChanges(const char* name, PS* structure) {
+  printf("rebuildNoChanges %s, rank %d\n", name, comm_rank);
   int fails = 0;
   int np = structure->nPtcls();
 
@@ -65,6 +66,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
 
 //Rebuild test with no new particles, but reassigned particle elements
 int rebuildNewElems(const char* name, PS* structure) {
+  printf("rebuildNewElems %s, rank %d\n", name, comm_rank);
   int fails = 0;
   int np = structure->nPtcls();
   int ne = structure->nElems();
@@ -128,6 +130,7 @@ int rebuildNewElems(const char* name, PS* structure) {
 
 //Rebuild test with new particles added only
 int rebuildNewPtcls(const char* name, PS* structure) {
+  printf("rebuildNewPtcls %s, rank %d\n", name, comm_rank);
   int fails = 0;
   int np = structure->nPtcls();
   int nnp = structure->capacity()/2;
@@ -197,6 +200,7 @@ int rebuildNewPtcls(const char* name, PS* structure) {
 
 //Rebuild test with existing particles destroyed only
 int rebuildPtclsDestroyed(const char* name, PS* structure) {
+  printf("rebuildPtclsDestroyed %s, rank %d\n", name, comm_rank);
   int fails = 0;
   int np = structure->nPtcls();
 
@@ -252,6 +256,7 @@ int rebuildPtclsDestroyed(const char* name, PS* structure) {
 
 //Rebuild test with particles added and destroyed
 int rebuildNewAndDestroyed(const char* name, PS* structure) {
+  printf("rebuildNewAndDestroyed %s, rank %d\n", name, comm_rank);
   int fails = 0;
   int np = structure->nPtcls();
   int nnp = structure->capacity()/2;

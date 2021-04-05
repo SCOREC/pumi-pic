@@ -430,14 +430,17 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
   return found;
 }
 
-template < class ParticleStruct, typename Segment3d, typename SegmentInt>
+template < class ParticleStruct, typename CurrentCoordView,
+           typename TargetCoordView, typename SegmentInt>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
-                 ParticleStruct* ptcls, // (in) particle structure
-                 Segment3d x_ps_d, // (in) starting particle positions
-                 Segment3d xtgt_ps_d, // (in) target particle positions
-                 SegmentInt pid_d, // (in) particle ids
-                 o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
-                 int looplimit=0) {
+                    ParticleStruct* ptcls, // (in) particle structure
+                    CurrentCoordView x_ps_d, // (in) starting particle positions
+                    TargetCoordView xtgt_ps_d, // (in) target particle positions
+                    SegmentInt pid_d, // (in) particle ids
+                    o::Write<o::LO> elem_ids, // (out) parent element ids for the target positions
+                    int looplimit=0,  // (in) [optional] number of loops before giving up
+                    bool debug = false) {
+
   const auto btime = pumipic_prebarrier();
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
   Kokkos::Timer timer;
@@ -445,7 +448,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   int rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
   MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
-  const auto rank_d = rank;
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
   const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
@@ -464,7 +466,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> lastEdge(psCapacity,-1);
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
+      if (elem_ids[pid] == -1) {
+        elem_ids[pid] = e;
+      }
       ptcl_done[pid] = 0;
     } else {
       elem_ids[pid] = -1;
@@ -473,6 +477,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   };
   ps::parallel_for(ptcls, lamb);
 
+  Omega_h::Write<o::LO> numNotInElem(1, 0);
   auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     //inactive particle that is still moving to its target position
     if( mask > 0 && !ptcl_done[pid] ) {
@@ -485,16 +490,24 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       Omega_h::Vector<3> faceBcc;
       barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
       if(!all_positive(faceBcc,1e-8)) {
-        printf("%d Particle not in element! ptcl %d elem %d => %d "
-          "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
-          rank_d, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
-          faceBcc[0], faceBcc[1], faceBcc[2]);
-        OMEGA_H_CHECK(false);
+        if (debug) {
+          printf("%d Particle not in element! ptcl %d elem %d => %d "
+                 "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
+                 rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+                 faceBcc[0], faceBcc[1], faceBcc[2]);
+        }
+        Kokkos::atomic_add(&(numNotInElem[0]), 1);
+        elem_ids[pid] = -1;
+        ptcl_done[pid] = 1;
       }
     } //if active
   };
   ps::parallel_for(ptcls, checkParent);
-
+  Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
+  if (numNotInElem_h[0] > 0) {
+    fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
+            "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
+  }
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -561,21 +574,26 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     ++loops;
 
     if(looplimit && loops >= looplimit) {
+      Omega_h::Write<o::LO> numNotFound(1,0);
       auto ptclsNotFound = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
         if( mask > 0 && !ptcl_done[pid] ) {
           auto searchElm = elem_ids[pid];
           auto ptcl = pid_d(pid);
           const auto ptclDest = makeVector2(pid, xtgt_ps_d);
           const auto ptclOrigin = makeVector2(pid, x_ps_d);
-          printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
-              rank_d,
-              searchElm, ptcl,
-              ptclOrigin[0], ptclOrigin[1],
-              ptclDest[0], ptclDest[1]);
+          if (debug) {
+            printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+                   rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
+                   ptclDest[0], ptclDest[1]);
+          }
+          elem_ids[pid] = -1;
+          Kokkos::atomic_add(&(numNotFound[0]), 1);
         }
       };
       ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
-      fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
+      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
+              "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
       break;
     }
   }

@@ -72,5 +72,5 @@ namespace pumipic {
 
     Note: This is a collective call and must be called by every process
   */
-  void SummarizeTimeAcrossProcesses();
+  void SummarizeTimeAcrossProcesses(TimingSortOption sort = SORT_ALPHA);
 }

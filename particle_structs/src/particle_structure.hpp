@@ -32,19 +32,25 @@ namespace pumipic {
       typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef MemberTypeViews MTVs;
     template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
+#ifdef PP_ENABLE_CABM
     //Cabana Values for defining generic slice
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
     static constexpr int vector_length =
       Cabana::Impl::PerformanceTraits<execution_space>::vector_length;
+#endif
     template <std::size_t M>
     using member_value_type =
       typename std::remove_all_extents<DataType<M>>::type;
 
+#ifdef PP_ENABLE_CABM
     using CM_DT=CM_DTBool<Types>;
     using soa_type = Cabana::SoA<CM_DT, vector_length>;
     template <std::size_t N> using Slice =
       Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
+#else
+    template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
+#endif
 
     ParticleStructure();
     ParticleStructure(const std::string& name_);
@@ -66,8 +72,10 @@ namespace pumipic {
       assert(N < num_types);
       if (num_ptcls == 0)
         return Slice<N>();
+#ifdef PP_ENABLE_CABM
       if (dynamic_cast<CabM<DataTypes, Space>*>(this) != NULL)
         return dynamic_cast<CabM<DataTypes, Space>*>(this)->template get<N>();
+#endif
       MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);
     }

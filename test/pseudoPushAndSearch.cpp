@@ -545,6 +545,8 @@ int main(int argc, char** argv) {
   delete ptcls;
 
   Omega_h::vtk::write_parallel("pseudoPush_tf", mesh, picparts.dim());
+
+  pumipic::SummarizeTime();
   if (!comm_rank)
     fprintf(stderr, "done\n");
   return 0;

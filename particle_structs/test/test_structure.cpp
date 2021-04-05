@@ -91,8 +91,10 @@ int main(int argc, char* argv[]) {
     fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
     //Add CabM
+#ifdef PP_ENABLE_CABM
     fails += addCabMs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
+#endif
 
     //Run each structure on every test
     for (int i = 0; i < structures.size(); ++i) {
@@ -373,3 +375,4 @@ int testSegmentComp(const char* name, PS* structure) {
 #include "test_constructor.cpp"
 #include "test_rebuild.cpp"
 #include "test_migrate.cpp"
+

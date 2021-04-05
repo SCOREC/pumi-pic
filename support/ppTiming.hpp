@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 /*
   Provides a timing utility to record and output timing of operations.
 

@@ -1,15 +1,29 @@
 #pragma once
+
 namespace pumipic {
 
-  template<class DataTypes, typename MemSpace>
-    void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-                                                  Distributor<MemSpace> dist,
-                                                  kkLidView new_particle_elements,
-                                                  MTVs new_particle_info) {
-    const auto btime = prebarrier();
-    Kokkos::Profiling::pushRegion("scs_migrate");
-    Kokkos::Timer timer;
+  /**
+   * Distributes current and new particles across a number of processes, then rebuilds
+   * @param[in] new_element view of ints representing new elements for each current particle (-1 for removal)
+   * @param[in] new_process view of ints representing new processes for each current particle
+   * @param[in] dist Distributor set up for keeping track of processes
+   * @param[in] new_particle_elements view of ints representing new elements for new particles (-1 for removal)
+   * @param[in] new_particle_info array of views filled with particle data
+  */
+  template <class DataTypes, typename MemSpace>
+  void CabM<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
+                                         Distributor<MemSpace> dist,
+                                         kkLidView new_particle_elements,
+                                         MTVs new_particle_info) {
+    /// @todo add prebarrier to main ParticleStructure files
+    //const auto btime = prebarrier();
+    Kokkos::Timer barrier_timer;
+    MPI_Barrier(MPI_COMM_WORLD);
+    const auto btime = barrier_timer.seconds();
 
+    Kokkos::Profiling::pushRegion("cabm_migrate");
+    Kokkos::Timer timer;
+    
     //Distributor size & rank for performing migration
     int comm_size = dist.num_ranks();
     int comm_rank;
@@ -17,12 +31,12 @@ namespace pumipic {
 
     //If serial, skip migration
     if (comm_size == 1) {
-      RecordTime(name + " particle migration", timer.seconds(), btime);
+      RecordTime("CabM particle migration", timer.seconds(), btime);
       rebuild(new_element, new_particle_elements, new_particle_info);
       Kokkos::Profiling::popRegion();
       return;
     }
-
+    
     //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
@@ -32,8 +46,8 @@ namespace pumipic {
                                mask * (process != comm_rank));
     };
     parallel_for(count_sending_particles);
-
-    /********* Send # of particles being sent to each process *********/
+    
+    // ********* Send # of particles being sent to each process *********
     kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
     int num_send_ranks = dist.isWorld() ? 0 : comm_size - 1;
     MPI_Request* count_send_requests = NULL;
@@ -57,7 +71,7 @@ namespace pumipic {
         }
       }
     }
-
+    
     //Gather sending particle data
     //Perform an ex-sum on num_send_particles & num_recv_particles
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
@@ -85,12 +99,11 @@ namespace pumipic {
       }
     };
     parallel_for(gatherParticlesToSend);
+    
     //Copy the values from ptcl_data[type][particle_id] into send_particle[type](index) for each data type
-    CopyParticlesToSend<SellCSigma<DataTypes, MemSpace>, DataTypes>(this, send_particle,
-                                                                    ptcl_data,
-                                                                    new_process,
-                                                                    send_index);
-
+    CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle, aosoa_,
+                                                                    new_process, send_index);
+    
     //Wait until all counts are received
     PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
@@ -109,11 +122,12 @@ namespace pumipic {
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      RecordTime(name +" particle migration", timer.seconds(), btime);
+      //RecordTime(name +" particle migration", timer.seconds(), btime);
+      RecordTime("CabM particle migration", timer.seconds());
       Kokkos::Profiling::popRegion();
       return;
     }
-
+    
     //Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_recv_particles, offset_recv_particles);
@@ -125,7 +139,8 @@ namespace pumipic {
       PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
       delete [] count_send_requests;
     }
-
+    
+    
     //Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     kkLidView recv_element("recv_element", np_recv + new_ptcls);
@@ -172,15 +187,15 @@ namespace pumipic {
     PS_Comm_Waitall<device_type>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
     delete [] recv_requests;
 
-    /********** Convert the received element from element gid to element lid *********/
+    // ********** Convert the received element from element gid to element lid *********
     auto element_gid_to_lid_local = element_gid_to_lid;
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
-        recv_element(i) = element_gid_to_lid_local.value_at(index);
+        recv_element(i) = element_gid_to_lid_local.value_at(index); // here?
       });
-
-    /********** Set particles that were sent to non existent on this process *********/
+    
+    // ********** Set particles that were sent to non existent on this process *********
     auto removeSentParticles = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
       const bool sent = new_process(particle_id) != comm_rank;
       const lid_t elm = new_element(particle_id);
@@ -189,7 +204,7 @@ namespace pumipic {
     };
     parallel_for(removeSentParticles);
 
-    /********** Add new particles to the migrated particles *********/
+    // ********** Add new particles to the migrated particles *********
     kkLidView new_ptcl_map("new_ptcl_map", new_ptcls);
     Kokkos::parallel_for(new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
         recv_element(np_recv + i) = new_particle_elements(i);
@@ -198,19 +213,20 @@ namespace pumipic {
     CopyViewsToViews<kkLidView, DataTypes>(recv_particle, new_particle_info, new_ptcl_map);
 
 
-    /********** Combine and shift particles to their new destination **********/
+    // ********** Combine and shift particles to their new destination **********
     Kokkos::Timer rebuild_subtract;
     rebuild(new_element, recv_element, recv_particle);
     const auto temp = rebuild_subtract.seconds();
-
+    
     //Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
     delete [] send_requests;
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
-
-    RecordTime(name +" particle migration", timer.seconds() - temp, btime);
+    
+    RecordTime("CabM particle migration", timer.seconds() - temp, btime);
 
     Kokkos::Profiling::popRegion();
   }
+
 }

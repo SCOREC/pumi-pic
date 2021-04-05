@@ -430,7 +430,8 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
   return found;
 }
 
-template < class ParticleStruct, typename CurrentCoordView, typename TargetCoordView>
+template < class ParticleStruct, typename CurrentCoordView,
+           typename TargetCoordView, typename SegmentInt>
 bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     ParticleStruct* ptcls, // (in) particle structure
                     CurrentCoordView x_ps_d, // (in) starting particle positions

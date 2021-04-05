@@ -156,7 +156,8 @@ namespace pumipic {
     auto slice_to_chunk_cpy = slice_to_chunk;
     chunk_starts = kkLidView("chunk_starts", num_chunks);
     lid_t cap_local = capacity_;
-    Kokkos::parallel_for(Kokkos::RangePolicy<>(1,num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
+    lid_t first_s2c = getFirstValue(slice_to_chunk);
+    Kokkos::parallel_for(Kokkos::RangePolicy<>(first_s2c+1,num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
       chunk_starts[i] = cap_local;
     });
     Kokkos::parallel_for(num_slices-1, KOKKOS_LAMBDA(const lid_t& i) {
@@ -167,7 +168,6 @@ namespace pumipic {
           chunk_starts(j) = offsets_cpy(i+1);
       }
     });
-
     //Fill the SCS
     const lid_t league_size = num_chunks;
     const lid_t team_size = C_;

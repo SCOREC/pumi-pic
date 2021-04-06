@@ -115,11 +115,16 @@ namespace pumipic {
       lsum += (num_recv_particles(i) > 0);
     }, num_receiving_from);
 
+    // wait for send requests if there are any
+    if (count_send_requests) {
+      PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
+      delete [] count_send_requests;
+    }
+
     // If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      // RecordTime(name +" particle migration", timer.seconds(), btime);
-      RecordTime("CabM particle migration", timer.seconds());
+      RecordTime(name +" particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -129,13 +134,6 @@ namespace pumipic {
     exclusive_scan(num_recv_particles, offset_recv_particles);
     kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
     int np_recv = offset_recv_particles_host(comm_size);
-
-    // wait for send requests if there are any
-    if (count_send_requests) {
-      PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
-      delete [] count_send_requests;
-    }
-    
     
     // Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();

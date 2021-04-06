@@ -119,10 +119,18 @@ int migrateSendToOne(const char* name, PS* structure) {
   ps::parallel_for(structure, setValues, "setValues");
   structure->migrate(new_element, new_process);
 
+  int np_send;
+  if (comm_rank == 0)
+    np_send = np;
+  else
+    np_send = np*5/100;
+  int expected_np_0 = 0;
+  MPI_Reduce(&np_send, &expected_np_0, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
   int nPtcls = structure->nPtcls();
-  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np*5/100) {
+  if (comm_rank == 0 && nPtcls != expected_np_0) {
     fprintf(stderr, "[ERROR] %s Rank 0 has incorrect number of particles (%d != %d)\n",
-            name, nPtcls, np + (comm_size - 1) * np*5/100);
+            name, nPtcls, expected_np_0);
     fails++;
   }
   else if (comm_rank != 0 && nPtcls != ceil(np*95.0/100)) {

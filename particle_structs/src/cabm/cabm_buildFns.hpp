@@ -5,12 +5,15 @@ namespace pumipic {
   /**
    * helper function: Builds the offset array for the CSR structure
    * @param[in] particles_per_element View representing the number of active elements in each SoA
+   * @param[in] padding double representing percentage of extra soas to add to last element
+   *                    set to -1 to fill offsets array to current number of soa
+   * @param[out] last_entry saved int representing end of SoAs to be filled
    * @return offset view (each element is the first index of each SoA block)
   */
   template<class DataTypes, typename MemSpace>
   typename ParticleStructure<DataTypes, MemSpace>::kkLidView
-  CabM<DataTypes, MemSpace>::buildOffset(const kkLidView particles_per_element) {
-    auto particles_per_element_h = Kokkos::create_mirror_view_and_copy(host_space(), particles_per_element);
+  CabM<DataTypes, MemSpace>::buildOffset(const kkLidView particles_per_element, const double padding, lid_t &padding_start) {
+    kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element);
     Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
     // elem at i owns SoA offsets[i+1] - offsets[i]
     const auto soa_len = AoSoA_t::vector_length;
@@ -19,6 +22,15 @@ namespace pumipic {
       const lid_t SoA_count = ceil( double(particles_per_element_h(i))/soa_len );
       offsets_h(i+1) = SoA_count + offsets_h(i);
     }
+    padding_start = offsets_h(offsets_h.size()-1);
+
+    if (padding == -1) { // add any remaining soa to end
+      lid_t remaining_soa = num_soa_ - offsets_h(offsets_h.size()-1);
+      if (remaining_soa > 0)
+        offsets_h(offsets_h.size()-1) += remaining_soa;
+    } else // add extra padding
+      offsets_h(offsets_h.size()-1) += ceil( offsets_h(offsets_h.size()-1)*padding );
+
     kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
     hostToDevice(offsets_d, offsets_h.data());
     return offsets_d;
@@ -55,7 +67,7 @@ namespace pumipic {
     Kokkos::View<lid_t*,host_space> elms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), num_soa);
     kkLidHostMirror offsets_h = create_mirror_view_and_copy(host_space(), offsets);
     for ( lid_t elm=0; elm<num_elements; elm++ )
-      for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++)
+      for ( lid_t soa=offsets_h(elm); soa<offsets_h(elm+1); soa++ )
           elms_h(soa)=elm;
     kkLidView elms_d("elements_device", elms_h.size());
     hostToDevice(elms_d, elms_h.data());
@@ -69,10 +81,11 @@ namespace pumipic {
    * @param[in] particles_per_element view representing the number of active elements in each SoA
    * @param[in] parentElms parent view for AoSoA, built by getParentElms
    * @param[in] offsets offset array for AoSoA, built by buildOffset
+   * @param[in] last_entry saved int representing end of SoAs to be filled
   */
   template<class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
-  const kkLidView parentElms, const kkLidView offsets) {
+  const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start) {
 
     const lid_t num_elements = particles_per_element.size();
     const auto soa_len = AoSoA_t::vector_length;
@@ -83,17 +96,19 @@ namespace pumipic {
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
         const lid_t elm = parentElms(soa);
-        const lid_t num_soa = offsets(elm+1)-offsets(elm);
-        const lid_t last_soa = offsets(elm+1)-1;
+        lid_t num_soa = offsets(elm+1)-offsets(elm);
+        lid_t last_soa = offsets(elm+1)-1;
+        if (last_soa >= padding_start) {
+          last_soa = padding_start-1;
+          num_soa = padding_start-offsets(elm);
+        }
         const lid_t elm_ppe = particles_per_element(elm);
         const lid_t last_soa_ppe = soa_len - ((num_soa * soa_len) - elm_ppe);
-        lid_t isActive = 0;
-        if (soa < last_soa) {
-          isActive = 1;
-        }
-        if (soa == last_soa && ptcl < last_soa_ppe) {
-          isActive = 1;
-        }
+        bool isActive = false;
+        if (soa < last_soa)
+          isActive = true;
+        else if (soa == last_soa && ptcl < last_soa_ppe)
+          isActive = true;
         active.access(soa,ptcl) = isActive;
       }, "set_active");
   }
@@ -106,7 +121,7 @@ namespace pumipic {
   */
   template<class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
-    lid_to_gid = kkGidView("row to element gid", num_elems);
+    lid_to_gid = kkGidView(Kokkos::ViewAllocateWithoutInitializing("row to element gid"), num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const gid_t gid = element_gids(i);
       lid_to_gid(i) = gid; // deep copy

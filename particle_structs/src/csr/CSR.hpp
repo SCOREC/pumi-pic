@@ -2,10 +2,14 @@
 
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
+#include <sstream>
 
 namespace ps = particle_structs;
 
 namespace pumipic {
+
+  void enable_prebarrier();
+  double prebarrier();
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CSR : public ParticleStructure<DataTypes, MemSpace> {
@@ -20,6 +24,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
+    typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
     CSR() = delete;
     CSR(const CSR&) = delete;
@@ -52,45 +57,17 @@ namespace pumipic {
     void parallel_for(FunctionType& fn, std::string name="");
 
     void printMetrics() const;
+    void printFormat(const char* prefix) const;
 
-    //---Attention User---  Do **not** call this function! {
-    /**
-     * (in) particle_elements - particle_elements[i] contains the id (index)
-     *                          of the parent element * of particle i
-     * (in) particle_info - 'member type views' containing the user's data to be
-     *                      associated with each particle
-     */
-    void initCsrData(kkLidView particle_elements, MTVs particle_info) {
-      //Create the 'particle_indices' array.  particle_indices[i] stores the
-      //location in the 'ptcl_data' where  particle i is stored.  Use the
-      //CSR offsets array and an atomic_fetch_add to compute these entries.
-      lid_t given_particles = particle_elements.size();
-      assert(given_particles == num_ptcls);
-
-      // create a pointer to the offsets array that we can access in a kokkos parallel_for
-      auto offset_cpy = offsets;
-      kkLidView particle_indices("particle_indices", num_ptcls);
-      //SS3 insert code to set the entries of particle_indices>
-      kkLidView row_indices("row indces", num_elems+1);
-      Kokkos::deep_copy(row_indices, offset_cpy);
-
-      //atomic_fetch_add to increment from the beginning of each element
-      //when filling (offset[element] is start of element)
-      auto fill_ptcl_indices = PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask){
-        particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(ptcl_id)),1);
-      };
-      parallel_for(fill_ptcl_indices);
-
-      //populate ptcl_data with input data and particle_indices mapping
-      CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
-    }
-    // } ... or else!
+    // Do not call these functions:
+    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
+    void initCsrData(kkLidView particle_elements, MTVs particle_info);
 
   private:
-    //The User defined Kokkos policy
+    // The User defined Kokkos policy
     PolicyType policy;
 
-    //Variables from ParticleStructure
+    // Variables from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::num_elems;
     using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity_;
@@ -98,20 +75,38 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    //Offsets array into CSR
+    // Data types for keeping track of global IDs
+    kkGidView element_to_gid;
+    GID_Mapping element_gid_to_lid;
+    // Offsets array into CSR
     kkLidView offsets;
   };
 
-
+  /**
+   * Constructor
+   * @param[in] p
+   * @param[in] num_elements number of elements
+   * @param[in] num_particles number of particles
+   * @param[in] particle_per_element view of ints, representing number of particles
+   *    in each element
+   * @param[in] element_gids view of ints, representing the global ids of each element
+   * @param[in] particle_elements view of ints, representing which elements
+   *    particle reside in (optional)
+   * @param[in] particle_info array of views filled with particle data (optional)
+   * @exception num_elements != particles_per_element.size(),
+   *    undefined behavior for new_particle_elements.size() != sizeof(new_particles),
+   *    undefined behavior for numberoftypes(new_particles) != numberoftypes(DataTypes)
+  */
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::CSR(PolicyType& p,
                                 lid_t num_elements, lid_t num_particles,
                                 kkLidView particles_per_element,
-                                kkGidView element_gids,      //optional
-                                kkLidView particle_elements, //optional
-                                MTVs particle_info) :        //optional
+                                kkGidView element_gids,      // optional
+                                kkLidView particle_elements, // optional
+                                MTVs particle_info) :        // optional
       ParticleStructure<DataTypes, MemSpace>(),
-      policy(p)
+      policy(p),
+      element_gid_to_lid(num_elements)
   {
     Kokkos::Profiling::pushRegion("csr_construction");
     num_elems = num_elements;
@@ -123,28 +118,31 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");
 
-    //SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
-    //to fill the entries of the offsets array.
-    //see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView("offsets", num_elems+1);
+    // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
+    // to fill the entries of the offsets array.
+    // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
+    offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
     Kokkos::resize(particles_per_element, particles_per_element.size()+1);
     exclusive_scan(particles_per_element, offsets);
 
-    //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
-    //pumi-pic/support/SupportKK.h has a helper function for this
+    // get global ids
+    if (element_gids.size() > 0) {
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    }
+
+    // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
+    // pumi-pic/support/SupportKK.h has a helper function for this
     capacity_ = getLastValue(offsets);
-    //allocate storage for user particle data
+    // allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
 
-    //If particle info is provided then enter the information
+    // If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
     if (given_particles > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
       initCsrData(particle_elements, particle_info);
     }
 
-    //if(!comm_rank)
-    //  fprintf(stderr, "Building CSR done\n");
     Kokkos::Profiling::popRegion();
   }
 
@@ -153,14 +151,14 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(ptcl_data);
   }
 
-  template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
-                                         Distributor<MemSpace> dist,
-                                         kkLidView new_particle_elements,
-                                         MTVs new_particle_info) {
-    fprintf(stderr, "[WARNING] CSR migrate(...) not implemented\n");
-  }
-
+  /**
+   * a parallel for-loop that iterates through all particles
+   * @param[in] fn function of the form fn(elm, particle_id, mask), where
+   *    elm is the element the particle is in
+   *    particle_id is the overall index of the particle in the structure
+   *    mask is 0 if the particle is inactive and 1 if the particle is active
+   * @param[in] s string for labelling purposes
+  */
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
@@ -174,10 +172,10 @@ namespace pumipic {
     fn_d = &fn;
 #endif
     const lid_t league_size = num_elems;
-    const lid_t team_size = 32;  //hack
+    const lid_t team_size = policy.team_size();
     const PolicyType policy(league_size, team_size);
     auto offsets_cpy = offsets;
-    const lid_t mask = 1; //all particles are active
+    const lid_t mask = 1; // all particles are active
     Kokkos::parallel_for(name, policy,
         KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
         const lid_t elm = thread.league_rank();
@@ -196,10 +194,59 @@ namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
   void CSR<DataTypes, MemSpace>::printMetrics() const {
-    fprintf(stderr, "csr capacity %d\n", capacity_);
-    fprintf(stderr, "num ptcls    %d\n", num_ptcls);
-    fprintf(stderr, "num elements %d\n", num_elems);
-  }
-} //end namespace pumipic
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
+    char buffer[1000];
+    char* ptr = buffer;
+
+    // Header
+    ptr += sprintf(ptr, "Metrics (Rank %d)\n", comm_rank);
+    // Sizes
+    ptr += sprintf(ptr, "Number of Elements %d, Number of Particles %d, Capacity %d\n",
+                   num_elems, num_ptcls, capacity_);
+    
+    printf("%s\n", buffer);
+  }
+
+  template <class DataTypes, typename MemSpace>
+  void CSR<DataTypes, MemSpace>::printFormat(const char* prefix) const {
+    kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
+    kkLidHostMirror offsets_host = deviceToHost(offsets);
+
+    std::stringstream ss;
+    char buffer[1000];
+    char* ptr = buffer;
+    int num_chars;
+
+    num_chars = sprintf(ptr, "%s\n", prefix);
+    num_chars += sprintf(ptr+num_chars,"Particle Structures CSR\n");
+    num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of Particles: %d.", num_elems, num_ptcls);
+    buffer[num_chars] = '\0';
+    ss << buffer;
+
+    for (int i = 1; i < offsets_host.size(); i++) {
+      if ( offsets_host[i] != offsets_host[i-1] ) {
+        if (element_to_gid_host.size() > 0)
+          num_chars = sprintf(ptr,"\n  Element %2d(%2d) |", i-1, element_to_gid_host(i-1));
+        else
+          num_chars = sprintf(ptr,"\n  Element %2d |", i-1);
+        buffer[num_chars] = '\0';
+        ss << buffer;
+
+        for (int j = offsets_host[i-1]; j < offsets_host[i]; j++) {
+          num_chars = sprintf(ptr," 1");
+          buffer[num_chars] = '\0';
+          ss << buffer;
+        }
+      }
+    }
+    ss << "\n";
+    std::cout << ss.str();
+  }
+
+} // end namespace pumipic
+
+#include "CSR_buildFns.hpp"
 #include "CSR_rebuild.hpp"
+#include "CSR_migrate.hpp"

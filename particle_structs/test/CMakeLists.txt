@@ -16,25 +16,14 @@ make_test(buildSCSTest buildSCSTest.cpp)
 
 make_test(initParticles initParticles.cpp)
 
-make_test(rebuild_scs rebuild_scs.cpp)
-
 make_test(lambdaTest lambdaTest.cpp)
-
-make_test(migrate_scs migrate_scs.cpp)
 
 make_test(test_scs_padding scs_padding.cpp)
 
 make_test(write_particles write_particle_file.cpp)
 make_test(test_structure test_structure.cpp)
 
-make_test(test_csr test_csr.cpp)
-make_test(rebuild_csr rebuild_csr.cpp)
-
-if(ENABLE_CABANA)
-make_test(test_cabm test_cabm.cpp)
-make_test(rebuild_cabm rebuild_cabm.cpp)
-make_test(migrate_cabm migrate_cabm.cpp)
-endif()
+make_test(destroy_test destroy_test.cpp)
 
 include(testing.cmake)
 

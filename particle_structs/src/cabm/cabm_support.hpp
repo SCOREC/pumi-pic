@@ -20,7 +20,7 @@ namespace pumipic {
     using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
   };
 
-  template <typename DataTypes> using CM_DTInt = typename AppendMT<int,DataTypes>::type;
+  template <typename DataTypes> using CM_DTBool = typename AppendMT<bool,DataTypes>::type;
 
   //Forward declaration of CabM
   template <class DataTypes, typename MemSpace> class CabM;
@@ -103,8 +103,8 @@ namespace pumipic {
   struct CopyMTVsToAoSoA<Device, MemberTypes<Types...>> {
 
     typedef CabM<MemberTypes<Types...>, Device> PS;
-    typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
-    typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
+    typedef Cabana::AoSoA<CM_DTBool<MemberTypes<Types...>>, Device> Aosoa;
+    typedef CM_DTBool<MemberTypes<Types...>> CM_DT;
 
     CopyMTVsToAoSoA(Aosoa &dst, MemberTypeViewsConst src,
                     typename PS::kkLidView soa_indices,
@@ -197,8 +197,8 @@ namespace pumipic {
   template <typename PS, typename... Types>
   struct CopyParticlesToSendFromAoSoA<PS, MemberTypes<Types...> > {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<CM_DTInt<MemberTypes<Types...>>, Device> Aosoa;
-    typedef CM_DTInt<MemberTypes<Types...>> CM_DT;
+    typedef Cabana::AoSoA<CM_DTBool<MemberTypes<Types...>>, Device> Aosoa;
+    typedef CM_DTBool<MemberTypes<Types...>> CM_DT;
 
     CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                         typename PS::kkLidView ps_to_array,

@@ -20,11 +20,7 @@ namespace pumipic {
   void CabM<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
-    /// @todo add prebarrier to main ParticleStructure files
-    //const auto btime = prebarrier();
-    Kokkos::Timer barrier_timer;
-    MPI_Barrier(MPI_COMM_WORLD);
-    const auto btime = barrier_timer.seconds();
+    const auto btime = prebarrier();
 
     Kokkos::Profiling::pushRegion("CabM Rebuild");
     Kokkos::Timer overall_timer; // timer for rebuild
@@ -39,13 +35,12 @@ namespace pumipic {
     assert(new_element.size() == capacity_);
     kkLidView num_removed_d("num_removed_d", 1); // for counting particles to be removed
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-      if (active.access(soa,tuple) == 1){
-        lid_t parent = new_element((soa*soa_len)+tuple);
-        if (parent >= 0) { // count particles to be deleted
+      if (active.access(soa,tuple)) {
+        lid_t parent = new_element(soa*soa_len + tuple);
+        if (parent > -1) // count particles to be kept
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
-        } else {
+        else // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
-        }
       }
     };
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
@@ -54,54 +49,75 @@ namespace pumipic {
 
     // count and index new particles (atomic)
     kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_new_ptcls);
-    if (num_new_ptcls > 0 && new_particles != NULL) {
-      Kokkos::parallel_for("fill_ptcl_indices", num_new_ptcls,
-        KOKKOS_LAMBDA(const lid_t ptcl) {
-          lid_t parent = new_particle_elements(ptcl);
-          assert(parent >= 0); // new particles should have a destination element
-          particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
-        });
-    }
+    Kokkos::parallel_for("fill_ptcl_indices", num_new_ptcls,
+      KOKKOS_LAMBDA(const lid_t ptcl) {
+        lid_t parent = new_particle_elements(ptcl);
+        assert(parent > -1); // new particles should have a destination element
+        particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
+      });
 
     RecordTime("CabM count active particles", overall_timer.seconds());
-    Kokkos::Timer existing_timer; // timer for moving/deleting particles
+    Kokkos::Timer setup_timer; // timer for aosoa setup
 
     // prepare a new aosoa to store the shuffled particles
-    kkLidView newOffset_d = buildOffset(elmDegree_d);
-    const lid_t newNumSoa = getLastValue(newOffset_d);
-    const lid_t newCapacity = newNumSoa*soa_len;
-    auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
+    kkLidView newOffset_d = buildOffset(elmDegree_d, -1, padding_start); // -1 signifies to fill to num_soa
+    lid_t newNumSoa = getLastValue(newOffset_d);
+    bool swap;
+    AoSoA_t newAosoa;
+    lid_t newCapacity;
+    if (newNumSoa > num_soa_) { // if need extra space, update
+      swap = false;
+      newOffset_d = buildOffset(elmDegree_d, extra_padding, padding_start);
+      newNumSoa = getLastValue(newOffset_d);
+      newCapacity = newNumSoa*soa_len;
+      aosoa_swap.resize(0); // clear aosoa_swap memory
+      newAosoa = makeAoSoA(newCapacity, newNumSoa);
+    } else { // if we don't need extra space
+      swap = true;
+      newCapacity = capacity_;
+      newAosoa = aosoa_swap;
+    }
+
+    RecordTime("CabM move/destroy setup", setup_timer.seconds());
+    Kokkos::Timer existing_timer; // timer for moving/deleting particles
+
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
     auto aosoa_copy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-        if (active.access(soa,tuple) == 1) {
+        const lid_t destParent = new_element(soa*soa_len + tuple);
+        if (active.access(soa,tuple) && destParent != -1) {
           // Compute the destSoa based on the destParent and an array of
           //   counters for each destParent tracking which particle is the next
           //   free position. Use atomic fetch and incriment with the
           //   'elmPtclCounter_d' array.
-          lid_t destParent = new_element(soa*soa_len + tuple);
-          if ( destParent >= 0 ) { // delete particles with negative destination element
-            lid_t occupiedTuples = Kokkos::atomic_fetch_add<lid_t>(&elmPtclCounter_d(destParent), 1);
-            // use newOffset_d to figure out which soa is the first for destParent
-            const lid_t firstSoa = newOffset_d(destParent);
-            const lid_t destIdx = occupiedTuples%soa_len;
-            Cabana::Impl::tupleCopy(
-              newAosoa.access(firstSoa + occupiedTuples/soa_len), destIdx, // dest
-              aosoa_copy.access(soa), tuple); // src
-          }
+          const lid_t occupiedTuples = Kokkos::atomic_fetch_add(&elmPtclCounter_d(destParent), 1);
+          // use newOffset_d to figure out which soa is the first for destParent
+          const lid_t firstSoa = newOffset_d(destParent);
+          const lid_t destSoa = firstSoa + occupiedTuples/soa_len;
+          const lid_t destTuple = occupiedTuples%soa_len;
+          Cabana::Impl::tupleCopy(
+            newAosoa.access(destSoa), destTuple, // dest
+            aosoa_copy.access(soa), tuple); // src
         }
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
 
-    // destroy the old aosoa and use the new one in the CabanaM object
-    aosoa_ = newAosoa;
+    // swap the old aosoa and use the new one in the CabanaM object
+    if (swap) {
+      auto temp = aosoa_;
+      aosoa_ = newAosoa;
+      aosoa_swap = temp;
+    } else { // destroy old aosoas and make new ones
+      aosoa_ = newAosoa;
+      aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
+    }
     // update member variables (note that these are set before particle addition)
     num_soa_ = newNumSoa;
     capacity_ = newCapacity;
     offsets = newOffset_d;
     num_ptcls = num_ptcls - num_removed;
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-    setActive(aosoa_, elmDegree_d, parentElms_, offsets);
+    setActive(aosoa_, elmDegree_d, parentElms_, offsets, padding_start);
 
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles

@@ -3,6 +3,8 @@
 #ifdef PP_ENABLE_CABM
 #include <Cabana_Core.hpp>
 #include "cabm_support.hpp"
+#include "cabm_input.hpp"
+#include <sstream>
 
 namespace {
   // class to append member types
@@ -19,6 +21,9 @@ namespace {
 }
 
 namespace pumipic {
+
+  void enable_prebarrier();
+  double prebarrier();
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
@@ -37,9 +42,10 @@ namespace pumipic {
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
+    typedef CabM_Input<DataTypes, MemSpace> Input_T;
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
-    using CM_DT = CM_DTInt<DataTypes>;
+    using CM_DT = CM_DTBool<DataTypes>;
     using AoSoA_t = Cabana::AoSoA<CM_DT,device_type>;
 
     CabM() = delete;
@@ -52,6 +58,7 @@ namespace pumipic {
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
           MTVs particle_info = NULL);
+    CabM(CabM_Input<DataTypes, MemSpace>&);
     ~CabM();
 
     //Functions from ParticleStructure
@@ -78,11 +85,11 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element);
+    kkLidView buildOffset(const kkLidView particles_per_element, const double padding, lid_t &padding_start);
     AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
-      const kkLidView parentElms, const kkLidView offsets);
+      const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start);
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info);
     void initCabMData(kkLidView particle_elements, MTVs particle_info);
@@ -92,6 +99,7 @@ namespace pumipic {
     PolicyType policy;
 
     //Variables from ParticleStructure
+    using ParticleStructure<DataTypes, MemSpace>::name;
     using ParticleStructure<DataTypes, MemSpace>::num_elems;
     using ParticleStructure<DataTypes, MemSpace>::num_ptcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity_;
@@ -99,13 +107,24 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    //mappings from row to element gid and back to row
+    // mappings from row to element gid and back to row
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
-    lid_t num_soa_; // number of SoA
-    kkLidView offsets; // Offsets array into CabM
-    kkLidView parentElms_; // Parent elements for each SoA
+     // number of SoA
+    lid_t num_soa_;
+    // SoA index for start of padding
+    lid_t padding_start;
+    // percentage of capacity to add as padding
+    double extra_padding;
+    // offsets array for CSR structure
+    kkLidView offsets; 
+    // parent elements for each SoA
+    kkLidView parentElms_;
+    // particle data
     AoSoA_t aosoa_;
+    // extra AoSoA copy for swapping (same size as aosoa_)
+    AoSoA_t aosoa_swap;
+    
   };
 
   /**
@@ -128,11 +147,12 @@ namespace pumipic {
                                    lid_t num_elements, lid_t num_particles,
                                    kkLidView particles_per_element,
                                    kkGidView element_gids,
-                                   kkLidView particle_elements,
+                                   kkLidView particle_elements, // optional
                                    MTVs particle_info) :        // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
-    element_gid_to_lid(num_elements)
+    element_gid_to_lid(num_elements),
+    extra_padding(0.1) // default extra padding at 10%
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
@@ -144,28 +164,69 @@ namespace pumipic {
       fprintf(stderr, "building CabM\n");
 
     // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(particles_per_element);
+    offsets = buildOffset(particles_per_element, extra_padding, padding_start);
     // set num_soa_ from the last entry of offsets
     num_soa_ = getLastValue(offsets);
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
+    // initialize appropriately-sized AoSoA and copy for swapping
     aosoa_ = makeAoSoA(capacity_, num_soa_);
+    aosoa_swap = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, particles_per_element, parentElms_, offsets);
+    setActive(aosoa_, particles_per_element, parentElms_, offsets, padding_start);
     // get global ids
     if (element_gids.size() > 0) {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
     }
     // populate AoSoA with input data if given
-    lid_t given_particles = particle_elements.size();
-    if (given_particles > 0 && particle_info != NULL) {
+    if (particle_elements.size() > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
       initCabMData(particle_elements, particle_info); // initialize data
     }
   }
+
+template<class DataTypes, typename MemSpace>
+CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
+    ParticleStructure<DataTypes, MemSpace>(input.name),
+    policy(input.policy),
+    element_gid_to_lid(input.ne) {
+  num_elems = input.ne;
+  num_rows = num_elems;
+  num_ptcls = input.np;
+  extra_padding = input.extra_padding;
+
+  assert(num_elems == input.ppe.size());
+
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  if(!comm_rank)
+    fprintf(stderr, "building CabM\n");
+  
+  // build view of offsets for SoA indices within particle elements
+  offsets = buildOffset(input.ppe, extra_padding, padding_start);
+  // set num_soa_ from the last entry of offsets
+  num_soa_ = getLastValue(offsets);
+  // calculate capacity_ from num_soa_ and max size of an SoA
+  capacity_ = num_soa_*AoSoA_t::vector_length;
+  // initialize appropriately-sized AoSoA and copy for swapping
+  aosoa_ = makeAoSoA(capacity_, num_soa_);
+  aosoa_swap = makeAoSoA(capacity_, num_soa_);
+  // get array of parents element indices for particles
+  parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+  // set active mask
+  setActive(aosoa_, input.ppe, parentElms_, offsets, padding_start);
+  // get global ids
+  if (input.e_gids.size() > 0) {
+    createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
+  }
+  // populate AoSoA with input data if given
+  if (input.particle_elms.size() > 0 && input.p_info != NULL) {
+    if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
+    initCabMData(input.particle_elms, input.p_info); // initialize data
+  }
+}
 
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::~CabM() { }
@@ -196,7 +257,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_.number_of_members-1;
     const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
-    Cabana::SimdPolicy<soa_len,execution_space> simd_policy( 0, capacity_);
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
         const lid_t elm = parentElms_cpy(soa); // calculate element
@@ -231,6 +292,7 @@ namespace pumipic {
 
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    
     char buffer[1000];
     char* ptr = buffer;
 
@@ -265,29 +327,51 @@ namespace pumipic {
       });
     kkLidHostMirror mask_host = deviceToHost(mask);
 
-    char buffer[10000];
+    std::stringstream ss;
+    char buffer[1000];
     char* ptr = buffer;
-    ptr += sprintf(ptr, "%s\n", prefix);
-    ptr += sprintf(ptr,"Particle Structures CabM\n");
-    ptr += sprintf(ptr,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
+    int num_chars;
+
+    num_chars = sprintf(ptr, "%s\n", prefix);
+    num_chars += sprintf(ptr+num_chars,"Particle Structures CabM\n");
+    num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
+    buffer[num_chars] = '\0';
+    ss << buffer;
+
     lid_t last_soa = -1;
     lid_t last_elm = -1;
     for (int i = 0; i < capacity_; i++) {
       lid_t soa = i / soa_len;
       lid_t elm = parents_host(soa);
-      if (last_soa == soa)
-        ptr += sprintf(ptr," %d", mask_host(i));
+      if (last_soa == soa) {
+        num_chars = sprintf(ptr," %d", mask_host(i));
+        buffer[num_chars] = '\0';
+        ss << buffer;
+      }
       else {
-        if (last_elm != elm)
-          ptr += sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
-        else
-          ptr += sprintf(ptr,"\n                 | %d", mask_host(i));
+        if (element_to_gid_host.size() > 0) {
+          if (last_elm != elm)
+            num_chars = sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
+          else
+            num_chars = sprintf(ptr,"\n                 | %d", mask_host(i));
+          buffer[num_chars] = '\0';
+          ss << buffer;
+        }
+        else {
+          if (last_elm != elm)
+            num_chars = sprintf(ptr,"\n  Element %2d | %d", elm, mask_host(i));
+          else
+            num_chars = sprintf(ptr,"\n             | %d", mask_host(i));
+          buffer[num_chars] = '\0';
+          ss << buffer;
+        }
       }
 
       last_soa = soa;
       last_elm = elm;
     }
-    printf("%s\n", buffer);
+    ss << "\n";
+    std::cout << ss.str();
   }
 
 }

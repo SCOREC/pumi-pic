@@ -43,7 +43,7 @@ namespace pumipic {
       typename std::remove_all_extents<DataType<M>>::type;
 
 #ifdef PP_ENABLE_CABM
-    using CM_DT=CM_DTInt<Types>;
+    using CM_DT=CM_DTBool<Types>;
     using soa_type = Cabana::SoA<CM_DT, vector_length>;
     template <std::size_t N> using Slice =
       Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
@@ -69,6 +69,7 @@ namespace pumipic {
      */
     template <std::size_t N>
     Slice<N> get() {
+      assert(N < num_types);
       if (num_ptcls == 0)
         return Slice<N>();
 #ifdef PP_ENABLE_CABM

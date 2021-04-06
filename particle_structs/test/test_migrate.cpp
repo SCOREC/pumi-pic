@@ -121,12 +121,12 @@ int migrateSendToOne(const char* name, PS* structure) {
 
   int nPtcls = structure->nPtcls();
   if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np*5/100) {
-    fprintf(stderr, "%s Rank 0 has incorrect number of particles (%d != %d)\n",
+    fprintf(stderr, "[ERROR] %s Rank 0 has incorrect number of particles (%d != %d)\n",
             name, nPtcls, np + (comm_size - 1) * np*5/100);
     fails++;
   }
   else if (comm_rank != 0 && nPtcls != ceil(np*95.0/100)) {
-    fprintf(stderr, "%s Rank %d has incorrect number of particles (%d != %d)\n",
+    fprintf(stderr, "[ERROR] %s Rank %d has incorrect number of particles (%d != %d)\n",
             name, comm_rank, nPtcls, np*95/100);
     fails++;
   }
@@ -138,7 +138,7 @@ int migrateSendToOne(const char* name, PS* structure) {
       int rank = int_slice(ptcl_id);
       double val = double_slice(ptcl_id, 0);
       if (fabs(rank*5 - val) > .0005) {
-        printf("%d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
+        printf("[ERROR] %d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
         failures(0) = 1;
       }
     }

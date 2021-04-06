@@ -110,9 +110,8 @@ int migrateSendToOne(const char* name, PS* structure) {
   auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
     int_slice(ptcl_id) = comm_rank_local;
     double_slice(ptcl_id,0) = comm_rank_local * 5;
-    if (Kokkos::atomic_fetch_add(&ptcls_set(0), mask) < np/100) {
+    if (Kokkos::atomic_fetch_add(&ptcls_set(0), mask) < np*5/100)
       new_process[ptcl_id] = 0;
-    }
     else
       new_process[ptcl_id] = comm_rank_local;
     new_element[ptcl_id] = elem_id;
@@ -121,14 +120,14 @@ int migrateSendToOne(const char* name, PS* structure) {
   structure->migrate(new_element, new_process);
 
   int nPtcls = structure->nPtcls();
-  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np * 1.0/100) {
+  if (comm_rank == 0 && nPtcls != np + (comm_size - 1) * np*5/100) {
     fprintf(stderr, "%s Rank 0 has incorrect number of particles (%d != %d)\n",
-            name, nPtcls, np + (comm_size - 1) * np/100);
+            name, nPtcls, np + (comm_size - 1) * np*5/100);
     fails++;
   }
-  else if (comm_rank != 0 && nPtcls != np*99/100) {
+  else if (comm_rank != 0 && nPtcls != ceil(np*95.0/100)) {
     fprintf(stderr, "%s Rank %d has incorrect number of particles (%d != %d)\n",
-            name, comm_rank, nPtcls, np* 99/100);
+            name, comm_rank, nPtcls, np*95/100);
     fails++;
   }
 

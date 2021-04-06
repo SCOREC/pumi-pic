@@ -44,7 +44,7 @@ namespace pumipic {
     parallel_for(count_sending_particles);
     
     //********* Send # of particles being sent to each process
-    kkLidView num_recv_particles(Kokkos::ViewAllocateWithoutInitializing("num_recv_particles"), comm_size + 1);
+    kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
     int num_send_ranks = dist.isWorld() ? 0 : comm_size - 1;
     MPI_Request* count_send_requests = NULL;
     if (num_send_ranks > 0)
@@ -70,7 +70,7 @@ namespace pumipic {
     
     // Gather sending particle data
     // Perform an ex-sum on num_send_particles & num_recv_particles
-    kkLidView offset_send_particles(Kokkos::ViewAllocateWithoutInitializing("offset_send_particles"), comm_size+1);
+    kkLidView offset_send_particles("offset_send_particles", comm_size+1);
     kkLidView offset_send_particles_temp(Kokkos::ViewAllocateWithoutInitializing("offset_send_particles_temp"), comm_size + 1);
     exclusive_scan(num_send_particles, offset_send_particles);
     Kokkos::deep_copy(offset_send_particles_temp, offset_send_particles);
@@ -125,7 +125,7 @@ namespace pumipic {
     }
     
     // Offset the recv particles
-    kkLidView offset_recv_particles(Kokkos::ViewAllocateWithoutInitializing("offset_recv_particles"), comm_size+1);
+    kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_recv_particles, offset_recv_particles);
     kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
     int np_recv = offset_recv_particles_host(comm_size);

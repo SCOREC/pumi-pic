@@ -124,7 +124,7 @@ namespace pumipic {
     // If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
       rebuild(new_element, new_particle_elements, new_particle_info);
-      RecordTime(name +" particle migration", timer.seconds(), btime);
+      RecordTime("CabM particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }

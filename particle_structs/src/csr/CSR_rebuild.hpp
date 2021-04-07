@@ -32,11 +32,17 @@ namespace pumipic{
 
     RecordTime("CSR count active particles", timer.seconds());
     
-    if(particles_on_process > capacity_){
+    if(particles_on_process > swap_capacity_){
       //Alocate new (temp) MTV
       //MTVs particle_info;
       destroyViews<DataTypes>(ptcl_data_swap);
-      CreateViews<device_type,DataTypes>(ptcl_data_swap, particles_on_process);
+      CreateViews<device_type,DataTypes>(ptcl_data_swap, 1.05*particles_on_process);
+      swap_capacity_ = 1.05*particles_on_process;
+    }
+    else if(particles_on_process < 0.8*swap_capacity_){
+      destroyViews<DataTypes>(ptcl_data_swap);
+      CreateViews<device_type,DataTypes>(ptcl_data_swap, 1.05*particles_on_process);
+      swap_capacity_ = 1.05*particles_on_process;
     }
 
     //fresh filling of particles_per_element
@@ -114,8 +120,12 @@ namespace pumipic{
     MTVs tmp  = ptcl_data;
     ptcl_data = ptcl_data_swap;
     ptcl_data_swap = tmp;
-    capacity_ = getLastValue<lid_t>(offsets_new);
-    num_ptcls = capacity_;
+    
+    lid_t tmp_cap = capacity_;
+    capacity_ = swap_capacity_;
+    swap_capacity_ = tmp_cap;
+
+    num_ptcls = particles_on_process;
     offsets   = offsets_new;
 
     RecordTime("CSR rebuild", timer.seconds());

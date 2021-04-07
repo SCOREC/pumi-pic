@@ -114,12 +114,11 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
 
-    MTVs ptcl_data_swap;
-
     //Offsets array into CSR
     kkLidView offsets;
 
     MTVs ptcl_data_swap;
+    lid_t swap_capacity_;
 
     lid_t team_size_;
   };
@@ -180,7 +179,8 @@ namespace pumipic {
 
     //SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     //pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets);
+    capacity_ = getLastValue<lid_t>(offsets);
+    swap_capacity_ = capacity_;
     //allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
     CreateViews<device_type, DataTypes>(ptcl_data_swap, capacity_);

@@ -177,7 +177,7 @@ namespace pumipic {
                  << std::setw(at_length+3)
                  << time_per_op[index].time / time_per_op[index].count;
           if (time_per_op[index].hasPrebarrier)
-            buffer <<"  Total Perbarrier=" << time_per_op[index].prebarrier;
+            buffer <<"  Total Prebarrier=" << time_per_op[index].prebarrier;
           buffer <<'\n';
         }
         fprintf(stderr, "%s\n", buffer.str().c_str());

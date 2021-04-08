@@ -33,7 +33,8 @@ namespace {
                         Omega_h::Write<Omega_h::Real> new_coords);
   template <class T>
   void convertTag(Omega_h::Mesh full_mesh, Omega_h::Mesh* picpart, int dim,
-                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tag);
+                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tag,
+                  const char* new_name = "");
 }
 
 namespace pumipic {
@@ -117,6 +118,12 @@ namespace pumipic {
     int comm_size = comm->size();
     int dim = mesh.dim();
 
+    //Get global entity counts from full mesh
+    num_entites[3] = 0;
+    for (int i = 0; i <= dim; ++i) {
+      num_entites[i] = mesh.nents(i);
+    }
+
     /************* Define Ownership of each lower dimension entity ************/
     Omega_h::LOs owner_dim[4];
     for (int i = 0; i < dim; ++i) {
@@ -179,6 +186,14 @@ namespace pumipic {
     if (isFullMesh()) {
       //Set picpart to point to the mesh
       picpart = &mesh;
+
+      //Copy global numbering to global_serial for consistency
+      for (int i = 0; i <= dim; ++i) {
+        if (mesh.has_tag(i, "global")) {
+          Omega_h::GOs tag_array = mesh.get_array<Omega_h::GO>(i, "global");
+          mesh.add_tag(i, "global_serial", 1, tag_array);
+        }
+      }
     }
     //************Build a new mesh as the picpart**************
     else {
@@ -204,11 +219,13 @@ namespace pumipic {
         for (int j = 0; j < mesh.ntags(i); ++j) {
           Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
           // Ignore Omega_h internal tags
-          if (tagbase->name() == "global" ||
-              tagbase->name() == "coordinates" ||
+          if (tagbase->name() == "coordinates" ||
               tagbase->name() == "class_dim" ||
               tagbase->name() == "class_id")
             continue;
+          if (tagbase->name() == "global")
+            convertTag<Omega_h::I64>(mesh, picpart, i, ent_ids[i], tagbase,
+                                     "global_serial");
           if (tagbase->type() == OMEGA_H_I8)
             convertTag<Omega_h::I8>(mesh, picpart, i, ent_ids[i], tagbase);
           if (tagbase->type() == OMEGA_H_I32)
@@ -519,7 +536,8 @@ namespace {
 
   template <class T>
   void convertTag(Omega_h::Mesh full_mesh, Omega_h::Mesh* picpart, int dim,
-                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tagbase) {
+                  Omega_h::LOs entToEnt, Omega_h::TagBase const* tagbase,
+                  const char* new_name) {
     Omega_h::Read<T> tag = full_mesh.get_array<T>(dim, tagbase->name());
     Omega_h::LO nents = full_mesh.nents(dim);
     int nvalues = tag.size() / nents;
@@ -532,6 +550,9 @@ namespace {
       }
     };
     Omega_h::parallel_for(nents, convertTagValues, "convertTagValues");
-    picpart->add_tag(dim, tagbase->name(), nvalues, Omega_h::Read<T>(new_tag));
+    if (strlen(new_name) == 0)
+      picpart->add_tag(dim, tagbase->name(), nvalues, Omega_h::Read<T>(new_tag));
+    else
+      picpart->add_tag(dim, new_name, nvalues, Omega_h::Read<T>(new_tag));
   }
 }

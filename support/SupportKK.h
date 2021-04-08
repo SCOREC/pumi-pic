@@ -155,6 +155,26 @@ namespace pumipic {
     return lastVal;
   }
 
+  template <typename T, typename Device>
+  T getFirst(Kokkos::View<T*, Device> view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    T lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,0));
+    return lastVal;
+  }
+
+  template <typename ViewT>
+  typename ViewT::value_type getFirstValue(ViewT view) {
+    const int size = view.size();
+    if (size == 0)
+      return 0;
+    typename ViewT::non_const_value_type lastVal;
+    Kokkos::deep_copy(lastVal,Kokkos::subview(view,0));
+    return lastVal;
+  }
+
   template <typename ViewT>
   PP_INLINE typename std::enable_if<ViewT::rank == 1>::type copyViewToView(ViewT dst, int dstind,
                                                                            ViewT src, int srcind){
@@ -249,4 +269,29 @@ namespace pumipic {
       Kokkos::deep_copy(view, hv);
     }
   };
+
+  //Print View function
+  template <typename ppView, typename T>
+  using CheckType =
+    typename std::enable_if<std::is_same<typename ppView::value_type, T>::value, void>::type;
+
+  //Print ints
+  template <typename ppView>
+  CheckType<ppView, int> printView(ppView v) {
+    //printf("view: %s\n", v.label().c_str());
+    Kokkos::parallel_for("print_view", v.size(),
+      KOKKOS_LAMBDA (const int& i) {
+        printf("%d %d\n", i, v(i));
+      });
+  }
+
+  //Print doubles
+  template <typename ppView>
+  CheckType<ppView, double> printView(ppView v) {
+    //printf("view: %s\n", v.label().c_str());
+    Kokkos::parallel_for("print_view", v.size(),
+      KOKKOS_LAMBDA (const int& i) {
+        printf("%d %f\n", i, v(i));
+      });
+  }
 }

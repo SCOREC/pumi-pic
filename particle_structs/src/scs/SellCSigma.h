@@ -19,11 +19,12 @@
 #include <thrust/device_ptr.h>
 #endif
 #include <ppTiming.hpp>
+#include <sstream>
+
 namespace pumipic {
 
 void enable_prebarrier();
 double prebarrier();
-
 
 template<class DataTypes, typename MemSpace = DefaultMemSpace>
 class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
@@ -209,6 +210,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   double extra_padding;
   double shuffle_padding;
   PaddingStrategy pad_strat;
+  double minimize_size;
+  bool always_realloc;
   //True - try shuffling every rebuild, false - only rebuild
   bool tryShuffling;
   //Metric Info
@@ -293,8 +296,10 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   V_ = v;
   num_elems = ne;
   num_ptcls = np;
-  shuffle_padding = 0.0;
-  extra_padding = 0.1;
+  shuffle_padding = 0.1;
+  extra_padding = 0.05;
+  minimize_size = 0.8;
+  always_realloc = false;
   pad_strat = PAD_EVENLY;
   construct(ptcls_per_elem, element_gids, particle_elements, particle_info);
 }
@@ -309,7 +314,9 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   num_ptcls = input.np;
   shuffle_padding = input.shuffle_padding;
   extra_padding = input.extra_padding;
+  minimize_size = input.minimize_size;
   pad_strat = input.padding_strat;
+  always_realloc = input.always_realloc;
   construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
 }
 
@@ -331,6 +338,8 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
   mirror_copy->extra_padding = extra_padding;
   mirror_copy->shuffle_padding = shuffle_padding;
   mirror_copy->pad_strat = pad_strat;
+  mirror_copy->minimize_size = minimize_size;
+  mirror_copy->always_realloc = always_realloc;
   mirror_copy->tryShuffling = tryShuffling;
   mirror_copy->num_empty_elements = num_empty_elements;
 
@@ -380,39 +389,58 @@ void SellCSigma<DataTypes,MemSpace>::printFormat(const char* prefix) const {
   kkLidHostMirror row_to_element_host = deviceToHost(row_to_element);
   kkLidHostMirror offsets_host = deviceToHost(offsets);
   kkLidHostMirror particle_mask_host = deviceToHost(particle_mask);
-  char message[10000];
-  char* cur = message;
-  cur += sprintf(cur, "%s\n", prefix);
-  cur += sprintf(cur,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C_, sigma, V_);
-  cur += sprintf(cur,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
-  cur += sprintf(cur,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+
+  std::stringstream ss;
+  char buffer[1000];
+  char* ptr = buffer;
+  int num_chars;
+
+  num_chars = sprintf(ptr, "%s\n", prefix);
+  num_chars += sprintf(ptr+num_chars,"Particle Structures Sell-C-Sigma C: %d sigma: %d V: %d.\n", C_, sigma, V_);
+  num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of Particles: %d.\n", num_elems, num_ptcls);
+  num_chars += sprintf(ptr+num_chars,"Number of Chunks: %d.\nNumber of Slices: %d.\n", num_chunks, num_slices);
+  buffer[num_chars] = '\0';
+  ss << buffer;
+
   lid_t last_chunk = -1;
   for (lid_t i = 0; i < num_slices; ++i) {
     lid_t chunk = slice_to_chunk_host(i);
     if (chunk != last_chunk) {
       last_chunk = chunk;
-      cur += sprintf(cur,"  Chunk %d. Elements", chunk);
+      num_chars = sprintf(ptr,"  Chunk %d. Elements", chunk);
       if (element_to_gid_host.size() > 0)
-        cur += sprintf(cur,"(GID)");
-      cur += sprintf(cur,":");
+        num_chars += sprintf(ptr+num_chars,"(GID)");
+      num_chars += sprintf(ptr+num_chars,":");
+      buffer[num_chars] = '\0';
+      ss << buffer;
+
       for (lid_t row = chunk*C_; row < (chunk+1)*C_; ++row) {
         lid_t elem = row_to_element_host(row);
-        cur += sprintf(cur," %d", elem);
-        if (element_to_gid_host.size() > 0) {
-          cur += sprintf(cur,"(%ld)", element_to_gid_host(elem));
-        }
+        num_chars = sprintf(ptr," %d", elem);
+        if (element_to_gid_host.size() > 0)
+          num_chars += sprintf(ptr+num_chars,"(%ld)", element_to_gid_host(elem));
+        buffer[num_chars] = '\0';
+        ss << buffer;
       }
-      cur += sprintf(cur,"\n");
+      num_chars = sprintf(ptr,"\n");
+      buffer[num_chars] = '\0';
+      ss << buffer;
     }
-    cur += sprintf(cur,"    Slice %d", i);
+    num_chars = sprintf(ptr,"    Slice %d", i);
+    buffer[num_chars] = '\0';
+    ss << buffer;
     for (lid_t j = offsets_host(i); j < offsets_host(i+1); ++j) {
       if ((j - offsets_host(i)) % C_ == 0)
-        cur += sprintf(cur," |");
-      cur += sprintf(cur," %d", particle_mask_host(j));
+        num_chars = sprintf(ptr," |");
+      num_chars += sprintf(ptr+num_chars," %d", particle_mask_host(j));
+      buffer[num_chars] = '\0';
+      ss << buffer;
     }
-    cur += sprintf(cur,"\n");
+    num_chars = sprintf(ptr,"\n");
+    buffer[num_chars] = '\0';
+    ss << buffer;
   }
-  printf("%s", message);
+  std::cout << ss.str();
 }
 
 template <class DataTypes, typename MemSpace>
@@ -453,6 +481,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
   char buffer[1000];
   char* ptr = buffer;
 

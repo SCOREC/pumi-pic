@@ -33,13 +33,17 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
+if(ENABLE_CABANA)
+  target_include_directories(support PUBLIC ${Cabana_INCLUDE_DIR})
+  target_link_libraries(support PUBLIC ${Cabana_LIBRARY})
+endif()
 
 cmake_policy(SET CMP0057 NEW)
 if ("CUDA" IN_LIST Kokkos_DEVICES)
   add_definitions(-DPP_USE_CUDA)
   target_compile_definitions(support INTERFACE -DPP_USE_CUDA)
 endif()
-if ("OpenMP" IN_LIST Kokkos_DEVICES)
+if ("OPENMP" IN_LIST KOKKOS_DEVICES)
   add_definitions(-DPP_USE_OPENMP)
   target_compile_definitions(support INTERFACE -DPP_USE_OPENMP)
 endif()

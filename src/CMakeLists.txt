@@ -22,6 +22,7 @@ set(SOURCES
   pumipic_mesh.cpp
   pumipic_library.cpp
   pumipic_profiling.cpp
+  pumipic_file.cpp
 )
 add_library(pumipic-core ${SOURCES})
 target_include_directories(pumipic-core INTERFACE

@@ -207,7 +207,66 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
   });
 }
 
-const int num_dist_funcs = 4;
+// CPU-ONLY version of distribution meant to approximate GITRm examples
+void gitrm_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {
+  int cutoff = 2*ne/5;
+  double percent = 0.85;
+
+  int ptcls_first = ceil(np*percent);
+  int ptcls_second = np - ptcls_first;
+
+  for (int i = 0; i < ne; i++) {
+    ptcls_per_elem[i] = 0;
+  }
+
+  int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  std::default_random_engine generator(seed);
+
+  std::uniform_int_distribution<int> distribution_first(0, cutoff-1);
+  int index = 0;
+  for (int i = 0; i < ptcls_first; ++i) {
+    int elem = distribution_first(generator);
+    ptcls_per_elem[elem]++;
+    ids[elem].push_back(index++);
+  }
+
+  std::uniform_int_distribution<int> distribution_second(cutoff, ne-1);
+  index = 0;
+  for (int i = 0; i < ptcls_second; ++i) {
+    int elem = distribution_second(generator);
+    ptcls_per_elem[elem]++;
+    ids[elem].push_back(index++);
+  }
+}
+
+// distribution meant to approximate GITRm examples
+void gitrm_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
+                      Kokkos::View<int*> elem_per_ptcl, float) {
+  int cutoff = 2*ne/5;
+  double percent = 0.85;
+
+  int ptcls_first = ceil(np*percent);
+  int ptcls_second = np - ptcls_first;
+
+  int seed = std::chrono::system_clock::now().time_since_epoch().count();
+  Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+  Kokkos::parallel_for(ptcls_first, KOKKOS_LAMBDA(const int i) {
+    auto generator = pool.get_state();
+    int index = generator.urand(0,cutoff);
+    pool.free_state(generator);
+    Kokkos::atomic_increment<int>(&ptcls_per_elem(index));
+    elem_per_ptcl(i) = index;
+  });
+  Kokkos::parallel_for(ptcls_second, KOKKOS_LAMBDA(const int i) {
+    auto generator = pool.get_state();
+    int index = generator.urand(cutoff,ne);
+    pool.free_state(generator);
+    Kokkos::atomic_increment<int>(&ptcls_per_elem(index));
+    elem_per_ptcl(ptcls_first + i) = index;
+  });
+}
+
+const int num_dist_funcs = 5;
 typedef void (*dist_func)(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids);
 typedef void (*dist_func_gpu)(int, int, Kokkos::View<int*>, Kokkos::View<int*>,float);
 typedef const char* dist_name ;
@@ -216,23 +275,26 @@ dist_func funcs[num_dist_funcs] = {
   &even_distribution,
   &uniform_distribution,
   &gaussian_distribution,
-  &exponential_distribution
+  &exponential_distribution,
+  &gitrm_distribution
 };
 dist_func_gpu gpu_funcs[num_dist_funcs] = {
   &even_distribution,
   &uniform_distribution,
   &gaussian_distribution,
-  &exponential_distribution
+  &exponential_distribution,
+  &gitrm_distribution
 };
 dist_name names[num_dist_funcs] = {
   "Evenly",
   "Uniform",
   "Gaussian",
-  "Exponential"
+  "Exponential",
+  "GITRm Approximation"
 };
 
 void distribute_help() {
-  printf("\nUnknown distribution strategy. Avaible distributions:\n");
+  printf("\nUnknown distribution strategy. Available distributions:\n");
   for(int i=0; i<num_dist_funcs; i++)
     printf("%d - %s\n", i, distribute_name(i));
 }

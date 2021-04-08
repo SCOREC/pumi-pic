@@ -7,7 +7,7 @@
 
 PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
+PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
       }
       name = ("Sell-"+std::to_string(team_size)+"-ne");
       ptcls = createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                team_size, num_elems, vert_slice, "Sell-"+std::to_string(team_size)+"-ne");
+                                                team_size, num_elems, vert_slice, name);
     }
     else if (structure == 1) {
       name = "CSR";
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
     }
     else if (structure == 2) {
       name = "CabM";
-      ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size);
+      ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size, name);
     }
 
     const int ITERS = 100;
@@ -229,7 +229,9 @@ PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
   return new pumipic::CSR<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
+PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  return new pumipic::CabM<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::CabM_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
+  return new pumipic::CabM<PerfTypes160, MemSpace>(input);
 }

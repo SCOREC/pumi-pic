@@ -2,13 +2,13 @@
 # Bash script to run a series of ps_combo tests
 
 # Dense Testing Script for AiMOS: small elm n, large ptcl n
-for e in 100 200 500 1000 1200 1500 2000
+for e in 1000 2000 3000 4000 5000 6000 7000
 do
-  for distribution in 1 2 3 # Even Distribution currently BAD on CabM
+  for distribution in 1 2 3
   do 
     for struct in 0 1 2
     do
-      mpirun -np 2 ./ps_combo160 $e $((e*10000)) $distribution $struct -p $percent
+      mpirun -np 2 ./ps_combo160 --kokkos-ndevices=2 $e $((e*10000)) $distribution $struct
     done
   done
 done

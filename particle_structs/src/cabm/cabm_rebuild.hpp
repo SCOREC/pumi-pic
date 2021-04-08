@@ -60,14 +60,14 @@ namespace pumipic {
     Kokkos::Timer setup_timer; // timer for aosoa setup
 
     // prepare a new aosoa to store the shuffled particles
-    kkLidView newOffset_d = buildOffset(elmDegree_d, -1, padding_start); // -1 signifies to fill to num_soa
+    kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
     bool swap;
     AoSoA_t newAosoa;
     lid_t newCapacity;
     if (newNumSoa > num_soa_) { // if need extra space, update
       swap = false;
-      newOffset_d = buildOffset(elmDegree_d, extra_padding, padding_start);
+      newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
       newNumSoa = getLastValue(newOffset_d);
       newCapacity = newNumSoa*soa_len;
       aosoa_swap.resize(0); // clear aosoa_swap memory
@@ -115,7 +115,7 @@ namespace pumipic {
     num_soa_ = newNumSoa;
     capacity_ = newCapacity;
     offsets = newOffset_d;
-    num_ptcls = num_ptcls - num_removed;
+    num_ptcls = num_ptcls-num_removed+num_new_ptcls;
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     setActive(aosoa_, elmDegree_d, parentElms_, offsets, padding_start);
 
@@ -136,7 +136,6 @@ namespace pumipic {
         });
       CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, new_particles, soa_indices,
         soa_ptcl_indices); // copy data over
-      num_ptcls = num_ptcls + num_new_ptcls; // update particle number
     }
 
     RecordTime("CabM add particles", add_timer.seconds());

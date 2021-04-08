@@ -85,7 +85,7 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element, const double padding, lid_t &padding_start);
+    kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
     void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
@@ -164,7 +164,7 @@ namespace pumipic {
       fprintf(stderr, "building CabM\n");
 
     // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(particles_per_element, extra_padding, padding_start);
+    offsets = buildOffset(particles_per_element, num_ptcls, extra_padding, padding_start);
     // set num_soa_ from the last entry of offsets
     num_soa_ = getLastValue(offsets);
     // calculate capacity_ from num_soa_ and max size of an SoA
@@ -205,7 +205,7 @@ CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
     fprintf(stderr, "building CabM\n");
   
   // build view of offsets for SoA indices within particle elements
-  offsets = buildOffset(input.ppe, extra_padding, padding_start);
+  offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
   // set num_soa_ from the last entry of offsets
   num_soa_ = getLastValue(offsets);
   // calculate capacity_ from num_soa_ and max size of an SoA

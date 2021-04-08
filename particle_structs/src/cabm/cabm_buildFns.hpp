@@ -12,7 +12,7 @@ namespace pumipic {
   */
   template<class DataTypes, typename MemSpace>
   typename ParticleStructure<DataTypes, MemSpace>::kkLidView
-  CabM<DataTypes, MemSpace>::buildOffset(const kkLidView particles_per_element, const double padding, lid_t &padding_start) {
+  CabM<DataTypes, MemSpace>::buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start) {
     kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element);
     Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
     // elem at i owns SoA offsets[i+1] - offsets[i]
@@ -28,8 +28,9 @@ namespace pumipic {
       lid_t remaining_soa = num_soa_ - offsets_h(offsets_h.size()-1);
       if (remaining_soa > 0)
         offsets_h(offsets_h.size()-1) += remaining_soa;
-    } else // add extra padding
-      offsets_h(offsets_h.size()-1) += ceil( offsets_h(offsets_h.size()-1)*padding );
+    }
+    else // add extra padding
+      offsets_h(offsets_h.size()-1) += ceil( (num_ptcls*padding)/soa_len );
 
     kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
     hostToDevice(offsets_d, offsets_h.data());

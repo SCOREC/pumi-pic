@@ -296,8 +296,8 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   V_ = v;
   num_elems = ne;
   num_ptcls = np;
-  shuffle_padding = 0.0;
-  extra_padding = 0.1;
+  shuffle_padding = 0.1;
+  extra_padding = 0.05;
   minimize_size = 0.8;
   always_realloc = false;
   pad_strat = PAD_EVENLY;

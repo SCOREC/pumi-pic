@@ -78,7 +78,7 @@ namespace pumipic {
     
     Kokkos::Timer time_pstops;
     // Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, particle_data_swap, ptcl_data, new_element, new_indices);
+    CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, ptcl_data_swap, ptcl_data, new_element, new_indices);
     RecordTime("CSR PSToPS", time_pstops.seconds());
 
     Kokkos::Timer time_newPtcls;
@@ -91,7 +91,7 @@ namespace pumipic {
       new_particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
     });
     if (num_new_ptcls > 0 && new_particles != NULL) {
-      CopyViewsToViews<kkLidView,DataTypes>(particle_data_swap, new_particles,
+      CopyViewsToViews<kkLidView,DataTypes>(ptcl_data_swap, new_particles,
                                                           new_particle_indices);
     }
     RecordTime("CSR ViewsToViews", time_newPtcls.seconds());

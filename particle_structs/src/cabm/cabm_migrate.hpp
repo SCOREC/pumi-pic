@@ -37,9 +37,10 @@ namespace pumipic {
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
       const lid_t process = new_process(particle_id);
-      const lid_t process_index = dist.index(process);
-      Kokkos::atomic_fetch_add(&(num_send_particles(process_index)),
-                               mask * (process != comm_rank));
+      if (mask * (process != comm_rank)) {
+        const lid_t process_index = dist.index(process);
+        Kokkos::atomic_increment<lid_t>(&num_send_particles(process_index));
+      }
     };
     parallel_for(count_sending_particles);
     

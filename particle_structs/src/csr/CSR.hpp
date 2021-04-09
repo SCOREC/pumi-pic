@@ -140,7 +140,7 @@ namespace pumipic {
     // allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
     CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_ * 1.05);
-    swap_capacity_ = capacity*1.05;
+    swap_capacity_ = capacity_*1.05;
 
     // If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();

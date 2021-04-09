@@ -68,17 +68,18 @@ namespace pumipic {
 
     lid_t num_new_ptcls = new_particle_elements.size();
     lid_t particles_on_process = num_ptcls - num_removed + num_new_ptcls;
-    // Alocate new (temp) MTV
-    MTVs particle_info;
-    CreateViews<device_type,DataTypes>(particle_info, particles_on_process);
+
+    //Determine if adequate memory 
+    if(particles_on_process > swap_capacity_){
+      destroyViews<DataTypes>(ptcl_data_swap);
+      CreateViews<device_type,DataTypes>(ptcl_data_swap,1.05*particles_on_process);
+      swap_capacity_ = 1.05*particles_on_process;
+    }
     
     Kokkos::Timer time_pstops;
     // Copy existing particles to their new location in the temp MTV
-    CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, particle_info, ptcl_data, new_element, new_indices);
+    CopyPSToPS< CSR<DataTypes,MemSpace>, DataTypes >(this, ptcl_data_swap, ptcl_data, new_element, new_indices);
     RecordTime("CSR PSToPS", time_pstops.seconds());
-
-    // Deallocate ptcl_data
-    destroyViews<DataTypes>(ptcl_data);
 
     Kokkos::Timer time_newPtcls;
     // If there are new particles
@@ -90,14 +91,20 @@ namespace pumipic {
       new_particle_indices(i) = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);
     });
     if (num_new_ptcls > 0 && new_particles != NULL) {
-      CopyViewsToViews<kkLidView,DataTypes>(particle_info, new_particles,
+      CopyViewsToViews<kkLidView,DataTypes>(ptcl_data_swap, new_particles,
                                                           new_particle_indices);
     }
     RecordTime("CSR ViewsToViews", time_newPtcls.seconds());
 
     // Reassign all member variables
-    ptcl_data = particle_info;
-    capacity_ = getLastValue<lid_t>(offsets_new);
+    MTVs tmp_data = ptcl_data;
+    ptcl_data = ptcl_data_swap;
+    ptcl_data_swap = tmp_data;
+
+    lid_t tmp_cap = capacity_;
+    capacity_ = swap_capacity_;
+    swap_capacity_ = tmp_cap;
+
     num_ptcls = particles_on_process;
     offsets   = offsets_new;
 

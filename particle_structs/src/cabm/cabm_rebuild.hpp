@@ -59,14 +59,6 @@ namespace pumipic {
     RecordTime("CabM count active particles", overall_timer.seconds());
     Kokkos::Timer setup_timer; // timer for aosoa setup
 
-    int comm_rank; // get process rank
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
-    size_t free, total, used;
-    cudaMemGetInfo(&free,&total);
-    used = total-free;
-    printf("%d used before: %u\n", comm_rank, used);
-
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
@@ -74,21 +66,13 @@ namespace pumipic {
     AoSoA_t* newAosoa;
     lid_t newCapacity;
     if (newNumSoa > num_soa_) { // if need extra space, update
-      printf("FULL REBUILD\n");
       swap = false;
       newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
       newNumSoa = getLastValue(newOffset_d);
       newCapacity = newNumSoa*soa_len;
       delete aosoa_swap;
-      cudaMemGetInfo(&free,&total);
-      used = total-free;
-      printf("%d used after delete: %u\n", comm_rank, used);
       newAosoa = makeAoSoA(newCapacity, newNumSoa);
-      cudaMemGetInfo(&free,&total);
-      used = total-free;
-      printf("%d used after new: %u\n", comm_rank, used);
     } else { // if we don't need extra space
-      printf("SWAP REBUILD\n");
       swap = true;
       newCapacity = capacity_;
       newAosoa = aosoa_swap;

@@ -8,12 +8,12 @@ fileID_rebuild = fopen('data/smallE_largeP_rebuild.dat');
 fileID_push = fopen('data/smallE_largeP_push.dat');
 fileID_migrate = fopen('data/smallE_largeP_migrate.dat');
 
-% struct, element_number, distribution, particles_moved, average_time
-rebuild_data = fscanf(fileID_rebuild, "%d %d %d %d %f", [5 Inf])';
+% struct, element_number, distribution, average_time
+rebuild_data = fscanf(fileID_rebuild, "%d %d %d %f", [4 Inf])';
 fclose(fileID_rebuild);
-push_data = fscanf(fileID_push, "%d %d %d %d %f", [5 Inf])';
+push_data = fscanf(fileID_push, "%d %d %d %f", [4 Inf])';
 fclose(fileID_push);
-migrate_data = fscanf(fileID_migrate, "%d %d %d %d %f", [5 Inf])';
+migrate_data = fscanf(fileID_migrate, "%d %d %d %f", [4 Inf])';
 fclose(fileID_migrate);
 
 %% Data Filtering
@@ -24,16 +24,16 @@ scs_length = length(unique(rebuild_data( rebuild_data(:,1) == 0, 2 )));
 csr_length = length(unique(rebuild_data( rebuild_data(:,1) == 1, 2 )));
 cabm_length = length(unique(rebuild_data( rebuild_data(:,1) == 2, 2 )));
 
-% Only take instances with 50% particles moved, pull distribution and time
-scs_rebuild = rebuild_data( rebuild_data(:,1) == 0,[3,5] );
-csr_rebuild = rebuild_data( rebuild_data(:,1) == 1, [3,5] );
-cabm_rebuild = rebuild_data( rebuild_data(:,1) == 2, [3,5] );
-scs_push = push_data( push_data(:,1) == 0, [3,5] );
-csr_push = push_data( push_data(:,1) == 1, [3,5] );
-cabm_push = push_data( push_data(:,1) == 2, [3,5] );
-scs_migrate = migrate_data( migrate_data(:,1) == 0, [3,5] );
-csr_migrate = migrate_data( migrate_data(:,1) == 1, [3,5] );
-cabm_migrate = migrate_data( migrate_data(:,1) == 2, [3,5] );
+% Only take instances with pull distribution and time
+scs_rebuild = rebuild_data( rebuild_data(:,1) == 0,[3,4] );
+csr_rebuild = rebuild_data( rebuild_data(:,1) == 1, [3,4] );
+cabm_rebuild = rebuild_data( rebuild_data(:,1) == 2, [3,4] );
+scs_push = push_data( push_data(:,1) == 0, [3,4] );
+csr_push = push_data( push_data(:,1) == 1, [3,4] );
+cabm_push = push_data( push_data(:,1) == 2, [3,4] );
+scs_migrate = migrate_data( migrate_data(:,1) == 0, [3,4] );
+csr_migrate = migrate_data( migrate_data(:,1) == 1, [3,4] );
+cabm_migrate = migrate_data( migrate_data(:,1) == 2, [3,4] );
 
 % Separate data by distribution, {0,1,2,3} = {Evenly,Uniform,Gaussian,Exponential}
 

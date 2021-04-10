@@ -2,7 +2,7 @@
 # Bash script to run a series of ps_combo tests
 
 # Dense Testing Script for AiMOS: small elm n, large ptcl n
-for e in 1000 2000 3000 4000 5000 6000 7000
+for e in 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500
 do
   for distribution in 1 2 3
   do 

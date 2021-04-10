@@ -38,7 +38,7 @@ namespace pumipic {
                                             kkLidView pes, MTVs info) :
     policy(p), ne(ne_), np(np_), ppe(ppe_), e_gids(eg),
     particle_elms(pes), p_info(info) {
-    extra_padding = 0.1;
+    extra_padding = 0.05;
     name = "ptcls";
   }
 }

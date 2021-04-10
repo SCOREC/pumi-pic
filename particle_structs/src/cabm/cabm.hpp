@@ -152,7 +152,7 @@ namespace pumipic {
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
-    extra_padding(0.1) // default extra padding at 10%
+    extra_padding(0.05) // default extra padding at 10%
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;

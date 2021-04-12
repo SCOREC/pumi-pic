@@ -122,7 +122,8 @@ lg = legend(nexttile(3), {'SCS pseudo-push'; 'SCS rebuild'; 'SCS migrate'});
 lg.Location = 'northeastoutside';
 % align axes
 limits = [lim2; lim3; lim4];
-limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+%limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+limits = [ min(limits(:,1)), 5500, min(limits(:,3)), max(limits(:,4)) ];
 axis([ax2 ax3 ax4], limits )
 
 saveas(f,'smallE_largeP_AreaSCS.png')
@@ -163,7 +164,8 @@ lg = legend(nexttile(3), {'CSR pseudo-push'; 'CSR rebuild'; 'CSR migrate'});
 lg.Location = 'northeastoutside';
 % align axes
 limits = [lim2; lim3; lim4];
-limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+%limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+limits = [ min(limits(:,1)), 5500, min(limits(:,3)), max(limits(:,4)) ];
 axis([ax2 ax3 ax4], limits )
 
 saveas(f,'smallE_largeP_AreaCSR.png')
@@ -204,7 +206,8 @@ lg = legend(nexttile(3), {'CabM pseudo-push'; 'CabM rebuild'; 'CabM migrate'});
 lg.Location = 'northeastoutside';
 % align axes
 limits = [lim2; lim3; lim4];
-limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+%limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
+limits = [ min(limits(:,1)), 5500, min(limits(:,3)), max(limits(:,4)) ];
 axis([ax2 ax3 ax4], limits )
 
 saveas(f,'smallE_largeP_AreaCabM.png')

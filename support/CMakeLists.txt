@@ -34,8 +34,7 @@ $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
 if(ENABLE_CABANA)
-  target_include_directories(support PUBLIC ${Cabana_INCLUDE_DIR})
-  target_link_libraries(support PUBLIC ${Cabana_LIBRARY})
+  target_link_libraries(support PUBLIC Cabana::cabanacore)
 endif()
 
 cmake_policy(SET CMP0057 NEW)

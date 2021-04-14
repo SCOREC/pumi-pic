@@ -532,7 +532,7 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
     Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (lid_t& j) {
       const lid_t row = slice_to_chunk_cpy(slice) * team_size + slice_row;
       const lid_t element_id = row_to_element_cpy(row);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [=] (lid_t& p) {
         const lid_t particle_id = start+(p*team_size);
         const lid_t mask = particle_mask_cpy[particle_id];
         (*fn_d)(element_id, particle_id, mask);

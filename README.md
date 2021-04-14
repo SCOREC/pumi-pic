@@ -7,6 +7,9 @@ CDash: https://my.cdash.org/index.php?project=pumi-pic
 - Kokkos https://github.com/kokkos/kokkos
 - Omega_h https://github.com/SNLComputation/omega_h
 - EnGPar https://github.com/SCOREC/EnGPar
+- **Optional** Cabana https://github.com/ECP-copa/Cabana
+
+See the wiki build instructions for detailed version info.
 
 ### Documentation
 

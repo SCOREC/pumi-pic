@@ -13,6 +13,7 @@ Particles strucutres for unstructed mesh particle-in-cell (PIC).
 - src
   - csr - Compressed Sparse Row implementation
   - scs - Sell-C-Sigma implementation
+  - cabm - Cabana implementation using CSR to assign SOAs to elements
   - support - MemberTypeArray, Segment, and Distributor source
 - test - particle structure specific test source, `ctest3` test generation files
 

@@ -198,7 +198,7 @@ int main(int argc, char* argv[]) {
       Kokkos::Timer tp;
       kkLidView new_process("new_process", ptcls->capacity());
       if (comm_size > 1) {
-        auto to_new_processes = PS_LAMBDA(const int e, const int p, const bool mask) {
+        auto to_new_processes = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
           if (mask) {
             auto generator = pool.get_state();
             double prob = generator.drand(1.0);

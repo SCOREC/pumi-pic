@@ -306,7 +306,7 @@ int testCopy(const char* name, PS* structure) {
   double EPSILON = .00001;
   kkLidView failure("failure", 1);
   int local_rank = comm_rank;
-  auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool mask) {
+  auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
     if (mask) {
       if (ids1(pid) != ids2(pid)) {
         printf("[ERROR] Particle ids do not match for particle %d "
@@ -348,7 +348,7 @@ int testSegmentComp(const char* name, PS* structure) {
   kkLidView failures("fails", 1);
 
   auto dbls = structure->get<1>();
-  auto setComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto setComponents = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     auto dbl_seg = dbls.getComponents(p);
     for (int i = 0; i < 3; ++i)
       dbl_seg(i) = e * (i + 1);
@@ -356,7 +356,7 @@ int testSegmentComp(const char* name, PS* structure) {
   pumipic::parallel_for(structure, setComponents, "Set components");
 
   const double TOL = .00001;
-  auto checkComponents = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto checkComponents = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     auto comps = dbls.getComponents(p);
     for (int i = 0; i < 3; ++i) {
       if (abs(comps[i] - e * (i + 1)) > TOL) {

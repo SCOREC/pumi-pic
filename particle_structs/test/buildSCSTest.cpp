@@ -60,7 +60,7 @@ bool defaultTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView e
   };
   scs->parallel_for(lamb);
   SCS::kkLidView fail("fail",1);
-  auto check = PS_LAMBDA(const int i) {
+  auto check = KOKKOS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
       printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
@@ -116,7 +116,7 @@ bool largeCTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
   };
   scs->parallel_for(lamb);
   SCS::kkLidView fail("fail",1);
-  auto check = PS_LAMBDA(const int i) {
+  auto check = KOKKOS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
       printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;

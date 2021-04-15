@@ -2,7 +2,7 @@
 # Bash script to run a series of ps_combo tests
 
 # Medium-Sparsity Testing Script for AiMOS: large elm n, small ptcl n
-for e in 10000 20000 30000 40000 50000 60000 70000
+for e in 10000 15000 20000 25000 30000 35000 40000 45000 50000 55000
 do
   for distribution in 1 2 3
   do 

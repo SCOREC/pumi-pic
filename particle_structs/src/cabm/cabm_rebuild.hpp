@@ -28,8 +28,8 @@ namespace pumipic {
     const auto num_new_ptcls = new_particle_elements.size();
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree_d("elmDegree", num_elems);
-    const auto activeSliceIdx = aosoa_.number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(aosoa_);
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
 
     // first loop to count number of particles per new element (atomic)
     assert(new_element.size() == capacity_);
@@ -63,14 +63,14 @@ namespace pumipic {
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
     bool swap;
-    AoSoA_t newAosoa;
+    AoSoA_t* newAosoa;
     lid_t newCapacity;
     if (newNumSoa > num_soa_) { // if need extra space, update
       swap = false;
       newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
       newNumSoa = getLastValue(newOffset_d);
       newCapacity = newNumSoa*soa_len;
-      aosoa_swap.resize(0); // clear aosoa_swap memory
+      delete aosoa_swap;
       newAosoa = makeAoSoA(newCapacity, newNumSoa);
     } else { // if we don't need extra space
       swap = true;
@@ -82,7 +82,8 @@ namespace pumipic {
     Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
-    auto aosoa_copy = aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
+    AoSoA_t aosoa_copy = *aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
+    AoSoA_t newAosoa_copy = *newAosoa;
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
         const lid_t destParent = new_element(soa*soa_len + tuple);
         if (active.access(soa,tuple) && destParent != -1) {
@@ -96,7 +97,7 @@ namespace pumipic {
           const lid_t destSoa = firstSoa + occupiedTuples/soa_len;
           const lid_t destTuple = occupiedTuples%soa_len;
           Cabana::Impl::tupleCopy(
-            newAosoa.access(destSoa), destTuple, // dest
+            newAosoa_copy.access(destSoa), destTuple, // dest
             aosoa_copy.access(soa), tuple); // src
         }
       };
@@ -108,6 +109,7 @@ namespace pumipic {
       aosoa_ = newAosoa;
       aosoa_swap = temp;
     } else { // destroy old aosoas and make new ones
+      delete aosoa_;
       aosoa_ = newAosoa;
       aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
     }
@@ -134,7 +136,7 @@ namespace pumipic {
             + (particle_indices(ptcl)/soa_len);
           soa_ptcl_indices(ptcl) = particle_indices(ptcl)%soa_len;
         });
-      CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, new_particles, soa_indices,
+      CopyMTVsToAoSoA<device_type, DataTypes>(*aosoa_, new_particles, soa_indices,
         soa_ptcl_indices); // copy data over
     }
 

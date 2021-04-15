@@ -46,11 +46,12 @@ namespace pumipic {
    * @exception num_soa != aosoa.numSoA()
   */
   template<class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::AoSoA_t
+  CabM<DataTypes, MemSpace>::AoSoA_t*
   CabM<DataTypes, MemSpace>::makeAoSoA(const lid_t capacity, const lid_t num_soa) {
-    auto aosoa = AoSoA_t();
-    aosoa.resize(capacity);
-    assert(num_soa == aosoa.numSoA());
+    AoSoA_t* aosoa = new AoSoA_t;
+    *aosoa = AoSoA_t();
+    aosoa->resize(capacity);
+    assert(num_soa == aosoa->numSoA());
     return aosoa;
   }
 
@@ -85,14 +86,14 @@ namespace pumipic {
    * @param[in] last_entry saved int representing end of SoAs to be filled
   */
   template<class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
+  void CabM<DataTypes, MemSpace>::setActive(AoSoA_t* aosoa, const kkLidView particles_per_element,
   const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start) {
 
     const lid_t num_elements = particles_per_element.size();
     const auto soa_len = AoSoA_t::vector_length;
 
-    const auto activeSliceIdx = aosoa.number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(aosoa);
+    const auto activeSliceIdx = aosoa->number_of_members-1;
+    auto active = Cabana::slice<activeSliceIdx>(*aosoa);
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
@@ -153,7 +154,7 @@ namespace pumipic {
           + (particle_indices(ptcl_id)/soa_len);
         soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
       });
-    CopyMTVsToAoSoA<device_type, DataTypes>(aosoa_, particle_info, soa_indices,
+    CopyMTVsToAoSoA<device_type, DataTypes>(*aosoa_, particle_info, soa_indices,
       soa_ptcl_indices);
   }
 

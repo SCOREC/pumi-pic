@@ -98,7 +98,7 @@ namespace pumipic {
     parallel_for(gatherParticlesToSend);
     
     // Copy the values from ptcl_data[type][particle_id] into send_particle[type](index) for each data type
-    CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle, aosoa_,
+    CopyParticlesToSendFromAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(this, send_particle, *aosoa_,
                                                                     new_process, send_index);
     
     // Wait until all counts are received

@@ -68,7 +68,7 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::numRows;
 
     template <std::size_t N>
-    Slice<N> get() { return Slice<N>(Cabana::slice<N, AoSoA_t>(aosoa_, "get<>()")); }
+    Slice<N> get() { return Slice<N>(Cabana::slice<N, AoSoA_t>(*aosoa_, "get<>()")); }
 
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
@@ -86,9 +86,9 @@ namespace pumipic {
 
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
-    AoSoA_t makeAoSoA(const lid_t capacity, const lid_t num_soa);
+    AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
-    void setActive(AoSoA_t &aosoa, const kkLidView particles_per_element,
+    void setActive(AoSoA_t* aosoa, const kkLidView particles_per_element,
       const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start);
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info);
@@ -121,9 +121,9 @@ namespace pumipic {
     // parent elements for each SoA
     kkLidView parentElms_;
     // particle data
-    AoSoA_t aosoa_;
+    AoSoA_t* aosoa_;
     // extra AoSoA copy for swapping (same size as aosoa_)
-    AoSoA_t aosoa_swap;
+    AoSoA_t* aosoa_swap;
     
   };
 
@@ -152,7 +152,7 @@ namespace pumipic {
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
-    extra_padding(0.1) // default extra padding at 10%
+    extra_padding(0.05) // default extra padding at 10%
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
@@ -255,8 +255,8 @@ CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
     #endif
     kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_.number_of_members-1;
-    const auto mask = Cabana::slice<activeSliceIdx>(aosoa_); // get active mask
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    const auto mask = Cabana::slice<activeSliceIdx>(*aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
@@ -269,8 +269,8 @@ CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
-    const auto activeSliceIdx = aosoa_.number_of_members-1;
-    auto mask = Cabana::slice<activeSliceIdx>(aosoa_);
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto mask = Cabana::slice<activeSliceIdx>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
     Kokkos::parallel_for("count_padding", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -319,8 +319,8 @@ CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
     const auto soa_len = AoSoA_t::vector_length;
 
     kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
-    const auto activeSliceIdx = aosoa_.number_of_members-1;
-    auto mask_slice = Cabana::slice<activeSliceIdx>(aosoa_);
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto mask_slice = Cabana::slice<activeSliceIdx>(*aosoa_);
     Kokkos::parallel_for("copy_mask", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         mask(ptcl_id) = mask_slice(ptcl_id);

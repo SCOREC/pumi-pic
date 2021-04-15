@@ -123,9 +123,12 @@ int main(int argc, char* argv[]) {
 #endif
     }
 
+    const int PS_ITERS = 100;
     const int ITERS = 100;
+    
     if (!comm_rank)
-      printf("Performing %d iterations of rebuild on each structure\n", ITERS);
+      printf("Performing %d iterations of push on each structure\n", PS_ITERS);
+
     /* Perform push & rebuild on the particle structures */
     if (!comm_rank)
       printf("Beginning push on structure %s\n", name.c_str());
@@ -137,7 +140,7 @@ int main(int argc, char* argv[]) {
       parentElmData(e) = sqrt(e) * e;
     });
 
-    for (int i = 0; i < ITERS; ++i) {
+    for (int i = 0; i < PS_ITERS; ++i) {
       /* Begin Push Setup */
       auto dbls = ptcls->get<0>();
       auto nums = ptcls->get<1>();
@@ -186,6 +189,9 @@ int main(int argc, char* argv[]) {
     }
     kkLidView other_ranks_d("other_ranks_d", comm_size-1);
     pumipic::hostToDevice(other_ranks_d, other_ranks);
+
+    if (!comm_rank)
+      printf("Performing %d iterations of migrate/rebuild on each structure\n", ITERS);
 
     if (!comm_rank)
       printf("Beginning migrate on structure %s\n", name.c_str());

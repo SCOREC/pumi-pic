@@ -50,5 +50,46 @@ namespace pumipic {
     // populate ptcl_data with input data and particle_indices mapping
     CopyViewsToViews<kkLidView, DataTypes>(ptcl_data, particle_info, particle_indices);
   }
+
+  template<class DataTypes, typename MemSpace>
+  void CSR<DataTypes,MemSpace>::construct(kkLidView ptcls_per_elem, kkGidView element_gids,
+                                          kkLideView particle_elements, MTVs particle_info){
+    Kokkos::Profiling::pushRegion("csr_construction");
+
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+
+    if(!comm_rank)
+      fprintf(stderr, "Building CSR\n");
+
+    // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
+    // to fill the entries of the offsets array.
+    // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
+    offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
+    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
+    exclusive_scan(particles_per_element, offsets);
+
+    // get global ids
+    if (element_gids.size() > 0) {
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    }
+
+    // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
+    // pumi-pic/support/SupportKK.h has a helper function for this
+    capacity_ = getLastValue(offsets)*1.05;
+    // allocate storage for user particle data
+    CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
+    CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_);
+    swap_capacity_ = capacity_;
+
+    // If particle info is provided then enter the information
+    lid_t given_particles = particle_elements.size();
+    if (given_particles > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
+      initCsrData(particle_elements, particle_info);
+    }
+
+    Kokkos::Profiling::popRegion();
+  }
     
 }

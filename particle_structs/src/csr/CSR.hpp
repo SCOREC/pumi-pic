@@ -3,6 +3,7 @@
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
 #include <sstream>
+#include <CSR_input.hpp>
 
 namespace ps = particle_structs;
 
@@ -84,6 +85,12 @@ namespace pumipic {
     //Swap memory
     MTVs ptcl_data_swap;
     lid_t swap_capacity_;
+
+    //Private construct function
+    void construct(kkLidView ptlc_per_elem,
+                   kkGidView element_gids,
+                   kkLidView particle_elements,
+                   MTVs particle_info);
   };
 
   /**
@@ -112,10 +119,13 @@ namespace pumipic {
       policy(p),
       element_gid_to_lid(num_elements)
   {
-    Kokkos::Profiling::pushRegion("csr_construction");
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
+
+    construct(particle_per_element,element_gids,particle_elements,particle_info);
+    /*
+    Kokkos::Profiling::pushRegion("csr_construction");
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
@@ -150,6 +160,22 @@ namespace pumipic {
     }
 
     Kokkos::Profiling::popRegion();
+    */
+  }
+
+  template <class DataTypes, typename MemSpace>
+  CSR<DataTypes, MemSpace>::CSR(Input_T& input):
+    ParticleStructure<Datatypes,MemSpace>(input.name),policy(input.policy),
+    element_gid_to_lid(input.ne) {
+
+    num_elems = input.ne;
+    num_ptlcs = input.np;
+    //padding variable = input.padding_amount;
+    //always_realloc = input.always_realloc;
+    //minimize_size = input.minimize_size;.
+    construct(input.ppe, input.e_gids, input.particle_elems, input.p_info);
+
+
   }
 
   template <class DataTypes, typename MemSpace>

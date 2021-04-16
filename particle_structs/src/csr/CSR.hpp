@@ -27,6 +27,8 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
+    typedef CSR_Input<DataTypes,MemSpace> Input_T;
+
     CSR() = delete;
     CSR(const CSR&) = delete;
     CSR& operator=(const CSR&) = delete;

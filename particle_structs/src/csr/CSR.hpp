@@ -39,6 +39,7 @@ namespace pumipic {
         kkGidView element_gids,
         kkLidView particle_elements = kkLidView(),
         MTVs particle_info = NULL);
+    CSR(Input_T& input);
     ~CSR();
 
     //Functions from ParticleStructure
@@ -89,7 +90,7 @@ namespace pumipic {
     lid_t swap_capacity_;
 
     //Private construct function
-    void construct(kkLidView ptlc_per_elem,
+    void construct(kkLidView ptcls_per_elem,
                    kkGidView element_gids,
                    kkLidView particle_elements,
                    MTVs particle_info);

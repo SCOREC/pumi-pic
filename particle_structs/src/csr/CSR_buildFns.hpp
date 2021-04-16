@@ -53,7 +53,7 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   void CSR<DataTypes,MemSpace>::construct(kkLidView ptcls_per_elem, kkGidView element_gids,
-                                          kkLideView particle_elements, MTVs particle_info){
+                                          kkLidView particle_elements, MTVs particle_info){
     Kokkos::Profiling::pushRegion("csr_construction");
 
     int comm_rank;

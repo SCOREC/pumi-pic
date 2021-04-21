@@ -1,5 +1,6 @@
 #pragma once
 #include <particle_structs.hpp>
+#ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "dps_support.hpp"
 #include <sstream>
@@ -155,3 +156,70 @@ namespace pumipic {
 #include "dps_buildFns.hpp"
 #include "dps_rebuild.hpp"
 #include "dps_migrate.hpp"
+
+#else
+namespace pumipic {
+  /*A dummy version of DPS when pumi-pic is built without Cabana so operations
+    can compile without ifdef guards. The operations will report a message stating
+    that the structure will not work.
+  */
+  template <class DataTypes, typename MemSpace = DefaultMemSpace>
+  class DPS : public ParticleStructure<DataTypes, MemSpace> {
+  public:
+    using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
+    using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
+    using typename ParticleStructure<DataTypes, MemSpace>::device_type;
+    using typename ParticleStructure<DataTypes, MemSpace>::kkLidView;
+    using typename ParticleStructure<DataTypes, MemSpace>::kkGidView;
+    using typename ParticleStructure<DataTypes, MemSpace>::kkLidHostMirror;
+    using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
+    using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
+    template<std::size_t N>
+    using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+
+    using host_space = Kokkos::HostSpace;
+    typedef Kokkos::TeamPolicy<execution_space> PolicyType;
+    typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
+
+    DPS() = delete;
+    DPS(const DPS&) = delete;
+    DPS& operator=(const DPS&) = delete;
+
+    DPS( PolicyType& p,
+          lid_t num_elements, lid_t num_particles,
+          kkLidView particles_per_element,
+          kkGidView element_gids,
+          kkLidView particle_elements = kkLidView(),
+          MTVs particle_info = NULL) {reportError();}
+    ~DPS() {}
+
+    //Functions from ParticleStructure
+    using ParticleStructure<DataTypes, MemSpace>::nElems;
+    using ParticleStructure<DataTypes, MemSpace>::nPtcls;
+    using ParticleStructure<DataTypes, MemSpace>::capacity;
+    using ParticleStructure<DataTypes, MemSpace>::numRows;
+
+    template <std::size_t N>
+    Slice<N> get() { reportError(); return Slice<N>();}
+
+    void migrate(kkLidView new_element, kkLidView new_process,
+                 Distributor<MemSpace> dist = Distributor<MemSpace>(),
+                 kkLidView new_particle_elements = kkLidView(),
+                 MTVs new_particle_info = NULL) {reportError();}
+
+    void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
+                 MTVs new_particles = NULL) {reportError();}
+
+    template <typename FunctionType>
+    void parallel_for(FunctionType& fn, std::string s="") {reportError();}
+
+    void printMetrics() const {reportError();}
+    void printFormat(const char* prefix) const {reportError();}
+
+  private:
+    void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "
+                                      "without Cabana so the DPS structure "
+                                      "can not be used\n");}
+  };
+}
+#endif // PP_ENABLE_CAB

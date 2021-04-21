@@ -1,13 +1,13 @@
 #pragma once
 
 #include "MemberTypeLibraries.h"
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
   #include <Cabana_Core.hpp>
 #endif
 #include <type_traits>
 
 namespace pumipic {
-#ifndef PP_ENABLE_CABM
+#ifndef PP_ENABLE_CAB
   //Dummy slice for when pumi-pic is build without Cabana
   //This is a hack that will go away in PSv2.0
   template <typename T>
@@ -33,7 +33,7 @@ namespace pumipic {
     using Base=typename BaseType<Type>::type;
 
     using ViewType = View<Type*, Device>;
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
 #else
@@ -103,7 +103,7 @@ namespace pumipic {
   public:
     using ViewType=View<Type*, Device>;
     using Base=typename BaseType<Type>::type;
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
     using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
                                     VectorLength, Stride>;
 #else

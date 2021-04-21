@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
     //Add CabM
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
     fails += addCabMs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
 #endif

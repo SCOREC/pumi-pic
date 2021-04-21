@@ -1,5 +1,5 @@
 #pragma once
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "cabana_support.hpp"
 
@@ -201,4 +201,5 @@ namespace pumipic {
   };
 
 }
-#endif //PP_ENABLE_CABM
+
+#endif //PP_ENABLE_CAB

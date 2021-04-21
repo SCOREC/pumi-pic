@@ -1,4 +1,5 @@
 #pragma once
+#ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "cabana_support.hpp"
 
@@ -10,3 +11,5 @@ namespace pumipic {
   template <typename T, typename... Types> struct AppendMT;
 
 }
+
+#endif //PP_ENABLE_CAB

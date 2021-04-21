@@ -7,7 +7,7 @@
 
 PS264* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS264* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
 PS264* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 #endif
 
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
     }
     else if (structure == 2) {
       name = "CabM";
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
       ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size, name);
 #else
       fprintf(stderr, "CabM requested, but PUMI-PIC was not built with Cabana enabled\n");
@@ -241,7 +241,7 @@ PS264* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
   return new pumipic::CSR<PerfTypes264, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
 PS264* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
   pumipic::CabM_Input<PerfTypes264> input(policy, num_elems, num_ptcls, ppe, elm_gids);

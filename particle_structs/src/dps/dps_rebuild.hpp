@@ -1,5 +1,4 @@
 #pragma once
-
 #include <ppTiming.hpp>
 
 namespace pumipic {

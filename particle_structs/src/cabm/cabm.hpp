@@ -1,6 +1,6 @@
 #pragma once
 #include <particle_structs.hpp>
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "cabm_support.hpp"
 #include "cabm_input.hpp"
@@ -380,6 +380,7 @@ CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
 #include "cabm_buildFns.hpp"
 #include "cabm_rebuild.hpp"
 #include "cabm_migrate.hpp"
+
 #else
 namespace pumipic {
   /*A dummy version of CabM when pumi-pic is built without Cabana so operations
@@ -403,7 +404,6 @@ namespace pumipic {
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
-
 
     CabM() = delete;
     CabM(const CabM&) = delete;
@@ -446,4 +446,4 @@ namespace pumipic {
                                       "can not be used\n");}
   };
 }
-#endif // PP_ENABLE_CABM
+#endif // PP_ENABLE_CAB

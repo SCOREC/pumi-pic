@@ -6,20 +6,6 @@
 #include "cabm_input.hpp"
 #include <sstream>
 
-namespace {
-  // class to append member types
-  template <typename T, typename... Types>
-  struct MemberTypesAppend;
-
-  //Append type to the end
-  template <typename T, typename... Types>
-  struct MemberTypesAppend<T, Cabana::MemberTypes<Types...> > {
-    static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
-    using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
-  };
-
-}
-
 namespace pumipic {
 
   void enable_prebarrier();

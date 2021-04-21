@@ -67,7 +67,12 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
+    AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
+    kkLidView buildIndices(const kkLidView particles_per_element, const lid_t capacity,
+      kkLidView particleIds, kkLidView parentElms);
+    void setNewActive(AoSoA_t* aosoa, const lid_t num_particles);
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
+    void fillAoSoA(kkLidView particle_elements, MTVs particle_info);
 
   private:
     //The User defined Kokkos policy
@@ -85,10 +90,16 @@ namespace pumipic {
     // mappings from row to element gid and back to row
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
+    // number of SoA
+    lid_t num_soa_;
     // SoA index for start of padding
     lid_t padding_start;
     // percentage of capacity to add as padding
     double extra_padding;
+    // CSR structure for element tracking
+    kkLidView particleIds_;
+    kkLidView offsets;
+    kkLidView parentElms_;
     // particle data
     AoSoA_t* aosoa_;
   };
@@ -118,9 +129,37 @@ namespace pumipic {
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
-    extra_padding(0.05) // default extra padding at 10%
+    extra_padding(0.05) // default extra padding at 5%
   {
-    fprintf(stderr, "[WARNING] Contructor not yet implemented!\n");
+    assert(num_elements == particles_per_element.size());
+    num_elems = num_elements;
+    num_rows = num_elems;
+    num_ptcls = num_particles;
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building DPS\n");
+
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    // build element tracking arrays
+    offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_, padding_start);
+    // set active mask
+    setNewActive(aosoa_, padding_start);
+    // get global ids
+    if (element_gids.size() > 0)
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    // populate AoSoA with input data if given
+    if (particle_elements.size() > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(particle_elements, particle_info); // fill aosoa with data
+    }
+
+    fprintf(stderr, "[WARNING] Contructor not yet finished!\n");
   }
 
   template <class DataTypes, typename MemSpace>

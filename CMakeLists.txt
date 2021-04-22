@@ -44,6 +44,9 @@ set(pumipic_USE_Omega_h_DEFAULT ON)
 message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
+#Clear the omegah compilation flags that it passes to cuda.  Using the
+# kokkos target, and nvcc_wrapper, provide sufficient flags.
+set_property(TARGET Omega_h::omega_h PROPERTY INTERFACE_COMPILE_OPTIONS "")
 
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})

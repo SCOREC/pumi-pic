@@ -70,7 +70,7 @@ namespace pumipic {
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView buildIndices(const kkLidView particles_per_element, const lid_t capacity,
       kkLidView particleIds, kkLidView parentElms);
-    void setNewActive(AoSoA_t* aosoa, const lid_t num_particles);
+    void setNewActive(const lid_t num_particles);
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(kkLidView particle_elements, MTVs particle_info);
 
@@ -149,7 +149,7 @@ namespace pumipic {
     // build element tracking arrays
     offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_, padding_start);
     // set active mask
-    setNewActive(aosoa_, padding_start);
+    setNewActive(num_ptcls);
     // get global ids
     if (element_gids.size() > 0)
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);

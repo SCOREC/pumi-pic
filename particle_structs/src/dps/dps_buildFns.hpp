@@ -64,13 +64,24 @@ namespace pumipic {
 
   /**
    * helper function: initializes last type in AoSoA as active mask
-   * where 1 denotes an active particle and 0 denotes an inactive particle.
-   * @param[out] aosoa the AoSoA to be edited
-   * @param[in] num_particles number of particles
+   *   where 1 denotes an active particle and 0 denotes an inactive particle.
+   *   Fills with 1s up to num_particles
+   * @param[in] num_particles number of particles to fill up to
   */
   template<class DataTypes, typename MemSpace>
-  void DPS<DataTypes, MemSpace>::setNewActive(AoSoA_t* aosoa, const lid_t num_particles) {
-    fprintf(stderr, "[WARNING] setNewActive not yet finished!\n");
+  void DPS<DataTypes, MemSpace>::setNewActive(const lid_t num_particles) {
+    const auto soa_len = AoSoA_t::vector_length;
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
+
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
+    Cabana::simd_parallel_for(simd_policy,
+      KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
+        bool isActive = false;
+        if (soa*soa_len+ptcl < num_particles)
+          isActive = true;
+        active.access(soa,ptcl) = isActive;
+      }, "set_active");
   }
 
   /**
@@ -99,6 +110,21 @@ namespace pumipic {
   */
   template<class DataTypes, typename MemSpace>
   void DPS<DataTypes, MemSpace>::fillAoSoA(kkLidView particle_elements, MTVs particle_info) {
+    assert(particle_elements.size() == num_ptcls);
+    const auto soa_len = AoSoA_t::vector_length;
+
+    kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
+    kkLidView soa_indices("soa_indices", particle_elements.size());
+    kkLidView soa_ptcl_indices("soa_ptcl_indices", particle_elements.size());
+    kkLidView offsets_cpy = offsets;
+    Kokkos::parallel_for(particle_elements.size(), KOKKOS_LAMBDA(const lid_t& ptcl_id) {
+      lid_t index_in_element = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
+      lid_t index_in_aosoa = offsets_cpy(particle_elements(ptcl_id)) + index_in_element;
+      soa_indices(ptcl_id) = index_in_aosoa/soa_len;
+      soa_ptcl_indices(ptcl_id) = index_in_aosoa%soa_len;
+    });
+
+    // send to templated function
     fprintf(stderr, "[WARNING] initData not yet finished!\n");
   }
 

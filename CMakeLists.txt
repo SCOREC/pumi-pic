@@ -41,7 +41,6 @@ set(MPIRUN_PROCFLAG "-np" CACHE STRING
 
 
 set(pumipic_USE_Omega_h_DEFAULT ON)
-message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
 #Clear the omegah compilation flags that it passes to cuda.  Using the

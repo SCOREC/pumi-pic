@@ -73,11 +73,10 @@ namespace pumipic {
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
-    void setActive(AoSoA_t* aosoa, const kkLidView particles_per_element,
-      const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start);
-    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
-    void fillAoSoA(kkLidView particle_elements, MTVs particle_info);
+    kkLidView getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+    void setActive(const kkLidView particles_per_element);
+    void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
+    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
 
   private:
     //The User defined Kokkos policy
@@ -160,7 +159,7 @@ namespace pumipic {
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, particles_per_element, parentElms_, offsets, padding_start);
+    setActive(particles_per_element);
     // get global ids
     if (element_gids.size() > 0) {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
@@ -202,7 +201,7 @@ namespace pumipic {
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, input.ppe, parentElms_, offsets, padding_start);
+    setActive(input.ppe);
     // get global ids
     if (input.e_gids.size() > 0)
       createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);

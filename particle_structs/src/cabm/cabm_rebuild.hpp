@@ -119,7 +119,7 @@ namespace pumipic {
     offsets = newOffset_d;
     num_ptcls = num_ptcls-num_removed+num_new_ptcls;
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-    setActive(aosoa_, elmDegree_d, parentElms_, offsets, padding_start);
+    setActive(elmDegree_d);
 
     RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles

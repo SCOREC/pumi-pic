@@ -80,30 +80,28 @@ namespace pumipic {
   /**
    * helper function: initializes last type in AoSoA as active mask
    *   where 1 denotes an active particle and 0 denotes an inactive particle.
-   * @param[out] aosoa the AoSoA to be edited
    * @param[in] particles_per_element view representing the number of active elements in each SoA
-   * @param[in] parentElms parent view for AoSoA, built by getParentElms
-   * @param[in] offsets offset array for AoSoA, built by buildOffset
-   * @param[in] padding_start int representing start of padding
   */
   template<class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::setActive(AoSoA_t* aosoa, const kkLidView particles_per_element,
-  const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start) {
+  void CabM<DataTypes, MemSpace>::setActive(const kkLidView particles_per_element) {
+    // get copies of member variables for device
+    auto parentElms_cpy = parentElms_;
+    auto offsets_cpy = offsets;
+    auto padding_start_cpy = padding_start;
 
     const lid_t num_elements = particles_per_element.size();
     const auto soa_len = AoSoA_t::vector_length;
-
-    const auto activeSliceIdx = aosoa->number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(*aosoa);
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
-        const lid_t elm = parentElms(soa);
-        lid_t num_soa = offsets(elm+1)-offsets(elm);
-        lid_t last_soa = offsets(elm+1)-1;
-        if (last_soa >= padding_start) {
-          last_soa = padding_start-1;
-          num_soa = padding_start-offsets(elm);
+        const lid_t elm = parentElms_cpy(soa);
+        lid_t num_soa = offsets_cpy(elm+1)-offsets_cpy(elm);
+        lid_t last_soa = offsets_cpy(elm+1)-1;
+        if (last_soa >= padding_start_cpy) {
+          last_soa = padding_start_cpy-1;
+          num_soa = padding_start_cpy-offsets_cpy(elm);
         }
         const lid_t elm_ppe = particles_per_element(elm);
         const lid_t last_soa_ppe = soa_len - ((num_soa * soa_len) - elm_ppe);
@@ -123,7 +121,7 @@ namespace pumipic {
    * @param[out] gid_to_lid unordered map with elements global ids as keys and local ids as values
   */
   template<class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
+  void CabM<DataTypes, MemSpace>::createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
     lid_to_gid = kkGidView(Kokkos::ViewAllocateWithoutInitializing("row to element gid"), num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const gid_t gid = element_gids(i);
@@ -141,7 +139,7 @@ namespace pumipic {
    * @exception particle_elements.size() != num_ptcls
   */
   template<class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::fillAoSoA(kkLidView particle_elements, MTVs particle_info) {
+  void CabM<DataTypes, MemSpace>::fillAoSoA(const kkLidView particle_elements, const MTVs particle_info) {
     assert(particle_elements.size() == num_ptcls);
 
     const auto soa_len = AoSoA_t::vector_length;

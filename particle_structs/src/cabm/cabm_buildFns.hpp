@@ -144,28 +144,19 @@ namespace pumipic {
   void CabM<DataTypes, MemSpace>::fillAoSoA(kkLidView particle_elements, MTVs particle_info) {
     assert(particle_elements.size() == num_ptcls);
 
-    // create a pointer to the offsets array that we can access in a kokkos parallel_for
-    kkLidView offset_copy = offsets;
-    kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("particle_indices"), num_ptcls);
-    // View for tracking particle index in elements
-    kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
-    // atomic_fetch_add to increment from the beginning of each element
-    Kokkos::parallel_for("fill_ptcl_indices", num_ptcls,
-      KOKKOS_LAMBDA(const lid_t ptcl_id) {
-        particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
-      });
-    
     const auto soa_len = AoSoA_t::vector_length;
-    // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
+    kkLidView offsets_cpy = offsets; // copy of offsets for device
+    kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
     kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), particle_elements.size());
     kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), particle_elements.size());
-    kkLidView offsets_copy = offsets; // copy of offsets since GPUs don't like member variables
-    Kokkos::parallel_for("soa_and_ptcl", particle_elements.size(),
+    // fill each element left to right
+    Kokkos::parallel_for("fill_ptcl_indices", num_ptcls,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
-        soa_indices(ptcl_id) = offsets_copy(particle_elements(ptcl_id))
-          + (particle_indices(ptcl_id)/soa_len);
-        soa_ptcl_indices(ptcl_id) = particle_indices(ptcl_id)%soa_len;
+        lid_t index_in_element = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
+        soa_indices(ptcl_id) = offsets_cpy(particle_elements(ptcl_id)) + index_in_element/soa_len; // index of soa
+        soa_ptcl_indices(ptcl_id) = index_in_element%soa_len; // index of particle in soa
       });
+
     CopyMTVsToAoSoA<device_type, DataTypes>(*aosoa_, particle_info, soa_indices,
       soa_ptcl_indices);
   }

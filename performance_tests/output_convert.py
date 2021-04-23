@@ -34,8 +34,7 @@ for line in lines:
         line = line.strip().split()
         elm = line[1]
         distribution = line[3]
-        percentage = line[5]
-        structure = line[7]
+        structure = line[4]
     # timing
     for check in edit_lines:
         if check in line:
@@ -48,11 +47,11 @@ for line in lines:
                 average = line[4]
 
             if "rebuild" in function:
-                rebuild.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
+                rebuild.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
             elif "pseudo-push" in function:
-                push.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
+                push.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
             elif "migration" in function and (n >= 5):
-                migrate.write( "{0} {1} {2} {3} {4}\n".format(structure, elm, distribution, percentage, average) )
+                migrate.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
 
 rebuild.close()
 push.close()

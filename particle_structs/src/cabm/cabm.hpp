@@ -6,20 +6,6 @@
 #include "cabm_input.hpp"
 #include <sstream>
 
-namespace {
-  // class to append member types
-  template <typename T, typename... Types>
-  struct MemberTypesAppend;
-
-  //Append type to the end
-  template <typename T, typename... Types>
-  struct MemberTypesAppend<T, Cabana::MemberTypes<Types...> > {
-    static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
-    using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
-  };
-
-}
-
 namespace pumipic {
 
   void enable_prebarrier();
@@ -87,12 +73,10 @@ namespace pumipic {
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView getParentElms( const lid_t num_elements, const lid_t num_soa, const kkLidView offsets );
-    void setActive(AoSoA_t* aosoa, const kkLidView particles_per_element,
-      const kkLidView parentElms, const kkLidView offsets, const lid_t padding_start);
-    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
-    void fillAoSoA(kkLidView particle_indices, kkLidView particle_elements, MTVs particle_info);
-    void initCabMData(kkLidView particle_elements, MTVs particle_info);
+    kkLidView getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+    void setActive(const kkLidView particles_per_element);
+    void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
+    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
 
   private:
     //The User defined Kokkos policy
@@ -110,7 +94,7 @@ namespace pumipic {
     // mappings from row to element gid and back to row
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
-     // number of SoA
+    // number of SoA
     lid_t num_soa_;
     // SoA index for start of padding
     lid_t padding_start;
@@ -152,7 +136,7 @@ namespace pumipic {
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
-    extra_padding(0.05) // default extra padding at 10%
+    extra_padding(0.05) // default extra padding at 5%
   {
     assert(num_elements == particles_per_element.size());
     num_elems = num_elements;
@@ -175,7 +159,7 @@ namespace pumipic {
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(aosoa_, particles_per_element, parentElms_, offsets, padding_start);
+    setActive(particles_per_element);
     // get global ids
     if (element_gids.size() > 0) {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
@@ -183,50 +167,50 @@ namespace pumipic {
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-      initCabMData(particle_elements, particle_info); // initialize data
+      fillAoSoA(particle_elements, particle_info); // initialize data
     }
   }
 
-template<class DataTypes, typename MemSpace>
-CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
+  template<class DataTypes, typename MemSpace>
+  CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
     ParticleStructure<DataTypes, MemSpace>(input.name),
     policy(input.policy),
-    element_gid_to_lid(input.ne) {
-  num_elems = input.ne;
-  num_rows = num_elems;
-  num_ptcls = input.np;
-  extra_padding = input.extra_padding;
+    element_gid_to_lid(input.ne)
+  {
+    num_elems = input.ne;
+    num_rows = num_elems;
+    num_ptcls = input.np;
+    extra_padding = input.extra_padding;
 
-  assert(num_elems == input.ppe.size());
+    assert(num_elems == input.ppe.size());
 
-  int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  if(!comm_rank)
-    fprintf(stderr, "building CabM\n");
-  
-  // build view of offsets for SoA indices within particle elements
-  offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
-  // set num_soa_ from the last entry of offsets
-  num_soa_ = getLastValue(offsets);
-  // calculate capacity_ from num_soa_ and max size of an SoA
-  capacity_ = num_soa_*AoSoA_t::vector_length;
-  // initialize appropriately-sized AoSoA and copy for swapping
-  aosoa_ = makeAoSoA(capacity_, num_soa_);
-  aosoa_swap = makeAoSoA(capacity_, num_soa_);
-  // get array of parents element indices for particles
-  parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-  // set active mask
-  setActive(aosoa_, input.ppe, parentElms_, offsets, padding_start);
-  // get global ids
-  if (input.e_gids.size() > 0) {
-    createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building CabM\n");
+    
+    // build view of offsets for SoA indices within particle elements
+    offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
+    // set num_soa_ from the last entry of offsets
+    num_soa_ = getLastValue(offsets);
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA and copy for swapping
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    aosoa_swap = makeAoSoA(capacity_, num_soa_);
+    // get array of parents element indices for particles
+    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+    // set active mask
+    setActive(input.ppe);
+    // get global ids
+    if (input.e_gids.size() > 0)
+      createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
+    // populate AoSoA with input data if given
+    if (input.particle_elms.size() > 0 && input.p_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
+      fillAoSoA(input.particle_elms, input.p_info); // initialize data
+    }
   }
-  // populate AoSoA with input data if given
-  if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-    if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-    initCabMData(input.particle_elms, input.p_info); // initialize data
-  }
-}
 
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::~CabM() { }

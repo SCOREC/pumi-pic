@@ -109,6 +109,7 @@ namespace pumipic {
     */
     template <class Space2>
     void copy(Mirror<Space2>* old) {
+      name = old->name;
       num_elems = old->num_elems;
       num_ptcls = old->num_ptcls;
       capacity_ = old->capacity_;

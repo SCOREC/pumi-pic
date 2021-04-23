@@ -30,7 +30,7 @@ namespace pumipic {
   template<class DataTypes, typename MemSpace>
   typename ParticleStructure<DataTypes, MemSpace>::kkLidView
   DPS<DataTypes, MemSpace>::buildIndices(const kkLidView particles_per_element, const lid_t capacity,
-  kkLidView particleIds, kkLidView parentElms) {
+  kkLidView &particleIds, kkLidView &parentElms) {
     kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element);
     Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
     Kokkos::View<lid_t*,host_space> parentElms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), capacity);

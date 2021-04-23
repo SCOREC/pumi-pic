@@ -69,10 +69,10 @@ namespace pumipic {
     // Do not call these functions:
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
     kkLidView buildIndices(const kkLidView particles_per_element, const lid_t capacity,
-      kkLidView particleIds, kkLidView parentElms);
+      kkLidView& particleIds, kkLidView& parentElms);
     void setNewActive(const lid_t num_particles);
-    void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
-    void fillAoSoA(kkLidView particle_elements, MTVs particle_info);
+    void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
+    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
 
   private:
     //The User defined Kokkos policy
@@ -138,14 +138,18 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "building DPS\n");
 
+    printf("ne,nr,np: %d,%d,%d\n", num_elems,num_rows,num_ptcls);
+
     // calculate num_soa_ from number of particles + extra padding
     num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
+    printf("ns,cap: %d,%d\n", num_soa_, capacity_);
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // build element tracking arrays
     offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_);
+    printf("%d %d %d\n", offsets.size(), particleIds_.size(), parentElms_.size());
     // set active mask
     setNewActive(num_ptcls);
     // get global ids
@@ -172,7 +176,28 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
   void DPS<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
-    fprintf(stderr, "[WARNING] parallel_for not yet implemented!\n");
+    if (nPtcls() == 0)
+      return;
+
+    // move function pointer to GPU (if needed)
+    FunctionType* fn_d;
+    #ifdef PP_USE_CUDA
+        cudaMalloc(&fn_d, sizeof(FunctionType));
+        cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+    #else
+        fn_d = &fn;
+    #endif
+    kkLidView parentElms_cpy = parentElms_;
+    const auto soa_len = AoSoA_t::vector_length;
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    const auto mask = Cabana::slice<activeSliceIdx>(*aosoa_); // get active mask
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
+    Cabana::simd_parallel_for(simd_policy,
+      KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
+        const lid_t elm = parentElms_cpy(soa); // calculate element
+        const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
+        (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
+      }, "parallel_for");
   }
 
   template <class DataTypes, typename MemSpace>

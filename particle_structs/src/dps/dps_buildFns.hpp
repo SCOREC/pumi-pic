@@ -89,7 +89,7 @@ namespace pumipic {
    * @param[out] gid_to_lid unordered map with elements global ids as keys and local ids as values
   */
   template<class DataTypes, typename MemSpace>
-  void DPS<DataTypes, MemSpace>::createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
+  void DPS<DataTypes, MemSpace>::createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid) {
     lid_to_gid = kkGidView(Kokkos::ViewAllocateWithoutInitializing("row_to_element_gid"), num_elems);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
       const gid_t gid = element_gids(i);
@@ -107,7 +107,7 @@ namespace pumipic {
    * @exception particle_elements.size() != num_ptcls
   */
   template<class DataTypes, typename MemSpace>
-  void DPS<DataTypes, MemSpace>::fillAoSoA(kkLidView particle_elements, MTVs particle_info) {
+  void DPS<DataTypes, MemSpace>::fillAoSoA(const kkLidView particle_elements, const MTVs particle_info) {
     assert(particle_elements.size() == num_ptcls);
     const auto soa_len = AoSoA_t::vector_length;
 

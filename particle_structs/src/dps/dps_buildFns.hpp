@@ -52,8 +52,8 @@ namespace pumipic {
     hostToDevice(parentElms, parentElms_h.data());
 
     // add base particle ids
-    particleIds = kkLidView(Kokkos::ViewAllocateWithoutInitializing("particleIds"), num_particles);
-    Kokkos::parallel_for(num_particles, KOKKOS_LAMBDA(const lid_t& i) {
+    particleIds = kkLidView(Kokkos::ViewAllocateWithoutInitializing("particleIds"), capacity);
+    Kokkos::parallel_for(capacity, KOKKOS_LAMBDA(const lid_t& i) {
       particleIds(i) = i;
     });
 
@@ -74,7 +74,7 @@ namespace pumipic {
 
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
-      KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
+      KOKKOS_LAMBDA(const lid_t& soa, const lid_t& ptcl) {
         bool isActive = false;
         if (soa*soa_len+ptcl < num_particles)
           isActive = true;

@@ -149,7 +149,7 @@ namespace pumipic {
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // build element tracking arrays
     offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_);
-    printf("%d %d %d\n", offsets.size(), particleIds_.size(), parentElms_.size());
+    printf("off,id,elm: %d %d %d\n", offsets.size(), particleIds_.size(), parentElms_.size());
     // set active mask
     setNewActive(num_ptcls);
     // get global ids

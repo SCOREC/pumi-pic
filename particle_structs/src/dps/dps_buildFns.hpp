@@ -124,8 +124,8 @@ namespace pumipic {
       soa_ptcl_indices(ptcl_id) = index_in_aosoa%soa_len;
     });
 
-    // send to templated function
-    fprintf(stderr, "[WARNING] initData not yet finished!\n");
+    CopyMTVsToAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(*aosoa_, particle_info,
+      soa_indices, soa_ptcl_indices);
   }
 
 }

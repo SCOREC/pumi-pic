@@ -3,11 +3,11 @@
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
 #include <psDistributor.hpp>
-#include <cabana_support.hpp>
+#include "psMemberTypeCabana.h"
 
 namespace pumipic {
 
-  //Forward Declare
+  //Forward Declaration of Cabana-using classes
   template <class DataTypes, typename Space>
   class CabM;
   template <class DataTypes, typename Space>

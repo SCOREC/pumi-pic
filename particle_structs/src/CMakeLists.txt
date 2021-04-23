@@ -14,10 +14,11 @@ set(HEADERS
   support/MemberTypeLibraries.h
   support/Segment.h
   support/psDistributor.hpp
+  support/psMemberType.h
+  support/psMemberTypeCabana.h
+
   particle_structure.hpp
   ps_for.hpp
-  psMemberType.h
-  cabana_support.hpp
 
   scs/SCS_Macros.h
   scs/SCS_Types.h
@@ -34,7 +35,6 @@ set(HEADERS
   csr/CSR_migrate.hpp
   csr/CSR_rebuild.hpp
   
-  cabm/cabm_support.hpp
   cabm/cabm.hpp
   cabm/cabm_buildFns.hpp
   cabm/cabm_migrate.hpp
@@ -42,6 +42,9 @@ set(HEADERS
   cabm/cabm_input.hpp
 
   dps/dps.hpp
+  dps/dps_buildFns.hpp
+  dps/dps_migrate.hpp
+  dps/dps_rebuild.hpp
 
   particle_structs.hpp
 )

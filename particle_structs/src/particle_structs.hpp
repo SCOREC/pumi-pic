@@ -6,3 +6,4 @@
 #include <cabm.hpp>
 #include <dps.hpp>
 #include "psMemberType.h"
+#include "psMemberTypeCabana.h"

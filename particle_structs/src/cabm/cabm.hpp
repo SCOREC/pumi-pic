@@ -2,7 +2,7 @@
 #include <particle_structs.hpp>
 #ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
-#include "cabm_support.hpp"
+#include "psMemberTypeCabana.h"
 #include "cabm_input.hpp"
 #include <sstream>
 

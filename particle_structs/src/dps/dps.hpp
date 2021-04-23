@@ -2,7 +2,7 @@
 #include <particle_structs.hpp>
 #ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
-#include "dps_support.hpp"
+#include "psMemberTypeCabana.h"
 #include <sstream>
 
 namespace pumipic {

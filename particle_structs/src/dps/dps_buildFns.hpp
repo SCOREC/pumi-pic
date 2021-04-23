@@ -41,8 +41,6 @@ namespace pumipic {
       for (lid_t j = offsets_h(i); j < offsets_h(i+1); j++)
         parentElms_h(j) = i; // set particle elements
     }
-    // calculate padding_start
-    const auto soa_len = AoSoA_t::vector_length;
     lid_t num_particles = offsets_h(offsets_h.size()-1);
     for (lid_t j = num_particles; j < capacity; j++)
       parentElms_h(j) = particles_per_element.size()-1; // set all inactive particles to last element

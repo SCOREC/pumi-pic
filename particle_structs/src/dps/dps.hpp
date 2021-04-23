@@ -92,8 +92,6 @@ namespace pumipic {
     GID_Mapping element_gid_to_lid;
     // number of SoA
     lid_t num_soa_;
-    // SoA index for start of padding
-    lid_t padding_start;
     // percentage of capacity to add as padding
     double extra_padding;
     // CSR structure for element tracking
@@ -147,7 +145,7 @@ namespace pumipic {
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // build element tracking arrays
-    offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_, padding_start);
+    offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_);
     // set active mask
     setNewActive(num_ptcls);
     // get global ids
@@ -158,8 +156,6 @@ namespace pumipic {
       if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
       fillAoSoA(particle_elements, particle_info); // fill aosoa with data
     }
-
-    fprintf(stderr, "[WARNING] Contructor not yet finished!\n");
   }
 
   template <class DataTypes, typename MemSpace>

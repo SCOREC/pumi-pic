@@ -68,11 +68,9 @@ namespace pumipic {
 
     // Do not call these functions:
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView buildIndices(const kkLidView particles_per_element, const lid_t capacity,
-      kkLidView& particleIds, kkLidView& parentElms);
     void setNewActive(const lid_t num_particles);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
-    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
+    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info, kkLidView& parentElms);
 
   private:
     //The User defined Kokkos policy
@@ -94,9 +92,7 @@ namespace pumipic {
     lid_t num_soa_;
     // percentage of capacity to add as padding
     double extra_padding;
-    // CSR structure for element tracking
-    kkLidView particleIds_;
-    kkLidView offsets;
+    // parent elements for all particles in AoSoA
     kkLidView parentElms_;
     // particle data
     AoSoA_t* aosoa_;
@@ -144,8 +140,6 @@ namespace pumipic {
     capacity_ = num_soa_*AoSoA_t::vector_length;
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
-    // build element tracking arrays
-    offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_);
     // set active mask
     setNewActive(num_ptcls);
     // get global ids
@@ -154,7 +148,7 @@ namespace pumipic {
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
       if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
-      fillAoSoA(particle_elements, particle_info); // fill aosoa with data
+      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
   }
 
@@ -206,17 +200,6 @@ namespace pumipic {
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         Kokkos::atomic_fetch_add(&padded_cells(0), !mask(ptcl_id));
       });
-    // Sum number of empty elements
-    kkLidHostMirror offsets_host = deviceToHost(offsets);
-    lid_t num_empty_elements = 0;
-    if (num_soa_ == 0)
-      num_empty_elements = num_elems;
-    else {
-      for (int i = 0; i < num_elems; i++) {
-        if (i != 0 && (offsets_host(i) == offsets_host(i-1)) )
-          num_empty_elements++;
-      }
-    }
     lid_t num_padded = getLastValue<lid_t>(padded_cells);
 
     int comm_rank;
@@ -231,9 +214,6 @@ namespace pumipic {
     // Padded Cells
     ptr += sprintf(ptr, "Padded Cells <Tot %%> %d %.3f%%\n", num_padded,
                    num_padded * 100.0 / capacity_);
-    // Empty Elements
-    ptr += sprintf(ptr, "Empty Elements <Tot %%> %d %.3f%%\n", num_empty_elements,
-                   num_empty_elements * 100.0 / num_elems);
     printf("%s\n", buffer);
   }
 

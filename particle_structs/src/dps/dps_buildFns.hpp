@@ -20,47 +20,6 @@ namespace pumipic {
   }
 
   /**
-   * helper function: Builds the offset array for the CSR structure and sets sidealong tracking arrays
-   * @param[in] particles_per_element View representing the number of active particles in each element
-   * @param[in] capacity int representing total capacity
-   * @param[out] particleIds View representing indexes of particles, grouped by element
-   * @param[out] parentElms View representing parent element for each particle
-   * @return offset view (each element is the first index of each element block in particleIds)
-  */
-  template<class DataTypes, typename MemSpace>
-  typename ParticleStructure<DataTypes, MemSpace>::kkLidView
-  DPS<DataTypes, MemSpace>::buildIndices(const kkLidView particles_per_element, const lid_t capacity,
-  kkLidView &particleIds, kkLidView &parentElms) {
-    kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element);
-    Kokkos::View<lid_t*,host_space> offsets_h(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), particles_per_element.size()+1);
-    Kokkos::View<lid_t*,host_space> parentElms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), capacity);
-    // fill offsets
-    offsets_h(0) = 0;
-    for (lid_t i = 0; i < particles_per_element.size(); i++) {
-      offsets_h(i+1) = particles_per_element_h(i) + offsets_h(i);
-      for (lid_t j = offsets_h(i); j < offsets_h(i+1); j++)
-        parentElms_h(j) = i; // set particle elements
-    }
-    lid_t num_particles = offsets_h(offsets_h.size()-1);
-    for (lid_t j = num_particles; j < capacity; j++)
-      parentElms_h(j) = particles_per_element.size()-1; // set all inactive particles to last element
-    offsets_h(offsets_h.size()-1) = capacity; // add inactive particles to last element
-    // move offsets and parentElms to device
-    kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
-    hostToDevice(offsets_d, offsets_h.data());
-    parentElms = kkLidView(Kokkos::ViewAllocateWithoutInitializing("parentElms_device"), parentElms_h.size());
-    hostToDevice(parentElms, parentElms_h.data());
-
-    // add base particle ids
-    particleIds = kkLidView(Kokkos::ViewAllocateWithoutInitializing("particleIds"), capacity);
-    Kokkos::parallel_for(capacity, KOKKOS_LAMBDA(const lid_t& i) {
-      particleIds(i) = i;
-    });
-
-    return offsets_d;
-  }
-
-  /**
    * helper function: initializes last type in AoSoA as active mask
    *   where 1 denotes an active particle and 0 denotes an inactive particle.
    *   Fills with 1s up to num_particles
@@ -104,22 +63,27 @@ namespace pumipic {
    *                          of the parent element * of particle i
    * @param[in] particle_info - 'member type views' containing the user's data to be
    *                      associated with each particle
+   * @param[out] parentElms - member View of elements for particle i in AoSoA
    * @exception particle_elements.size() != num_ptcls
   */
   template<class DataTypes, typename MemSpace>
-  void DPS<DataTypes, MemSpace>::fillAoSoA(const kkLidView particle_elements, const MTVs particle_info) {
+  void DPS<DataTypes, MemSpace>::fillAoSoA(const kkLidView particle_elements, const MTVs particle_info, kkLidView& parentElms) {
     assert(particle_elements.size() == num_ptcls);
     const auto soa_len = AoSoA_t::vector_length;
+
+    parentElms = kkLidView(Kokkos::ViewAllocateWithoutInitializing("parentElms"), capacity_);
 
     kkLidView ptcl_elm_indices("ptcl_elm_indices", num_elems);
     kkLidView soa_indices("soa_indices", particle_elements.size());
     kkLidView soa_ptcl_indices("soa_ptcl_indices", particle_elements.size());
-    kkLidView offsets_cpy = offsets;
+    kkLidView index("index", 1);
     Kokkos::parallel_for(particle_elements.size(), KOKKOS_LAMBDA(const lid_t& ptcl_id) {
-      lid_t index_in_element = Kokkos::atomic_fetch_add(&ptcl_elm_indices(particle_elements(ptcl_id)),1);
-      lid_t index_in_aosoa = offsets_cpy(particle_elements(ptcl_id)) + index_in_element;
+      // calculate indices of particles
+      lid_t index_in_aosoa = Kokkos::atomic_fetch_add(&index(0),1);
       soa_indices(ptcl_id) = index_in_aosoa/soa_len;
       soa_ptcl_indices(ptcl_id) = index_in_aosoa%soa_len;
+      // set element
+      parentElms(index_in_aosoa) = particle_elements(ptcl_id);
     });
 
     CopyMTVsToAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(*aosoa_, particle_info,

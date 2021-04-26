@@ -138,18 +138,14 @@ namespace pumipic {
     if(!comm_rank)
       fprintf(stderr, "building DPS\n");
 
-    printf("ne,nr,np: %d,%d,%d\n", num_elems,num_rows,num_ptcls);
-
     // calculate num_soa_ from number of particles + extra padding
     num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    printf("ns,cap: %d,%d\n", num_soa_, capacity_);
     // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
     // build element tracking arrays
     offsets = buildIndices(particles_per_element, capacity_, particleIds_, parentElms_);
-    printf("off,id,elm: %d %d %d\n", offsets.size(), particleIds_.size(), parentElms_.size());
     // set active mask
     setNewActive(num_ptcls);
     // get global ids
@@ -194,8 +190,8 @@ namespace pumipic {
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
-        const lid_t elm = parentElms_cpy(soa); // calculate element
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
+        const lid_t elm = parentElms_cpy(particle_id); // calculate element
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, "parallel_for");
   }

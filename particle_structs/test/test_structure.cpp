@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
       fails += pseudoPush(names[i].c_str(), structures[i]);
       Kokkos::fence();
       fails += testMetrics(names[i].c_str(), structures[i]);
-      //fails += testRebuild(names[i].c_str(), structures[i]);
+      fails += testRebuild(names[i].c_str(), structures[i]);
       //fails += testMigration(names[i].c_str(), structures[i]);
       //fails += testCopy(names[i].c_str(), structures[i]);
       //fails += testSegmentComp(names[i].c_str(), structures[i]);

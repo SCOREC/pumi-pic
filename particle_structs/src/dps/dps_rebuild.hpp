@@ -19,7 +19,77 @@ namespace pumipic {
   void DPS<DataTypes, MemSpace>::rebuild(kkLidView new_element,
                                          kkLidView new_particle_elements,
                                          MTVs new_particles) {
-    fprintf(stderr, "[WARNING] rebuild not yet implemented!\n");
+    const auto btime = prebarrier();
+
+    Kokkos::Profiling::pushRegion("DPS Rebuild");
+    Kokkos::Timer overall_timer; // timer for rebuild
+
+    const auto num_new_ptcls = new_particle_elements.size();
+    const auto soa_len = AoSoA_t::vector_length;
+    kkLidView elmDegree_d("elmDegree", num_elems);
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
+    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto parentElms_cpy = parentElms_;
+
+    // first loop to count removed particles and move/remove them (move)
+    assert(new_element.size() == capacity_);
+    kkLidView num_removed_d("num_removed_d", 1); // for counting particles to be removed
+    auto move = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
+      if (active.access(soa,tuple)) {
+        lid_t parent = new_element(soa*soa_len + tuple);
+        if (parent > -1) // count particles kept and move
+          parentElms_cpy(soa*soa_len + tuple) = parent;
+        else { // count particles deleted and delete
+          Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
+          active.access(soa,tuple) = false; // delete particles
+        }
+      }
+    };
+    Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
+    Cabana::simd_parallel_for(simd_policy, move, "move");
+    lid_t num_removed = getLastValue(num_removed_d);
+    parentElms_ = parentElms_cpy;
+
+    printf("finished move\n");
+    assert(cudaDeviceSynchronize() == cudaSuccess);
+    printf("after check\n");
+    
+    RecordTime("DPS count/move/delete active particles", overall_timer.seconds());
+    Kokkos::Timer copy_timer; // timer for copying to new structure
+
+    // check if need bigger, copy particles
+    if ( num_ptcls-num_removed+num_new_ptcls > capacity_ ) {
+      fprintf(stderr, "[WARNING] FULL rebuild not yet implemented!\n");
+    }
+
+    num_ptcls = num_ptcls-num_removed+num_new_ptcls;
+
+    RecordTime("DPS copy particles", copy_timer.seconds());
+    Kokkos::Timer add_timer; // timer for adding particles
+
+    if (num_new_ptcls > 0 && new_particles != NULL) {
+      // calculate new particle indices by filling holes
+      kkLidView new_index("new_index", 1);
+      kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), num_new_ptcls);
+      kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), num_new_ptcls);
+      auto add = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
+        if (!active.access(soa,tuple)) { // if inactive
+          lid_t index = Kokkos::atomic_fetch_add(&new_index(0),1); // attempt to fill hole
+          if (index < num_new_ptcls) { // if new particles not yet assigned
+            soa_indices(index) = soa;
+            soa_ptcl_indices(index) = tuple;
+          }
+        }
+      };
+      Cabana::simd_parallel_for(simd_policy, add, "add");
+      // populate with new particle data
+      CopyMTVsToAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(*aosoa_, new_particles,
+        soa_indices, soa_ptcl_indices); // copy data over
+    }
+
+    RecordTime("DPS add particles", add_timer.seconds());
+    RecordTime("DPS rebuild", overall_timer.seconds(), btime);
+    Kokkos::Profiling::popRegion();
   }
 
 }

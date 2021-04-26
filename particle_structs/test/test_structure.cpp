@@ -112,10 +112,10 @@ int main(int argc, char* argv[]) {
       Kokkos::fence();
       fails += testMetrics(names[i].c_str(), structures[i]);
       fails += testRebuild(names[i].c_str(), structures[i]);
-      //fails += testMigration(names[i].c_str(), structures[i]);
+      fails += testMigration(names[i].c_str(), structures[i]);
       //fails += testCopy(names[i].c_str(), structures[i]);
-      //fails += testSegmentComp(names[i].c_str(), structures[i]);
-      //fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
+      fails += testSegmentComp(names[i].c_str(), structures[i]);
+      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
     }
 
     //Cleanup

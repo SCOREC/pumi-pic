@@ -57,9 +57,40 @@ namespace pumipic {
     RecordTime("DPS count/move/delete active particles", overall_timer.seconds());
     Kokkos::Timer copy_timer; // timer for copying to new structure
 
-    // check if need bigger, copy particles
+    // if capacity reached, allocate new structure and copy into
     if ( num_ptcls-num_removed+num_new_ptcls > capacity_ ) {
-      fprintf(stderr, "[WARNING] FULL rebuild not yet implemented!\n");
+      lid_t new_num_soa = ceil(ceil(double(num_ptcls-num_removed+num_new_ptcls)/soa_len)*(1+extra_padding));
+      lid_t new_capacity = new_num_soa*soa_len;
+      AoSoA_t* newAosoa = makeAoSoA(new_capacity, new_num_soa);
+      AoSoA_t aosoa_copy = *aosoa_;
+      AoSoA_t newAosoa_copy = *newAosoa;
+      kkLidView new_parentElms(Kokkos::ViewAllocateWithoutInitializing("parentElms"), new_capacity);
+      kkLidView parentElms_copy = parentElms_;
+      lid_t num_ptcls_copy = num_ptcls;
+      
+      kkLidView copy_index("copy_index", 1);
+      auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
+        if (active.access(soa,tuple)) {
+          lid_t index = Kokkos::atomic_fetch_add(&copy_index(0),1);
+          lid_t soa_index = index/soa_len;
+          lid_t tuple_index = index%soa_len;
+          // copy particle (soa,tuple) in aosoa_ into index in newAosoa
+          if (index < num_ptcls_copy-num_removed+num_new_ptcls) {
+            new_parentElms(index) = parentElms_copy(soa*soa_len + tuple);
+            Cabana::Impl::tupleCopy(
+              newAosoa_copy.access(soa_index), tuple_index, // dest
+              aosoa_copy.access(soa), tuple); // src
+          }
+        }
+      };
+      Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
+      delete aosoa_;
+      aosoa_ = newAosoa; // assign new aosoa
+      num_soa_ = new_num_soa;
+      capacity_ = new_capacity;
+      parentElms_ = new_parentElms;
+
+      active = Cabana::slice<activeSliceIdx>(*aosoa_);
     }
 
     num_ptcls = num_ptcls-num_removed+num_new_ptcls;

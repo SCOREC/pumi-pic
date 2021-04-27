@@ -9,6 +9,7 @@ PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids
 PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
 #ifdef PP_ENABLE_CAB
 PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
+PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 #endif
 
 int main(int argc, char* argv[]) {
@@ -120,6 +121,14 @@ int main(int argc, char* argv[]) {
       ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size, name);
 #else
       fprintf(stderr, "CabM requested, but PUMI-PIC was not built with Cabana enabled\n");
+#endif
+    }
+    else if (structure == 3) {
+      name = "DPS";
+#ifdef PP_ENABLE_CAB
+      ptcls = createDPS(num_elems, num_ptcls, ppe, element_gids, team_size, name);
+#else
+      fprintf(stderr, "DPS requested, but PUMI-PIC was not built with Cabana enabled\n");
 #endif
     }
 
@@ -247,5 +256,9 @@ PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gid
   pumipic::CabM_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
   input.name = name;
   return new pumipic::CabM<PerfTypes160, MemSpace>(input);
+}
+PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  return new pumipic::DPS<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }
 #endif

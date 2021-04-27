@@ -49,10 +49,6 @@ namespace pumipic {
     Cabana::simd_parallel_for(simd_policy, move, "move");
     lid_t num_removed = getLastValue(num_removed_d);
     parentElms_ = parentElms_cpy;
-
-    printf("finished move\n");
-    assert(cudaDeviceSynchronize() == cudaSuccess);
-    printf("after check\n");
     
     RecordTime("DPS count/move/delete active particles", overall_timer.seconds());
     Kokkos::Timer copy_timer; // timer for copying to new structure
@@ -62,25 +58,30 @@ namespace pumipic {
       lid_t new_num_soa = ceil(ceil(double(num_ptcls-num_removed+num_new_ptcls)/soa_len)*(1+extra_padding));
       lid_t new_capacity = new_num_soa*soa_len;
       AoSoA_t* newAosoa = makeAoSoA(new_capacity, new_num_soa);
+
+      auto newActive = Cabana::slice<activeSliceIdx>(*newAosoa);
+      auto setInactive = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) { 
+        newActive.access(soa,tuple) = false; // fill new active mask with false
+      };
+      Cabana::SimdPolicy<soa_len,execution_space> new_simd_policy(0, new_capacity);
+      Cabana::simd_parallel_for(new_simd_policy, setInactive, "setInactive");
+      
       AoSoA_t aosoa_copy = *aosoa_;
       AoSoA_t newAosoa_copy = *newAosoa;
       kkLidView new_parentElms(Kokkos::ViewAllocateWithoutInitializing("parentElms"), new_capacity);
       kkLidView parentElms_copy = parentElms_;
-      lid_t num_ptcls_copy = num_ptcls;
-      
       kkLidView copy_index("copy_index", 1);
       auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-        if (active.access(soa,tuple)) {
+        if (active.access(soa,tuple)) { // copy all active particles in
+          // map particles in this structure to new structure
           lid_t index = Kokkos::atomic_fetch_add(&copy_index(0),1);
           lid_t soa_index = index/soa_len;
           lid_t tuple_index = index%soa_len;
-          // copy particle (soa,tuple) in aosoa_ into index in newAosoa
-          if (index < num_ptcls_copy-num_removed+num_new_ptcls) {
-            new_parentElms(index) = parentElms_copy(soa*soa_len + tuple);
-            Cabana::Impl::tupleCopy(
-              newAosoa_copy.access(soa_index), tuple_index, // dest
-              aosoa_copy.access(soa), tuple); // src
-          }
+          // copy particle aosoa_(soa,tuple) into newAosoa(index)
+          new_parentElms(index) = parentElms_copy(soa*soa_len + tuple);
+          Cabana::Impl::tupleCopy(
+            newAosoa_copy.access(soa_index), tuple_index, // dest
+            aosoa_copy.access(soa), tuple); // src
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
@@ -89,7 +90,6 @@ namespace pumipic {
       num_soa_ = new_num_soa;
       capacity_ = new_capacity;
       parentElms_ = new_parentElms;
-
       active = Cabana::slice<activeSliceIdx>(*aosoa_);
     }
 
@@ -100,19 +100,24 @@ namespace pumipic {
 
     if (num_new_ptcls > 0 && new_particles != NULL) {
       // calculate new particle indices by filling holes
+      kkLidView parentElms_copy = parentElms_;
       kkLidView new_index("new_index", 1);
       kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), num_new_ptcls);
       kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), num_new_ptcls);
-      auto add = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
+      auto addPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
         if (!active.access(soa,tuple)) { // if inactive
           lid_t index = Kokkos::atomic_fetch_add(&new_index(0),1); // attempt to fill hole
           if (index < num_new_ptcls) { // if new particles not yet assigned
+            active.access(soa,tuple) = true;
             soa_indices(index) = soa;
             soa_ptcl_indices(index) = tuple;
+            parentElms_copy(soa*soa_len + tuple) = new_particle_elements(index);
           }
         }
       };
-      Cabana::simd_parallel_for(simd_policy, add, "add");
+      Cabana::SimdPolicy<soa_len,execution_space> new_simd_policy(0,capacity_);
+      Cabana::simd_parallel_for(new_simd_policy, addPtcls, "addPtcls");
+      parentElms_ = parentElms_copy;
       // populate with new particle data
       CopyMTVsToAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(*aosoa_, new_particles,
         soa_indices, soa_ptcl_indices); // copy data over

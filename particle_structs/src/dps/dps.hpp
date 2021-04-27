@@ -153,7 +153,7 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  DPS<DataTypes, MemSpace>::~DPS() { }
+  DPS<DataTypes, MemSpace>::~DPS() { delete aosoa_; }
 
   /**
    * a parallel for-loop that iterates through all particles

@@ -71,6 +71,7 @@ namespace pumipic {
     void setNewActive(const lid_t num_particles);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info, kkLidView& parentElms);
+    void setParentElms(const kkLidView particles_per_element, kkLidView& parentElms);
 
   private:
     //The User defined Kokkos policy
@@ -150,6 +151,8 @@ namespace pumipic {
       if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
       fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
+    else
+      setParentElms(particles_per_element, parentElms_);
   }
 
   template <class DataTypes, typename MemSpace>

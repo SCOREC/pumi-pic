@@ -90,4 +90,21 @@ namespace pumipic {
       soa_indices, soa_ptcl_indices);
   }
 
+  /**
+    * helper function: sets elements in event of no data provided
+    * @param[in] element_gids view of global ids for each element
+    * @param[out] lid_to_gid view to copy elmGid to
+  */
+  template<class DataTypes, typename MemSpace>
+  void DPS<DataTypes, MemSpace>:: setParentElms(const kkLidView particles_per_element, kkLidView& parentElms) {
+    kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element);
+    Kokkos::View<lid_t*,host_space> parentElms_h(Kokkos::ViewAllocateWithoutInitializing("parentElms_host"), capacity_);
+    int index = 0;
+    for (int i = 0; i < particles_per_element_h.size(); i++)
+      for (int j = 0; j < particles_per_element_h(i); j++)
+        parentElms_h(index++) = i;
+    parentElms = kkLidView(Kokkos::ViewAllocateWithoutInitializing("parentElms"), capacity_);
+    hostToDevice(parentElms, parentElms_h.data());
+  }
+
 }

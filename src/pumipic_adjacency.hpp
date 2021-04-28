@@ -277,7 +277,7 @@ OMEGA_H_DEVICE bool isPointWithinElemTet(const o::LOs& mesh2verts,
   return isPointWithinElemTet(mesh2verts, coords, pos, elem, bcc, tol);
 }
 
-template < class ParticleType >
+template < class ParticleType, typename Segment3d, typename SegmentInt >
 bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     ParticleStructure< ParticleType >* ptcls, // (in) particle structure
     Segment3d x_ps_d, // (in) starting particle positions
@@ -514,7 +514,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
 }
 
 
-template < class ParticleType>
+template < class ParticleType, typename Segment3d, typename SegmentInt >
 bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   Segment3d x_ps_d, Segment3d xtgt_ps_d, SegmentInt pid_d,
   o::Write<o::LO>& elem_ids, o::Write<o::Real>& xpoints_d,

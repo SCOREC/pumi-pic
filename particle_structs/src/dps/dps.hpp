@@ -3,6 +3,7 @@
 #ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "psMemberTypeCabana.h"
+#include "dps_input.hpp"
 #include <sstream>
 
 namespace pumipic {
@@ -27,6 +28,7 @@ namespace pumipic {
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
+    typedef DPS_Input<DataTypes, MemSpace> Input_T;
 
     using DPS_DT = PS_DTBool<DataTypes>;
     using AoSoA_t = Cabana::AoSoA<DPS_DT,device_type>;
@@ -41,6 +43,7 @@ namespace pumipic {
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
           MTVs particle_info = NULL);
+    DPS(DPS_Input<DataTypes, MemSpace>&);
     ~DPS();
 
     //Functions from ParticleStructure
@@ -153,6 +156,44 @@ namespace pumipic {
     }
     else
       setParentElms(particles_per_element, parentElms_);
+  }
+
+  template <class DataTypes, typename MemSpace>
+  DPS<DataTypes, MemSpace>::DPS(Input_T& input) :        // optional
+    ParticleStructure<DataTypes, MemSpace>(input.name),
+    policy(input.policy),
+    element_gid_to_lid(input.ne)
+  {
+    num_elems = input.ne;
+    num_rows = num_elems;
+    num_ptcls = input.np;
+    extra_padding = input.extra_padding;
+
+    assert(num_elems == input.ppe.size());
+
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building DPS\n");
+
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    // set active mask
+    setNewActive(num_ptcls);
+    // get global ids
+    if (input.e_gids.size() > 0)
+      createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
+    // populate AoSoA with input data if given
+    if (input.particle_elms.size() > 0 && input.p_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(input.particle_elms, input.p_info, parentElms_); // fill aosoa with data
+    }
+    else
+      setParentElms(input.ppe, parentElms_);
   }
 
   template <class DataTypes, typename MemSpace>

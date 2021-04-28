@@ -45,6 +45,7 @@ set(HEADERS
   dps/dps_buildFns.hpp
   dps/dps_migrate.hpp
   dps/dps_rebuild.hpp
+  dps/dps_input.hpp
 
   particle_structs.hpp
 )

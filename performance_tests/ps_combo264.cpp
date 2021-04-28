@@ -259,6 +259,8 @@ PS264* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gid
 }
 PS264* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  return new pumipic::DPS<PerfTypes264, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::DPS_Input<PerfTypes264> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
+  return new pumipic::DPS<PerfTypes264, MemSpace>(input);
 }
 #endif

@@ -3,7 +3,9 @@
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
 #include <psDistributor.hpp>
+#ifdef PP_ENABLE_CAB
 #include "psMemberTypeCabana.h"
+#endif
 
 namespace pumipic {
 

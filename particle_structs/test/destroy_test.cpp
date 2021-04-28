@@ -3,7 +3,7 @@
 #include "Distribute.h"
 #include <mpi.h>
 
-const char* structure_names[3] = { "SCS", "CSR", "CabM" };
+const char* structure_names[4] = { "SCS", "CSR", "CabM", "DPS" };
 int comm_rank, comm_size;
 
 bool destroyConstructor(int ne_in, int np_in, int distribution, int structure);
@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
   int distribution = 1;
   int fails = 0;
 
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     if (!comm_rank) fprintf(stderr,"destroyConstructor\n");
     fails += destroyConstructor(ne, np, distribution, i);
     if (!comm_rank) fprintf(stderr,"destroyRebuild\n");
@@ -73,6 +73,9 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   else if (structure == 2) {
     ptcls = new ps::CabM<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
   }
+  else if (structure == 3) {
+    ptcls = new ps::DPS<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
+  }
 
   delete ptcls;
   
@@ -113,6 +116,9 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   }
   else if (structure == 2) {
     ptcls = new ps::CabM<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
+  }
+  else if (structure == 3) {
+    ptcls = new ps::DPS<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
   }
   PS::kkLidView new_element("new_element", ptcls->capacity());
   
@@ -161,6 +167,9 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   }
   else if (structure == 2) {
     ptcls = new ps::CabM<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
+  }
+  else if (structure == 3) {
+    ptcls = new ps::DPS<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
   }
   PS::kkLidView new_element("new_element", ptcls->capacity()); // just move particles to first element
   PS::kkLidView new_process("new_process", ptcls->capacity()); // just keep particles where they are

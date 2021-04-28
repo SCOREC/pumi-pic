@@ -153,7 +153,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths,
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(kkLidView mask, PairView ptcls, kkLidView chunk_widths,
+  void setupParticleMask(Kokkos::View<bool*> mask, PairView ptcls, kkLidView chunk_widths,
                          kkLidView& chunk_starts);
   void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
                    MTVs particle_info);
@@ -189,7 +189,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   //  it is a part of.
   kkLidView slice_to_chunk;
   //particle_mask true means there is a particle at this location, false otherwise
-  kkLidView particle_mask;
+  Kokkos::View<bool*, MemSpace> particle_mask;
   //offsets into the scs structure
   kkLidView offsets;
 
@@ -263,7 +263,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
 
   //Allocate the SCS and backup with extra space
   lid_t cap = capacity_;
-  particle_mask = kkLidView("particle_mask", cap);
+  particle_mask = Kokkos::View<bool*>("particle_mask", cap);
   if (extra_padding > 0)
     cap *= (1 + extra_padding);
   CreateViews<device_type, DataTypes>(ptcl_data, cap);
@@ -349,7 +349,7 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
   mirror_copy->slice_to_chunk = typename Mirror<MSpace>::kkLidView("mirror slice_to_chunk",
                                                                    slice_to_chunk.size());
   Kokkos::deep_copy(mirror_copy->slice_to_chunk, slice_to_chunk);
-  mirror_copy->particle_mask = typename Mirror<MSpace>::kkLidView("mirror particle_mask",
+  mirror_copy->particle_mask = Kokkos::View<bool*,MSpace>("mirror particle_mask",
                                                                   particle_mask.size());
   Kokkos::deep_copy(mirror_copy->particle_mask, particle_mask);
   mirror_copy->offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
@@ -388,7 +388,7 @@ void SellCSigma<DataTypes,MemSpace>::printFormat(const char* prefix) const {
   kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
   kkLidHostMirror row_to_element_host = deviceToHost(row_to_element);
   kkLidHostMirror offsets_host = deviceToHost(offsets);
-  kkLidHostMirror particle_mask_host = deviceToHost(particle_mask);
+  Kokkos::View<bool*>::HostMirror particle_mask_host = deviceToHost(particle_mask);
 
   std::stringstream ss;
   char buffer[1000];
@@ -467,7 +467,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
     lid_t np = 0;
     for (lid_t p = 0; p < rowLen; ++p) {
       const lid_t particle_id = start+(p*team_size);
-      const lid_t mask = particle_mask_cpy[particle_id];
+      const bool mask = particle_mask_cpy(particle_id);
       np += !mask;
     }
     Kokkos::atomic_fetch_add(&padded_cells[0],np);
@@ -534,7 +534,7 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
       const lid_t element_id = row_to_element_cpy(row);
       Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
         const lid_t particle_id = start+(p*team_size);
-        const lid_t mask = particle_mask_cpy[particle_id];
+        const bool mask = particle_mask_cpy(particle_id);
         (*fn_d)(element_id, particle_id, mask);
       });
     });

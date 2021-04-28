@@ -3,6 +3,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/scs
   ${CMAKE_CURRENT_SOURCE_DIR}/csr
   ${CMAKE_CURRENT_SOURCE_DIR}/cabm
+  ${CMAKE_CURRENT_SOURCE_DIR}/dps
   ${CMAKE_CURRENT_SOURCE_DIR}
 
   )
@@ -13,9 +14,11 @@ set(HEADERS
   support/MemberTypeLibraries.h
   support/Segment.h
   support/psDistributor.hpp
+  support/psMemberType.h
+  support/psMemberTypeCabana.h
+
   particle_structure.hpp
   ps_for.hpp
-  psMemberType.h
 
   scs/SCS_Macros.h
   scs/SCS_Types.h
@@ -32,12 +35,17 @@ set(HEADERS
   csr/CSR_migrate.hpp
   csr/CSR_rebuild.hpp
   
-  cabm/cabm_support.hpp
   cabm/cabm.hpp
   cabm/cabm_buildFns.hpp
   cabm/cabm_migrate.hpp
   cabm/cabm_rebuild.hpp
   cabm/cabm_input.hpp
+
+  dps/dps.hpp
+  dps/dps_buildFns.hpp
+  dps/dps_migrate.hpp
+  dps/dps_rebuild.hpp
+  dps/dps_input.hpp
 
   particle_structs.hpp
 )
@@ -62,6 +70,9 @@ target_include_directories(particleStructs INTERFACE
   $<INSTALL_INTERFACE:include>)
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/cabm>
+  $<INSTALL_INTERFACE:include>)
+target_include_directories(particleStructs INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dps>
   $<INSTALL_INTERFACE:include>)
 
 pumipic_export_lib(particleStructs "${HEADERS}")

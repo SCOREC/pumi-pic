@@ -1,15 +1,19 @@
 #pragma once
-
 #include <ppTypes.h>
 #include <Segment.h>
 #include <MemberTypeLibraries.h>
 #include <psDistributor.hpp>
-#include <cabm_support.hpp>
+#ifdef PP_ENABLE_CAB
+#include "psMemberTypeCabana.h"
+#endif
+
 namespace pumipic {
 
-  //Forward Declare
+  //Forward Declaration of Cabana-using classes
   template <class DataTypes, typename Space>
   class CabM;
+  template <class DataTypes, typename Space>
+  class DPS;
 
   template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {
@@ -32,7 +36,7 @@ namespace pumipic {
       typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef MemberTypeViews MTVs;
     template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
     //Cabana Values for defining generic slice
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
     static constexpr int vector_length =
@@ -42,9 +46,9 @@ namespace pumipic {
     using member_value_type =
       typename std::remove_all_extents<DataType<M>>::type;
 
-#ifdef PP_ENABLE_CABM
-    using CM_DT=CM_DTBool<Types>;
-    using soa_type = Cabana::SoA<CM_DT, vector_length>;
+#ifdef PP_ENABLE_CAB
+    using PS_DT=PS_DTBool<Types>;
+    using soa_type = Cabana::SoA<PS_DT, vector_length>;
     template <std::size_t N> using Slice =
       Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
@@ -72,9 +76,11 @@ namespace pumipic {
       assert(N < num_types);
       if (num_ptcls == 0)
         return Slice<N>();
-#ifdef PP_ENABLE_CABM
+#ifdef PP_ENABLE_CAB
       if (dynamic_cast<CabM<DataTypes, Space>*>(this) != NULL)
         return dynamic_cast<CabM<DataTypes, Space>*>(this)->template get<N>();
+      if (dynamic_cast<DPS<DataTypes, Space>*>(this) != NULL)
+        return dynamic_cast<DPS<DataTypes, Space>*>(this)->template get<N>();
 #endif
       MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);

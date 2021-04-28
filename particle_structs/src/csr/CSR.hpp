@@ -136,11 +136,11 @@ namespace pumipic {
 
     // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     // pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets);
+    capacity_ = getLastValue(offsets)*1.05; // with 5% extra padding
     // allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
-    CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_ * 1.05);
-    swap_capacity_ = capacity_*1.05;
+    CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_);
+    swap_capacity_ = capacity_;
 
     // If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
@@ -155,6 +155,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::~CSR() {
     destroyViews<DataTypes, memory_space>(ptcl_data);
+    destroyViews<DataTypes, memory_space>(ptcl_data_swap);
   }
 
   /**
@@ -181,7 +182,7 @@ namespace pumipic {
     const lid_t team_size = policy.team_size();
     const PolicyType policy(league_size, team_size);
     auto offsets_cpy = offsets;
-    const lid_t mask = 1; // all particles are active
+    lid_t num_ptcls_cpy = num_ptcls;
     Kokkos::parallel_for(name, policy,
         KOKKOS_LAMBDA(const typename PolicyType::member_type& thread) {
         const lid_t elm = thread.league_rank();
@@ -190,6 +191,9 @@ namespace pumipic {
         const lid_t numPtcls = end-start;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, numPtcls), [=] (lid_t& j) {
           const lid_t particle_id = start+j;
+          bool mask = true;
+          if (particle_id > num_ptcls_cpy)
+            mask = false;
           (*fn_d)(elm, particle_id, mask);
         });
     });

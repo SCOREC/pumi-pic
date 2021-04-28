@@ -3,6 +3,7 @@
 
 cd ~/barn/pumipic_CabM/
 source envAimos.sh
+cd ./build-dcs-gcc74-pumipic/performance_tests/
 
 # Dense Testing Script for AiMOS: small elm n, large ptcl n
 echo "---------------------AiMOS Medium-Sparsity (smallE_largeP)"
@@ -12,7 +13,7 @@ do
   do 
     for struct in 0 1 2 3
     do
-      mpirun -np 2 ./build-dcs-gcc74-pumipic/performance_tests/ps_combo160 --kokkos-ndevices=2 $e $((e*10000)) $distribution $struct
+      mpirun -np 2 ./ps_combo160 --kokkos-ndevices=2 $e $((e*10000)) $distribution $struct
     done
   done
 done

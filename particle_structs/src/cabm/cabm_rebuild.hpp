@@ -1,5 +1,4 @@
 #pragma once
-
 #include <ppTiming.hpp>
 
 namespace pumipic {
@@ -136,8 +135,8 @@ namespace pumipic {
             + (particle_indices(ptcl)/soa_len);
           soa_ptcl_indices(ptcl) = particle_indices(ptcl)%soa_len;
         });
-      CopyMTVsToAoSoA<device_type, DataTypes>(*aosoa_, new_particles, soa_indices,
-        soa_ptcl_indices); // copy data over
+      CopyMTVsToAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(*aosoa_, new_particles,
+        soa_indices, soa_ptcl_indices); // copy data over
     }
 
     RecordTime("CabM add particles", add_timer.seconds());

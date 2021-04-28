@@ -21,7 +21,8 @@ file.close()
 
 edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push", "Sell-32-ne particle migration",
               "CSR rebuild", "CSR pseudo-push", "CSR particle migration",
-              "CabM rebuild", "CabM pseudo-push", "CabM particle migration" ]
+              "CabM rebuild", "CabM pseudo-push", "CabM particle migration",
+              "DPS rebuild", "DPS pseudo-push", "DPS particle migration" ]
 
 elms = 0
 

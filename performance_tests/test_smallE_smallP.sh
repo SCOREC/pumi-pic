@@ -6,9 +6,9 @@ for e in 250 500 750 1000 1250 1500 1750 2000
 do
   for distribution in 0 1 2 3
   do 
-    for struct in 0 1 2
+    for struct in 0 1 2 3
     do
-      ./ps_combo160 --kokkos-ndevices=2 $e $((e*1000)) $distribution $struct
+      ./build-pumipic-blockade-cuda/performance_tests/ps_combo160 --kokkos-ndevices=2 $e $((e*1000)) $distribution $struct
     done
   done
 done

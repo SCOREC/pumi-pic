@@ -20,6 +20,11 @@ namespace pumipic {
       cabm->parallel_for(fn, s);
       return;
     }
+    DPS<DataTypes, MemSpace>* dps = dynamic_cast<DPS<DataTypes, MemSpace>*>(ps);
+    if (dps) {
+      dps->parallel_for(fn, s);
+      return;
+    }
     fprintf(stderr, "[ERROR] Structure does not support parallel for used on kernel %s\n",
             s.c_str());
     throw 1;

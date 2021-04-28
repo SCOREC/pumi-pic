@@ -155,8 +155,8 @@ namespace pumipic {
         soa_ptcl_indices(ptcl_id) = index_in_element%soa_len; // index of particle in soa
       });
 
-    CopyMTVsToAoSoA<device_type, DataTypes>(*aosoa_, particle_info, soa_indices,
-      soa_ptcl_indices);
+    CopyMTVsToAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(*aosoa_, particle_info,
+      soa_indices, soa_ptcl_indices);
   }
 
 }

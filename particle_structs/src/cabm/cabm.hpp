@@ -213,7 +213,7 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::~CabM() { }
+  CabM<DataTypes, MemSpace>::~CabM() { delete aosoa_; }
 
   /**
    * a parallel for-loop that iterates through all particles

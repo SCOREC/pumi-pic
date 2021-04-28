@@ -8,7 +8,7 @@ do
   do 
     for struct in 0 1 2 3
     do
-      ./ps_combo160 --kokkos-ndevices=2 $e $((e*1000)) $distribution $struct
+      ./build-pumipic-blockade-cuda/performance_tests/ps_combo160 --kokkos-ndevices=2 $e $((e*1000)) $distribution $struct
     done
   done
 done

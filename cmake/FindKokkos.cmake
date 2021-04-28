@@ -4,7 +4,7 @@
 #  KOKKOS_INCLUDE_DIRS - The KOKKOS include directories
 #  KOKKOS_LIBRARIES - The libraries needed to use KOKKOS
 
-set(KOKKOS_PREFIX "" CACHE STRING "Zoltan install directory")
+set(KOKKOS_PREFIX "" CACHE STRING "Kokkos install directory")
 if(KOKKOS_PREFIX)
   message(STATUS "KOKKOS_PREFIX ${KOKKOS_PREFIX}")
 endif()

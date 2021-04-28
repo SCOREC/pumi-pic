@@ -1,5 +1,5 @@
 #pragma once
-#include <particle_structure.hpp>
+#include <particle_structs.hpp>
 namespace pumipic {
     enum PaddingStrategy {
       //Divide all padding evenly to each element [Default]
@@ -23,13 +23,17 @@ namespace pumipic {
               lid_t num_particles, kkLidView particles_per_elements, kkGidView element_gids,
               kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
 
+    //True - reallocate memory every time, false only reallocate if needed
+    bool always_realloc = false;
+    //Percent of current memory size to perform realloc if requesting below
+    double minimize_size = .8;
     //Percent padding to add based on the padding strategy [default = 0.1 (10%)]
-    double shuffle_padding;
+    double shuffle_padding = 0.1;
     //Extra padding at the end of the structure to allow growth [default = 0.05 (5%)]
-    double extra_padding;
+    double extra_padding = 0.05;
 
     //Padding strategy
-    PaddingStrategy padding_strat;
+    PaddingStrategy padding_strat = PAD_EVENLY;
 
     //String identification for the particle structure
     std::string name;

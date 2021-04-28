@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <Kokkos_Core.hpp>
 
-#include <MemberTypes.h>
-#include <SellCSigma.h>
 #include <particle_structs.hpp>
 #include "Distribute.h"
 
@@ -57,12 +55,14 @@ int main(int argc, char* argv[]) {
   }
   Kokkos::finalize();
   MPI_Finalize();
-  if (fails == 0)
+  if (fails == 0) {
     printf("All tests passed\n");
+    return 0;
+  }
   else {
     printf("[ERROR] %d tests failed\n", fails);
+    return 1;
   }
-  return 0;
 }
 
 bool padEvenly(Input& input) {

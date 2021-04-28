@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <Kokkos_Core.hpp>
 
-#include <MemberTypes.h>
-#include <SellCSigma.h>
+#include <particle_structs.hpp>
 
 #include <ppAssert.h>
 #include "Distribute.h"

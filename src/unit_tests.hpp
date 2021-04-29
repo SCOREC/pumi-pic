@@ -26,75 +26,80 @@
 
 #include "pumipic_adjacency.hpp"
 
-namespace g = pumipic;
+namespace p = pumipic;
+
+void print_array(const double* a, int n, std::string name) {
+    if(name!=" ")
+      std::cout << name << ": ";
+    for(int i=0; i<n; ++i)
+      std::cout << a[i] << ", ";
+    std::cout <<"\n";
+}
+
+template< o::LO N>
+void print_osh_vector(const Omega_h::Vector<N> &v, const char* name) {
+  if(N==3)
+    printf("%s %g %g %g\n",  name, v[0], v[1], v[2]);
+  else if(N==4)
+    printf("%s %g %g %g %g\n",  name, v[0], v[1], v[2], v[3]);
+  else if(N>4) {
+    printf("%s ", name);
+    for(o::LO i=0; i<N; ++i)
+      printf("%g ", v[i]); 
+    printf("\n");
+  }
+}
 
 //static in separate file if not in class
+//remove M
 bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
-    const Omega_h::Vector<3> &p, const double *v, int pos=-1, bool intent=0)
-{
-  Omega_h::Vector<4> bcc;
-  g::find_barycentric_tet(M, p, bcc);
-  if(pos == -1)
-  {
-  #ifdef DEBUG
-    g::print_osh_vector(M[0], "", false);
-    g::print_osh_vector(M[1], "", false);
-    g::print_osh_vector(M[2], "", false);
-    g::print_osh_vector(M[3], "", false);
-    g::print_osh_vector(p, " P");
-    g::print_array(bcc.data(), 4, "BCC");
-#endif // DEBUG
-
-    //assumes size of v is 4
+    const o::Vector<3> &p, const double *v, int pos=-1, 
+    bool intent=false, bool debug=false) {
+  o::Write<o::LO>res(1,0);
+  o::Write<o::LO>bcc_w(4,0);
+  o::Real x = p[0];
+  o::Real y = p[1];
+  o::Real z = p[2];
+  o::parallel_for(1, OMEGA_H_LAMBDA(int i) {
+    o::Vector<3> pd;
+    pd[0] = x;
+    pd[1] = y;
+    pd[2] = z;
+    Omega_h::Vector<4> bcc_v;
+    p::find_barycentric_tet(M, pd, bcc_v);
     for(int i=0; i<4; ++i)
-    {
-      if(std::abs(bcc[i]- v[i]) > 1e-10)
-      {
-#ifdef DEBUG
-          //Omega_h_fail format
-          printf("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
-                       " calculated_bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
-                    p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
-#endif // DEBUG
-        return 0;
+      bcc_w[i] = bcc_v[i];
+  });
+
+  //Access p in host ??
+  o::HostRead<o::LO> bcc(bcc_w);
+    if(pos == -1) {
+      for(int i=0; i<4; ++i) {
+        if(std::abs(bcc[i]- v[i]) > 1e-10) {
+          if(debug)
+            printf("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
+              " calculated_bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
+              p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
+          return false;
+        }
       }
+    } else if (o::are_close(bcc[pos], v[0])) {
+      if(debug)
+        std::cout << "Barycentric test passed for (" << p[0] << ","
+          << p[1] << "," << p[2]<< ") => " << v[0] << "==" << bcc[pos] << "\n";
+    }else if(intent) {
+      if(debug)
+        std::cout << "Barycentric test intented to fail (" << p[0] << ","
+          << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bcc[pos] << " success :)\n";
+    } else {
+      std::cout << "Barycentric test failed : " << v[0] << " != " <<  bcc[pos] << "\n";
+      return false;
     }
-#ifdef DEBUG
-    std::cout << "Barycentric test passed \n";
-#endif // DEBUG
-  }
-  else  //, v has size=1
-  {
-    if(g::almost_equal(bcc[pos], v[0]))
-    {
-#ifdef DEBUG
-      std::cout << "Barycentric test passed for (" << p[0] << ","
-                << p[1] << "," << p[2]<< ") => " << v[0] << "==" << bcc[pos] << "\n";
-#endif // DEBUG
-    }
-    else if(intent)
-    {
-#ifdef DEBUG
-      std::cout << "Barycentric test intented to fail (" << p[0] << ","
-                << p[1] << "," << p[2]<< ") => " << v[0]  << "!=" << bcc[pos] << " success :)\n";
-#endif // DEBUG
-    }
-    else
-    {
-#ifdef DEBUG
-      g::print_matrix(M );
-      g::print_osh_vector(p, "p");
-      Omega_h_fail("Barycentric test failed : %0.3f != %0.3f \n", v[0], bcc[pos]);
-#endif // DEBUG
-      return 0;
-    }
-  }
-  return 1;
+  return true;// TODO check this  result[0];
 }
 
 
-bool test_barycentric1()
-{
+bool test_barycentric1() {
     std::cout <<"In_test_barycentric1 \n";
   const Omega_h::Vector<3> p1{0.0,1.0,0.0}, p2{0.5, 0.0, 0.0},
       p3{1.0,1.0,0.0}, p4{0.5,1.0,0.5};
@@ -174,6 +179,7 @@ bool test_barycentric2()
 
 bool test_barycentric_tri()
 {
+/*
   const Omega_h::Vector<3> p1{0.0,0.0,0.0}, p2{2.0, 0.0, 0.0}, p3{1.0,1.0,0.0};
   const Omega_h::Matrix<3, 3> M{p1, p2, p3};
   Omega_h::Vector<3> bc{-1, -1, -1};
@@ -190,10 +196,10 @@ bool test_barycentric_tri()
     std::cout << "Barycentric test : " << bcname[i] <<  " \n";
 #endif // DEBUG
     index = Omega_h::simplex_opposite_template(2, 1, i);
-    g::find_barycentric_tri_simple(M, M[index], bc);
-    bool res = g::compare_array(bc.data(), bcc_mat[i].data(), 3);
+    p::find_barycentric_tri_simple(M, M[index], bc);
+    bool res = p::compare_array(bc.data(), bcc_mat[i].data(), 3);
 #ifdef DEBUG
-    g::print_array(bc.data(), 3, "BC_tri");
+    p::print_array(bc.data(), 3, "BC_tri");
 #endif // DEBUG
     if(!res)
     {
@@ -211,9 +217,9 @@ bool test_barycentric_tri()
   const Omega_h::Few<Omega_h::Vector<3>, 3>& xpoints{xp1, xp2, xp3};
   for(int i=0; i<3; ++i)
   {
-    g::find_barycentric_tri_simple(M, xpoints[i], bc);
+    p::find_barycentric_tri_simple(M, xpoints[i], bc);
 #ifdef DEBUG
-    g::print_array(bc.data(), 3, "BC_tri");
+    p::print_array(bc.data(), 3, "BC_tri");
 #endif // DEBUG
     if(bc[i] >= 0)
     {
@@ -223,6 +229,7 @@ bool test_barycentric_tri()
       return 0;
     }
   }
+*/
   return 1;
 }
 
@@ -243,16 +250,11 @@ void test_line_tri_intx()
 
   for(int i=0; i<4; ++i)
   {
-    g::get_face_coords( M, i, face);
-    Omega_h::LO edge = -1;
-    bool res = g::line_triangle_intx_simple(face, orig, dest, xpoint, edge);
-    if(res)
-    {
-#if DEBUG>0
-      g::print_array(xpoint.data(), 3, "FoundXPT:");
-      std::cout << "--------\n";
-#endif // DEBUG
-    }
+    /*
+    p::get_face_from_face_index_of_tet( M, i, face);
+    Omega_h::Real dp = 0;
+    bool res = p::line_triangle_intx_simple(face, orig, dest, xpoint, dp);
+   */
   }
 }
 
@@ -265,25 +267,22 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
             << " #verts " << m.nverts()
             << "\n";
 
-  if(coords)
-  {
+  if(coords)  {
     const auto coords = m.coords();
-    std::cout << "\n#Coords: size=" << coords.size() << " (3 x verts)\n\t";
-
-    
+    std::cout << "\n#Coords: size=" << coords.size() << " (3 x verts)\n\t";    
     auto printCoords = OMEGA_H_LAMBDA(o::LO i) {
       if( i<20 )
         printf("coords[%2d] %.4f\n", i, coords[i]);
     };
     o::parallel_for(coords.size(), printCoords, "printCoords");
-
     const auto mesh2verts = m.ask_elem_verts();
     std::cout << "#ask_elem_verts: " << mesh2verts.size() << "\n"; //LOs
     auto printElems = OMEGA_H_LAMBDA(o::LO ielem) {
       if(ielem<2) {
         auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
         const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
-        g::print_matrix(M);
+        for(o::LO i=0; i<4; ++i)
+          printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
         printf("Vertex IDS :");
         for(int i=0; i<4; ++i)
         {

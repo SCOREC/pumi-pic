@@ -3,16 +3,16 @@
 namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
-  class CabM;
+  class DPS;
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
-  class CabM_Input {
+  class DPS_Input {
   public:
     typedef typename ParticleStructure<DataTypes, MemSpace>::kkLidView kkLidView;
     typedef typename ParticleStructure<DataTypes, MemSpace>::kkGidView kkGidView;
     typedef typename ParticleStructure<DataTypes, MemSpace>::MTVs MTVs;
     typedef Kokkos::TeamPolicy<typename MemSpace::execution_space> PolicyType;
-    CabM_Input(PolicyType& p, lid_t num_elements,
+    DPS_Input(PolicyType& p, lid_t num_elements,
               lid_t num_particles, kkLidView particles_per_elements, kkGidView element_gids,
               kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
 
@@ -22,7 +22,7 @@ namespace pumipic {
     //String identification for the particle structure
     std::string name;
 
-    friend class CabM<DataTypes, MemSpace>;
+    friend class DPS<DataTypes, MemSpace>;
   protected:
     PolicyType policy;
     lid_t ne, np;
@@ -33,7 +33,7 @@ namespace pumipic {
   };
 
   template <class DataTypes, typename MemSpace>
-  CabM_Input<DataTypes, MemSpace>::CabM_Input(PolicyType& p, lid_t ne_,
+  DPS_Input<DataTypes, MemSpace>::DPS_Input(PolicyType& p, lid_t ne_,
                                             lid_t np_, kkLidView ppe_, kkGidView eg,
                                             kkLidView pes, MTVs info) :
     policy(p), ne(ne_), np(np_), ppe(ppe_), e_gids(eg),

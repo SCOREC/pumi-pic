@@ -42,7 +42,7 @@ namespace pumipic {
 
     // atomic_fetch_add to increment from the beginning of each element
     // when filling (offset[element] is start of element)
-    auto fill_ptcl_indices = PS_LAMBDA(const lid_t elm_id, const lid_t ptcl_id, bool mask){
+    auto fill_ptcl_indices = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, bool& mask){
       particle_indices(ptcl_id) = Kokkos::atomic_fetch_add(&row_indices(particle_elements(ptcl_id)),1);
     };
     parallel_for(fill_ptcl_indices);

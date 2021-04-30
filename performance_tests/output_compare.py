@@ -18,7 +18,8 @@ input_stream.close()
 
 edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push", "Sell-32-ne particle migration",
               "CSR rebuild", "CSR pseudo-push", "CSR particle migration",
-              "CabM rebuild", "CabM pseudo-push", "CabM particle migration" ]
+              "CabM rebuild", "CabM pseudo-push", "CabM particle migration",
+              "DPS rebuild", "DPS pseudo-push", "DPS particle migration" ]
 
 rebuild = []
 push = []
@@ -54,18 +55,18 @@ for line in lines:
             # output
             if "Sell" in name:
                 print_command = False
-            elif "CabM particle migration" in name:
+            elif "DPS particle migration" in name:
                 output.write("Migrate Averages:\n")
                 for test in migrate:
                     output.write(test)
                 migrate = []
                 print_command = True
-            elif "CabM pseudo-push" in name:
+            elif "DPS pseudo-push" in name:
                 output.write("Pseudo-Push Averages:\n")
                 for test in push:
                     output.write(test)
                 push = []
-            elif "CabM rebuild" in name:
+            elif "DPS rebuild" in name:
                 output.write("Rebuild Averages:\n")
                 for test in rebuild:
                     output.write(test)

@@ -147,7 +147,7 @@ namespace pumipic {
     cap = getLastValue<lid_t>(offs);
   }
   template<class DataTypes, typename MemSpace>
-  void SellCSigma<DataTypes, MemSpace>::setupParticleMask(kkLidView mask,
+  void SellCSigma<DataTypes, MemSpace>::setupParticleMask(Kokkos::View<bool*> mask,
                                                           PairView ptcls,
                                                           kkLidView chunk_widths,
                                                           kkLidView& chunk_starts) {
@@ -185,7 +185,7 @@ namespace pumipic {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [=] (lid_t& p) {
               const lid_t particle_id = start+(p*team_size);
               if (element_id < ne)
-                mask(particle_id) =  p < ptcls(row).first;
+                mask(particle_id) = p < ptcls(row).first;
             });
         });
     });

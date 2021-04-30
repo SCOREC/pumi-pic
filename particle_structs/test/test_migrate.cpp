@@ -16,7 +16,7 @@ int migrateSendRight(const char* name, PS* structure) {
   int local_rank = comm_rank;
   int local_csize = comm_size;
   int num_elems = structure->nElems();
-  auto sendRight = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto sendRight = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       new_element(p) = e;
       if (e == num_elems - 1)
@@ -35,7 +35,7 @@ int migrateSendRight(const char* name, PS* structure) {
 
   pids = structure->get<0>();
   rnks = structure->get<3>();
-  auto checkPostMigrate = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto checkPostMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       const int pid = pids(p);
       const int rank = rnks(p);
@@ -65,7 +65,7 @@ int migrateSendRight(const char* name, PS* structure) {
 
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
-  auto sendBack = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto sendBack = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     new_element(p) = e;
     new_process(p) = rnks(p);
   };
@@ -75,7 +75,7 @@ int migrateSendRight(const char* name, PS* structure) {
   failures = kkLidView("fails", 1);
   pids = structure->get<0>();
   rnks = structure->get<3>();
-  auto checkPostBackMigrate = PS_LAMBDA(const lid_t e, const lid_t p, const bool mask) {
+  auto checkPostBackMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       if (rnks(p) != local_rank) {
         printf("[ERROR] Test %s: Particle %d from rank %d was not sent back on rank %d\n",
@@ -107,7 +107,7 @@ int migrateSendToOne(const char* name, PS* structure) {
   auto double_slice = structure->get<1>();
   kkLidView ptcls_set("ptcls_set", 1);
   auto comm_rank_local = comm_rank;
-  auto setValues = PS_LAMBDA(int elem_id, int ptcl_id, int mask) {
+  auto setValues = PS_LAMBDA(const lid_t& elem_id, const lid_t& ptcl_id, const bool& mask) {
     int_slice(ptcl_id) = comm_rank_local;
     double_slice(ptcl_id,0) = comm_rank_local * 5;
     if (Kokkos::atomic_fetch_add(&ptcls_set(0), mask) < np*5/100)
@@ -141,7 +141,7 @@ int migrateSendToOne(const char* name, PS* structure) {
 
   int_slice = structure->get<0>();
   double_slice = structure->get<1>();
-  auto checkValues = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
+  auto checkValues = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const bool& mask) {
     if (mask) {
       int rank = int_slice(ptcl_id);
       double val = double_slice(ptcl_id, 0);
@@ -174,7 +174,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
   auto elem = structure->get<2>();
   int num_elems = structure->nElems();
 
-  auto sendToOdd = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+  auto sendToOdd = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     rnks(p) = local_rank;
     elem(p) = e;
     if (mask) {
@@ -200,7 +200,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
       ++fails;
       fprintf(stderr, "[ERROR] Particles remain on rank %d\n", comm_rank);
     }
-    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    auto checkPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         failures(0) = 1;
         printf("[ERROR] Particle %d remains on rank %d\n", p, local_rank);
@@ -215,7 +215,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
     }
     const int prev_rank = ((comm_rank - 1) + comm_size) % comm_size;
     auto new_rnks = structure->get<3>();
-    auto checkPtcls = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+    auto checkPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         if (new_rnks(p) != local_rank && new_rnks(p) !=  prev_rank) {
           failures(0) = 1;
@@ -230,7 +230,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
   rnks = structure->get<3>();
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
-  auto sendToOrig = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+  auto sendToOrig = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     new_element(p) = e;
     if (mask) {
       new_process(p) = rnks(p);
@@ -250,7 +250,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
 
   auto elems = structure->get<2>();
   new_element = kkLidView("new_element", structure->capacity());
-  auto resetElements = PS_LAMBDA(lid_t e, lid_t p, bool mask) {
+  auto resetElements = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       new_element(p) = elems(p);
     }

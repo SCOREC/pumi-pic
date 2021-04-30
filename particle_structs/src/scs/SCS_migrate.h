@@ -25,9 +25,9 @@ namespace pumipic {
 
     //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
-    auto count_sending_particles = PS_LAMBDA(lid_t element_id, lid_t particle_id, bool mask) {
+    auto count_sending_particles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t process = new_process(particle_id);
-      if (mask * (process != comm_rank)) {
+      if (mask && (process != comm_rank)) {
         const lid_t process_index = dist.index(process);
         Kokkos::atomic_increment<lid_t>(&num_send_particles(process_index));
       }
@@ -75,7 +75,7 @@ namespace pumipic {
     CreateViews<device_type, DataTypes>(send_particle, np_send);
     kkLidView send_index(Kokkos::ViewAllocateWithoutInitializing("send_particle_index"), capacity());
     auto element_to_gid_local = element_to_gid;
-    auto gatherParticlesToSend = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
+    auto gatherParticlesToSend = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t process = new_process(particle_id);
       const lid_t process_index = dist.index(process);
       if (mask && process != comm_rank) {
@@ -109,12 +109,14 @@ namespace pumipic {
 
     //wait for send requests if there are any
     if (count_send_requests) {
-      PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests, MPI_STATUSES_IGNORE);
+      PS_Comm_Waitall<device_type>(num_send_ranks, count_send_requests,
+                                   MPI_STATUSES_IGNORE);
       delete [] count_send_requests;
     }
 
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
+      destroyViews<DataTypes, memory_space>(send_particle);
       rebuild(new_element, new_particle_elements, new_particle_info);
       RecordTime(name +" particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
@@ -182,7 +184,7 @@ namespace pumipic {
       });
 
     /********** Set particles that were sent to non existent on this process *********/
-    auto removeSentParticles = PS_LAMBDA(lid_t element_id, lid_t particle_id, lid_t mask) {
+    auto removeSentParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const bool sent = new_process(particle_id) != comm_rank;
       const lid_t elm = new_element(particle_id);
       //Subtract (its value + 1) to get to -1 if it was sent, 0 otherwise

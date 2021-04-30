@@ -3,7 +3,7 @@
 #ifdef PP_ENABLE_CAB
 #include <Cabana_Core.hpp>
 #include "psMemberTypeCabana.h"
-#include "cabm_input.hpp"
+#include "dps_input.hpp"
 #include <sstream>
 
 namespace pumipic {
@@ -12,7 +12,7 @@ namespace pumipic {
   double prebarrier();
 
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
-  class CabM : public ParticleStructure<DataTypes, MemSpace> {
+  class DPS : public ParticleStructure<DataTypes, MemSpace> {
   public:
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
@@ -28,24 +28,23 @@ namespace pumipic {
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
-    typedef CabM_Input<DataTypes, MemSpace> Input_T;
+    typedef DPS_Input<DataTypes, MemSpace> Input_T;
 
-    //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
-    using CM_DT = PS_DTBool<DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<CM_DT,device_type>;
+    using DPS_DT = PS_DTBool<DataTypes>;
+    using AoSoA_t = Cabana::AoSoA<DPS_DT,device_type>;
 
-    CabM() = delete;
-    CabM(const CabM&) = delete;
-    CabM& operator=(const CabM&) = delete;
+    DPS() = delete;
+    DPS(const DPS&) = delete;
+    DPS& operator=(const DPS&) = delete;
 
-    CabM( PolicyType& p,
+    DPS( PolicyType& p,
           lid_t num_elements, lid_t num_particles,
           kkLidView particles_per_element,
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
           MTVs particle_info = NULL);
-    CabM(CabM_Input<DataTypes, MemSpace>&);
-    ~CabM();
+    DPS(DPS_Input<DataTypes, MemSpace>&);
+    ~DPS();
 
     //Functions from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::nElems;
@@ -71,12 +70,11 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
-    void setActive(const kkLidView particles_per_element);
+    void setNewActive(const lid_t num_particles);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
-    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
+    void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info, kkLidView& parentElms);
+    void setParentElms(const kkLidView particles_per_element, kkLidView& parentElms);
 
   private:
     //The User defined Kokkos policy
@@ -90,25 +88,18 @@ namespace pumipic {
     using ParticleStructure<DataTypes, MemSpace>::num_rows;
     using ParticleStructure<DataTypes, MemSpace>::ptcl_data;
     using ParticleStructure<DataTypes, MemSpace>::num_types;
-
+  
     // mappings from row to element gid and back to row
     kkGidView element_to_gid;
     GID_Mapping element_gid_to_lid;
     // number of SoA
     lid_t num_soa_;
-    // SoA index for start of padding
-    lid_t padding_start;
     // percentage of capacity to add as padding
     double extra_padding;
-    // offsets array for CSR structure
-    kkLidView offsets; 
-    // parent elements for each SoA
+    // parent elements for all particles in AoSoA
     kkLidView parentElms_;
     // particle data
     AoSoA_t* aosoa_;
-    // extra AoSoA copy for swapping (same size as aosoa_)
-    AoSoA_t* aosoa_swap;
-    
   };
 
   /**
@@ -127,7 +118,7 @@ namespace pumipic {
    *    undefined behavior for numberoftypes(new_particles) != numberoftypes(DataTypes)
   */
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::CabM( PolicyType& p,
+  DPS<DataTypes, MemSpace>::DPS( PolicyType& p,
                                    lid_t num_elements, lid_t num_particles,
                                    kkLidView particles_per_element,
                                    kkGidView element_gids,
@@ -145,34 +136,30 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if(!comm_rank)
-      fprintf(stderr, "building CabM\n");
+      fprintf(stderr, "building DPS\n");
 
-    // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(particles_per_element, num_ptcls, extra_padding, padding_start);
-    // set num_soa_ from the last entry of offsets
-    num_soa_ = getLastValue(offsets);
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA and copy for swapping
+    // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
-    aosoa_swap = makeAoSoA(capacity_, num_soa_);
-    // get array of parents element indices for particles
-    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(particles_per_element);
+    setNewActive(num_ptcls);
     // get global ids
-    if (element_gids.size() > 0) {
+    if (element_gids.size() > 0)
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    }
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-      fillAoSoA(particle_elements, particle_info); // initialize data
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
+    else
+      setParentElms(particles_per_element, parentElms_);
   }
 
-  template<class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::CabM(Input_T& input) :
+  template <class DataTypes, typename MemSpace>
+  DPS<DataTypes, MemSpace>::DPS(Input_T& input) :        // optional
     ParticleStructure<DataTypes, MemSpace>(input.name),
     policy(input.policy),
     element_gid_to_lid(input.ne)
@@ -187,33 +174,30 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if(!comm_rank)
-      fprintf(stderr, "building CabM\n");
-    
-    // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
-    // set num_soa_ from the last entry of offsets
-    num_soa_ = getLastValue(offsets);
+      fprintf(stderr, "building DPS\n");
+
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA and copy for swapping
+    // initialize appropriately-sized AoSoA
     aosoa_ = makeAoSoA(capacity_, num_soa_);
-    aosoa_swap = makeAoSoA(capacity_, num_soa_);
-    // get array of parents element indices for particles
-    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
-    setActive(input.ppe);
+    setNewActive(num_ptcls);
     // get global ids
     if (input.e_gids.size() > 0)
       createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
     // populate AoSoA with input data if given
     if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-      fillAoSoA(input.particle_elms, input.p_info); // initialize data
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(input.particle_elms, input.p_info, parentElms_); // fill aosoa with data
     }
+    else
+      setParentElms(input.ppe, parentElms_);
   }
 
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::~CabM() { delete aosoa_; }
+  DPS<DataTypes, MemSpace>::~DPS() { delete aosoa_; }
 
   /**
    * a parallel for-loop that iterates through all particles
@@ -225,7 +209,7 @@ namespace pumipic {
   */
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
-  void CabM<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
+  void DPS<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
     if (nPtcls() == 0)
       return;
 
@@ -244,14 +228,14 @@ namespace pumipic {
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
-        const lid_t elm = parentElms_cpy(soa); // calculate element
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
+        const lid_t elm = parentElms_cpy(particle_id); // calculate element
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, "parallel_for");
   }
 
   template <class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::printMetrics() const {
+  void DPS<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
     const auto activeSliceIdx = aosoa_->number_of_members-1;
     auto mask = Cabana::slice<activeSliceIdx>(*aosoa_);
@@ -260,26 +244,12 @@ namespace pumipic {
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         Kokkos::atomic_fetch_add(&padded_cells(0), !mask(ptcl_id));
       });
-    // Sum number of empty elements
-    kkLidHostMirror offsets_host = deviceToHost(offsets);
-    lid_t num_empty_elements = 0;
-    if (num_soa_ == 0)
-      num_empty_elements = num_elems;
-    else {
-      for (int i = 0; i < num_elems; i++) {
-        if (i != 0 && (offsets_host(i) == offsets_host(i-1)) )
-          num_empty_elements++;
-      }
-    }
-
     lid_t num_padded = getLastValue<lid_t>(padded_cells);
 
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    
     char buffer[1000];
     char* ptr = buffer;
-
     // Header
     ptr += sprintf(ptr, "Metrics (Rank %d)\n", comm_rank);
     // Sizes
@@ -288,91 +258,29 @@ namespace pumipic {
     // Padded Cells
     ptr += sprintf(ptr, "Padded Cells <Tot %%> %d %.3f%%\n", num_padded,
                    num_padded * 100.0 / capacity_);
-    // Empty Elements
-    ptr += sprintf(ptr, "Empty Elements <Tot %%> %d %.3f%%\n", num_empty_elements,
-                   num_empty_elements * 100.0 / num_elems);
-
     printf("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::printFormat(const char* prefix) const {
-    kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
-    kkLidHostMirror offsets_host = deviceToHost(offsets);
-    kkLidHostMirror parents_host = deviceToHost(parentElms_);
-    const auto soa_len = AoSoA_t::vector_length;
-
-    kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask_slice = Cabana::slice<activeSliceIdx>(*aosoa_);
-    Kokkos::parallel_for("copy_mask", capacity_,
-      KOKKOS_LAMBDA(const lid_t ptcl_id) {
-        mask(ptcl_id) = mask_slice(ptcl_id);
-      });
-    kkLidHostMirror mask_host = deviceToHost(mask);
-
-    std::stringstream ss;
-    char buffer[1000];
-    char* ptr = buffer;
-    int num_chars;
-
-    num_chars = sprintf(ptr, "%s\n", prefix);
-    num_chars += sprintf(ptr+num_chars,"Particle Structures CabM\n");
-    num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
-    buffer[num_chars] = '\0';
-    ss << buffer;
-
-    lid_t last_soa = -1;
-    lid_t last_elm = -1;
-    for (int i = 0; i < capacity_; i++) {
-      lid_t soa = i / soa_len;
-      lid_t elm = parents_host(soa);
-      if (last_soa == soa) {
-        num_chars = sprintf(ptr," %d", mask_host(i));
-        buffer[num_chars] = '\0';
-        ss << buffer;
-      }
-      else {
-        if (element_to_gid_host.size() > 0) {
-          if (last_elm != elm)
-            num_chars = sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
-          else
-            num_chars = sprintf(ptr,"\n                 | %d", mask_host(i));
-          buffer[num_chars] = '\0';
-          ss << buffer;
-        }
-        else {
-          if (last_elm != elm)
-            num_chars = sprintf(ptr,"\n  Element %2d | %d", elm, mask_host(i));
-          else
-            num_chars = sprintf(ptr,"\n             | %d", mask_host(i));
-          buffer[num_chars] = '\0';
-          ss << buffer;
-        }
-      }
-
-      last_soa = soa;
-      last_elm = elm;
-    }
-    ss << "\n";
-    std::cout << ss.str();
+  void DPS<DataTypes, MemSpace>::printFormat(const char* prefix) const {
+    fprintf(stderr, "[WARNING] printFormat not yet implemented!\n");
   }
 
 }
 
-// Separate files with CabM member function implementations
-#include "cabm_buildFns.hpp"
-#include "cabm_rebuild.hpp"
-#include "cabm_migrate.hpp"
+// Separate files with DPS member function implementations
+#include "dps_buildFns.hpp"
+#include "dps_rebuild.hpp"
+#include "dps_migrate.hpp"
 
 #else
 namespace pumipic {
-  /*A dummy version of CabM when pumi-pic is built without Cabana so operations
+  /*A dummy version of DPS when pumi-pic is built without Cabana so operations
     can compile without ifdef guards. The operations will report a message stating
     that the structure will not work.
   */
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
-  class CabM : public ParticleStructure<DataTypes, MemSpace> {
+  class DPS : public ParticleStructure<DataTypes, MemSpace> {
   public:
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
@@ -389,17 +297,17 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
-    CabM() = delete;
-    CabM(const CabM&) = delete;
-    CabM& operator=(const CabM&) = delete;
+    DPS() = delete;
+    DPS(const DPS&) = delete;
+    DPS& operator=(const DPS&) = delete;
 
-    CabM( PolicyType& p,
+    DPS( PolicyType& p,
           lid_t num_elements, lid_t num_particles,
           kkLidView particles_per_element,
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
           MTVs particle_info = NULL) {reportError();}
-    ~CabM() {}
+    ~DPS() {}
 
     //Functions from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::nElems;
@@ -426,7 +334,7 @@ namespace pumipic {
 
   private:
     void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "
-                                      "without Cabana so the CabM structure "
+                                      "without Cabana so the DPS structure "
                                       "can not be used\n");}
   };
 }

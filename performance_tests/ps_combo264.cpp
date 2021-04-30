@@ -5,11 +5,11 @@
 #include "../particle_structs/test/Distribute.h"
 #include <string>
 
-PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
+PS264* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
+PS264* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
 #ifdef PP_ENABLE_CAB
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
-PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
+PS264* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
+PS264* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 #endif
 
 int main(int argc, char* argv[]) {
@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     }
     else {
       fprintf(stderr, "Illegal argument: %s", argv[i]);
-      fprintf(stderr, "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]");
+      fprintf(stderr, "Usage argument: ./ps_combo264 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]");
     }
   }
 
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
 
     std::string name;
-    PS160* ptcls;
+    PS264* ptcls;
 
     /* Create particle structure */
     if (structure == 0) {
@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
     Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
     Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
         KOKKOS_LAMBDA(const int& e){
-      parentElmData(e) = std::sqrt((double)e) * e;
+      parentElmData(e) = sqrt(e) * e;
     });
 
     for (int i = 0; i < PS_ITERS; ++i) {
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
         if (mask) {
           for (int i = 0; i < 17; i++) {
             dbls(p,i) = 10.3;
-            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
+            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
           }
           for (int i = 0; i < 4; i++) {
             nums(p,i) = 4*p + i;
@@ -240,27 +240,27 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 
-PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
+PS264* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, C);
-  pumipic::SCS_Input<PerfTypes160> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::SCS_Input<PerfTypes264> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
   input.name = name;
-  return new pumipic::SellCSigma<PerfTypes160, MemSpace>(input);
+  return new pumipic::SellCSigma<PerfTypes264, MemSpace>(input);
 }
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
+PS264* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  return new pumipic::CSR<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
+  return new pumipic::CSR<PerfTypes264, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
 }
 #ifdef PP_ENABLE_CAB
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
+PS264* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  pumipic::CabM_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::CabM_Input<PerfTypes264> input(policy, num_elems, num_ptcls, ppe, elm_gids);
   input.name = name;
-  return new pumipic::CabM<PerfTypes160, MemSpace>(input);
+  return new pumipic::CabM<PerfTypes264, MemSpace>(input);
 }
-PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
+PS264* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  pumipic::DPS_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  pumipic::DPS_Input<PerfTypes264> input(policy, num_elems, num_ptcls, ppe, elm_gids);
   input.name = name;
-  return new pumipic::DPS<PerfTypes160, MemSpace>(input);
+  return new pumipic::DPS<PerfTypes264, MemSpace>(input);
 }
 #endif

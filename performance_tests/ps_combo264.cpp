@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
     Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
     Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
         KOKKOS_LAMBDA(const int& e){
-      parentElmData(e) = sqrt(e) * e;
+      parentElmData(e) = std::sqrt((double)e) * e;
     });
 
     for (int i = 0; i < PS_ITERS; ++i) {
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
         if (mask) {
           for (int i = 0; i < 17; i++) {
             dbls(p,i) = 10.3;
-            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / sqrt(p) / sqrt(e) + parentElmData(e);
+            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
           }
           for (int i = 0; i < 4; i++) {
             nums(p,i) = 4*p + i;

@@ -126,53 +126,16 @@ namespace pumipic {
     num_rows = num_elems;
     num_ptcls = num_particles;
 
-    construct(particle_per_element,element_gids,particle_elements,particle_info);
-    /*
-    Kokkos::Profiling::pushRegion("csr_construction");
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
-    if(!comm_rank)
-      fprintf(stderr, "Building CSR\n");
-
-    // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
-    // to fill the entries of the offsets array.
-    // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
-    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
-    exclusive_scan(particles_per_element, offsets);
-
-    // get global ids
-    if (element_gids.size() > 0) {
-      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    }
-
-    // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
-    // pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets)*1.05; // with 5% extra padding
-    // allocate storage for user particle data
-    CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
-    CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_);
-    swap_capacity_ = capacity_;
-
-    // If particle info is provided then enter the information
-    lid_t given_particles = particle_elements.size();
-    if (given_particles > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
-      initCsrData(particle_elements, particle_info);
-    }
-
-    Kokkos::Profiling::popRegion();
-    */
+    construct(particles_per_element,element_gids,particle_elements,particle_info);
   }
 
   template <class DataTypes, typename MemSpace>
   CSR<DataTypes, MemSpace>::CSR(Input_T& input):
-    ParticleStructure<Datatypes,MemSpace>(input.name),policy(input.policy),
+    ParticleStructure<DataTypes,MemSpace>(input.name),policy(input.policy),
     element_gid_to_lid(input.ne) {
 
     num_elems = input.ne;
-    num_ptlcs = input.np;
+    num_ptcls = input.np;
     //padding variable = input.padding_amount;
     //always_realloc = input.always_realloc;
     //minimize_size = input.minimize_size;.

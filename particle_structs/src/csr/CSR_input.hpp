@@ -14,7 +14,8 @@ namespace pumipic{
     typedef typename ParticleStructure<DataTypes, MemSpace>::MTVs MTVs;
     typedef Kokkos::TeamPolicy<typename MemSpace::execution_space> PolicyType;
     
-    CSR_Input(PolicyType& p, lid_t num_elements, lid_t num_particles, kkLidView particles_per_element, kkGidView element_gids, kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
+    CSR_Input(PolicyType& p, lid_t num_elements, lid_t num_particles, kkLidView particles_per_element, 
+        kkGidView element_gids, kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
 
     //Whether to reallocate the ptcl_structure on every rebuild or only when size requires
     bool always_realloc = false;
@@ -40,8 +41,10 @@ namespace pumipic{
   }; //end class CSR_Input
 
   template <class DataTypes, typename MemSpace>
-  CSR_Input<DataTypes, MemSpace>::CSR_Input(PolicyType& p, lid_t num_elements, lid_t num_particles, kkLidView particles_per_element, kkGidView element_gids, kkLidView particle_elements, MTVs particle_info) :
-    policy(p), ne(num_elements), np(num_particles), ppe(particles_per_element), e_gids(element_gids), particle_elems(particle_elements), p_info(particle_info)
+  CSR_Input<DataTypes, MemSpace>::CSR_Input(PolicyType& p, lid_t num_elements, lid_t num_particles, 
+      kkLidView particles_per_element, kkGidView element_gids, kkLidView particle_elements, MTVs particle_info) :
+    policy(p), ne(num_elements), np(num_particles), ppe(particles_per_element), 
+    e_gids(element_gids), particle_elems(particle_elements), p_info(particle_info)
   {
     name = "ptcls";
   }

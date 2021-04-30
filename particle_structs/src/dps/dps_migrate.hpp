@@ -11,15 +11,15 @@ namespace pumipic {
    * @param[in] new_particle_info array of views filled with particle data
   */
   template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
+  void DPS<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
                                          Distributor<MemSpace> dist,
                                          kkLidView new_particle_elements,
                                          MTVs new_particle_info) {
     const auto btime = prebarrier();
 
-    Kokkos::Profiling::pushRegion("csr_migrate");
+    Kokkos::Profiling::pushRegion("dps_migrate");
     Kokkos::Timer timer;
-
+    
     // Distributor size & rank for performing migration
     int comm_size = dist.num_ranks();
     int comm_rank;
@@ -27,12 +27,12 @@ namespace pumipic {
 
     // If serial, skip migration
     if (comm_size == 1) {
-      RecordTime("CSR particle migration", timer.seconds(), btime);
+      RecordTime("DPS particle migration", timer.seconds(), btime);
       rebuild(new_element, new_particle_elements, new_particle_info);
       Kokkos::Profiling::popRegion();
       return;
     }
-
+    
     // Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
@@ -44,7 +44,7 @@ namespace pumipic {
     };
     parallel_for(count_sending_particles);
     
-    //********* Send # of particles being sent to each process
+    // ********* Send # of particles being sent to each process *********
     kkLidView num_recv_particles("num_recv_particles", comm_size + 1);
     int num_send_ranks = dist.isWorld() ? 0 : comm_size - 1;
     MPI_Request* count_send_requests = NULL;
@@ -96,16 +96,15 @@ namespace pumipic {
       }
     };
     parallel_for(gatherParticlesToSend);
+    
     // Copy the values from ptcl_data[type][particle_id] into send_particle[type](index) for each data type
-    CopyParticlesToSend<CSR<DataTypes, MemSpace>, DataTypes>(this, send_particle,
-                                                                    ptcl_data,
-                                                                    new_process,
-                                                                    send_index);
+    CopyParticlesToSendFromAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(this, send_particle, *aosoa_,
+                                                                    new_process, send_index);
     
     // Wait until all counts are received
     PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
-    
+
     // Count the number of processes being sent to and recv from
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size,
@@ -128,7 +127,7 @@ namespace pumipic {
     if (num_sending_to == 0 && num_receiving_from == 0) {
       destroyViews<DataTypes, memory_space>(send_particle);
       rebuild(new_element, new_particle_elements, new_particle_info);
-      RecordTime("CSR particle migration", timer.seconds(), btime);
+      RecordTime("DPS particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -138,14 +137,14 @@ namespace pumipic {
     exclusive_scan(num_recv_particles, offset_recv_particles);
     kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
     int np_recv = offset_recv_particles_host(comm_size);
-
+    
     // Create arrays for particles being received
     lid_t new_ptcls = new_particle_elements.size();
     kkLidView recv_element(Kokkos::ViewAllocateWithoutInitializing("recv_element"), np_recv + new_ptcls);
     MTVs recv_particle;
     // Allocate views for each data type into recv_particle[type]
     CreateViews<device_type, DataTypes>(recv_particle, np_recv + new_ptcls);
-    
+
     // Get pointers to the data for MPI calls
     lid_t send_num = 0, recv_num = 0;
     lid_t num_sends = num_sending_to * (num_types + 1);
@@ -184,16 +183,16 @@ namespace pumipic {
 
     PS_Comm_Waitall<device_type>(num_recvs, recv_requests, MPI_STATUSES_IGNORE);
     delete [] recv_requests;
-    
-    //********** Convert the received element from element gid to element lid
+
+    // ********** Convert the received element from element gid to element lid *********
     auto element_gid_to_lid_local = element_gid_to_lid;
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
         recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
-
-    //********** Set particles that were sent to non existent on this process
+    
+    // ********** Set particles that were sent to non existent on this process *********
     auto removeSentParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const bool sent = new_process(particle_id) != comm_rank;
       const lid_t elm = new_element(particle_id);
@@ -202,7 +201,7 @@ namespace pumipic {
     };
     parallel_for(removeSentParticles);
 
-    //********** Add new particles to the migrated particles
+    // ********** Add new particles to the migrated particles *********
     kkLidView new_ptcl_map(Kokkos::ViewAllocateWithoutInitializing("new_ptcl_map"), new_ptcls);
     Kokkos::parallel_for(new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
         recv_element(np_recv + i) = new_particle_elements(i);
@@ -211,19 +210,20 @@ namespace pumipic {
     CopyViewsToViews<kkLidView, DataTypes>(recv_particle, new_particle_info, new_ptcl_map);
 
 
-    //********** Combine and shift particles to their new destination
+    // ********** Combine and shift particles to their new destination **********
     Kokkos::Timer rebuild_subtract;
     rebuild(new_element, recv_element, recv_particle);
     const auto temp = rebuild_subtract.seconds();
-
+    
     // Cleanup
     PS_Comm_Waitall<device_type>(num_sends, send_requests, MPI_STATUSES_IGNORE);
     delete [] send_requests;
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
-
-    RecordTime("CSR particle migration", timer.seconds() - temp, btime);
+    
+    RecordTime("DPS particle migration", timer.seconds() - temp, btime);
 
     Kokkos::Profiling::popRegion();
   }
+
 }

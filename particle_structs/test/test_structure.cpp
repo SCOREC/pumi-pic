@@ -24,6 +24,9 @@ int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
 int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
             lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
             kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
+int addDPSs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
 
 //Simple tests of constructors
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
@@ -90,9 +93,12 @@ int main(int argc, char* argv[]) {
     //Add CSR
     fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
+#ifdef PP_ENABLE_CAB
     //Add CabM
-#ifdef PP_ENABLE_CABM
     fails += addCabMs(structures, names, num_elems, num_ptcls, ppe, element_gids,
+                     particle_elements, particle_info);
+    //Add DPS
+    fails += addDPSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
                      particle_elements, particle_info);
 #endif
 
@@ -204,6 +210,24 @@ int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
   }
   catch(...) {
     fprintf(stderr, "[ERROR] Construction of CabM failed on rank %d\n", comm_rank);
+    ++fails;
+  }
+  return fails;
+}
+
+int addDPSs(std::vector<PS*>& structures, std::vector<std::string>& names,
+            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
+            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
+  int fails = 0;
+  try {
+    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+    PS* s = new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                         element_gids, particle_elements, particle_info);
+    structures.push_back(s);
+    names.push_back("dps");
+  }
+  catch(...) {
+    fprintf(stderr, "[ERROR] Construction of DPS failed on rank %d\n", comm_rank);
     ++fails;
   }
   return fails;

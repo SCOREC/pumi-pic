@@ -8,5 +8,6 @@ function(make_test exename srcname)
 endfunction(make_test)
 
 make_test(ps_combo160 ps_combo160.cpp)
+make_test(ps_combo264 ps_combo264.cpp)
 
 bob_end_subdir()

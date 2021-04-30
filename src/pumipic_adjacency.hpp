@@ -2,7 +2,6 @@
 #define PUMIPIC_ADJACENCY_HPP
 
 #include <iostream>
-
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
 #include "Omega_h_element.hpp"
@@ -34,36 +33,6 @@ namespace pumipic
             \ | /
               1
 */
-//retrieve face coords in the Omega_h order
-OMEGA_H_INLINE void get_face_coords(const Omega_h::Matrix<DIM, 4> &M,
-          const Omega_h::LO iface, Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc)
-{
-   //face_vert:0,2,1; 0,1,3; 1,2,3; 2,0,3
-    OMEGA_H_CHECK(iface<4 && iface>=0);
-    abc[0] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 0)];
-    abc[1] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 1)];
-    abc[2] = M[Omega_h::simplex_down_template(DIM, FDIM, iface, 2)];
-
-}
-
-OMEGA_H_INLINE void get_edge_coords(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-          const Omega_h::LO iedge, Omega_h::Few<Omega_h::Vector<DIM>, 2> &ab)
-{
-   //edge_vert:0,1; 1,2; 2,0
-    ab[0] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 0)];
-    ab[1] = abc[Omega_h::simplex_down_template(FDIM, 1, iedge, 1)];
-}
-
-OMEGA_H_INLINE void check_face(const Omega_h::Matrix<DIM, 4> &M,
-    const Omega_h::Few<Omega_h::Vector<DIM>, 3>& face, const Omega_h::LO faceid )
-{
-    Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
-    get_face_coords( M, faceid, abc);
-
-    OMEGA_H_CHECK(true == compare_array(abc[0].data(), face[0].data(), DIM)); //a
-    OMEGA_H_CHECK(true == compare_array(abc[1].data(), face[1].data(), DIM)); //b
-    OMEGA_H_CHECK(true == compare_array(abc[2].data(), face[2].data(), DIM)); //c
-}
 
 #define TriVerts 3
 #define TriDim 2
@@ -90,144 +59,181 @@ OMEGA_H_DEVICE void barycentric_tri(
   }
 }
 
-// BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
-//TODO Warning: Check opposite_template use in this before using
-OMEGA_H_INLINE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &Mat,
-     const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc)
-{
-  for(Omega_h::LO i=0; i<4; ++i) bcc[i] = -1;
+//TODO use  barycentric_coords_tet()
+OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &mat,
+     const Omega_h::Vector<DIM> &pos, Omega_h::Vector<4> &bcc, bool debug=false) {
+  for(Omega_h::LO i=0; i<4; ++i) 
+    bcc[i] = -1;
+  o::Real tol = 1.0e-20;
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
-  for(Omega_h::LO iface=0; iface<4; ++iface) // TODO last not needed
-  {
-    get_face_coords(Mat, iface, abc);
+  for(Omega_h::LO iface=0; iface<4; ++iface) {
+    get_face_from_face_index_of_tet(mat, iface, abc);
     auto vab = abc[1] - abc[0]; //b - a;
     auto vac = abc[2] - abc[0]; //c - a;
     auto vap = pos - abc[0]; // p - a;
-    vals[iface] = osh_dot(vap, Omega_h::cross(vac, vab)); //ac, ab NOTE
-
+    vals[iface] = o::inner_product(vap, Omega_h::cross(vac, vab)); //ac, ab
   }
   //volume using bottom face=0
-  get_face_coords(Mat, 0, abc);
+  get_face_from_face_index_of_tet(mat, 0, abc);
   auto vtx3 = Omega_h::simplex_opposite_template(DIM, FDIM, 0);
   OMEGA_H_CHECK(3 == vtx3);
   // abc in order, for bottom face: M[0], M[2](=abc[1]), M[1](=abc[2])
-  Omega_h::Vector<DIM> cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]); //NOTE
-  Omega_h::Real vol6 = osh_dot(Mat[vtx3]-Mat[0], cross_ac_ab);
+  auto cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
+  auto vol6 = o::inner_product(mat[vtx3]-mat[0], cross_ac_ab);
+  if(debug) 
+    printf(" old:bccvals %g %g %g %g vol %g \n", vals[0]/6.0, vals[1]/6.0, 
+      vals[2]/6.0, vals[3]/6.0,vol6/6.0);
+
   Omega_h::Real inv_vol = 0.0;
-  if(vol6 > EPSILON) // TODO tolerance
+  if(vol6 > tol) // TODO tolerance
     inv_vol = 1.0/vol6;
-  else
-  {
+  else {
     return 0;
   }
-  bcc[0] = inv_vol * vals[0]; //for face0, cooresp. to its opp. vtx.
-  bcc[1] = inv_vol * vals[1];
-  bcc[2] = inv_vol * vals[2];
-  bcc[3] = inv_vol * vals[3]; // 1-others
+  //bcc[0] for face0 corresp to its opp vtx, so on.
+  for(int i=0; i<4; ++i)
+    bcc[i] = inv_vol * vals[i];
+  return 1; //success
+}
 
+// BC coords are not in order of its corresp. opp. vertexes. Bccoord of tet(iface, xpoint)
+OMEGA_H_DEVICE bool barycentric_coords_tet(const o::LOs& mesh2verts, 
+   const o::Reals& coords, const o::Vector<DIM>& pos, const o::LO elem, 
+   o::Vector<DIM+1>& bcc, o::Real tol=0, bool debug=false) {
+  auto verts = Omega_h::gather_verts<DIM + 1>(mesh2verts, elem);
+  auto tet = Omega_h::gather_vectors<DIM + 1, DIM>(coords, verts);
+  auto vals = o::zero_vector<DIM+1>();
+  Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
+  for(Omega_h::LO iface=0; iface<4; ++iface) {
+    get_face_from_face_index_of_tet(tet, iface, abc);
+    auto vab = abc[1] - abc[0]; //b - a;
+    auto vac = abc[2] - abc[0]; //c - a;
+    auto vap = pos - abc[0]; // p - a;
+    vals[iface] = 1.0/6.0*o::inner_product(vap, Omega_h::cross(vac, vab)); //ac, ab
+    bcc[iface] = 0;
+  }
+  auto basis = Omega_h::simplex_basis<DIM, DIM>(tet);
+  auto vol = Omega_h::tet_volume_from_basis(basis);
+  if(debug)
+    printf(" bccvals %g %g %g %g vol %g \n", vals[0], vals[1], vals[2], vals[3],vol);
+  if(vol < tol)
+    return 0;
+  bcc = 1.0/vol * vals;
   return 1; //success
 }
 
 // BC coords are not in order of its corresp. vertexes. Bccoord of triangle (iedge, xpoint)
 // corresp. to vertex obtained from simplex_opposite_template(FDIM, 1, iedge) ?
-OMEGA_H_INLINE bool find_barycentric_tri_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-     const Omega_h::Vector<3> &xpoint, Omega_h::Vector<3> &bc)
-{
-  Omega_h::Vector<DIM> a = abc[0];
-  Omega_h::Vector<DIM> b = abc[1];
-  Omega_h::Vector<DIM> c = abc[2];
-  Omega_h::Vector<DIM> cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
-  Omega_h::Vector<DIM> norm = Omega_h::normalize(cross);
-  Omega_h::Real area = osh_dot(norm, cross);
+OMEGA_H_DEVICE bool find_barycentric_tri_simple(
+  const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
+  const Omega_h::Vector<3> &xpoint, Omega_h::Vector<3> &bc) {
+  auto a = abc[0];
+  auto b = abc[1];
+  auto c = abc[2];
+  auto cross = 1/2.0 * Omega_h::cross(b-a, c-a); //NOTE order
+  auto norm = Omega_h::normalize(cross);
+  Omega_h::Real area = o::inner_product(norm, cross);
 
-  if(std::abs(area) < 1e-6)  //TODO
+  if(std::abs(area) < 1e-20) { //TODO
+    printf("area is too small \n");
     return 0;
+  }
   Omega_h::Real fac = 1/(area*2.0);
-  bc[0] = fac * osh_dot(norm, Omega_h::cross(b-a, xpoint-a));
-  bc[1] = fac * osh_dot(norm, Omega_h::cross(c-b, xpoint-b));
-  bc[2] = fac * osh_dot(norm, Omega_h::cross(xpoint-a, c-a));
+  bc[0] = fac * o::inner_product(norm, Omega_h::cross(b-a, xpoint-a));
+  bc[1] = fac * o::inner_product(norm, Omega_h::cross(c-b, xpoint-b));
+  bc[2] = fac * o::inner_product(norm, Omega_h::cross(xpoint-a, c-a));
 
   return 1;
 }
 
-/** \brief returns true if line dest-origin intersects the triangle abc
+/** \brief returns true if line dest-origin intersects triangle abc.
+  \info Algorithm checks values of projection of vectors : 
+  from line start to plane (Pstart), from plane to line end (Pend), and
+  line onto surface normal (Pseg). 
+  Requirements: No holes in domain => containment check using BCC
+  should include edge/face (no -ve tolerance).
+  If end point of a particle is on edge/face, and BCC fails to detect it,
+  L-T search should include edge/face with a tolerance. 
+  So, edge/face belongs to both adjacent elements. 
+  Any wall boundary handling has to be done separately. 
+
+  If particle start is on edge/face and BCC failed to detect end point, 
+  L-T needs a tolerance to make sure start position is valid.
+  This would be allowing a small negative projection of start point 
+  on the plane, instead of limiting it to be positive for the standard.
+  Particle path should have a positive projection, Pseg>0, which means a 
+  sliding particle on an edge/face is not an intersection since Pseg=0. 
+  If BCC failed to detect such slides, the maximum projection of segment
+  on plane is used to find the next adjacent element. If it is wall, 
+  then xpoint is same as origin when par_t is zero due to Pseg=0.
+  
+  If particle end point is on edge/face and L-T detects it, then the 
+  adjacent element is searched next. If BCC fails in that element
+  since it is on edge/face, then L-T will fail since the particle
+  hasn't gone out. So, BCC search needs a tolerance, which means
+  domain extends a bit outward than the wall. 
+  NOTE: For boundary simulation this may be a problem, since the
+  particle may be still in domain for a zero and a little -ve
+  distance to boundary, causing mismatch in fields with wall.
+
+  Limits/Tolerance: Pstart >= -tol; Pend > -tol; Pseg>0. 
+
+  Examples of particle handling around boundary:
+  If Pstart =0, and Pend=0, then Pseg won't be >0; i.e, if start and 
+  end on bdry, then line won't make +ve projn with surface normal.
+  If this case failed in BCC search then particle has moved out of the 
+  element, then take the adjacent element for the maximum projection of
+  segment onto plane, which is calculated only if start and end projection
+  are within limits.
+  If Pstart>0 (ptcl within), Pend=0, then Pseg will be>0; i.e, if start
+  is inside domain and end is on bdry, then line has to make +ve projn 
+  with surface normal.
+  If Pstart=0,Pseg>0,then Pend will be >0(outside); i.e if start is on 
+  bdry, and line  has +ve proj with normal, then end point will be outside.
  */
-OMEGA_H_INLINE bool line_triangle_intx_simple(const Omega_h::Few<Omega_h::Vector<DIM>, 3> &abc,
-    const Omega_h::Vector<DIM> &origin, const Omega_h::Vector<DIM> &dest,
-    Omega_h::Vector<DIM> &xpoint, bool reverse=false )
-{
-  const auto debug = 0;
-  for(int i=0; i<DIM; ++i)
+OMEGA_H_DEVICE bool line_triangle_intx_simple (
+  const Omega_h::Few<Omega_h::Vector<3>, 3> &abc, 
+  const Omega_h::Vector<3> &origin, const Omega_h::Vector<3> &dest,
+  Omega_h::Vector<3> &xpoint, Omega_h::Real& dproj, bool reverse=false, 
+  Omega_h::Real tol=0, bool debug=false) {
+  for(int i=0; i<3; ++i)
     xpoint[i] = 0;
 
-  //Boundary exclusion. Don't set it globally and change randomnly.
-  const Omega_h::Real bound_intol = 0;//SURFACE_EXCLUDE; //TODO optimum value ?
-
   bool found = false;
-  const Omega_h::Vector<DIM> line = dest - origin;
-  const Omega_h::Vector<DIM> edge0 = abc[1] - abc[0];
-  const Omega_h::Vector<DIM> edge1 = abc[2] - abc[0];
-  Omega_h::Vector<DIM> normv = Omega_h::cross(edge0, edge1);
-  if(reverse)
-  {
+  auto line = dest - origin;
+  auto edge0 = abc[1] - abc[0];
+  auto edge1 = abc[2] - abc[0];
+  auto normv = Omega_h::cross(edge0, edge1);
+  if(reverse) {
     normv = -1*normv;
     if(debug)
-      printf("Surface normal reversed\n");
-
+      printf("LTintX Surface normal is flipped\n");
   }
-  const Omega_h::Vector<DIM> snorm_unit = Omega_h::normalize(normv);
-  const Omega_h::Real dist2plane = osh_dot(abc[0] - origin, snorm_unit);
-  const Omega_h::Real proj_lined =  osh_dot(line, snorm_unit);
-  const Omega_h::Vector<DIM> surf2dest = dest - abc[0];
-
-  if(std::abs(proj_lined) >0)
-  {
-    const Omega_h::Real par_t = dist2plane/proj_lined;
-    if(debug)
-      printf(" abs(proj_lined)>0;  par_t= %f dist2plane= %f "
-             "; proj_lined= %f \n", par_t, dist2plane, proj_lined);
-    if (par_t > bound_intol && par_t <= 1.0) //TODO test tol value
-    {
-      xpoint = origin + par_t * line;
+  auto snorm_unit = Omega_h::normalize(normv);
+  Omega_h::Real dist2plane = o::inner_product(abc[0] - origin, snorm_unit);
+  auto plane2dest = dest - abc[0];
+  Omega_h::Real proj_end = o::inner_product(snorm_unit, plane2dest);
+  if(debug)
+    printf("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
+  // equal required if tol=0 is used
+  if(dist2plane >= -tol && proj_end >= -tol) {
+    dproj = o::inner_product(line, snorm_unit);
+    Omega_h::Real par_t = (dproj>0) ? dist2plane/dproj : 0; 
+    xpoint = origin + par_t * line;
+    // line has to make a +ve projection
+    if(dproj>0) {
       Omega_h::Vector<3> bcc;
       bool res = find_barycentric_tri_simple(abc, xpoint, bcc);
-      if(res)
-      {
-        if(! (bcc[0] < 0 || bcc[2] < 0 || bcc[0]+bcc[2] > 1.0) ) //TODO all zeros ?
-        {
-          const Omega_h::Real proj = osh_dot(snorm_unit, surf2dest);
-          if(proj >0) found = true;
-          else if(proj<0)
-          {
-            if(debug)
-              printf("Particle Entering domain\n");
-          }
-          else if(almost_equal(proj,0.0)) //TODO use tol
-          {
-            if(debug)
-              printf("Particle path on surface\n");
-          }
-        }
-      }
-    }
-    else if(par_t >1.0)
-    {
+      if(res && bcc[0] >=0 && bcc[0] <=1 && bcc[1] >=0 && 
+        bcc[1]<=1 && bcc[2] >=0 && bcc[2] <=1)
+          found = true;
       if(debug)
-        printf("Line origin and destination are on the same side of face \n");
+        printf("LTintX Found %d bcc+ %d par_t= %.10f dist2plane= %.10f "
+           "projline= %.10f proj_out_line %.10f X %.10f %.10f %.10f \n", found, res, 
+           par_t, dist2plane, dproj, proj_end, xpoint[0], xpoint[1], xpoint[2]);
     }
-    else if(par_t < bound_intol) // dist2plane ~0. Line contained in plane, no intersection?
-    {
-      if(debug)
-        printf("No/Self-intersection of ptcl origin with plane at origin."
-               "t= %f %f %f\n", par_t, dist2plane, proj_lined);
-    }
-  }
-  else
-  {
-    if(debug)
-      printf("WARNING: Line and plane are parallel \n");
   }
   return found;
 }
@@ -239,6 +245,7 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3(int pid, Segment xyz) {
     v[i] = xyz(pid,i);
   return v;
 }
+
 template <typename Segment>
 OMEGA_H_DEVICE o::Vector<2> makeVector2(int pid, Segment xyz) {
   o::Vector<2> v;
@@ -246,50 +253,291 @@ OMEGA_H_DEVICE o::Vector<2> makeVector2(int pid, Segment xyz) {
     v[i] = xyz(pid,i);
   return v;
 }
-OMEGA_H_DEVICE o::LO getfmap(int i) {
-  assert(i>=0 && i<8);
-  const o::LO fmap[8] = {2,1,1,3,2,3,0,3};
-  return fmap[i];
-}
+
 OMEGA_H_DEVICE o::Matrix<3, 3> gatherVectors3x3(o::Reals const& a, o::Few<o::LO, 3> v) {
   return o::gather_vectors<3, 3>(a, v);
 }
+
 OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors4x3(o::Reals const& a, o::Few<o::LO, 4> v) {
   return o::gather_vectors<4, 3>(a, v);
 }
 
-//How to avoid redefining the MemberType? each application will define it
-//differently. Templating search_mesh with
-//template < typename ParticleType >
-//results in an error on get<> as an unresolved function.
 
-template < class ParticleType, typename Segment3d, typename SegmentInt>
-bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
-                 Segment3d x_ps_d, Segment3d xtgt_ps_d, SegmentInt pid_d,
-                 o::Write<o::LO> elem_ids, o::Write<o::Real> xpoints_d,
-                 o::Write<o::LO> xface_id, int looplimit=0) {
-  const int debug = 0;
+OMEGA_H_DEVICE bool isPointWithinElemTet(const o::LOs& mesh2verts, 
+   const o::Reals& coords, const o::Vector<DIM>& pos, const o::LO elem, 
+   o::Vector<DIM+1>& bcc, const o::Real tol=1.0e-20, bool debug=false) {
+  barycentric_coords_tet(mesh2verts, coords, pos, elem, bcc, tol, debug);
+  return all_positive(bcc, tol);
+}
 
-  const auto dual = mesh.ask_dual();
-  const auto down_r2f = mesh.ask_down(3, 2);
+OMEGA_H_DEVICE bool isPointWithinElemTet(const o::LOs& mesh2verts, 
+   const o::Reals& coords, const o::Vector<3>& pos, const o::LO elem, 
+   const o::Real tol=1.0e-20) {
+  auto bcc = o::zero_vector<4>();
+  return isPointWithinElemTet(mesh2verts, coords, pos, elem, bcc, tol);
+}
+
+template < class ParticleType, typename Segment3d, typename SegmentInt >
+bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
+    ParticleStructure< ParticleType >* ptcls, // (in) particle structure
+    Segment3d x_ps_d, // (in) starting particle positions
+    Segment3d xtgt_ps_d, // (in) target particle positions
+    SegmentInt pid_d, // (in) particle ids
+    o::Write<o::LO>& elem_ids, // (out) parent element ids for the target positions
+    o::Write<o::Real>& xpoints_d, // (out) particle-boundary intersection points
+    o::Write<o::LO>& xface_d, // (out) face ids of boundary-intersecting points
+    int looplimit=0, int debug=0) {
+  const auto btime = pumipic_prebarrier();
+  Kokkos::Profiling::pushRegion("pumpipic_search_mesh3d");
+  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_Init");
+
+  Kokkos::Timer timer;
+  const o::Real tol = 1.0e-20;
+  int rank, comm_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_omegah");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto mesh2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
   const auto face_verts =  mesh.ask_verts_of(2);
-  const auto down_r2fs = down_r2f.ab2b;
-  const auto dual_faces = dual.ab2b;
-  const auto dual_elems = dual.a2ab;
+  const auto elem_faces = mesh.ask_down(3, 2).ab2b;
+  const auto dual_elems = mesh.ask_dual().ab2b;
+  const auto dual_faces = mesh.ask_dual().a2ab;
+  const auto psCapacity = ptcls->capacity();
+  Kokkos::Profiling::popRegion();
 
+  Kokkos::Profiling::pushRegion("pumpipic_ptcl-done_elem_ids");
+  // ptcl_done[i] = 2 : particle i has hit a boundary or reached its destination
+  o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
+  // store the next parent for each particle
+  o::Write<o::LO> elem_ids_next(psCapacity,-1, "elem_ids_next");
+  Kokkos::Profiling::popRegion();
+
+  auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      elem_ids[pid] = e;
+      ptcl_done[pid] = 0;
+    } else {
+      elem_ids[pid] = -1;
+      ptcl_done[pid] = 2;
+    }
+  };
+  parallel_for(ptcls, fill, "searchMesh_fill_elem_ids");
+
+  auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if( mask > 0) {
+      const auto orig = makeVector3(pid, x_ps_d);
+      if(!isPointWithinElemTet(mesh2verts, coords, orig, e, tol)) {
+        if(debug)
+          printf("Search1: ptcl %d not_in parent_element %d :pos %g %g %g \n", 
+            pid_d(pid), e, orig[0], orig[1], orig[2]);
+        OMEGA_H_CHECK(false);
+      }
+    }
+  };
+  parallel_for(ptcls, checkParent, "pumipic_checkParent");
+  Kokkos::Profiling::popRegion();
+  bool found = false;
+  int loops = 0;
+  
+  //debug
+  int nloops = 5;
+  int lsize = 5;
+  int hsize = 1;
+  int nl = nloops*lsize;
+  if(debug)
+    hsize = psCapacity;
+  auto el_hist = o::Write<o::LO>(hsize*nl, -2);
+
+  while(!found) {
+    auto checkCurrentElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        const auto searchElm = elem_ids[pid];
+        OMEGA_H_CHECK(searchElm >= 0);
+        const auto dest = makeVector3(pid, xtgt_ps_d);
+        auto inParent = isPointWithinElemTet(mesh2verts, coords, dest, searchElm, tol);
+        ptcl_done[pid] = (inParent) ? 2:0;
+        //if ptcl not done, this will be reset below
+        elem_ids_next[pid] = searchElm;
+        if(debug && loops<nloops) {
+          el_hist[pid*nl+lsize*loops] = ptcl_done[pid];
+          el_hist[pid*nl+lsize*loops+1] = elem_ids_next[pid];
+        }
+      }
+    };
+    parallel_for(ptcls, checkCurrentElm, "pumipic_checkCurrentElm");
+
+    auto findIntersection = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && ptcl_done[pid]<2 ) {
+        const auto searchElm = elem_ids[pid];
+        OMEGA_H_CHECK(searchElm >= 0);
+        const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
+        const auto dest = makeVector3(pid, xtgt_ps_d);
+        const auto orig = makeVector3(pid, x_ps_d);
+        const auto face_ids = o::gather_down<4>(elem_faces, searchElm);
+        auto dual_elem_id = dual_faces[searchElm];
+        int adj_id = -1, ind_exp = -1;
+        auto projd = o::zero_vector<4>(); //not used
+        auto xpts = o::zero_vector<3>();
+        for(int fi=0; fi<4; ++fi) {
+          const auto face_id = face_ids[fi];
+          auto xpoint = o::zero_vector<3>();
+          const auto fv2v = o::gather_verts<3>(face_verts, face_id);
+          const auto face = gatherVectors3x3(coords, fv2v);
+          const auto flip = isFaceFlipped(fi, fv2v, tetv2v);
+          const auto det = line_triangle_intx_simple(face, orig, dest, xpoint, 
+            projd[fi], flip, tol);//, debug);
+          auto exposed = side_is_exposed[face_id];
+          if(det && exposed) {
+            ind_exp = fi;
+            for(o::LO i=0; i<3; ++i)
+              xpts[i] = xpoint[i];
+          }
+          if(det && !exposed)
+            adj_id = dual_elem_id;
+          if(!exposed)
+            ++dual_elem_id;
+        } //for
+
+        //wall collision
+        if(ind_exp >= 0) {
+          for(o::LO i=0; i<3; ++i)
+            xpoints_d[pid*3+i] = xpts[i];
+          xface_d[pid] = face_ids[ind_exp];
+          if(debug)
+            printf("Search: ptcl %d hit boundary %d  to-be stopped/reflected\n", 
+              pid_d(pid), xface_d[pid]);
+          elem_ids_next[pid] = -1;
+          ptcl_done[pid] = 2;
+          if(debug && loops<nloops)
+            el_hist[pid*nl+lsize*loops+3] = elem_ids_next[pid];
+        }
+
+        //interior
+        if(adj_id >= 0) {
+          elem_ids_next[pid] = dual_elems[adj_id];
+          ptcl_done[pid] = 1; // reset below to 0/non-zero
+          if(debug && loops<nloops) {
+            el_hist[pid*nl+lsize*loops+2] = adj_id;
+            el_hist[pid*nl+lsize*loops+3] = elem_ids_next[pid];
+          }
+        }
+      }
+    };
+    parallel_for(ptcls, findIntersection, "pumipic_findIntersection");
+
+    auto processUndetected = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      auto done = ptcl_done[pid];
+      ptcl_done[pid] = (done <2) ? 0: 2;
+      if( mask > 0 && done < 1) {
+        const auto searchElm = elem_ids[pid];
+        OMEGA_H_CHECK(searchElm >= 0);
+        const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
+        const auto dest = makeVector3(pid, xtgt_ps_d);
+        const auto orig = makeVector3(pid, x_ps_d);
+        const auto face_ids = o::gather_down<4>(elem_faces, searchElm);
+        o::Real projd[4] = {-1,-1,-1,-1};
+        auto xpoints = o::zero_vector<12>();
+        for(int fi=0; fi<4; ++fi) {
+          const auto face_id = face_ids[fi];
+          auto xpoint = o::zero_vector<3>();
+          const auto fv2v = o::gather_verts<3>(face_verts, face_id);
+          const auto face = gatherVectors3x3(coords, fv2v);
+          const auto flip = isFaceFlipped(fi, fv2v, tetv2v);
+          const auto det = line_triangle_intx_simple(face, orig, dest, xpoint, 
+            projd[fi], flip, tol);//, debug);
+          for(int i=0; i<3; ++i) 
+            xpoints[fi*3+i] = xpoint[i];
+        }
+        const o::LO max_ind = max_index(projd, 4);
+        OMEGA_H_CHECK(max_ind >= 0);
+        const auto face_id = face_ids[max_ind];
+        const auto exposed = side_is_exposed[face_id];
+        if(exposed) {
+          elem_ids_next[pid] = -1;
+          if(debug && loops<nloops)
+            el_hist[pid*nl+lsize*loops+4] = elem_ids_next[pid];          
+          for(o::LO i=0; i<3; ++i)
+            xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
+          xface_d[pid] = face_id;
+          if(debug)
+            printf("Search: ptcl %d hit boundary tobe reflected/stopped\n", pid_d(pid));
+          ptcl_done[pid] = 2;
+        } else {
+          elem_ids_next[pid] = dual_elems[face_id];
+          if(debug && loops<nloops)
+            el_hist[pid*nl+lsize*loops+4] = elem_ids_next[pid];
+        }
+      }
+    };
+    parallel_for(ptcls, processUndetected, "pumipic_processUndetected");
+    found = true;
+    auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
+      elem_ids[i] = elem_ids_next[i];
+    };
+    o::parallel_for(elem_ids.size(), cp_elm_ids, "copy_elem_ids");
+    o::LOs ptcl_done_r(ptcl_done);
+    auto minFlag = o::get_min(ptcl_done_r);
+    if(minFlag == 0)
+      found = false;
+    ++loops;
+
+    if(looplimit && loops >= looplimit) {
+      auto ptclsNotFound = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+        if( mask > 0 && !ptcl_done[pid] ) {
+          auto elm = elem_ids[pid];
+          auto ptcl = pid_d(pid);
+          const auto dest = makeVector3(pid, xtgt_ps_d);
+          const auto orig = makeVector3(pid, x_ps_d);
+          printf("rank %d : el %d next_elm %d ptcl %d  %.15e %.15e %.15e "
+            "=> %.15e %.15e %.15e \n", rank, e, elm, ptcl, orig[0], 
+            orig[1], orig[2], dest[0], dest[1],dest[2]);
+          if(debug)
+            for(int il=0; il<nloops; ++il) {
+              auto nn = pid*nloops*lsize+lsize*il;
+              printf(" pid %d  loop %d el_hist  : %d %d %d %d %d\n", pid, il, 
+               el_hist[nn], el_hist[nn+1], el_hist[nn+2], el_hist[nn+3], el_hist[nn+4]);
+            }
+        }
+      };
+      parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
+      fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      break;
+    }
+  } //while
+  Kokkos::Profiling::popRegion(); //whole
+  //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  pumipic::RecordTime("Search Mesh 3d", timer.seconds(), btime);
+  return found;   
+}
+
+
+template < class ParticleType, typename Segment3d, typename SegmentInt >
+bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
+  Segment3d x_ps_d, Segment3d xtgt_ps_d, SegmentInt pid_d,
+  o::Write<o::LO>& elem_ids, o::Write<o::Real>& xpoints_d,
+  o::Write<o::LO>& xface_d, int looplimit=0, int debug=0) {
+           
+  o::Real tol = 1.0e-10;
+  
+  Kokkos::Profiling::pushRegion("pumipic_search");
+  Kokkos::Profiling::pushRegion("pumipic_search_Init");
+  const auto side_is_exposed = mark_exposed_sides(&mesh);
+  const auto mesh2verts = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const auto face_verts =  mesh.ask_verts_of(2);
+  const auto dual_r2fs = mesh.ask_down(3, 2).ab2b;
+  const auto dual_elems = mesh.ask_dual().ab2b;
+  const auto dual_faces = mesh.ask_dual().a2ab;
   const auto psCapacity = ptcls->capacity();
 
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
-  o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
-  // particle intersection points
-  o::Write<o::Real> xpoints(3*psCapacity, 0);
+  o::Write<o::LO> ptcl_done(psCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(psCapacity,-1);
-  // flag to move origin if intersection fails
-  auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
+  auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       elem_ids[pid] = e;
       ptcl_done[pid] = 0;
@@ -300,7 +548,8 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
       ptcl_done[pid] = 1;
     }
   };
-  ps::parallel_for(ptcls, lamb, "init_search");
+  parallel_for(ptcls, fill, "searchMesh_fill_elem_ids");
+  Kokkos::Profiling::popRegion();
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -311,102 +560,139 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto elmId = e;
-        auto ptcl = pid_d(pid);
-        if(debug)
-          printf("Elem %d ptcl: %d\n", elmId, ptcl);
-        if(elmId != elem_ids[pid]) {
-          elmId = elem_ids[pid];
-          if(debug)
-            printf("Switching: Elem %d ptcl: %d\n", elmId, ptcl);
-        }
+        auto elmId = elem_ids[pid];
         OMEGA_H_CHECK(elmId >= 0);
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
+        if(debug)
+          printf("pid %d in element %d\n", pid, elmId);
         auto dest = makeVector3(pid, xtgt_ps_d);
         auto orig = makeVector3(pid, x_ps_d);
-        Omega_h::Vector<4> bcc;
+        o::Vector<4> bcc;
         if(loops == 0) {
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
-          if(!all_positive(bcc, 0)) {
-            printf("ptcl %d elem %d => %d orig %.3f %.3f %.3f dest %.3f %.3f %.3f\n",
-              ptcl, e, elmId, orig[0], orig[1], orig[2], dest[0], dest[1], dest[2]);
-            printf("Particle doesn't belong to this element at loops=0");
+          if(!all_positive(bcc, tol)) {
+            printf("Warning: Particle not in this element at loops=0"
+              "\tpid %d elem %d\n", pid, elmId);
             OMEGA_H_CHECK(false);
           }
         }
-        //check if the destination is this element
+        
+        auto ptcl = pid_d(pid);
+        bool intersected = false;
         find_barycentric_tet(M, dest, bcc);
-        if(all_positive(bcc, 0)) {
+        // TODO tolerance
+        if(all_positive(bcc, tol)) {
           if(debug)
             printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
-          elem_ids_next[pid] = elem_ids[pid];
+          elem_ids_next[pid] = elmId;
           ptcl_done[pid] = 1;
         } else {
           if(debug)
-            printf("ptcl %d checking adj elms\n", ptcl);
+            printf("ptcl %d  elemId %d checking adj elms:\n", ptcl, elmId);
+          auto dproj = o::zero_vector<4>();
+          auto xpoints = o::zero_vector<12>();
+          o::LO exposed_faces[4];
+          o::LO xface_ids[4];
+          o::LO min_bcc_elem = -1;
+          dproj[0] = dproj[1] = dproj[2] = dproj[3] = -1;
           //get element ID
-          auto dface_ind = dual_elems[elmId];
+          auto dual_elem_id = dual_faces[elmId];
           const auto beg_face = elmId *4;
           const auto end_face = beg_face +4;
-          o::LO f_index = 0;
-          bool detected = false;
+          o::LO findex = 0;
           for(auto iface = beg_face; iface < end_face; ++iface) {
-            const auto face_id = down_r2fs[iface];
+            const auto face_id = dual_r2fs[iface];
             auto xpoint = o::zero_vector<3>();
-            bool exposed = side_is_exposed[face_id];
+            o::LO exposed = side_is_exposed[face_id];
+            exposed_faces[findex] = exposed;
+            xface_ids[findex] = face_id;
             auto fv2v = o::gather_verts<3>(face_verts, face_id);
             const auto face = gatherVectors3x3(coords, fv2v);
-            o::LO matInd1 = getfmap(f_index*2);
-            o::LO matInd2 = getfmap(f_index*2+1);
-            bool inverse = true;
+            o::LO matInd1 = getFaceMap(findex*2);
+            o::LO matInd2 = getFaceMap(findex*2+1);
+            bool flip = true;
             if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
-              inverse = false;
+              flip = false;
+            intersected = line_triangle_intx_simple(face, orig, dest, xpoint, 
+              dproj[findex], flip, tol);
+            for(o::LO i=0; i<3; ++i)
+              xpoints[findex*3+i] = xpoint[i];
 
-            detected = line_triangle_intx_simple(face, orig, dest, xpoint, inverse);
-            if(debug)
-              printf("\t :ptcl %d faceid %d flipped %d exposed %d detected %d\n", ptcl,
-                face_id, inverse, exposed, detected);
-
-            if(detected && exposed) {
+            if(debug) {
+              printf("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
+              " findex %d\n", ptcl, elmId, face_id, flip, exposed, intersected, findex);
+              for(int i=0; i<3; ++i)
+               printf("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
+                ptcl, i, face[i][0], face[i][1], face[i][2]);
+              printf("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
+                ptcl, orig[0], orig[1], orig[2], dest[0],dest[1],dest[2]);
+            }
+            if(intersected && exposed) {
               ptcl_done[pid] = 1;
               for(o::LO i=0; i<3; ++i)
-                xpoints[pid*3+i] = xpoint[i];
+                xpoints_d[pid*3+i] = xpoint[i];
+              xface_d[pid] = face_id;
               elem_ids_next[pid] = -1;
-              if(debug) {
-                printf("ptcl %d faceid %d detected and exposed, next parent elm %d\n",
-                    ptcl, face_id, elem_ids_next[pid]);
-              }
+              if(debug)
+                printf("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
+                  "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               break;
-            } else if(detected && !exposed) {
-              auto adj_elem  = dual_faces[dface_ind];
+            } else if(intersected && !exposed) {
+              auto adj_elem  = dual_elems[dual_elem_id];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
-                printf("ptcl %d faceid %d detected and !exposed, next parent elm %d\n",
-                    ptcl, face_id, elem_ids_next[pid]);
+                printf("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
+                      "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               }
               break;
             }
-            // no line triangle intersection found for the current face
-            // appears to be a guess at the next element based on the smallest BCC
+            o::LO min_ind = min_index(bcc, 4);
+
+            // save next element based on the smallest BCC,
             if(!exposed) {
               if(debug)
-                printf("ptcl %d faceid %d !detected and !exposed\n", pid, face_id);
-              ++dface_ind;
-              const o::LO min_ind = min_index(bcc, 4);
-              if(f_index == min_ind) {
-                elem_ids_next[pid] = dual_faces[dface_ind];
+                printf("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
+                ptcl, elmId, face_id, findex);
+              o::LO min_ind = min_index(bcc, 4);
+              if(findex == min_ind) {
+                min_bcc_elem = dual_elems[dual_elem_id];
               }
+              ++dual_elem_id;
             }
-            ++f_index;
+            ++findex;
           } //for iface
 
+          if(!intersected) {
+            printf("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
+            o::LO max_ind = max_index(dproj, 4);
+            if(dproj[max_ind]>=0) {
+              auto fid = xface_ids[max_ind];
+              if(exposed_faces[max_ind]) {
+                elem_ids_next[pid] = -1;
+                for(o::LO i=0; i<3; ++i)
+                  xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
+                xface_d[pid] = fid;
+                ptcl_done[pid] = 1;
+              } else { //if(min_bcc_elem >= 0) {
+                elem_ids_next[pid] = dual_elems[fid]; //min_bcc_elem;
+                if(debug)
+                  printf("\t ptcl %d e %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
+                   elmId, elem_ids_next[pid], min_bcc_elem);
+              }
+            } else {
+              // current elem, but bcc failed to detect it on face/corner
+              printf("WARNING: particle %d leaked from e %d \n", ptcl, elmId);
+              elem_ids_next[pid] = -1;
+              ptcl_done[pid] = 1;
+            }
+          }
         } //else not in current element
       } //if active particle
     };
 
-    ps::parallel_for(ptcls, lamb, "adj_search");
+    parallel_for(ptcls, lamb, "adj_search");
 
     found = true;
     auto cp_elm_ids = OMEGA_H_LAMBDA( o::LO i) {
@@ -422,12 +708,257 @@ bool search_mesh(o::Mesh& mesh, ps::ParticleStructure< ParticleType >* ptcls,
     ++loops;
 
     if(looplimit && loops > looplimit) {
-      if (debug)
+      //if (debug)
         fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
-  }
+  } //while
+  
+  if(debug)
+    fprintf(stderr, "\t: loops %d\n", loops);
+  Kokkos::Profiling::popRegion();
   return found;
+}
+
+// To interpoalte field stored at vertices. Field has dof components, and 
+// stored in order 0,1,2,3 at tet's vertices. BCC in order of faces
+OMEGA_H_DEVICE Omega_h::Real interpolateTetVtx(const Omega_h::LOs& mesh2verts,
+  const Omega_h::Reals& field, o::LO elem, const Omega_h::Vector<4>& bcc, 
+  o::LO dof=1, o::LO comp=0, bool debug=false) {
+  OMEGA_H_CHECK(all_positive(bcc)==1);
+  auto tetv2v = o::gather_verts<4>(mesh2verts, elem);
+  auto fv4 = o::gather_vectors<4, 1>(field, tetv2v);
+  Omega_h::Real val = 0;
+  for(Omega_h::LO fi=0; fi<4; ++fi) {//faces
+    auto d = Omega_h::simplex_opposite_template(3,2,fi); //3,2,0,1
+    auto fd = d*dof + comp;
+    val = val + bcc[fi]*fv4[fd][0];
+    if(debug) {// preprocess
+      printf("bcc %.15f field %.15f val %.15f\n", bcc[fi], fv4[fd][0], val);
+      printf("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
+        bcc[fi], fv4[fd][0]);
+    }
+  }
+  return val;
+}
+
+
+OMEGA_H_DEVICE void interpolate3dFieldTet(const Omega_h::LOs& mesh2verts,
+  const Omega_h::Reals &field, o::LO elem, const Omega_h::Vector<4> &bcc, 
+  Omega_h::Vector<3>& fv) {
+  for(int i=0; i<3; ++i) {
+    fv[i] = interpolateTetVtx(mesh2verts, field, elem, bcc, 3, i);
+  }
+}
+
+OMEGA_H_DEVICE void findBCCoordsInTet(const Omega_h::Reals &coords, 
+   const Omega_h::LOs &mesh2verts, const Omega_h::Vector<3> &xyz, 
+   const Omega_h::LO elem, Omega_h::Vector<4> &bcc) {
+  const auto tetv2v = Omega_h::gather_verts<4>(mesh2verts, elem);
+  auto mat = Omega_h::gather_vectors<4, 3>(coords, tetv2v);
+  const bool res = find_barycentric_tet(mat, xyz, bcc);
+  OMEGA_H_CHECK(res==1);
+  OMEGA_H_CHECK(all_positive(bcc)==1);
+}
+
+// Voronoi regions of triangle, to find nearest point on triangle
+enum TriRegion {
+  VTXA, 
+  VTXB,
+  VTXC,
+  EDGEAB,
+  EDGEAC,
+  EDGEBC,
+  TRIFACE,
+  NREGIONS 
+};
+
+//TODO test this function, is this needed ?
+OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle_wnormal(
+  const o::Few< o::Vector<3>, 3> &abc,
+  const o::Vector<3> &p, o::LO* reg=nullptr) {
+  // Check if P in vertex region outside A
+  auto q = o::zero_vector<3>();
+  auto a = abc[0];
+  auto b = abc[1];
+  auto c = abc[2];
+
+  auto ab = b - a;
+  auto ac = c - a;
+  auto bc = c - b;
+  // Compute parametric position s for projection P’ of P on AB,
+  // P’ = A + s*AB, s = snom/(snom+sdenom)
+  float snom = o::inner_product(p - a, ab);
+  float sdenom = o::inner_product(p - b, a - b);
+  // Compute parametric position t for projection P’ of P on AC,
+  // P’ = A + t*AC, s = tnom/(tnom+tdenom)
+  float tnom = o::inner_product(p - a, ac);
+  float tdenom = o::inner_product(p - c, a - c);
+  if(snom <= 0.0 && tnom <= 0.0){
+    if(reg)
+      *reg = VTXA;
+    return a;
+  } // Vertex region early out
+  // Compute parametric position u for projection P’ of P on BC,
+  // P’ = B + u*BC, u = unom/(unom+udenom)
+  float unom = o::inner_product(p - b, bc);
+  float udenom = o::inner_product(p - c, b - c);
+  if (sdenom <= 0.0 && unom <= 0.0){
+    if(reg)
+      *reg = VTXB; // Vertex region early out
+    return b;
+  }
+  if(tdenom <= 0.0 && udenom <= 0.0){
+    if(reg)
+     *reg = VTXC; // Vertex region early out
+    return c;
+  }
+  // P is outside (or on) AB if the triple scalar product [N PA PB] <= 0
+  auto n = o::cross(b - a, c - a);
+  auto temp = o::cross(a - p, b - p);
+  float vc = o::inner_product(n, temp);
+  // If P outside AB and within feature region of AB,
+  // return projection of P onto AB
+  if (vc <= 0.0 && snom >= 0.0 && sdenom >= 0.0){
+    q = a + snom / (snom + sdenom) * ab;
+    if(reg)
+     *reg = EDGEAB;
+    return q;
+  }
+  // P is outside (or on) BC if the triple scalar product [N PB PC] <= 0
+  auto temp1 = o::cross(b - p, c - p);
+  float va = o::inner_product(n, temp1);
+  // If P outside BC and within feature region of BC,
+  // return projection of P onto BC
+  if (va <= 0.0 && unom >= 0.0 && udenom >= 0.0){
+    q = b + unom / (unom + udenom) * bc;
+    if(reg)
+     *reg = EDGEBC;
+    return q;
+  }
+  // P is outside (or on) CA if the triple scalar product [N PC PA] <= 0
+  auto temp2 = o::cross(c - p, a - p);
+  float vb = o::inner_product(n, temp2);
+  // If P outside CA and within feature region of CA,
+  // return projection of P onto CA
+  if (vb <= 0.0 && tnom >= 0.0 && tdenom >= 0.0){
+    q =  a + tnom / (tnom + tdenom) * ac;
+    if(reg)
+     *reg = EDGEAC;
+    return q;
+  }
+  // P must project inside face region. Compute Q using barycentric coordinates
+  float u = va / (va + vb + vc);
+  float v = vb / (va + vb + vc);
+  float w = 1.0 - u - v; // = vc / (va + vb + vc)
+  q = u * a + v * b + w * c;
+  if(reg)
+   *reg = TRIFACE;
+  return q;
+}
+
+
+//Ref: Real-time Collision Detection by Christer Ericson, 2005.
+//ptp = ref point; ptq = nearest point on triangle; abc = triangle
+OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle( 
+   const o::Few< o::Vector<3>, 3> &abc, 
+   const o::Vector<3> &ptp, o::LO* reg=nullptr) {
+  o::LO debug = 0;
+  o::LO region = -1;
+  auto ptq = o::zero_vector<3>();
+  // Check if P in vertex region outside A
+  auto pta = abc[0];
+  auto ptb = abc[1];
+  auto ptc = abc[2];
+  auto vab = ptb - pta;
+  auto vac = ptc - pta;
+  auto vap = ptp - pta;
+  auto d1 = o::inner_product(vab, vap);
+  auto d2 = o::inner_product(vac, vap);
+  if(d1 <= 0 && d2 <= 0) {
+    // barycentric coordinates (1,0,0)
+    for(int i=0; i<3; ++i)
+      ptq[i] = pta[i];
+    region = VTXA;
+    if(reg)
+      *reg = region;
+    return ptq; 
+  }
+  // Check if P in vertex region outside B
+  auto vbp = ptp - ptb;
+  auto d3 = o::inner_product(vab, vbp);
+  auto d4 = o::inner_product(vac, vbp);
+  if(region <0 && d3 >= 0 && d4 <= d3){ 
+    // barycentric coordinates (0,1,0)
+    for(int i=0; i<3; ++i)
+      ptq[i] = ptb[i];
+    region = VTXB;
+    if(reg)
+      *reg = region;
+    return ptq; 
+  }
+  // Check if P in edge region of AB, if so return projection of P onto AB
+  auto vc = d1*d4 - d3*d2;
+  if(region <0 && vc <= 0 && d1 >= 0 && d3 <= 0) {
+    auto v = d1 / (d1 - d3);
+    // barycentric coordinates (1-v,v,0)
+    ptq = v*vab;
+    ptq = ptq + pta; 
+    region = EDGEAB;
+    return ptq;
+  }
+  // Check if P in vertex region outside C
+  auto vcp = ptp - ptc;
+  auto d5 = o::inner_product(vab, vcp);
+  auto d6 = o::inner_product(vac, vcp);
+  if(region <0 && d6 >= 0 && d5 <= d6) { 
+    // barycentric coordinates (0,0,1)
+    for(int i=0; i<3; ++i)
+      ptq[i] = ptc[i]; 
+    region = VTXC;
+    if(reg)
+      *reg = region;
+    return ptq;
+  }
+  // Check if P in edge region of AC, if so return projection of P onto AC
+  auto vb = d5*d2 - d1*d6;
+  if(region <0 && vb <= 0 && d2 >= 0 && d6 <= 0) {
+    auto w = d2 / (d2 - d6);
+    // barycentric coordinates (1-w,0,w)
+    ptq = w*vac;
+    ptq = ptq + pta; 
+    region = EDGEAC;
+    if(reg)
+      *reg = region;
+    return ptq;
+  }
+  // Check if P in edge region of BC, if so return projection of P onto BC
+  auto va = d3*d6 - d5*d4;
+  if(region <0 && va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+    auto w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+    // barycentric coordinates (0,1-w,w)
+    ptq =  ptb + w * (ptc - ptb); 
+    region = EDGEBC;
+    if(reg)
+      *reg = region;
+    return ptq;
+  }
+  // P inside face region. Compute Q through its barycentric coordinates (u,v,w)
+  if(region <0) {
+    auto inv = 1.0/(va + vb + vc);
+    auto v = vb * inv;
+    auto w = vc * inv;
+    // u*a + v*b + w*c, u = va * inv = 1 - v - w
+    ptq =  pta + v * vab+ w * vac;
+    region = TRIFACE;
+    if(reg)
+      *reg = region;
+    return ptq;
+  }
+  if(debug)
+    printf("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
+
+  return ptq;
 }
 
 template < class ParticleStruct, typename CurrentCoordView,
@@ -475,7 +1006,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       ptcl_done[pid] = 1;
     }
   };
-  ps::parallel_for(ptcls, lamb);
+  parallel_for(ptcls, lamb);
 
   Omega_h::Write<o::LO> numNotInElem(1, 0);
   auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -530,7 +1061,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         lastEdge[pid] = edges[idx];
       }
     };
-    ps::parallel_for(ptcls, checkCurrentElm);
+    parallel_for(ptcls, checkCurrentElm);
 
     auto checkExposedEdges = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
@@ -543,7 +1074,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
       }
     };
-    ps::parallel_for(ptcls, checkExposedEdges, "pumipic_checkExposedEdges");
+    parallel_for(ptcls, checkExposedEdges, "pumipic_checkExposedEdges");
 
     auto e2f_vals = edges2faces.ab2b; // CSR value array
     auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh edge ids
@@ -564,7 +1095,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         elem_ids[pid] = nextElm;
       }
     };
-    ps::parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
+    parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
 
     found = true;
     o::LOs ptcl_done_r(ptcl_done);

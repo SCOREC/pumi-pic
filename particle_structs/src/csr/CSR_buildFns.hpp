@@ -76,7 +76,7 @@ namespace pumipic {
 
     // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
     // pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets)*1.05;
+    capacity_ = getLastValue(offsets)*padding_amount;
     // allocate storage for user particle data
     CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
     CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_);

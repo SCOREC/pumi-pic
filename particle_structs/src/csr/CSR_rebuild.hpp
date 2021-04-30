@@ -69,11 +69,16 @@ namespace pumipic {
     lid_t num_new_ptcls = new_particle_elements.size();
     lid_t particles_on_process = num_ptcls - num_removed + num_new_ptcls;
 
-    //Determine if adequate memory 
-    if (particles_on_process > swap_capacity_) {
+    //Determine if realloc appropriate based on variables
+    if (always_realloc || particles_on_process > swap_capacity_) {
       destroyViews<DataTypes>(ptcl_data_swap);
-      CreateViews<device_type,DataTypes>(ptcl_data_swap, 1.05*particles_on_process);
-      swap_capacity_ = 1.05*particles_on_process;
+      CreateViews<device_type,DataTypes>(ptcl_data_swap, padding_amount*particles_on_process);
+      swap_capacity_ = padding_amount*particles_on_process;
+    }
+    else if (particles_on_process < minimize_size*swap_capacity_){
+      destroyViews<DataTypes>(ptcl_data_swap);
+      CreateViews<device_type,DataTypes>(ptcl_data_swap, padding_amount*particles_on_process);
+      swap_capacity_ = padding_amount*particles_on_process;
     }
     
     Kokkos::Timer time_pstops;

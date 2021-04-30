@@ -94,6 +94,11 @@ namespace pumipic {
                    kkGidView element_gids,
                    kkLidView particle_elements,
                    MTVs particle_info);
+
+    //Rebuild and Padding variables
+    bool always_realloc;
+    double minimize_size;
+    double padding_amount;
   };
 
   /**
@@ -123,8 +128,12 @@ namespace pumipic {
       element_gid_to_lid(num_elements)
   {
     num_elems = num_elements;
-    num_rows = num_elems;
+    num_rows  = num_elems;
     num_ptcls = num_particles;
+    
+    always_realloc = false;
+    minimize_size = 0.8;
+    padding_amount = 1.05;
 
     construct(particles_per_element,element_gids,particle_elements,particle_info);
   }
@@ -136,9 +145,12 @@ namespace pumipic {
 
     num_elems = input.ne;
     num_ptcls = input.np;
-    //padding variable = input.padding_amount;
-    //always_realloc = input.always_realloc;
-    //minimize_size = input.minimize_size;.
+    num_rows  = num_elems;
+
+    padding_amount = input.padding_amount;
+    always_realloc = input.always_realloc;
+    minimize_size = input.minimize_size;
+
     construct(input.ppe, input.e_gids, input.particle_elems, input.p_info);
 
 

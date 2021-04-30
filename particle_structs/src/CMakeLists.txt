@@ -34,6 +34,7 @@ set(HEADERS
   csr/CSR_buildFns.hpp
   csr/CSR_migrate.hpp
   csr/CSR_rebuild.hpp
+  csr/CSR_input.hpp
   
   cabm/cabm.hpp
   cabm/cabm_buildFns.hpp

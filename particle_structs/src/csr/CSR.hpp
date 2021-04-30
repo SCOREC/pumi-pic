@@ -3,6 +3,7 @@
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
 #include <sstream>
+#include <CSR_input.hpp>
 
 namespace ps = particle_structs;
 
@@ -26,6 +27,8 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
+    typedef CSR_Input<DataTypes,MemSpace> Input_T;
+
     CSR() = delete;
     CSR(const CSR&) = delete;
     CSR& operator=(const CSR&) = delete;
@@ -36,6 +39,7 @@ namespace pumipic {
         kkGidView element_gids,
         kkLidView particle_elements = kkLidView(),
         MTVs particle_info = NULL);
+    CSR(Input_T& input);
     ~CSR();
 
     //Functions from ParticleStructure
@@ -84,6 +88,17 @@ namespace pumipic {
     //Swap memory
     MTVs ptcl_data_swap;
     lid_t swap_capacity_;
+
+    //Private construct function
+    void construct(kkLidView ptcls_per_elem,
+                   kkGidView element_gids,
+                   kkLidView particle_elements,
+                   MTVs particle_info);
+
+    //Rebuild and Padding variables
+    bool always_realloc;
+    double minimize_size;
+    double padding_amount;
   };
 
   /**
@@ -112,44 +127,33 @@ namespace pumipic {
       policy(p),
       element_gid_to_lid(num_elements)
   {
-    Kokkos::Profiling::pushRegion("csr_construction");
     num_elems = num_elements;
-    num_rows = num_elems;
+    num_rows  = num_elems;
     num_ptcls = num_particles;
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    
+    always_realloc = false;
+    minimize_size = 0.8;
+    padding_amount = 1.05;
 
-    if(!comm_rank)
-      fprintf(stderr, "Building CSR\n");
+    construct(particles_per_element,element_gids,particle_elements,particle_info);
+  }
 
-    // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
-    // to fill the entries of the offsets array.
-    // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
-    offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
-    Kokkos::resize(particles_per_element, particles_per_element.size()+1);
-    exclusive_scan(particles_per_element, offsets);
+  template <class DataTypes, typename MemSpace>
+  CSR<DataTypes, MemSpace>::CSR(Input_T& input):
+    ParticleStructure<DataTypes,MemSpace>(input.name),policy(input.policy),
+    element_gid_to_lid(input.ne) {
 
-    // get global ids
-    if (element_gids.size() > 0) {
-      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    }
+    num_elems = input.ne;
+    num_ptcls = input.np;
+    num_rows  = num_elems;
 
-    // SS2 set the 'capacity_' of the CSR storage from the last entry of offsets
-    // pumi-pic/support/SupportKK.h has a helper function for this
-    capacity_ = getLastValue(offsets)*1.05; // with 5% extra padding
-    // allocate storage for user particle data
-    CreateViews<device_type, DataTypes>(ptcl_data, capacity_);
-    CreateViews<device_type, DataTypes>(ptcl_data_swap,capacity_);
-    swap_capacity_ = capacity_;
+    padding_amount = input.padding_amount;
+    always_realloc = input.always_realloc;
+    minimize_size = input.minimize_size;
 
-    // If particle info is provided then enter the information
-    lid_t given_particles = particle_elements.size();
-    if (given_particles > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CSR data\n");
-      initCsrData(particle_elements, particle_info);
-    }
+    construct(input.ppe, input.e_gids, input.particle_elems, input.p_info);
 
-    Kokkos::Profiling::popRegion();
+
   }
 
   template <class DataTypes, typename MemSpace>

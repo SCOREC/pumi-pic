@@ -320,10 +320,22 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
 }
 
+template <typename Space>
+typename std::enable_if<std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type 
+  maxChunk(int C_max) {
+    return 1;
+}
+template <typename Space>
+typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type
+  maxChunk(int C_max) {
+    return C_max;
+}
+
 template<class DataTypes, typename MemSpace>
 template <class MSpace>
 SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
-  Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(C_max);
+  const auto cmax = maxChunk<MSpace>(C_max);
+  Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(cmax);
   //Call Particle structures copy
   mirror_copy->copy(this);
   //Copy constants

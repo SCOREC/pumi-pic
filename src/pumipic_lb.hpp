@@ -51,7 +51,18 @@ namespace pumipic {
     void repartition(Mesh& picparts, PS* ps, double tol,
                      typename PS::kkLidView new_elems,
                      typename PS::kkLidView new_procs,
-                     double step_factor = 0.5);
+                     double step_factor = 0.3);
+
+    /* Performs particle load balancing on an array of particles per element
+       picparts(in) - the picparts mesh
+       ptcls_per_elem - the number of particles per element (size must equal number of elements in `picparts`)
+       tol(in) - the target imbalance (5% would be a value of 1.05)
+       step_factor(in) - (optional) the rate of weight transfer
+
+       Returns an array of the new process per particle
+     */
+    template <class ViewT>
+    Kokkos::View<lid_t*> partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor = 0.3);
 
     //Access the sbar ids per element
     Omega_h::LOs getSbarIDs(Mesh& picparts) const;
@@ -63,13 +74,20 @@ namespace pumipic {
     void addWeights(Mesh& picparts, PS* ps, typename PS::kkLidView new_elems,
                     typename PS::kkLidView new_procs);
 
+    //adds the weight of particles in ptcls_per_elem to graph
+    template <class ViewT>
+    void addWeights(Mesh& picparts, ViewT ptcls_per_elem);
+
     //run the weight balancer and return the plan
-    ParticlePlan balance(double tol, double step_factor = 0.5);
+    ParticlePlan balance(double tol, double step_factor = 0.3);
 
     template <class PS>
     void selectParticles(Mesh& picparts, PS* ps, typename PS::kkLidView new_elems,
                          ParticlePlan plan, typename PS::kkLidView new_parts);
-  private:
+
+    template <typename ViewT>
+    Kokkos::View<lid_t*> selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan);
+private:
     typedef std::unordered_map<Parts, int, PartsHash> SBarUnmap;
     int max_sbar;
     SBarUnmap sbar_ids;
@@ -187,6 +205,28 @@ namespace pumipic {
     delete [] peer_wgts;
   }
 
+  //adds the weight of particles in ptcls_per_elem to graph
+  template <class ViewT>
+  void ParticleBalancer::addWeights(Mesh& picparts, ViewT ptcls_per_elem) {
+    //Count particles in each sbar
+    Omega_h::Write<agi::wgt_t> weights(sbar_ids.size() + 1, 0);
+    Omega_h::LOs elem_sbars = getSbarIDs(picparts);
+    auto sbar_to_vert_local = sbar_to_vert;
+    auto accumulateWeight = OMEGA_H_LAMBDA(const int elm) {
+      const Omega_h::LO sbar_index = elem_sbars[elm];
+      if (sbar_to_vert_local.exists(sbar_index)) {
+        auto index = sbar_to_vert_local.find(sbar_index);
+        const agi::lid_t vert_index = sbar_to_vert_local.value_at(index);
+        Kokkos::atomic_add(&(weights[vert_index]), 1.0*ptcls_per_elem[elm]);
+      }
+    };
+    Omega_h::parallel_for(ptcls_per_elem.size(), accumulateWeight, "accumulateWeight");
+
+    //Apply weights to the graph
+    Omega_h::HostWrite<Omega_h::Real> weights_host(weights);
+    weightGraph->setWeights(weights_host.data());
+  }
+
   template <class PS>
   void ParticleBalancer::selectParticles(Mesh& picparts, PS* ptcls,
                                          typename PS::kkLidView new_elems,
@@ -247,14 +287,79 @@ namespace pumipic {
     parallel_for(ptcls, selectParticles, "selectParticles");
   }
 
+  template <class ViewT>
+  Kokkos::View<int*> ParticleBalancer::selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan) {
+    int comm_size = picparts.comm()->size();
+    if (comm_size == 1)
+      return Kokkos::View<int*>(0);
+    int comm_rank = picparts.comm()->rank();
+
+    //Offset sum the ptcls per elem and get total number of particles
+    ViewT offsets = ViewT("ptcl per elem offsets", ptcls_per_elem.size() + 1);
+    Kokkos::resize(ptcls_per_elem, ptcls_per_elem.size() + 1);
+    exclusive_scan(ptcls_per_elem, offsets);
+
+    //Array of new processes per particle
+    lid_t nptcls = getLastValue(offsets);
+    Kokkos::View<int*> new_procs("new procs", nptcls);
+    auto setSelf = OMEGA_H_LAMBDA(const int ptcl) {
+      new_procs[ptcl] = comm_rank;
+    };
+    Omega_h::parallel_for(new_procs.size(), setSelf, "setSelf");
+
+    //Select particles to migrate
+    Omega_h::LOs sbars = getSbarIDs(picparts);
+    auto send_wgts = plan.send_wgts;
+    auto sbar_to_index = plan.sbar_to_index;
+    auto part_ids = plan.part_ids;
+    auto owners = picparts.entOwners(picparts->dim());
+    auto selectParticles = OMEGA_H_LAMBDA(const int elm) {
+      const Omega_h::LO sbar = sbars[elm];
+      const Omega_h::LO start_ptcl = offsets[elm];
+      if (sbar_to_index.exists(sbar)) {
+        const auto map_index = sbar_to_index.find(sbar);
+        for (Omega_h::LO i = 0; i < ptcls_per_elem[i]; ++i) {
+          const Omega_h::LO index = sbar_to_index.value_at(map_index);
+          const Omega_h::LO part = part_ids[index];
+          const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+          if (part >= 0) {
+            if (wgt == 0)
+              Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+            if (wgt > 0)
+              new_procs[start_ptcl+i] = part;
+          }
+        }
+      }
+    };
+    Omega_h::parallel_for(ptcls_per_elem.size(), selectParticles, "selectParticles");
+    return new_procs;
+  }
+
   template <class PS>
   void ParticleBalancer::repartition(Mesh& picparts, PS* ptcls, double tol,
                                      typename PS::kkLidView new_elems,
                                      typename PS::kkLidView new_parts,
                                      double step_factor) {
+    if (picparts.comm()->size() == 1)
+      return;
     addWeights(picparts, ptcls, new_elems, new_parts);
     ParticlePlan plan = balance(tol, step_factor);
     selectParticles(picparts, ptcls, new_elems, plan, new_parts);
+  }
+
+  template <class ViewT>
+  Kokkos::View<lid_t*> ParticleBalancer::partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor) {
+    if (picparts.comm()->size() == 1) {
+      lid_t np = 0;
+      Kokkos::parallel_reduce(ptcls_per_elem.size(), KOKKOS_LAMBDA(const int index, int& ptcls) {
+        ptcls += ptcls_per_elem[index];
+      }, np);
+      Kokkos::View<lid_t*> new_procs("new_procs", np);
+      return new_procs;
+    }
+    addWeights(picparts, ptcls_per_elem);
+    ParticlePlan plan = balance(tol, step_factor);
+    return selectParticles(picparts, ptcls_per_elem, plan);
   }
 
   //Print particle imbalance statistics

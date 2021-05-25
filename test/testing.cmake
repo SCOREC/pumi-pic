@@ -68,6 +68,15 @@ mpi_test(file_rw_xgc_120k_4 4
   bfs bfs
   ${TEST_DATA_DIR}/xgc/120k)
 
+#load balancing tests
+mpi_test(lb_r1 1 ./test_lb
+         ${TEST_DATA_DIR}/cube.msh
+         ignored)
+
+mpi_test(lb_r4 4 ./test_lb
+         ${TEST_DATA_DIR}/cube.msh
+         testing_cube_4.ptn)
+
 #pseudo-simulation tests
 
 mpi_test(pseudoPushAndSearch_t1 1

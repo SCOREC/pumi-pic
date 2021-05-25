@@ -41,9 +41,11 @@ set(MPIRUN_PROCFLAG "-np" CACHE STRING
 
 
 set(pumipic_USE_Omega_h_DEFAULT ON)
-message(STATUS "Found Omega_h: ${Omega_h_VERSION}")
 set(Omega_h_PREFIX ${Omega_h_PREFIX})
 bob_public_dep(Omega_h)
+#Clear the omegah compilation flags that it passes to cuda.  Using the
+# kokkos target, and nvcc_wrapper, provide sufficient flags.
+set_property(TARGET Omega_h::omega_h PROPERTY INTERFACE_COMPILE_OPTIONS "")
 
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})
@@ -64,10 +66,6 @@ endif()
 
 set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
-if( NOT Kokkos_PREFIX )
-  get_filename_component(Kokkos_PREFIX ${Kokkos_INCLUDE_DIRS} DIRECTORY)
-endif()
-include(${Kokkos_PREFIX}/kokkos_generated_settings.cmake)
 set(KOKKOS_ENABLED true)
 
 set(debug_flag)

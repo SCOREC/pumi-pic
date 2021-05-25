@@ -108,12 +108,14 @@ int pseudoPush(const char* name, PS* structure) {
   auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     //printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
     if (mask) {
+      const double p_fp = (double) p;
+      const double e_fp = (double) e;
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;
       dbls(p, 2) += 10;
-      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / sqrt(p) / sqrt(e) + parentElmData(e);
-      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / sqrt(p) / sqrt(e) + parentElmData(e);
-      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / sqrt(p) / sqrt(e) + parentElmData(e);
+      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
+      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
+      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
       nums(p) = local_rank;
       bools(p) = true;
     }

@@ -320,10 +320,22 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
 }
 
+template <typename Space>
+typename std::enable_if<std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type 
+  maxChunk(int C_max) {
+    return 1;
+}
+template <typename Space>
+typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type
+  maxChunk(int C_max) {
+    return C_max;
+}
+
 template<class DataTypes, typename MemSpace>
 template <class MSpace>
 SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
-  Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(C_max);
+  const auto cmax = maxChunk<MSpace>(C_max);
+  Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(cmax);
   //Call Particle structures copy
   mirror_copy->copy(this);
   //Copy constants
@@ -532,7 +544,7 @@ void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string
     Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (lid_t& j) {
       const lid_t row = slice_to_chunk_cpy(slice) * team_size + slice_row;
       const lid_t element_id = row_to_element_cpy(row);
-      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
+      Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [=] (lid_t& p) {
         const lid_t particle_id = start+(p*team_size);
         const bool mask = particle_mask_cpy(particle_id);
         (*fn_d)(element_id, particle_id, mask);

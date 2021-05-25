@@ -182,7 +182,7 @@ namespace pumipic {
       Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, team_size), [=] (lid_t& j) {
           const lid_t row = chunk * team_size + chunk_row;
           const lid_t element_id = row_to_element_cpy(row);
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [&] (lid_t& p) {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [=] (lid_t& p) {
               const lid_t particle_id = start+(p*team_size);
               if (element_id < ne)
                 mask(particle_id) = p < ptcls(row).first;

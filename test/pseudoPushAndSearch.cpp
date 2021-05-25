@@ -303,7 +303,7 @@ void setSunflowerPositions(PS* ptcls, const fp_t insetFaceDiameter, const fp_t i
   const o::LO n = ptcls->capacity();
   const fp_t phi = (sqrt(5) + 1) / 2;
   auto setPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    const fp_t r = sqrt(pid + 0.5) / sqrt(n - 1 / 2);
+    const fp_t r = std::sqrt((double)pid + 0.5) / std::sqrt((double)n - 1 / 2);
     const fp_t theta = 2 * M_PI * pid / (phi*phi);
     xtgt_ps_d(pid, 0) = insetFaceCenter + insetFaceRadius * r * cos(theta);
     xtgt_ps_d(pid, 1) = insetFacePlane;

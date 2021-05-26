@@ -137,7 +137,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   template <typename FunctionType, class U = MemSpace>
   typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
   template <typename FunctionType, class U = MemSpace>
-  typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Cuda>::value>::type parallel_for(FunctionType& fn, std::string s="");
+  typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
 
   //Prints the format of the SCS labeled by prefix
   void printFormat(const char* prefix = "") const;
@@ -520,13 +520,17 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 
 template <class DataTypes, typename MemSpace>
 template <typename FunctionType, typename U>
-typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Cuda>::value>::type
+typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type
 SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
   if (nPtcls() == 0)
     return;
   FunctionType* fn_d;
+#ifdef PP_USE_CUDA
   cudaMalloc(&fn_d, sizeof(FunctionType));
   cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+#else
+  fn_d = &fn;
+#endif
   const lid_t league_size = num_slices;
   const lid_t team_size = C_;
   const PolicyType policy(league_size, team_size);
@@ -550,7 +554,9 @@ SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name
       });
     });
   });
+#ifdef PP_USE_CUDA
   cudaFree(fn_d);
+#endif
 }
 
 template <class DataTypes, typename MemSpace>

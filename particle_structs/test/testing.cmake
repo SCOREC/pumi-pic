@@ -12,7 +12,7 @@ mpi_test(lambdaTest 1 ./lambdaTest)
 
 mpi_test(write_ptcl_small 1 ./write_particles 5 25 0 0 small_ptcls_e5_p25_r0)
 mpi_test(write_ptcl_small_4 4 ./write_particles 5 25 0 2 small_ptcls_e5_p25_r4)
-mpi_test(write_ptcl_4 4 ./write_particles 100 10000 0 2 smallptcls_e100_p10k_r4)
+mpi_test(write_ptcl_4 4 ./write_particles 100 10000 0 2 small_ptcls_e100_p10k_r4)
 mpi_test(write_ptcl_empty 4 ./write_particles 0 0 0 0 empty_ptcls)
 mpi_test(write_ptcl_noptcls 4 ./write_particles 100 0 0 0 no_ptcls_e100)
 mpi_test(write_ptcl_medium 1 ./write_particles 500 100000 0 2 medium_ptcls_e500_p10e5_r0)

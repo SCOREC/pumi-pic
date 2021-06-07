@@ -1,10 +1,3 @@
-function(mpi_test TESTNAME PROCS EXE)
-  add_test(
-    NAME ${TESTNAME}
-    COMMAND ${MPIRUN} ${MPIRUN_PROCFLAG} ${PROCS} ${VALGRIND} ${VALGRIND_ARGS} ${EXE} ${ARGN}
-  )
-endfunction(mpi_test)
-
 #simple tests
 mpi_test(barycentric_3 1 ./barycentric test1)
 

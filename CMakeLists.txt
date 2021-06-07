@@ -81,6 +81,14 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
+# testing helper function
+function(mpi_test TESTNAME PROCS EXE)
+  add_test(
+    NAME ${TESTNAME}
+    COMMAND ${MPIRUN} ${MPIRUN_PROCFLAG} ${PROCS} ${VALGRIND} ${VALGRIND_ARGS} ${EXE} ${ARGN}
+  )
+endfunction(mpi_test)
+
 # support
 add_subdirectory(support)
 include_directories(support)

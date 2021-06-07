@@ -1,35 +1,29 @@
-add_test(NAME type_test COMMAND ./typeTest)
+mpi_test(type_test 1 ./typeTest)
 
-add_test(NAME view_test COMMAND ./viewTest)
+mpi_test(view_test 1 ./viewTest)
 
-add_test(NAME initParticles COMMAND ./initParticles)
+mpi_test(initParticles 1 ./initParticles)
 
-add_test(NAME buildSCS COMMAND ./buildSCSTest)
+mpi_test(buildSCS 1 ./buildSCSTest)
 
-add_test(NAME scs_padding COMMAND ./test_scs_padding)
+mpi_test(scs_padding 1 ./test_scs_padding)
 
-add_test(NAME lambdaTest COMMAND ./lambdaTest)
+mpi_test(lambdaTest 1 ./lambdaTest)
 
-add_test(NAME write_ptcl_small COMMAND ./write_particles 5 25 0 0 small_ptcls_e5_p25_r0)
-add_test(NAME write_ptcl_small_4 COMMAND mpirun -np 4 ./write_particles 5 25 0 2
-    small_ptcls_e5_p25_r4)
-add_test(NAME write_ptcl_4 COMMAND mpirun -np 4 ./write_particles 100 10000 0 2
-    small_ptcls_e100_p10k_r4)
-add_test(NAME write_ptcl_empty COMMAND mpirun -np 4 ./write_particles 0 0 0 0 empty_ptcls)
-add_test(NAME write_ptcl_noptcls COMMAND mpirun -np 4 ./write_particles 100 0 0 0 no_ptcls_e100)
-add_test(NAME write_ptcl_medium COMMAND ./write_particles 500 100000 0 2 medium_ptcls_e500_p10e5_r0)
-add_test(NAME write_ptcl_large COMMAND ./write_particles 2500 1000000 0 2 large_ptcls_e2500_p10e6_r0)
+mpi_test(write_ptcl_small 1 ./write_particles 5 25 0 0 small_ptcls_e5_p25_r0)
+mpi_test(write_ptcl_small_4 4 ./write_particles 5 25 0 2 small_ptcls_e5_p25_r4)
+mpi_test(write_ptcl_4 4 ./write_particles 100 10000 0 2 smallptcls_e100_p10k_r4)
+mpi_test(write_ptcl_empty 4 ./write_particles 0 0 0 0 empty_ptcls)
+mpi_test(write_ptcl_noptcls 4 ./write_particles 100 0 0 0 no_ptcls_e100)
+mpi_test(write_ptcl_medium 1 ./write_particles 500 100000 0 2 medium_ptcls_e500_p10e5_r0)
+mpi_test(write_ptcl_large 1 ./write_particles 2500 1000000 0 2 large_ptcls_e2500_p10e6_r0)
 
-add_test(NAME test_structures_small COMMAND ./test_structure small_ptcls_e5_p25_r0)
-add_test(NAME test_structures_medium COMMAND ./test_structure medium_ptcls_e500_p10e5_r0)
-add_test(NAME test_structures_large COMMAND ./test_structure large_ptcls_e2500_p10e6_r0)
-add_test(NAME test_structures_small_4 COMMAND mpirun -np 4
-  ./test_structure small_ptcls_e5_p25_r4)
-add_test(NAME test_structures_4 COMMAND mpirun -np 4
-  ./test_structure small_ptcls_e100_p10k_r4)
-add_test(NAME test_structures_empty COMMAND mpirun -np 4
-  ./test_structure empty_ptcls)
-add_test(NAME test_structures_noptcls COMMAND mpirun -np 4
-  ./test_structure no_ptcls_e100)
+mpi_test(test_structures_small 1 ./test_structure small_ptcls_e5_p25_r0)
+mpi_test(test_structures_medium 1 ./test_structure medium_ptcls_e500_p10e5_r0)
+mpi_test(test_structures_large 1 ./test_structure large_ptcls_e2500_p10e6_r0)
+mpi_test(test_structures_small_4 4 ./test_structure small_ptcls_e5_p25_r4)
+mpi_test(test_structures_4 4 ./test_structure small_ptcls_e100_p10k_r4)
+mpi_test(test_structures_empty 4 ./test_structure empty_ptcls)
+mpi_test(test_structures_noptcls 4 ./test_structure no_ptcls_e100)
 
-add_test(NAME destroy_test COMMAND mpirun -np 4 ./destroy_test)
+mpi_test(destroy_test 4 ./destroy_test)

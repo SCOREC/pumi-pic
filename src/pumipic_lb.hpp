@@ -318,7 +318,7 @@ private:
       const Omega_h::LO start_ptcl = offsets[elm];
       if (sbar_to_index.exists(sbar)) {
         const auto map_index = sbar_to_index.find(sbar);
-        for (Omega_h::LO i = 0; i < ptcls_per_elem[i]; ++i) {
+        for (Omega_h::LO i = 0; i < ptcls_per_elem[elm]; ++i) {
           const Omega_h::LO index = sbar_to_index.value_at(map_index);
           const Omega_h::LO part = part_ids[index];
           const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);

@@ -307,31 +307,47 @@ private:
     };
     Omega_h::parallel_for(new_procs.size(), setSelf, "setSelf");
 
+
     //Select particles to migrate
     Omega_h::LOs sbars = getSbarIDs(picparts);
     auto send_wgts = plan.send_wgts;
     auto sbar_to_index = plan.sbar_to_index;
     auto part_ids = plan.part_ids;
     auto owners = picparts.entOwners(picparts->dim());
-    auto selectParticles = OMEGA_H_LAMBDA(const int elm) {
-      const Omega_h::LO sbar = sbars[elm];
-      const Omega_h::LO start_ptcl = offsets[elm];
-      if (sbar_to_index.exists(sbar)) {
-        const auto map_index = sbar_to_index.find(sbar);
-        for (Omega_h::LO i = 0; i < ptcls_per_elem[elm]; ++i) {
-          const Omega_h::LO index = sbar_to_index.value_at(map_index);
-          const Omega_h::LO part = part_ids[index];
-          const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
-          if (part >= 0) {
-            if (wgt == 0)
-              Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
-            if (wgt > 0)
-              new_procs[start_ptcl+i] = part;
+    for (int i = 0; i < 3; ++i) {
+      auto selectParticles = OMEGA_H_LAMBDA(const int elm) {
+        const Omega_h::LO sbar = sbars[elm];
+        const Omega_h::LO start_ptcl = offsets[elm];
+        if (sbar_to_index.exists(sbar)) {
+          const auto map_index = sbar_to_index.find(sbar);
+          for (Omega_h::LO i = 0; i < ptcls_per_elem[elm]; ++i) {
+            const Omega_h::LO new_part = new_procs[start_ptcl+i];
+            if (new_part == comm_rank) {
+              const Omega_h::LO index = sbar_to_index.value_at(map_index);
+              const Omega_h::LO part = part_ids[index];
+              const Omega_h::Real wgt = Kokkos::atomic_fetch_add(&(send_wgts[index]), -1);
+              if (part >= 0) {
+                if (wgt == 0)
+                  Kokkos::atomic_add(&(sbar_to_index.value_at(map_index)), 1);
+                if (wgt > 0)
+                  new_procs[start_ptcl+i] = part;
+              }
+            }
           }
         }
-      }
-    };
-    Omega_h::parallel_for(ptcls_per_elem.size(), selectParticles, "selectParticles");
+      };
+      Omega_h::parallel_for(ptcls_per_elem.size(), selectParticles, "selectParticles");
+      Omega_h::Write<Omega_h::LO> finished(1,0);
+      auto checkPlan = OMEGA_H_LAMBDA(const int id) {
+        if (send_wgts[id] > 0) {
+          finished[0] = 1;
+        }
+      };
+      Omega_h::parallel_for(send_wgts.size(), checkPlan);
+      Omega_h::HostWrite<Omega_h::LO> finished_h(finished);
+      if (finished_h[0] == 0)
+        break;
+    }
     return new_procs;
   }
 

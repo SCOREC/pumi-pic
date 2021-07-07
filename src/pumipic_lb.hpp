@@ -62,7 +62,7 @@ namespace pumipic {
        Returns an array of the new process per particle
      */
     template <class ViewT>
-    Kokkos::View<lid_t*> partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor = 0.3);
+    Kokkos::View<lid_t*> partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor = 0.3, int selection_iterations = 5);
 
     //Access the sbar ids per element
     Omega_h::LOs getSbarIDs(Mesh& picparts) const;
@@ -86,7 +86,7 @@ namespace pumipic {
                          ParticlePlan plan, typename PS::kkLidView new_parts);
 
     template <typename ViewT>
-    Kokkos::View<lid_t*> selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan);
+    Kokkos::View<lid_t*> selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan, int selection_iterations);
 private:
     typedef std::unordered_map<Parts, int, PartsHash> SBarUnmap;
     int max_sbar;
@@ -288,7 +288,7 @@ private:
   }
 
   template <class ViewT>
-  Kokkos::View<int*> ParticleBalancer::selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan) {
+  Kokkos::View<int*> ParticleBalancer::selectParticles(Mesh& picparts, ViewT ptcls_per_elem, ParticlePlan plan, int selection_iterations) {
     int comm_size = picparts.comm()->size();
     if (comm_size == 1)
       return Kokkos::View<int*>(0);
@@ -314,7 +314,7 @@ private:
     auto sbar_to_index = plan.sbar_to_index;
     auto part_ids = plan.part_ids;
     auto owners = picparts.entOwners(picparts->dim());
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < selection_iterations; ++i) {
       auto selectParticles = OMEGA_H_LAMBDA(const int elm) {
         const Omega_h::LO sbar = sbars[elm];
         const Omega_h::LO start_ptcl = offsets[elm];
@@ -364,7 +364,7 @@ private:
   }
 
   template <class ViewT>
-  Kokkos::View<lid_t*> ParticleBalancer::partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor) {
+  Kokkos::View<lid_t*> ParticleBalancer::partition(Mesh& picparts, ViewT ptcls_per_elem, double tol, double step_factor, int selection_iterations) {
     if (picparts.comm()->size() == 1) {
       lid_t np = 0;
       Kokkos::parallel_reduce(ptcls_per_elem.size(), KOKKOS_LAMBDA(const int index, int& ptcls) {
@@ -375,7 +375,7 @@ private:
     }
     addWeights(picparts, ptcls_per_elem);
     ParticlePlan plan = balance(tol, step_factor);
-    return selectParticles(picparts, ptcls_per_elem, plan);
+    return selectParticles(picparts, ptcls_per_elem, plan, selection_iterations);
   }
 
   //Print particle imbalance statistics

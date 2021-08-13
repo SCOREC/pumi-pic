@@ -70,6 +70,11 @@ mpi_test(lb_r4 4 ./test_lb
          ${TEST_DATA_DIR}/cube.msh
          testing_cube_4.ptn)
 
+#reverse classification tests
+mpi_test(revClass_r1 1 ./test_revClass
+         ${TEST_DATA_DIR}/cube.msh
+         ignored)
+
 #pseudo-simulation tests
 
 mpi_test(pseudoPushAndSearch_t1 1

@@ -220,7 +220,6 @@ namespace pumipic {
           Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
           // Ignore Omega_h internal tags
           if (tagbase->name() == "coordinates" ||
-              tagbase->name() == "class_dim" ||
               tagbase->name() == "class_id")
             continue;
           if (tagbase->name() == "global")

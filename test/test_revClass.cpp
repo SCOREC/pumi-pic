@@ -4,19 +4,24 @@
 #include <Omega_h_file.hpp>  //gmsh
 #include <pumipic_mesh.hpp>
 #include <Omega_h_for.hpp>
+#include <Omega_h_array_ops.hpp> //get_max
+#include <Omega_h_atomics.hpp> //atomic_increment
 
 namespace o = Omega_h;
 namespace p = pumipic;
 
-void writeArray(o::LOs deg, std::string name) {
-  o::HostRead<o::LO> deg_hr(deg);
-  o::LO const nl = deg_hr.size();
+
+template <class T>
+void writeArray(o::Read<T> arr, std::string name) {
+  o::HostRead<T> arr_hr(arr);
+  o::LO const nl = arr_hr.size();
   std::cout << name << " size " << nl << "\n";
   for(int l=0; l<nl; l++) {
-    const auto d = deg_hr[l];
-    if(d) std::cout << l << " " << d << "\n";
+    const auto d = arr_hr[l];
+    std::cout << l << " " << d << "\n";
   }
 }
+
 
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -37,6 +42,7 @@ int main(int argc, char** argv) {
 
   o::CommPtr world = lib.world();
   o::Mesh full_mesh = Omega_h::read_mesh_file(meshFile, lib.self());
+  o::vtk::write_vtu("ohTri.vtu", &full_mesh, 2);
 
   const auto nt = full_mesh.ntags(2);
   for(auto i = 0; i<nt; i++) {
@@ -44,17 +50,17 @@ int main(int argc, char** argv) {
     std::cout << "tag " << t->name() << " " << t->ncomps() << "\n";
   }
 
-  auto class_dim = mesh.get_array<o::I8>(2, "class_dim");
-  writeArray(class_dim, "class_dim");
-  auto const n_dim = get_max(class_dim)+1;
+  auto class_dim = full_mesh.get_array<o::I8>(2, "class_dim");
+  writeArray(o::Read<o::I8>(class_dim), "class_dim");
+  auto const n_dim = o::get_max(class_dim)+1;
   o::Write<o::LO> dimCnt(n_dim, 0, "dim_count");
   auto count_dim = OMEGA_H_LAMBDA (o::LO i) {
     assert(class_dim[i]>=0);
     auto const d = class_dim[i];
-    atomic_increment(&dimCnt[d]);
+    o::atomic_increment(&dimCnt[d]);
   };
-  parallel_for(mesh.nents(2), count_dim);
-  writeArray(dimCnt, "dim");
+  o::parallel_for(full_mesh.nents(2), count_dim);
+  writeArray(o::Read<o::LO>(dimCnt), "dim");
 
   //{
   //auto start_rev = std::chrono::system_clock::now();
@@ -94,6 +100,7 @@ int main(int argc, char** argv) {
   p::Mesh picparts(pp_input);
   o::Mesh* mesh = picparts.mesh();
   o::binary::write("pp.osh", mesh);
+  o::vtk::write_vtu("ppTri.vtu", &full_mesh, 2);
 
   {
   std::cerr <<"done picparts\n";

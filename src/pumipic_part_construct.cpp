@@ -512,6 +512,8 @@ namespace {
             ent2v[new_v] = new_v_id;
           }
           ent_class[new_ent] = old_class[ent_id];
+        } else {
+          printf("entity %d %d is not new\n", dim, ent_id);
         }
       };
       Omega_h::parallel_for(full_mesh.nents(dim), getDownAndClass, "getDownAndClass");

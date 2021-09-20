@@ -9,6 +9,32 @@
 #include "pumipic_lb.hpp"
 
 namespace {
+  template <class T>
+  void writeArray(Omega_h::Read<T> arr, std::string name) {
+    Omega_h::HostRead<T> arr_hr(arr);
+    Omega_h::LO const nl = arr_hr.size();
+    std::cout << name << " size " << nl << "\n";
+    for(int l=0; l<nl; l++) {
+      const auto d = arr_hr[l];
+      std::cout << l << " " << (int)d << "\n";
+    }
+  }
+
+
+  //FIXME - this is a hack
+  int classId(pEntity e) {
+    pGEntity g = EN_whatIn(e);
+    assert(g);
+    return GEN_tag(g);
+  }
+
+  int classType(pEntity e) {
+    pGEntity g = EN_whatIn(e);
+    assert(g);
+    assert((0 <= GEN_type(g)) && (3 >= GEN_type(g)));
+    return GEN_type(g);
+  }
+
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners, int self,
                                 Omega_h::Write<Omega_h::LO> owns);
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::CommPtr, Omega_h::LOs owner);
@@ -31,6 +57,8 @@ namespace {
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
                         Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
                         Omega_h::Write<Omega_h::Real> new_coords);
+  void buildAndClassifyFull2pp(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
+      int dim, int pp_num_ents, Omega_h::LOs full2pp_entIds, Omega_h::LOs full2pp_downIds);
   template <class T>
   void convertTag(Omega_h::Mesh full_mesh, Omega_h::Mesh* picpart, int dim,
                   Omega_h::LOs entToEnt, Omega_h::TagBase const* tag,
@@ -158,13 +186,20 @@ namespace pumipic {
     Omega_h::Write<Omega_h::LO> buf_ents[4];
     for (int i = 0; i <= dim; ++i)
       buf_ents[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
-    for (int i = 0; i <= dim; ++i)
+    for (int i = 0; i <= dim; ++i) {
       setSafeEnts(mesh, i, mesh.nelems(), has_part, owner_dim[dim], buf_ents[i]);
+      std::stringstream ss;
+      ss << "buf_ents[" << i <<"]";
+      std::string str = ss.str();
+      writeArray(Omega_h::Read<Omega_h::LO>(buf_ents[i]), str); //all entries should be '1'
+    }
 
     //Gather number of entities remaining in the picpart
     Omega_h::GO* num_ents = new Omega_h::GO[dim+1];
-    for (int i = 0; i <= dim; ++i)
+    for (int i = 0; i <= dim; ++i) {
       num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
+      std::cerr << "num_ents[" << i << "] " << num_ents[i] << " mesh.nents(i) " << mesh.nents(i) << "\n";
+    }
 
     /**************** Create numberings for the entities on the picpart **************/
     Omega_h::LOs ent_ids[4];
@@ -180,6 +215,10 @@ namespace pumipic {
             numbering[i] = offset[i];
       });
       ent_ids[i] = numbering;
+      //std::stringstream ss;
+      //ss << "ent_ids[" << i <<"]";
+      //std::string str = ss.str();
+      //writeArray(Omega_h::Read<Omega_h::LO>(ent_ids[i]), str);
     }
 
     //If full mesh buffer then we don't need to make new mesh for the picparts
@@ -205,8 +244,8 @@ namespace pumipic {
       gatherCoords(mesh, ent_ids[0], new_coords);
 
       //Build the mesh
-      for (int i = dim; i >= 0; --i)
-        buildAndClassify(mesh,picpart,i,num_ents[i], ent_ids[i], ent_ids[0], new_coords);
+      for (int i = dim; i > 0; --i)
+        buildAndClassifyFull2pp(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[i-1]);
       Omega_h::finalize_classification(picpart);
       if(!picpart->nelems()) {
         fprintf(stderr,"%s: empty part on rank %d\n", __func__, rank);
@@ -218,6 +257,9 @@ namespace pumipic {
         //Move tags from old mesh to new mesh
         for (int j = 0; j < mesh.ntags(i); ++j) {
           Omega_h::TagBase const* tagbase = mesh.get_tag(i,j);
+          if (tagbase->name() == "class_dim" ) {
+            std::cerr << " tag " << i << " " << tagbase->name() << "\n";
+          }
           // Ignore Omega_h internal tags
           if (tagbase->name() == "coordinates" ||
               tagbase->name() == "class_id")
@@ -488,6 +530,76 @@ namespace {
     };
     Omega_h::parallel_for(mesh.nverts(), gatherCoordsL, "gatherCoords");
   }
+
+  void buildAndClassifyFull2pp(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
+      int dim, int pp_num_ents, Omega_h::LOs full2pp_entIds, Omega_h::LOs full2pp_downIds) {
+    //extract downward adjaceny arrays from full_mesh and pass them into the new
+    //picpart mesh via Omega_h::set_ents(...)
+    auto full_classId = full_mesh.get_array<Omega_h::ClassId>(dim, "class_id");
+    auto full_classDim = full_mesh.get_array<Omega_h::ClassId>(dim, "class_dim");
+    const auto degree = Omega_h::element_degree(full_mesh.family(), dim, dim-1);
+    Omega_h::Write<Omega_h::LO> ppDown(pp_num_ents*degree);
+    Omega_h::Write<Omega_h::ClassID> ppClassId(pp_num_ents);
+    Omega_h::Write<Omega_h::I8> ppClassDim(pp_num_ents);
+    const auto downFull = full_mesh.ask_down(dim,dim-1);
+
+    auto getDownAndClass = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
+      const Omega_h::LO pp_ent = full2pp_entIds[full_ent_id];
+      const Omega_h::LO full_first_down = full_ent_id * degree;
+      const Omega_h::LO pp_first_down = pp_ent * degree;
+      if (pp_ent >= 0) {
+        //fill in the downward adjacency array
+        for (int j = 0; j < degree; ++j) {
+          const Omega_h::LO full_down = downFull.ab2b[full_first_down+j];
+          const Omega_h::LO pp_down = pp_first_down + j;
+          const Omega_h::LO pp_down_id = full2pp_downIds[full_down];
+          ppDown[pp_down] = pp_down_id;
+        }
+        //transfer classification
+        ppClassId[pp_ent] = full_classId[full_ent_id];
+        ppClassDim[pp_ent] = full_classDim[full_ent_id];
+      } else {
+        printf("entity %d %d is not new\n", dim, full_ent_id);
+      }
+    };
+    Omega_h::parallel_for(full_mesh.nents(dim), getDownAndClass, "getDownAndClass");
+    picpart.set_ents(dim,Omega_h::Adj(ppDown));
+    
+    //set classification
+    mesh->add_tag<Omega_h::ClassId>(dim, "class_id", 1, Omega_h::Read<Omega_h::ClassId>(ppClassId));
+    mesh->add_tag<Omega_h::I8>(dim, "class_dim", 1, Omega_h::Read<Omega_h::I8>(ppClassDim));
+  }
+
+  void classifyVerts(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
+      int pp_num_ents, Omega_h::LOs full2pp_entIds) {
+    const auto vdim = 0;
+    auto full_class = full_mesh.get_array<Omega_h::ClassId>(vdim, "class_id");
+    Omega_h::Write<Omega_h::LO> ppDown(pp_num_ents*degree);
+    Omega_h::Write<Omega_h::LO> ppClass(pp_num_ents);
+    const auto downFull = full_mesh.ask_down(dim,dim-1);
+
+    auto getDownAndClass = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
+      const Omega_h::LO pp_ent = full2pp_entIds[full_ent_id];
+      const Omega_h::LO full_first_down = full_ent_id * degree;
+      const Omega_h::LO pp_first_down = pp_ent * degree;
+      if (pp_ent >= 0) {
+        //fill in the downward adjacency array
+        for (int j = 0; j < degree; ++j) {
+          const Omega_h::LO full_down = downFull.ab2b[full_first_down+j];
+          const Omega_h::LO pp_down = pp_first_down + j;
+          const Omega_h::LO pp_down_id = full2pp_downIds[full_down];
+          ppDown[pp_down] = pp_down_id;
+        }
+        //transfer classification while we are at it
+        ppClass[pp_ent] = full_class[full_ent_id];
+      } else {
+        printf("entity %d %d is not new\n", dim, full_ent_id);
+      }
+    };
+    Omega_h::parallel_for(full_mesh.nents(dim), getDownAndClass, "getDownAndClass");
+    picpart.set_ents(dim,Omega_h::Adj(ppDown));
+  }
+
 
   void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
                         Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,

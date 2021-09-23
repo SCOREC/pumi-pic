@@ -45,16 +45,19 @@ namespace pumipic
 //compute the area coordinates formed by each edge of searchElm
 //the coordinates are returned in the order of the edges bounding
 //searchElm
+// vshift is to specify whether the returned Bcc will be in edge based notation
+// or vertex based notation; default is edge based notation
 OMEGA_H_DEVICE void barycentric_tri(
   const o::Reals triArea,
   const o::Matrix<TriDim, TriVerts> &faceCoords,
   const o::Vector<TriDim> &pos,
   o::Vector<TriVerts> &bcc,
-  const int searchElm) {
+  const int searchElm, const bool vertex_major=false) {
   const auto parent_area = triArea[searchElm];
+  const auto vshift = vertex_major ? 1 : 0;
   for(int i=0; i<3; i++) {
-    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i, 0);
-    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i, 1);
+    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i+vshift, 0);
+    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i+vshift, 1);
     const auto kxy = faceCoords[kIdx];
     const auto lxy = faceCoords[lIdx];
     o::Few<o::Vector<2>, 2> tri;

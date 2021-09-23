@@ -56,8 +56,8 @@ OMEGA_H_DEVICE void barycentric_tri(
   const auto parent_area = triArea[searchElm];
   const auto vshift = vertex_major ? 1 : 0;
   for(int i=0; i<3; i++) {
-    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i+vshift, 0);
-    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i+vshift, 1);
+    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, (i+vshift)%3, 0);
+    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, (i+vshift)%3, 1);
     const auto kxy = faceCoords[kIdx];
     const auto lxy = faceCoords[lIdx];
     o::Few<o::Vector<2>, 2> tri;

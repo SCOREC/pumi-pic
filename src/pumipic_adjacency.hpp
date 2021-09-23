@@ -32,6 +32,12 @@ namespace pumipic
           \   |   /
             \ | /
               1
+   triangle:
+              1
+             / \
+            1   0
+           /     \
+          2---2---0
 */
 
 #define TriVerts 3
@@ -40,11 +46,11 @@ namespace pumipic
 //the coordinates are returned in the order of the edges bounding
 //searchElm
 OMEGA_H_DEVICE void barycentric_tri(
-    const o::Reals triArea,
-    const o::Matrix<TriDim, TriVerts> &faceCoords,
-    const o::Vector<TriDim> &pos,
-    o::Vector<TriVerts> &bcc,
-    const int searchElm) {
+  const o::Reals triArea,
+  const o::Matrix<TriDim, TriVerts> &faceCoords,
+  const o::Vector<TriDim> &pos,
+  o::Vector<TriVerts> &bcc,
+  const int searchElm) {
   const auto parent_area = triArea[searchElm];
   for(int i=0; i<3; i++) {
     const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i, 0);

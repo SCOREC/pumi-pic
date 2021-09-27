@@ -236,7 +236,7 @@ namespace pumipic {
       picpart->set_family(OMEGA_H_SIMPLEX);
       picpart->set_verts(num_ents[0]);
       for (int i = 1; i <= dim; ++i)
-        buildAndClassifyFull2pp(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[i-1]);
+        buildAndClassifyFull2pp(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[0]);
       classifyVerts(mesh, *picpart, num_ents[0], ent_ids[0]);
       picpart->add_coords(new_coords);
       Omega_h::finalize_classification(picpart);
@@ -539,11 +539,11 @@ namespace {
     //picpart mesh via Omega_h::set_ents(...)
     auto full_classId = full_mesh.get_array<Omega_h::ClassId>(dim, "class_id");
     auto full_classDim = full_mesh.get_array<Omega_h::I8>(dim, "class_dim");
-    const auto degree = Omega_h::element_degree(full_mesh.family(), dim, dim-1);
+    const auto degree = Omega_h::element_degree(full_mesh.family(), dim, 0);
     Omega_h::Write<Omega_h::LO> ppDown(pp_num_ents*degree);
     Omega_h::Write<Omega_h::ClassId> ppClassId(pp_num_ents);
     Omega_h::Write<Omega_h::I8> ppClassDim(pp_num_ents);
-    const auto downFull = full_mesh.ask_down(dim,dim-1);
+    const auto downFull = full_mesh.ask_down(dim,0);
 
     auto getDownAndClass = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
       const Omega_h::LO pp_ent = full2pp_entIds[full_ent_id];

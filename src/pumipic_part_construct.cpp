@@ -527,11 +527,17 @@ namespace {
   Omega_h::Adj getAdj(const int dim, Omega_h::LOs down, Omega_h::Mesh m) {
     if(dim == 1) return Omega_h::Adj(down);
     else if(dim == 2) {
-      const auto e2v = m.get_adj(1,0);
+      const auto e2v = m.ask_down(1,0);
       const auto v2e = m.ask_up(0,1);
-      const auto adj = Omega_h::reflect_down(down, e2v.ab2b, v2e, m.family(), dim, dim-1); //fails here
+      const auto adj = Omega_h::reflect_down(down, e2v.ab2b, v2e, m.family(), dim, dim-1);
+      return adj;
+    } else if(dim == 3) {
+      const auto f2v = m.ask_down(2,0);
+      const auto v2f = m.ask_up(0,2);
+      const auto adj = Omega_h::reflect_down(down, f2v.ab2b, v2f, m.family(), dim, dim-1);
       return adj;
     }
+
     else exit(EXIT_FAILURE);
   }
 

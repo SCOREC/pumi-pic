@@ -10,17 +10,6 @@
 #include "pumipic_lb.hpp"
 
 namespace {
-  template <class T>
-  void writeArray(Omega_h::Read<T> arr, std::string name) {
-    Omega_h::HostRead<T> arr_hr(arr);
-    Omega_h::LO const nl = arr_hr.size();
-    std::cout << name << " size " << nl << "\n";
-    for(int l=0; l<nl; l++) {
-      const auto d = arr_hr[l];
-      std::cout << l << " " << (int)d << "\n";
-    }
-  }
-
   void setOwnerByClassification(Omega_h::Mesh& m, Omega_h::LOs class_owners, int self,
                                 Omega_h::Write<Omega_h::LO> owns);
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::CommPtr, Omega_h::LOs owner);
@@ -40,10 +29,7 @@ namespace {
   Omega_h::LO sumPositives(Omega_h::LO size, Omega_h::Write<Omega_h::LO> arr);
   void gatherCoords(Omega_h::Mesh& mesh, Omega_h::LOs vert_ids,
                     Omega_h::Write<Omega_h::Real> new_coords);
-  void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
-                        Omega_h::Write<Omega_h::Real> new_coords);
-  void buildAndClassifyFull2pp(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
+  void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
       int dim, int pp_num_ents, Omega_h::LOs full2pp_entIds, Omega_h::LOs full2pp_downIds);
   void classifyVerts(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
       const int pp_num_verts, Omega_h::LOs full2pp_entIds);
@@ -174,20 +160,13 @@ namespace pumipic {
     Omega_h::Write<Omega_h::LO> buf_ents[4];
     for (int i = 0; i <= dim; ++i)
       buf_ents[i] = Omega_h::Write<Omega_h::LO>(mesh.nents(i),0);
-    for (int i = 0; i <= dim; ++i) {
+    for (int i = 0; i <= dim; ++i)
       setSafeEnts(mesh, i, mesh.nelems(), has_part, owner_dim[dim], buf_ents[i]);
-      std::stringstream ss;
-      ss << "buf_ents[" << i <<"]";
-      std::string str = ss.str();
-      writeArray(Omega_h::Read<Omega_h::LO>(buf_ents[i]), str); //all entries should be '1'
-    }
 
     //Gather number of entities remaining in the picpart
     Omega_h::GO* num_ents = new Omega_h::GO[dim+1];
-    for (int i = 0; i <= dim; ++i) {
+    for (int i = 0; i <= dim; ++i)
       num_ents[i] = sumPositives(mesh.nents(i), buf_ents[i]);
-      std::cerr << "num_ents[" << i << "] " << num_ents[i] << " mesh.nents(i) " << mesh.nents(i) << "\n";
-    }
 
     /**************** Create numberings for the entities on the picpart **************/
     Omega_h::LOs ent_ids[4];
@@ -203,10 +182,6 @@ namespace pumipic {
             numbering[i] = offset[i];
       });
       ent_ids[i] = numbering;
-      //std::stringstream ss;
-      //ss << "ent_ids[" << i <<"]";
-      //std::string str = ss.str();
-      //writeArray(Omega_h::Read<Omega_h::LO>(ent_ids[i]), str);
     }
 
     //If full mesh buffer then we don't need to make new mesh for the picparts
@@ -224,7 +199,7 @@ namespace pumipic {
     }
     //************Build a new mesh as the picpart**************
     else {
-      const auto lib = mesh.library();
+      Omega_h::Library* lib = mesh.library();
       picpart = new Omega_h::Mesh(lib);
       picpart->set_comm(lib->self());
       picpart->set_dim(dim);
@@ -238,7 +213,7 @@ namespace pumipic {
       //Build the mesh
       picpart->set_verts(num_ents[0]);
       for (int i = 1; i <= dim; ++i)
-        buildAndClassifyFull2pp(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[0]);
+        buildAndClassify(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[0]);
       classifyVerts(mesh, *picpart, num_ents[0], ent_ids[0]);
       picpart->add_coords(new_coords);
       Omega_h::finalize_classification(picpart);
@@ -541,7 +516,7 @@ namespace {
     else exit(EXIT_FAILURE);
   }
 
-  void buildAndClassifyFull2pp(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
+  void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh& picpart,
       int dim, int pp_num_ents, Omega_h::LOs full2pp_entIds, Omega_h::LOs full2pp_downIds) {
     //extract downward adjaceny arrays from full_mesh and pass them into the new
     //picpart mesh via Omega_h::set_ents(...)
@@ -603,52 +578,6 @@ namespace {
     //set classification
     picpart.add_tag<Omega_h::ClassId>(vdim, "class_id", 1, Omega_h::Read<Omega_h::ClassId>(ppClassId));
     picpart.add_tag<Omega_h::I8>(vdim, "class_dim", 1, Omega_h::Read<Omega_h::I8>(ppClassDim));
-  }
-
-  void buildAndClassify(Omega_h::Mesh& full_mesh, Omega_h::Mesh* picpart, int dim, int num_ents,
-                        Omega_h::LOs ent_ids, Omega_h::LOs vert_ids,
-                        Omega_h::Write<Omega_h::Real> new_coords) {
-    Omega_h::Write<Omega_h::LO> ent2v((num_ents) * (dim + 1));
-    Omega_h::Write<Omega_h::LO> ent_class(num_ents);
-    auto old_class = full_mesh.get_array<Omega_h::ClassId>(dim, "class_id");
-    if (dim != 0) {
-      //All entities of dimension > 0
-      const auto ent2vert = full_mesh.ask_down(dim, 0);
-
-      auto getDownAndClass = OMEGA_H_LAMBDA(Omega_h::LO ent_id) {
-        const Omega_h::LO new_ent = ent_ids[ent_id];
-        const int nvpe = dim + 1;
-        const Omega_h::LO first_vert = ent_id * nvpe;
-        const Omega_h::LO first_new_vert = new_ent * nvpe;
-        if (new_ent >= 0) {
-          for (int j = 0; j < nvpe; ++j) {
-            const Omega_h::LO old_vert = ent2vert.ab2b[first_vert+j];
-            const Omega_h::LO new_v = first_new_vert + j;
-            const Omega_h::LO new_v_id = vert_ids[old_vert];
-            ent2v[new_v] = new_v_id;
-          }
-          ent_class[new_ent] = old_class[ent_id];
-        } else {
-          printf("entity %d %d is not new\n", dim, ent_id);
-        }
-      };
-      Omega_h::parallel_for(full_mesh.nents(dim), getDownAndClass, "getDownAndClass");
-    }
-    else {
-      //We cant do downwards with vertices
-      auto getVertClass = OMEGA_H_LAMBDA(Omega_h::LO vert_id) {
-        const Omega_h::LO new_vert = ent_ids[vert_id];
-        if (new_vert >= 0) {
-          ent_class[new_vert] = old_class[vert_id];
-          ent2v[new_vert] = new_vert;
-        }
-      };
-      Omega_h::parallel_for(full_mesh.nverts(), getVertClass, "getVertClass");
-    }
-    if (dim == full_mesh.dim())
-      Omega_h::build_from_elems_and_coords(picpart, full_mesh.family(), full_mesh.dim(),
-                                         ent2v, new_coords);
-    Omega_h::classify_equal_order(picpart, dim, ent2v, ent_class);
   }
 
   template <class T>

@@ -224,16 +224,18 @@ namespace pumipic {
     }
     //************Build a new mesh as the picpart**************
     else {
-      Omega_h::Library* lib = mesh.library();
+      const auto lib = mesh.library();
       picpart = new Omega_h::Mesh(lib);
+      picpart->set_comm(lib->self());
+      picpart->set_dim(dim);
+      picpart->set_family(OMEGA_H_SIMPLEX);
+      picpart->set_parting(OMEGA_H_ELEM_BASED);
 
       //Gather coordinates
       Omega_h::Write<Omega_h::Real> new_coords((num_ents[0])*dim,0);
       gatherCoords(mesh, ent_ids[0], new_coords);
 
       //Build the mesh
-      picpart->set_dim(dim);
-      picpart->set_family(OMEGA_H_SIMPLEX);
       picpart->set_verts(num_ents[0]);
       for (int i = 1; i <= dim; ++i)
         buildAndClassifyFull2pp(mesh, *picpart, i, num_ents[i], ent_ids[i], ent_ids[0]);

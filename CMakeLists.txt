@@ -65,7 +65,7 @@ if(ENABLE_CABANA)
 endif()
 
 option(PP_ENABLE_ADIOS2 "Build with ADIOS2" OFF)
-if(ENABLE_CABANA)
+if(PP_ENABLE_ADIOS2)
   set(pumipic_USE_ADIOS2_DEFAULT ON)
   set(ADIOS2_PREFIX ${Cabana_PREFIX})
   bob_public_dep(ADIOS2)

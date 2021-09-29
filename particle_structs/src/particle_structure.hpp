@@ -94,6 +94,10 @@ namespace pumipic {
                          kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
+
+    /* checkpoint restart methods*/
+    virtual void checkpoint(std::string path) { fprintf(stderr, "not supported!\n"); }
+
   protected:
     //String to identify the particle structure
     std::string name;

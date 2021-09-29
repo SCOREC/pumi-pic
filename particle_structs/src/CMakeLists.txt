@@ -51,12 +51,19 @@ set(HEADERS
   particle_structs.hpp
 )
 
+if(PP_ENABLE_ADIOS2)
+  set(HEADERS ${HEADERS} cabm/cabm_checkpoint.hpp)
+endif()
+
 set(SOURCES
   support/prebarrier.cpp
 )
 
 add_library(particleStructs ${SOURCES})
 target_link_libraries(particleStructs support)
+if(PP_ENABLE_ADIOS2)
+  target_link_libraries(particleStructs adios2::cxx11_mpi)
+endif()
 target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>)

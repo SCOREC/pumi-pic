@@ -64,6 +64,15 @@ if(ENABLE_CABANA)
   add_definitions(-DPP_ENABLE_CAB)
 endif()
 
+option(PP_ENABLE_ADIOS2 "Build with ADIOS2" OFF)
+if(ENABLE_CABANA)
+  set(pumipic_USE_ADIOS2_DEFAULT ON)
+  set(ADIOS2_PREFIX ${Cabana_PREFIX})
+  bob_public_dep(ADIOS2)
+  add_definitions(-DPP_ENABLE_ADIOS2)
+endif()
+
+
 set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
 set(KOKKOS_ENABLED true)

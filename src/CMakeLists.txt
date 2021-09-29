@@ -36,6 +36,10 @@ target_link_libraries(pumipic-core
   EnGPar::engpar
   EnGPar::pcu
   )
+if(PP_ENABLE_ADIOS2)
+  target_link_libraries(pumipic-core adios2::cxx11_mpi)
+endif()
+
 pumipic_export_lib(pumipic-core "${HEADERS}")
 
 # this INTERFACE target bundles all the enabled libraries together

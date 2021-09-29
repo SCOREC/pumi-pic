@@ -75,6 +75,13 @@ mpi_test(revClass_r1 1 ./test_revClass
          ${TEST_DATA_DIR}/cube/7k.osh
          ignored)
 
+#checkpoint test
+if(PP_ENABLE_ADIOS2 AND ENABLE_CABANA)
+  mpi_test(checkpoint_r1 1 ./test_chkpt
+           ${TEST_DATA_DIR}/cube.msh
+           ignored)
+endif()
+
 #pseudo-simulation tests
 
 mpi_test(pseudoPushAndSearch_t1 1

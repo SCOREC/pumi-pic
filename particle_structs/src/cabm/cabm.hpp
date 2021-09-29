@@ -70,6 +70,8 @@ namespace pumipic {
     void printMetrics() const;
     void printFormat(const char* prefix) const;
 
+    void checkpoint(std::string path);
+
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
@@ -364,6 +366,9 @@ namespace pumipic {
 #include "cabm_buildFns.hpp"
 #include "cabm_rebuild.hpp"
 #include "cabm_migrate.hpp"
+#if defined(PP_ENABLE_ADIOS2)
+#include "cabm_checkpoint.hpp"
+#endif
 
 #else
 namespace pumipic {
@@ -423,6 +428,7 @@ namespace pumipic {
 
     void printMetrics() const {reportError();}
     void printFormat(const char* prefix) const {reportError();}
+
 
   private:
     void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "

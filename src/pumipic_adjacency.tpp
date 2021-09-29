@@ -1,0 +1,463 @@
+#ifndef PUMIPIC_ADJACENCY_NEW_HPP
+#define PUMIPIC_ADJACENCY_NEW_HPP
+
+#include <iostream>
+#include "Omega_h_for.hpp"
+#include "Omega_h_adj.hpp"
+#include "Omega_h_element.hpp"
+#include "Omega_h_shape.hpp"
+
+#include <particle_structs.hpp>
+
+#include "pumipic_utils.hpp"
+#include "pumipic_constants.hpp"
+#include "pumipic_kktypes.hpp"
+#include "pumipic_profiling.hpp"
+
+namespace o = Omega_h;
+namespace ps = particle_structs;
+
+namespace pumipic {
+  OMEGA_H_DEVICE void barycentric_tri(
+    const o::Real parentArea,
+    const o::Matrix<TriDim, TriVerts> &faceCoords,
+    const o::Vector<TriDim> &pos,
+    o::Vector<TriVerts> &bcc) {
+    for(int i=0; i<3; i++) {
+      const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i, 0);
+      const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i, 1);
+      const auto kxy = faceCoords[kIdx];
+      const auto lxy = faceCoords[lIdx];
+      o::Few<o::Vector<2>, 2> tri;
+      tri[0] = lxy - kxy;
+      tri[1] = pos - kxy;
+      const auto area = o::triangle_area_from_basis(tri);
+      bcc[i] = area/parentArea;
+    }
+  }
+
+  OMEGA_H_DEVICE bool barycentric_tet(
+    const o::Real parentVol,
+    const Omega_h::Matrix<DIM, 4> &mat,
+    const Omega_h::Vector<DIM> &pos,
+    Omega_h::Vector<4> &bcc) {
+  for(Omega_h::LO i=0; i<4; ++i) 
+    bcc[i] = -1;
+  o::Real tol = 1.0e-20;
+
+  Omega_h::Real vals[4];
+  Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
+  for(Omega_h::LO iface=0; iface<4; ++iface) {
+    get_face_from_face_index_of_tet(mat, iface, abc);
+    auto vab = abc[1] - abc[0]; //b - a;
+    auto vac = abc[2] - abc[0]; //c - a;
+    auto vap = pos - abc[0]; // p - a;
+    vals[iface] = o::inner_product(vap, Omega_h::cross(vac, vab)); //ac, ab
+  }
+
+  Omega_h::Real inv_vol = 0.0;
+  if(parentVol > tol)
+    inv_vol = 1.0/parentVol;
+  else {
+    return 0;
+  }
+  //bcc[0] for face0 corresp to its opp vtx, so on.
+  for(int i=0; i<4; ++i)
+    bcc[i] = inv_vol * vals[i];
+  return 1; //success
+}
+
+  //Check that every particle is within the initial parent element
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  o::LO check_initial_parents(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
+                              Segment3d x_ps_orig, SegmentInt pids,
+                              o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
+                              o::Reals elmArea, bool debug = false) {
+    const auto dim = mesh.dim();
+    const auto elm2verts = mesh.ask_elem_verts();
+    const auto coords = mesh.coords();
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    Omega_h::Write<o::LO> numNotInElem(1, 0, "search_numNotInElem");
+    if (dim == 2) {
+      auto checkParent = PS_LAMBDA(const int e, const int pid, const int mask) {
+        //inactive particle that is still moving to its target position
+        if( mask > 0 && !ptcl_done[pid] ) {
+          auto searchElm = elem_ids[pid];
+          auto ptcl = pids(pid);
+          OMEGA_H_CHECK(searchElm >= 0);
+          auto elmVerts = o::gather_verts<3>(elm2verts, searchElm);
+          const auto elmCoords = o::gather_vectors<3,2>(coords, elmVerts);
+          auto ptclOrigin = makeVector2(pid, x_ps_orig);
+          Omega_h::Vector<3> faceBcc;
+          barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
+          if(!all_positive(faceBcc,1e-8)) {
+            if (debug) {
+              printf("%d Particle not in element! ptcl %d elem %d => %d "
+                     "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
+                     rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+                     faceBcc[0], faceBcc[1], faceBcc[2]);
+            }
+            Kokkos::atomic_add(&(numNotInElem[0]), 1);
+            elem_ids[pid] = -1;
+            ptcl_done[pid] = 1;
+          }
+        } //if active
+      };
+      parallel_for(ptcls, checkParent, "search_checkParent");
+    }
+    else if (dim == 3) {
+      auto checkParent = PS_LAMBDA(const int e, const int pid, const int mask) {
+        if( mask > 0 && !ptcl_done[pid] ) {
+          auto searchElm = elem_ids[pid];
+          auto ptcl = pids(pid);
+          OMEGA_H_CHECK(searchElm >= 0);
+          auto elmVerts = o::gather_verts<4>(elm2verts, searchElm);
+          const auto elmCoords = o::gather_vectors<4,3>(coords, elmVerts);
+          auto ptclOrigin = makeVector3(pid, x_ps_orig);
+          Omega_h::Vector<4> bcc;
+          barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
+          if(!all_positive(bcc,1e-8)) {
+            if (debug) {
+              printf("%d Particle not in element! ptcl %d elem %d => %d "
+                     "orig %.15f %.15f %.15f bcc %.3f %.3f %.3f %.3f\n",
+                     rank, ptcl, e, searchElm,
+                     ptclOrigin[0], ptclOrigin[1], ptclOrigin[2],
+                     bcc[0], bcc[1], bcc[2], bcc[3]);
+            }
+            Kokkos::atomic_add(&(numNotInElem[0]), 1);
+            elem_ids[pid] = -1;
+            ptcl_done[pid] = 1;
+          }
+        } //if active
+      };
+      parallel_for(ptcls, checkParent, "search_checkParent");
+    }
+    Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
+    if (numNotInElem_h[0] > 0) {
+      fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
+              "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
+    }
+    return numNotInElem_h[0];
+  }
+
+  //Moller Trumbore line triangle intersection method
+  /*
+    Möller and Trumbore, « Fast, Minimum Storage Ray-Triangle Intersection », Journal of Graphics Tools, vol. 2,‎ 1997, p. 21–28
+    https://cadxfem.org/inf/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
+   */
+  OMEGA_H_DEVICE bool moller_trumbore_line_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
+                                                    const o::Vector<3>& orig, const o::Vector<3>& dest,
+                                                    o::Vector<3>& xpoint, o::Real tol, o::LO flip = 1) {
+    int vtx1 = 2 - flip;
+    int vtx2 = flip + 1;
+    const o::Vector<3> edge1 = faceVerts[vtx1] - faceVerts[0];
+    const o::Vector<3> edge2 = faceVerts[vtx2] - faceVerts[0];
+    const o::Vector<3> dir = o::normalize(dest - orig);
+    const o::Vector<3> pvec = o::cross(dir, edge2);
+    const o::Real det = o::inner_product(edge1, pvec);
+    const o::Real invdet = 1.0/det;
+    const o::Vector<3> tvec = orig - faceVerts[0];
+    const o::Real u = invdet * o::inner_product(tvec, pvec);
+    const o::Vector<3> qvec = o::cross(tvec, edge1);
+    const o::Real v = invdet * o::inner_product(dir, qvec);
+    const o::Real t = invdet * o::inner_product(edge2, qvec);
+    xpoint = orig + dir * t;
+    return  (det >= tol) && (t >= 0.0) && (u >= 0.0) && (v >= 0.0) && (u+v <= 1.0);
+  }
+
+  template <class ParticleType, typename Segment3d>
+  void find_exit_face(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
+                     Segment3d x_ps_orig, Segment3d x_ps_tgt,
+                     o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
+                     o::Reals elmArea, bool useBcc, o::Write<o::LO> lastExit) {
+    const auto dim = mesh.dim();
+    const auto elm2verts = mesh.ask_elem_verts();
+    const auto coords = mesh.coords();
+    const auto elm2faces = mesh.ask_down(dim, dim-1);
+    const auto elmDown = elm2faces.ab2b;
+
+    if (useBcc) {
+      if (dim == 2) {
+        auto findExitFace = PS_LAMBDA(const int, const int pid, const int mask) {
+          if( mask > 0 && !ptcl_done[pid] ) {
+            auto searchElm = elem_ids[pid];
+            OMEGA_H_CHECK(searchElm >= 0);
+            //Calculate BCC
+            auto elmVerts = o::gather_verts<3>(elm2verts, searchElm);
+            const auto elmCoords = o::gather_vectors<3,2>(coords, elmVerts);
+            auto ptclOrigin = makeVector2(pid, x_ps_tgt);
+            Omega_h::Vector<3> faceBcc;
+            barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
+            auto isDestInParentElm = all_positive(faceBcc);
+            ptcl_done[pid] = isDestInParentElm;
+            //Find min and set exit edge
+            const int idx = min3(faceBcc);
+            const auto edges = o::gather_down<3>(elmDown, searchElm);
+            lastExit[pid] = edges[idx];
+          }
+        };
+        parallel_for(ptcls, findExitFace, "search_findExitFace_bcc_2d");
+      }
+      else if (dim == 3) {
+        auto findExitFace = PS_LAMBDA(const int e, const int pid, const int mask) {
+          if( mask > 0 && !ptcl_done[pid] ) {
+            auto searchElm = elem_ids[pid];
+            OMEGA_H_CHECK(searchElm >= 0);
+            auto elmVerts = o::gather_verts<4>(elm2verts, searchElm);
+            const auto elmCoords = o::gather_vectors<4,3>(coords, elmVerts);
+            auto ptclOrigin = makeVector3(pid, x_ps_tgt);
+            Omega_h::Vector<4> bcc;
+            barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
+            auto isDestInParentElm = all_positive(bcc);
+            ptcl_done[pid] = isDestInParentElm;
+            //Find min and set exit face
+            const int idx = min_index(bcc, 4);
+            const auto faces = o::gather_down<4>(elmDown, searchElm);
+            lastExit[pid] = faces[idx];
+          }
+        };
+        parallel_for(ptcls, findExitFace, "search_findExitFace_bcc_3d");
+      }
+    }
+    else {
+      const auto faceVerts =  mesh.ask_verts_of(2);
+      //Use line face intersection to determine exit face
+      if (dim == 2) {
+
+      }
+      else if (dim == 3) {
+        auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
+          if (mask > 0 && !ptcl_done[ptcl]) {
+            const auto searchElm = elem_ids[ptcl];
+            OMEGA_H_CHECK(searchElm >= 0);
+            const auto tetv2v = o::gather_verts<4>(elm2verts, searchElm);
+            const auto dest = makeVector3(ptcl, x_ps_tgt);
+            const auto orig = makeVector3(ptcl, x_ps_orig);
+            const auto face_ids = o::gather_down<4>(elmDown, searchElm);
+            auto xpts = o::zero_vector<3>();
+            lastExit[ptcl] = -1;
+            for(int fi=0; fi<4; ++fi) {
+              const auto face_id = face_ids[fi];
+              const auto fv2v = o::gather_verts<3>(faceVerts, face_id);
+              const auto face = gatherVectors3x3(coords, fv2v);
+              const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
+              const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts, 1e-8, flip);
+              if (success) {
+                lastExit[ptcl] = face_id;
+              }
+            }
+            ptcl_done[ptcl] = lastExit[ptcl] == -1;
+          }
+        };
+        parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
+      }
+    }
+  }
+
+  template <typename ParticleType, typename Segment3d>
+  void check_model_intersection(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
+                                Segment3d x_ps_orig, Segment3d x_ps_tgt,
+                                o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
+                                o::Write<o::LO> lastExit, o::Bytes side_is_exposed,
+                                bool requireIntersection,
+                                o::Write<o::LO> xFace, o::Write<o::Real> xPoints) {
+    const auto face_verts =  mesh.ask_verts_of(2);
+    const auto mesh2verts = mesh.ask_elem_verts();
+    const auto elm2faces = mesh.ask_down(mesh.dim(), mesh.dim()-1);
+    const auto elmDown = elm2faces.ab2b;
+    const auto coords = mesh.coords();
+    auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        assert(lastExit[pid] != -1);
+        const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
+        const auto face_ids = o::gather_down<4>(elmDown, searchElm);
+        const o::LO bridge = lastExit[pid];
+        const bool exposed = side_is_exposed[bridge];
+        ptcl_done[pid] = exposed;
+        if (exposed && requireIntersection) {
+          //TODO write in 2D
+          const auto fv2v = o::gather_verts<3>(face_verts, lastExit[pid]);
+          const auto faceVerts = gatherVectors3x3(coords, fv2v);
+          const o::Vector<3> orig = makeVector3(pid, x_ps_orig);
+          const o::Vector<3> dest = makeVector3(pid, x_ps_tgt);
+          for(int fi=0; fi<4; ++fi) {
+            if (face_ids[fi] == bridge) {
+              const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
+
+              o::Vector<3> xpoint;
+              bool success = moller_trumbore_line_triangle(faceVerts, orig, dest,
+                                                           xpoint, 1e-8, flip);
+              if (success) {
+                xFace[pid] = lastExit[pid];
+                for (int i =0; i < 3; ++i) {
+                  xPoints[pid*3 + i] = xpoint[i];
+                }
+              }
+            }
+          }
+        }
+        else {
+          elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
+        }
+      }
+    };
+    parallel_for(ptcls, checkExposedEdges, "pumipic_checkExposedEdges");
+  }
+
+  template <class ParticleType>
+  void set_new_element(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                       o::Write<o::LO> elem_ids, o::LOs ptcl_done,
+                       o::Write<o::LO> lastExit) {
+    int dim = mesh.dim();
+    const auto faces2elms = mesh.ask_up(dim-1, dim);
+    auto e2f_vals = faces2elms.ab2b; // CSR value array
+    auto e2f_offsets = faces2elms.a2ab; // CSR offset array, index by mesh edge ids
+    auto setNextElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if( mask > 0 && !ptcl_done[pid] ) {
+        auto searchElm = elem_ids[pid];
+        auto bridge = lastExit[pid];
+        auto e2f_first = e2f_offsets[bridge];
+        auto e2f_last = e2f_offsets[bridge+1];
+        auto upFaces = e2f_last - e2f_first;
+        assert(upFaces==2);
+        auto faceA = e2f_vals[e2f_first];
+        auto faceB = e2f_vals[e2f_first+1];
+        assert(faceA != faceB);
+        assert(faceA == searchElm || faceB == searchElm);
+        auto nextElm = (faceA == searchElm) ? faceB : faceA;
+        elem_ids[pid] = nextElm;
+      }
+    };
+    parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
+  }
+  
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                   Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
+                   o::Write<o::LO>& elem_ids,
+                   bool requireIntersection,
+                   o::Write<o::LO>& inter_faces,
+                   o::Write<o::Real>& inter_points,
+                   int looplimit,
+                   int debug) {
+    //Initialize timer
+    const auto btime = pumipic_prebarrier();
+    Kokkos::Profiling::pushRegion("pumipic_search_mesh");
+    Kokkos::Timer timer;
+
+    //Initial setup
+    const auto psCapacity = ptcls->capacity();
+    // True if particle has reached new parent element
+    o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
+    // Store the last exit face
+    o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
+    const auto elmArea = measure_elements_real(&mesh);
+    bool useBcc = !requireIntersection;
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    
+    const auto dim = mesh.dim();
+    const auto edges2faces = mesh.ask_up(dim-1, dim);
+    const auto side_is_exposed = mark_exposed_sides(&mesh);
+    const auto faces2verts = mesh.ask_elem_verts();
+    const auto coords = mesh.coords();
+    const auto edge_verts =  mesh.ask_verts_of(dim - 1);
+    
+    //Setup the output information
+    if (elem_ids.size() == 0) {
+      //Setup new parent id arrays
+      elem_ids = o::Write<o::LO>(psCapacity, -1, "search_elem_ids");
+      auto setInitial = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+        if(mask) {
+          elem_ids[pid] = e;
+        }
+        else
+          ptcl_done[pid] = 1;
+      };
+      parallel_for(ptcls, setInitial, "search_setInitial");
+    }
+    else {
+      auto setInitial = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+        if((mask && elem_ids[pid] == -1) || (!mask))
+          ptcl_done[pid] = 1;
+      };
+      parallel_for(ptcls, setInitial, "search_setInitial");
+    }
+    
+    if (requireIntersection) {
+      //Setup intersection arrays
+      if (inter_points.size() == 0 || inter_faces.size() == 0) {
+        inter_points = o::Write<o::Real>(3*ptcls->capacity(), 0);
+        inter_faces = o::Write<o::LO>(ptcls->capacity(), -1);
+      }
+      else {
+        auto initializeIntersection = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+          inter_points[3 * pid] = inter_points[3 * pid + 1] = inter_points[3 * pid + 2] = 0;
+          inter_faces[pid] = -1;
+        };
+        parallel_for(ptcls, initializeIntersection, "search_initializeIntersection");
+      }
+   }
+
+    //Ensure all particles are within their starting element
+    check_initial_parents(mesh, ptcls, x_ps_orig, pids, elem_ids, ptcl_done, elmArea, debug);
+
+    bool found = false;
+    int loops = 0;
+
+    //Iteratively find the next element until parent element is reached for each particle
+    while (!found) {
+      //Find intersection face
+      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit);
+      //Check if intersection face is exposed
+      check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, side_is_exposed,
+                               requireIntersection, inter_faces, inter_points);
+      
+      //Move to next element
+      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+
+      //Check if all particles are found
+      found = true;
+      o::LOs ptcl_done_r(ptcl_done);
+      auto minFlag = o::get_min(ptcl_done_r);
+      if(minFlag == 0)
+        found = false;
+      ++loops;
+
+      //Check iteration count
+      if(looplimit && loops >= looplimit) {
+        Omega_h::Write<o::LO> numNotFound(1,0);
+        auto ptclsNotFound = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+          if( mask > 0 && !ptcl_done[pid] ) {
+            auto searchElm = elem_ids[pid];
+            auto ptcl = pids(pid);
+            const auto ptclDest = makeVector2(pid, x_ps_orig);
+            const auto ptclOrigin = makeVector2(pid, x_ps_tgt);
+            if (debug) {
+              printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+                     rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
+                     ptclDest[0], ptclDest[1]);
+            }
+            elem_ids[pid] = -1;
+            Kokkos::atomic_add(&(numNotFound[0]), 1);
+          }
+        };
+        ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
+        Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
+        fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
+                "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
+        break;
+      }
+
+    }
+    RecordTime("pumipic search_mesh", timer.seconds(), btime);
+    char buffer[1024];
+    sprintf(buffer, "%d pumipic search_mesh loops %d", rank, loops);
+    PrintAdditionalTimeInfo(buffer, 1);
+    Kokkos::Profiling::popRegion();
+    return found;
+  }
+}
+#endif

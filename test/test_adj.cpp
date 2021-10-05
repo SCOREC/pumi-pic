@@ -282,42 +282,102 @@ bool check_inside_bbox(o::Mesh mesh, PS* ptcls, o::Write<o::LO> xFaces) {
   return fails;
 }
 
+//Checks if the point is on an edge
+OMEGA_H_INLINE bool check_point_on_edge(const o::Few<o::Vector<2>, 2> verts, const o::Vector<2> point, const o::Real tol, o::LO ptcl) {
+  const o::Vector<2> path = point - verts[0];
+  const o::Vector<2> edge = verts[1] - verts[0];
+  const o::Real cross = o::cross(path, edge);
+
+  return fabs(cross) <= tol &&
+    point[0] >= min(verts[0][0], verts[1][0]) - tol &&
+    point[1] >= min(verts[0][1], verts[1][1]) - tol &&
+    point[0] <= max(verts[0][0], verts[1][0]) + tol &&
+    point[1] <= max(verts[0][1], verts[1][1]) + tol;
+}
+
+//3D test of intersection point within the intersection face
+bool check_intersections_3d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> intersection_faces, o::Write<o::Real> x_points) {
+  o::Write<o::LO> failures(1,0);
+  const auto face_verts =  mesh.ask_verts_of(2);
+  const auto coords = mesh.coords();
+  auto checkIntersections3d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+    const o::LO face = intersection_faces[ptcl];
+    if (mask && face != -1) {
+      //check intersection point is in the intersection face
+      const auto fv2v = o::gather_verts<3>(face_verts, face);
+      const auto abc = o::gather_vectors<3, 3>(coords, fv2v);
+      Omega_h::Vector<3> xpoint = o::zero_vector<3>();
+      for (int i =0; i < 3; ++i)
+        xpoint[i] = x_points[3 * ptcl + i];
+      Omega_h::Vector<3> bcc;
+      bool pass = p::find_barycentric_tri_simple(abc, xpoint, bcc);
+      if(pass && !p::all_positive(bcc)) {
+        Kokkos::atomic_add(&(failures[0]),1);
+        printf("[ERROR] Particle intersected with model boundary outside the intersection face!\n");
+      }
+    }
+  };
+  p::parallel_for(ptcls, checkIntersections3d, "checkIntersections3d");
+  bool fail = o::HostWrite<o::LO>(failures)[0];
+  return fail;
+}
+
+//2D test of intersection point within the intersection edge
+bool check_intersections_2d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> intersection_faces, o::Write<o::Real> x_points) {
+  o::Write<o::LO> failures(1,0);
+  const auto edge_verts =  mesh.ask_verts_of(1);
+  const auto coords = mesh.coords();
+  auto checkIntersections2d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+    const o::LO edge = intersection_faces[ptcl];
+    if (mask && edge != -1) {
+      //check intersection point is in the intersection face
+      const auto ev2v = o::gather_verts<2>(edge_verts, edge);
+      const auto abc = o::gather_vectors<2, 2>(coords, ev2v);
+      Omega_h::Vector<2> xpoint = o::zero_vector<2>();
+      for (int i =0; i < 2; ++i)
+        xpoint[i] = x_points[2 * ptcl + i];
+      if (!check_point_on_edge(abc, xpoint, 1e-8, ptcl)) {
+        Kokkos::atomic_add(&(failures[0]),1);
+        printf("[ERROR] Particle intersected with model boundary outside the intersection edge!\n");
+      }
+    }
+  };
+  p::parallel_for(ptcls, checkIntersections2d, "checkIntersections2d");
+  bool fail = o::HostWrite<o::LO>(failures)[0];
+  return fail; 
+}
+
 //Tests particles that hit the wall if the intersection points are correct/valid
 //Also calls check_inside_bbox to check particles that did not find a wall intersection to ensure they are in the mesh
 template <int DIM>
 bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, o::Write<o::LO> intersection_faces,
                              o::Write<o::Real> x_points) {
+  bool fail = false;
   o::Write<o::LO> failures(1,0);
-  const auto face_verts =  mesh.ask_verts_of(DIM-1);
   auto bb = o::get_bounding_box<DIM>(&mesh);
-  const auto coords = mesh.coords();
   int nvpe = DIM + 1;
   const auto elm_down = mesh.ask_down(mesh.dim(), mesh.dim() - 1);
   auto motion = ptcls->get<3>();
+  //Test intersection points on face
+  if (DIM == 3)
+    fail |= check_intersections_3d(mesh, ptcls, intersection_faces, x_points);
+  else if (DIM == 2)
+    fail |= check_intersections_2d(mesh, ptcls, intersection_faces, x_points);
+
+  //Test intersection points against motion and intersection face on parent element
   auto checkIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
     const o::LO face = intersection_faces[ptcl];
+    const o::LO searchElm = elem_ids[ptcl];
     if (mask && face != -1) {
-      //check intersection point is in the intersection face
-      const auto fv2v = o::gather_verts<3>(face_verts, face);
-      const auto abc = p::gatherVectors3x3(coords, fv2v);
-      const o::LO searchElm = elem_ids[ptcl];
-
-      Omega_h::Vector<3> bcc;
-      Omega_h::Vector<3> xpoint = o::zero_vector<3>();
-      xpoint[0] = x_points[3*ptcl];
-      xpoint[1] = x_points[3*ptcl+1];
-      xpoint[2] = x_points[3*ptcl+2];
-      bool res = p::find_barycentric_tri_simple(abc, xpoint, bcc);
-      if(!p::all_positive(bcc)) {
-        Kokkos::atomic_add(&(failures[0]),1);
-        printf("[ERROR] Particle intersected with model boundary outside the intersection face!\n");
-      }
-      // printf("Particle %d in element %d intersected %d at (%f %f %f) moving (%f %f %f)\n", ptcl, searchElm, face, xpoint[0], xpoint[1], xpoint[2], motion(ptcl, 0), motion(ptcl, 1), motion(ptcl, 2));
       //Check the intersection point is in the direction of motion
+        Omega_h::Vector<DIM> xpoint = o::zero_vector<DIM>();
+        for (int i =0; i < DIM; ++i)
+          xpoint[i] = x_points[DIM * ptcl + i];
       for (int i = 0; i < DIM; ++i) {
         if (fabs(xpoint[i] - bb.min[i]) < 1e-8 && motion(ptcl, i) > 0) {
           Kokkos::atomic_add(&(failures[0]),1);
           printf("[ERROR] Intersection with minimum model boundary is not in the direction of particle motion\n");
+
         }
         if (fabs(xpoint[i]- bb.max[i]) < 1e-8 && motion(ptcl, i) < 0) {
           Kokkos::atomic_add(&(failures[0]),1);
@@ -338,7 +398,8 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
   };
   p::parallel_for(ptcls, checkIntersections, "checkIntersections");
 
-  bool fail = o::HostWrite<o::LO>(failures)[0];
+  fail |= o::HostWrite<o::LO>(failures)[0];
+  //check non intersected particles are still in the domain
   fail |= check_inside_bbox<DIM>(mesh, ptcls, intersection_faces);
   return fail;
 }
@@ -385,11 +446,12 @@ bool testInternalBCCSearch(o::Mesh mesh, PS* ptcls) {
 void reflect_intersections(PS* ptcls, o::Write<o::LO> xFaces, o::Write<o::Real> xPoints) {
   auto tgt = ptcls->get<1>();
   auto dir = ptcls->get<3>();
+  int dim = xPoints.size() / ptcls->capacity();
   auto reflectParticles = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
     o::LO face = xFaces[ptcl];
     if (mask && face != -1) {
-      for (int i = 0; i < 3; ++i) {
-        tgt(ptcl, i) =  xPoints[ptcl*3 + i];
+      for (int i = 0; i < dim; ++i) {
+        tgt(ptcl, i) =  xPoints[ptcl*dim + i];
         dir(ptcl, i) *= -1;
       }
     }
@@ -448,6 +510,7 @@ bool testInternalIntersectionSearch(o::Mesh mesh, PS* ptcls) {
   fprintf(stderr, "  Push particles again\n");
   push_ptcls(ptcls, distance);
 
+  return fail;
   //Search again
   fprintf(stderr, "  Find second new parent elements\n");
   fail |= !p::search_mesh(mesh, ptcls, cur, tgt, pids, elem_ids, 

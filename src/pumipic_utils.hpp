@@ -462,6 +462,12 @@ OMEGA_H_DEVICE o::LO getFaceMap(const o::LO i) {
   return fmap[i];
 }
 
+OMEGA_H_DEVICE bool isFaceFlipped(const o::LO ei, const o::Few<o::LO, 2>& ev2v, 
+                                  const o::Few<o::LO, 3>& facev2v) {
+  const o::LO index = (ev2v[0] == facev2v[0]) ? 1 : (ev2v[0] == facev2v[1]) ? 2 : 0;
+  return ev2v[1] != facev2v[index];
+}
+
 OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v, 
   const o::Few<o::LO, 4>& tetv2v) {
   const o::LO matInd1 = getFaceMap(fi*2);

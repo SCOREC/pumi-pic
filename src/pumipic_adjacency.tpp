@@ -148,9 +148,9 @@ namespace pumipic {
    */
   OMEGA_H_DEVICE bool moller_trumbore_line_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
                                                     const o::Vector<3>& orig, const o::Vector<3>& dest,
-                                                    o::Vector<3>& xpoint, o::Real tol, o::LO flip = 1) {
-    int vtx1 = 2 - flip;
-    int vtx2 = flip + 1;
+                                                    o::Vector<3>& xpoint, o::Real tol, o::LO flip) {
+    const o::LO vtx1 = 2 - flip;
+    const o::LO vtx2 = flip + 1;
     const o::Vector<3> edge1 = faceVerts[vtx1] - faceVerts[0];
     const o::Vector<3> edge2 = faceVerts[vtx2] - faceVerts[0];
     const o::Vector<3> dir = o::normalize(dest - orig);
@@ -163,14 +163,37 @@ namespace pumipic {
     const o::Real v = invdet * o::inner_product(dir, qvec);
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
-    return  (det >= tol) && (t >= 0.0) && (u >= 0.0) && (v >= 0.0) && (u+v <= 1.0);
+    return  (det >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0+tol);
+  }
+
+  //Simple 2d line segment intersection routine
+  OMEGA_H_DEVICE bool line_edge_2d(const o::Few<o::Vector<2>, 2>& edgeVerts,
+                                   const o::Vector<2>& orig, const o::Vector<2>& dest,
+                                   o::Vector<2>& xpoint, o::Real tol, o::LO flip) {
+    const o::LO vtx1 = flip;
+    const o::LO vtx2 = !flip;
+    const o::Vector<2> path = dest - orig;
+    const o::Vector<2> edge = edgeVerts[vtx2] - edgeVerts[vtx1];
+    const o::Vector<2> norm = o::perp(edge);
+    const o::Vector<2> normp = o::perp(path);
+    const o::Real det = -o::inner_product(norm, path);
+    const o::Real s = o::inner_product(normp, orig - edgeVerts[vtx1]);
+    const o::Real t = o::inner_product(norm, orig - edgeVerts[vtx1]);
+    xpoint = orig + (t / det) * path;
+      // printf("V0 %f %f V1 %f %f\n", edgeVerts[vtx1][0], edgeVerts[vtx1][1], edgeVerts[vtx2][0], edgeVerts[vtx2][1]);
+      // printf("Path %f %f Norm %f %f\n", path[0], path[1], norm[0], norm[1]);
+
+      // printf("flip=%d det=%f s=%f t=%f xpoint %f %f\n",
+      //        flip, det, s/det, t/det, xpoint[0], xpoint[1]);
+    return det >= tol && s >= -tol && s <= det+tol && t >= -tol && t <= det+tol;
   }
 
   template <class ParticleType, typename Segment3d>
   void find_exit_face(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
-                     Segment3d x_ps_orig, Segment3d x_ps_tgt,
-                     o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
-                     o::Reals elmArea, bool useBcc, o::Write<o::LO> lastExit) {
+                      Segment3d x_ps_orig, Segment3d x_ps_tgt,
+                      o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
+                      o::Reals elmArea, bool useBcc, o::Write<o::LO> lastExit,
+                      o::Write<o::Real> xPoints) {
     const auto dim = mesh.dim();
     const auto elm2verts = mesh.ask_elem_verts();
     const auto coords = mesh.coords();
@@ -221,10 +244,35 @@ namespace pumipic {
       }
     }
     else {
-      const auto faceVerts =  mesh.ask_verts_of(2);
+      const auto bridgeVerts =  mesh.ask_verts_of(dim-1);
       //Use line face intersection to determine exit face
       if (dim == 2) {
-
+        auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
+          if (mask > 0 && !ptcl_done[ptcl]) {
+            const auto searchElm = elem_ids[ptcl];
+            OMEGA_H_CHECK(searchElm >= 0);
+            const auto faceVerts = o::gather_verts<3>(elm2verts, searchElm);
+            const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+            const auto dest = makeVector2(ptcl, x_ps_tgt);
+            const auto orig = makeVector2(ptcl, x_ps_orig);
+            const auto edge_ids = o::gather_down<3>(elmDown, searchElm);
+            auto xpts = o::zero_vector<2>();
+            lastExit[ptcl] = -1;
+            for(int ei=0; ei<3; ++ei) {
+              const auto edge_id = edge_ids[ei];
+              const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
+              const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
+              const o::LO flip = isFaceFlipped(ei, ev2v, faceVerts);
+              const bool success = line_edge_2d(edge, orig, dest, xpts, 1e-8, flip);
+              if (success) {
+                lastExit[ptcl] = edge_id;
+                xPoints[2*ptcl] = xpts[0]; xPoints[2*ptcl+1] = xpts[1];
+              }
+            }
+            ptcl_done[ptcl] = (lastExit[ptcl] == -1);
+          }
+        };
+        parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_2d");
       }
       else if (dim == 3) {
         auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
@@ -239,15 +287,16 @@ namespace pumipic {
             lastExit[ptcl] = -1;
             for(int fi=0; fi<4; ++fi) {
               const auto face_id = face_ids[fi];
-              const auto fv2v = o::gather_verts<3>(faceVerts, face_id);
-              const auto face = gatherVectors3x3(coords, fv2v);
+              const auto fv2v = o::gather_verts<3>(bridgeVerts, face_id);
+              const auto face = o::gather_vectors<3,3>(coords, fv2v);
               const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
               const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts, 1e-8, flip);
               if (success) {
                 lastExit[ptcl] = face_id;
+                xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
               }
             }
-            ptcl_done[ptcl] = lastExit[ptcl] == -1;
+            ptcl_done[ptcl] = (lastExit[ptcl] == -1);
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
@@ -261,11 +310,11 @@ namespace pumipic {
                                 o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
                                 o::Write<o::LO> lastExit, o::Bytes side_is_exposed,
                                 bool requireIntersection,
-                                o::Write<o::LO> xFace, o::Write<o::Real> xPoints) {
-    const auto face_verts =  mesh.ask_verts_of(2);
+                                o::Write<o::LO> xFace) {
+    o::LO dim = mesh.dim();
+    const auto bridgeVerts =  mesh.ask_verts_of(dim - 1);
     const auto mesh2verts = mesh.ask_elem_verts();
-    const auto elm2faces = mesh.ask_down(mesh.dim(), mesh.dim()-1);
-    const auto elmDown = elm2faces.ab2b;
+    const auto elmDown = mesh.ask_down(dim, dim - 1).ab2b;
     const auto coords = mesh.coords();
     auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
@@ -277,26 +326,7 @@ namespace pumipic {
         const bool exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
         if (exposed && requireIntersection) {
-          //TODO write in 2D
-          const auto fv2v = o::gather_verts<3>(face_verts, lastExit[pid]);
-          const auto faceVerts = gatherVectors3x3(coords, fv2v);
-          const o::Vector<3> orig = makeVector3(pid, x_ps_orig);
-          const o::Vector<3> dest = makeVector3(pid, x_ps_tgt);
-          for(int fi=0; fi<4; ++fi) {
-            if (face_ids[fi] == bridge) {
-              const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
-
-              o::Vector<3> xpoint;
-              bool success = moller_trumbore_line_triangle(faceVerts, orig, dest,
-                                                           xpoint, 1e-8, flip);
-              if (success) {
-                xFace[pid] = lastExit[pid];
-                for (int i =0; i < 3; ++i) {
-                  xPoints[pid*3 + i] = xpoint[i];
-                }
-              }
-            }
-          }
+          xFace[pid] = lastExit[pid];
         }
         else {
           elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
@@ -389,12 +419,13 @@ namespace pumipic {
     if (requireIntersection) {
       //Setup intersection arrays
       if (inter_points.size() == 0 || inter_faces.size() == 0) {
-        inter_points = o::Write<o::Real>(3*ptcls->capacity(), 0);
+        inter_points = o::Write<o::Real>(dim*ptcls->capacity(), 0);
         inter_faces = o::Write<o::LO>(ptcls->capacity(), -1);
       }
       else {
         auto initializeIntersection = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-          inter_points[3 * pid] = inter_points[3 * pid + 1] = inter_points[3 * pid + 2] = 0;
+          for (int i = 0; i < dim; ++i)
+            inter_points[dim * pid + i] = 0;
           inter_faces[pid] = -1;
         };
         parallel_for(ptcls, initializeIntersection, "search_initializeIntersection");
@@ -410,10 +441,10 @@ namespace pumipic {
     //Iteratively find the next element until parent element is reached for each particle
     while (!found) {
       //Find intersection face
-      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit);
+      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points);
       //Check if intersection face is exposed
       check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, side_is_exposed,
-                               requireIntersection, inter_faces, inter_points);
+                               requireIntersection, inter_faces);
       
       //Move to next element
       set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);

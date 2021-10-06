@@ -62,6 +62,7 @@ PS* create_particle_structure(o::Mesh mesh, p::lid_t numPtcls) {
   return new p::SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
                                      ptcls_per_elem, element_gids);
 }
+
 void init2DInternal(o::Mesh mesh, PS* ptcls) {
   //Randomly distrubite particles within each element (uniformly within the element)
   //Create a deterministic generation of random numbers on the host with 2 number per particle
@@ -116,6 +117,140 @@ void init2DInternal(o::Mesh mesh, PS* ptcls) {
     }
   };
   ps::parallel_for(ptcls, lamb);
+}
+
+void init_2D_edges(o::Mesh mesh, PS* ptcls) {
+  o::HostWrite<o::Real> rand_num_per_ptcl(2*ptcls->capacity());
+  o::HostWrite<o::LO> rand_ints_per_ptcl(3*ptcls->capacity());
+  std::default_random_engine generator(PARTICLE_SEED);
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  srand(PARTICLE_SEED);
+  for (int i = 0; i < ptcls->capacity(); ++i) {
+    o::LO type = rand() % 3;
+    rand_ints_per_ptcl[3*i] = type;
+    if (type == 0) {
+      //Generate particle on vertex and move along an edge
+      //Which vertex index of triangle
+      rand_ints_per_ptcl[3*i+1] = rand() % 3;
+      //Which edge from that vertex (will be modded in parallel_for)
+      rand_ints_per_ptcl[3*i+2] = rand();
+    }
+    else if (type == 1) {
+      //Generate particle on edge and move along that edge
+      //Which edge index of triangle
+      rand_ints_per_ptcl[3*i+1] = rand() % 3;
+      //Which direction along the edge
+      rand_ints_per_ptcl[3*i+2] = 2*(rand() % 2)-1;
+      //How far along the edge to spawn particle
+      rand_num_per_ptcl[2*i] = dist(generator);
+    }
+    else {
+      //Generate particle in triangle and move through a vertex
+      //Location in triangle
+      o::Real x = dist(generator);
+      o::Real y = dist(generator);
+      if (x+y > 1) {
+        x = 1-x;
+        y = 1-y;
+      }
+      rand_num_per_ptcl[2*i] = x;
+      rand_num_per_ptcl[2*i+1] = y;
+      //Which vertex to move towards
+      rand_ints_per_ptcl[3*i+1] = rand() % 3;
+    }
+  }
+  
+  //Transfer random numbers to device
+  o::Write<o::Real> rand_nums(rand_num_per_ptcl);
+  o::Write<o::LO> rand_ints(rand_ints_per_ptcl);
+
+  auto cells2nodes = mesh.ask_down(o::FACE, o::VERT).ab2b;
+  auto cells2edges = mesh.ask_down(o::FACE, o::EDGE).ab2b;
+  auto coords = mesh.coords();
+  auto verts2edges = mesh.ask_up(o::VERT, o::EDGE);
+  auto edges2verts = mesh.ask_down(o::EDGE, o::VERT).ab2b;
+  //set particle positions and parent element ids
+  auto x_ps_d = ptcls->get<0>();
+  auto pids = ptcls->get<2>();
+  auto motion = ptcls->get<3>();
+  o::Reals elmArea = measure_elements_real(&mesh);
+  
+  auto lamb = PS_LAMBDA(const int e, const int pid, const int mask) {
+    if(mask > 0) {
+      const o::LO type = rand_ints[3*pid];
+      if (type == 0) {
+        //Set particle position on vertex
+        const o::LO vert_index = rand_ints[3*pid+1];
+        const o::LO vert_id = cells2nodes[3*e+vert_index];
+        x_ps_d(pid, 0) = coords[2*vert_id];
+        x_ps_d(pid, 1) = coords[2*vert_id+1];
+        x_ps_d(pid, 2) = 0;
+
+        //Pick edge to move along
+        const o::LO firstEdge = verts2edges.a2ab[vert_id];
+        const o::LO nedge = verts2edges.a2ab[vert_id+1] - firstEdge;
+        const o::LO edgeIndex = rand_ints[3*pid+2] % nedge;
+        const o::LO edgeID = verts2edges.ab2b[firstEdge + edgeIndex];
+        const auto edgeVerts = o::gather_verts<2>(edges2verts, edgeID);
+        const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
+        const o::Vector<2> dir = o::normalize(edgeCoords[1] - edgeCoords[0]);
+        motion(pid, 0) = dir[0];
+        motion(pid, 1) = dir[1];
+        motion(pid, 2) = 0;
+      }
+      else if (type == 1) {
+        //Set particle on edge
+        const o::LO edgeIndex = rand_ints[3*pid+1];
+        const o::LO edgeID = cells2edges[3*e+edgeIndex];
+        const auto edgeVerts = o::gather_verts<2>(edges2verts, edgeID);
+        const auto edgeCoords = o::gather_vectors<2,2>(coords, edgeVerts);
+        const o::Vector<2> dir = edgeCoords[1] - edgeCoords[0];
+        const o::Real dist = rand_nums[2*pid];
+        for (int i = 0; i < 2; ++i)
+          x_ps_d(pid, i) = edgeCoords[0][i] + dist * dir[i];
+        x_ps_d(pid, 2) = 0;
+
+        //Choose direction along edge
+        const o::LO flip = rand_ints[3*pid+2];
+        const o::Vector<2> ndir = o::normalize(dir);
+        for (int i = 0; i < 2; ++i)
+          motion(pid, i) =  flip * ndir[i];
+        motion(pid, 2) = 0;
+      }
+      else {
+        //Place particle in triangle
+        auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
+        auto vtxCoords = o::gather_vectors<3,2>(coords, elmVerts);
+        o::Real r1 = rand_nums[2*pid];
+        o::Real r2 = rand_nums[2*pid+1];
+        // X = A + r1(B-A) + r2(C-A)
+        for (int i = 0; i < 2; i++)
+          x_ps_d(pid,i) = vtxCoords[0][i] + r1 * (vtxCoords[1][i] - vtxCoords[0][i])
+            + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
+        x_ps_d(pid,2) = 0;
+
+        //Move particle towards a vertex
+        const o::LO vertIndex = rand_ints[3*pid + 1];
+        const o::LO vertID = cells2nodes[3*e+vertIndex];
+        o::Vector<2> vertCoord;
+        for (int i = 0; i < 2; ++i) vertCoord[i] = coords[2*vertID + i];
+        const auto ptclPos = p::makeVector2(pid, x_ps_d);
+        const o::Vector<2> dir = o::normalize(vertCoord - ptclPos);
+        for (int i = 0; i < 2; ++i) motion(pid, i) = dir[i];
+        motion(pid, 2) = 0;
+        
+      }
+      //Ensure particle is created in the parent element
+      const auto elmVerts = o::gather_verts<3>(cells2nodes, o::LO(e));
+      const auto vtxCoords = o::gather_vectors<3,2>(coords, elmVerts);
+      const auto ptclOrigin = p::makeVector2(pid, x_ps_d);
+      Omega_h::Vector<3> faceBcc;
+      p::barycentric_tri(elmArea[e], vtxCoords, ptclOrigin, faceBcc);
+      assert(p::all_positive(faceBcc));      
+    }
+  };
+  ps::parallel_for(ptcls, lamb);
+
 }
 
 void init3DInternal(o::Mesh mesh, PS* ptcls) {
@@ -188,7 +323,7 @@ void init3DInternal(o::Mesh mesh, PS* ptcls) {
 }
 
 template <int N>
-o::Real determineDistance(o::Mesh mesh) {
+o::Real determine_distance(o::Mesh mesh) {
   auto bb = o::get_bounding_box<N>(&mesh);
   char buffer[1024];
   char name[3] = {'x', 'y', 'z'};
@@ -206,13 +341,25 @@ o::Real determineDistance(o::Mesh mesh) {
 }
 
 //Initialize particle position and directions inside each element
-o::Real init_internal(o::Mesh mesh, PS* ptcls) {
-  if (mesh.dim() == 2) {
+void init_internal(o::Mesh mesh, PS* ptcls) {
+  if (mesh.dim() == 2)
     init2DInternal(mesh, ptcls);
-    return determineDistance<2>(mesh) / 20;
-  }
-  init3DInternal(mesh, ptcls);
-  return determineDistance<3>(mesh) / 20;
+  else
+    init3DInternal(mesh, ptcls);
+}
+
+void init_edges(o::Mesh mesh, PS* ptcls) {
+  if (mesh.dim() == 2)
+    init_2D_edges(mesh, ptcls);
+  // else
+  //   init3DEdges(mesh, ptcls);
+}
+
+
+o::Real get_push_distance(o::Mesh mesh) {
+  if (mesh.dim() == 2)
+    return determine_distance<2>(mesh) / 20;
+  return determine_distance<3>(mesh) / 20;
 }
 
 //Push particles
@@ -260,16 +407,19 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids) {
 template <int DIM>
 bool check_inside_bbox(o::Mesh mesh, PS* ptcls, o::Write<o::LO> xFaces) {
   auto box = o::get_bounding_box<DIM>(&mesh);
-  auto x_ps_orig = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
   o::Write<o::LO> failures(1,0);
   auto checkInteriors = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
     const o::LO face = xFaces[ptcl];
-    const o::Vector<3> ptcl_pos = makeVector3(ptcl, x_ps_orig);
+    const o::Vector<3> ptcl_pos = makeVector3(ptcl, x_ps_tgt);
     if (mask && face == -1) {
       bool fail = false;
       for (int i = 0; i < DIM; ++i) {
-        fail |= (ptcl_pos[i] < box.min[i]);
-        fail |= (ptcl_pos[i] > box.max[i]);
+        fail |= (ptcl_pos[i] < box.min[i] - 1e-8);
+        fail |= (ptcl_pos[i] > box.max[i] + 1e-8);
+      }
+      if (fail) {
+        printf("%d %f %f\n", ptcl ,ptcl_pos[0], ptcl_pos[1]);
       }
       Kokkos::atomic_add(&(failures[0]), (o::LO)fail);
     }
@@ -365,26 +515,30 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
     fail |= check_intersections_2d(mesh, ptcls, intersection_faces, x_points);
 
   //Test intersection points against motion and intersection face on parent element
+  auto x_ps_orig = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
   auto checkIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
     const o::LO face = intersection_faces[ptcl];
     const o::LO searchElm = elem_ids[ptcl];
     if (mask && face != -1) {
-      //Check the intersection point is in the direction of motion
-        Omega_h::Vector<DIM> xpoint = o::zero_vector<DIM>();
-        for (int i =0; i < DIM; ++i)
-          xpoint[i] = x_points[DIM * ptcl + i];
+      //Check the intersection point is along the particle path [norm(C-A) = norm(B-A)]
+      Omega_h::Vector<DIM> xpoint = o::zero_vector<DIM>();
+      Omega_h::Vector<DIM> orig = o::zero_vector<DIM>();
+      Omega_h::Vector<DIM> tgt = o::zero_vector<DIM>();
+      for (int i =0; i < DIM; ++i) {
+        orig[i] = x_ps_orig(ptcl, i);
+        tgt[i] = x_ps_tgt(ptcl, i);
+        xpoint[i] = x_points[DIM * ptcl + i];
+      }
+      const o::Vector<DIM> dir = o::normalize(tgt - orig);
+      const o::Vector<DIM> dir2 = o::normalize(xpoint - orig);
       for (int i = 0; i < DIM; ++i) {
-        if (fabs(xpoint[i] - bb.min[i]) < 1e-8 && motion(ptcl, i) > 0) {
-          Kokkos::atomic_add(&(failures[0]),1);
-          printf("[ERROR] Intersection with minimum model boundary is not in the direction of particle motion\n");
-
-        }
-        if (fabs(xpoint[i]- bb.max[i]) < 1e-8 && motion(ptcl, i) < 0) {
-          Kokkos::atomic_add(&(failures[0]),1);
-          printf("[ERROR] Intersection with max model boundary is not in the direction of particle motion\n");
+        if (fabs(dir[i] - dir2[i]) > 1e-8 && dir[i] > 1e-8 && dir2[i] > 1e-8) {
+          Kokkos::atomic_add(&(failures[0]), 1);
+          printf("[ERROR] Intersection point is not along the particle path\n  Ptcl:%d Start:<%f %f> End:<%f %f> xPoint:<%f %f>\n", ptcl , orig[0], orig[1], tgt[0], tgt[1], xpoint[0], xpoint[1]);
         }
       }
-
+      
       //check new parent element has the intersection face
       bool hasFace = false;
       for (int i =0; i < nvpe; ++i) {
@@ -404,12 +558,10 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
   return fail;
 }
 
-bool testInternalBCCSearch(o::Mesh mesh, PS* ptcls) {
-  fprintf(stderr, "\nBeginning BCC Search test with internal particle positions\n");
+bool testBCCSearch(o::Mesh mesh, PS* ptcls) {
   bool fail = false;
-  //Initialize particle information
-  o::Real distance = init_internal(mesh, ptcls);
-
+  o::Real distance = get_push_distance(mesh);
+  
   //Push particles
   fprintf(stderr, "  First push\n");
   push_ptcls(ptcls, distance);
@@ -443,6 +595,24 @@ bool testInternalBCCSearch(o::Mesh mesh, PS* ptcls) {
   return fail;
 }
 
+bool test_internal_BCC_search(o::Mesh mesh, PS* ptcls) {
+  fprintf(stderr, "\nBeginning BCC Search test with internal particle positions\n");
+  //Initialize particle information
+  init_internal(mesh, ptcls);
+
+  //Run test
+  return testBCCSearch(mesh, ptcls);
+}
+
+bool test_edge_BCC_search(o::Mesh mesh, PS* ptcls) {
+  fprintf(stderr, "\nBeginning BCC Search test with edge particle positions\n");
+  //Initialize particle information
+  init_edges(mesh, ptcls);
+
+  //Run test
+  return testBCCSearch(mesh, ptcls);
+}
+
 void reflect_intersections(PS* ptcls, o::Write<o::LO> xFaces, o::Write<o::Real> xPoints) {
   auto tgt = ptcls->get<1>();
   auto dir = ptcls->get<3>();
@@ -470,13 +640,11 @@ void delete_intersections(PS* ptcls, o::Write<o::LO> elem_ids, o::Write<o::LO> x
 
 }
 
-bool testInternalIntersectionSearch(o::Mesh mesh, PS* ptcls) {
-  fprintf(stderr, "\nBeginning BCC Search with intersection points test with internal particle positions\n");
+bool test_intersection_search(o::Mesh mesh, PS* ptcls) {
   bool fail = false;
-  //Initialize particle information
-  o::Real distance = init_internal(mesh, ptcls);
+  o::Real distance = get_push_distance(mesh);
 
-  //Push particles
+    //Push particles
   fprintf(stderr, "  First push\n");
   for (int i = 0; i < 10; ++i)
     push_ptcls(ptcls, distance);
@@ -510,7 +678,6 @@ bool testInternalIntersectionSearch(o::Mesh mesh, PS* ptcls) {
   fprintf(stderr, "  Push particles again\n");
   push_ptcls(ptcls, distance);
 
-  return fail;
   //Search again
   fprintf(stderr, "  Find second new parent elements\n");
   fail |= !p::search_mesh(mesh, ptcls, cur, tgt, pids, elem_ids, 
@@ -533,6 +700,20 @@ bool testInternalIntersectionSearch(o::Mesh mesh, PS* ptcls) {
   return fail;
 }
 
+bool test_internal_intersection_search(o::Mesh mesh, PS* ptcls) {
+  fprintf(stderr, "\nBeginning search with intersection points test with internal particle positions\n");
+  //Initialize particle information
+  init_internal(mesh, ptcls);
+  return test_intersection_search(mesh, ptcls);
+}
+
+bool test_edge_intersection_search(o::Mesh mesh, PS* ptcls) {
+  fprintf(stderr, "\nBeginning search with intersection points test with edge particle positions\n");
+  //Initialize particle information
+  init_edges(mesh, ptcls);
+  return test_intersection_search(mesh, ptcls);
+}
+
 int test_search(o::Mesh mesh, p::lid_t np) {
   
   fprintf(stderr, "\n%s\n", std::string(20, '-').c_str());
@@ -543,10 +724,10 @@ int test_search(o::Mesh mesh, p::lid_t np) {
 
   //Run tests
   int fails = 0;
-  fails += testInternalBCCSearch(mesh, ptcls);
-  fails += testInternalIntersectionSearch(mesh, ptcls);
-  // fails += testEdgeBCCSearch(mesh, ptcls);
-  // fails += testEdgeIntersectionSearch(mesh, ptcls);
+  fails += test_internal_BCC_search(mesh, ptcls);
+  fails += test_internal_intersection_search(mesh, ptcls);
+  fails += test_edge_BCC_search(mesh, ptcls);
+  fails += test_edge_intersection_search(mesh, ptcls);
 
   delete ptcls;
   return fails;

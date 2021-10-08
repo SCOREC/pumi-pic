@@ -88,6 +88,7 @@ void init2DInternal(o::Mesh mesh, PS* ptcls) {
   auto nodes2coords = mesh.coords();
   //set particle positions and parent element ids
   auto x_ps_d = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
   auto pids = ptcls->get<2>();
   auto motion = ptcls->get<3>();
   o::Reals elmArea = measure_elements_real(&mesh);
@@ -100,16 +101,18 @@ void init2DInternal(o::Mesh mesh, PS* ptcls) {
       o::Real r2 = rand_nums[3*pid+1];
       o::Real r3 = rand_nums[3*pid+2];
       // X = A + r1(B-A) + r2(C-A)
-      for (int i = 0; i < 2; i++)
+      for (int i = 0; i < 2; i++) {
         x_ps_d(pid,i) = vtxCoords[0][i] + r1 * (vtxCoords[1][i] - vtxCoords[0][i])
                                         + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
-      x_ps_d(pid,2) = 0;
+        x_ps_tgt(pid, i) = x_ps_d(pid, i);
+      }
+      x_ps_tgt(pid,2) = x_ps_d(pid,2) = 0;
 
       auto ptclOrigin = p::makeVector2(pid, x_ps_d);
       Omega_h::Vector<3> faceBcc;
       p::barycentric_tri(elmArea[e], vtxCoords, ptclOrigin, faceBcc);
-      assert(p::all_positive(faceBcc));
-      if (!p::all_positive(faceBcc)) printf("FAILURE\n");
+      assert(p::all_positive(faceBcc, 1e-8));
+      if (!p::all_positive(faceBcc, 1e-8)) printf("FAILURE\n");
       motion(pid, 0) = cos(r3);
       motion(pid, 1) = sin(r3);
       motion(pid, 2) = 0;
@@ -171,6 +174,7 @@ void init_2D_edges(o::Mesh mesh, PS* ptcls) {
   auto edges2verts = mesh.ask_down(o::EDGE, o::VERT).ab2b;
   //set particle positions and parent element ids
   auto x_ps_d = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
   auto pids = ptcls->get<2>();
   auto motion = ptcls->get<3>();
   o::Reals elmArea = measure_elements_real(&mesh);
@@ -246,11 +250,189 @@ void init_2D_edges(o::Mesh mesh, PS* ptcls) {
       const auto ptclOrigin = p::makeVector2(pid, x_ps_d);
       Omega_h::Vector<3> faceBcc;
       p::barycentric_tri(elmArea[e], vtxCoords, ptclOrigin, faceBcc);
-      assert(p::all_positive(faceBcc));      
+      assert(p::all_positive(faceBcc, 1e-8));      
     }
+    pids(pid) = pid;
+    for (int i = 0; i < 3; ++i)
+      x_ps_tgt(pid, i) = x_ps_d(pid, i);
   };
   ps::parallel_for(ptcls, lamb);
 
+}
+
+void init_3D_edges(o::Mesh mesh, PS* ptcls) {
+  const o::LO rpp = 4;
+  const o::LO ipp = 4;
+  o::HostWrite<o::Real> rand_num_per_ptcl(rpp*ptcls->capacity());
+  o::HostWrite<o::LO> rand_ints_per_ptcl(ipp*ptcls->capacity());
+
+  std::default_random_engine generator(PARTICLE_SEED);
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  srand(PARTICLE_SEED);
+
+  for (int i = 0; i < ptcls->capacity(); ++i) {
+    o::LO spawnType = 0;//rand() % 4;
+    o::LO tgtType = rand() % 2;
+    rand_ints_per_ptcl[ipp*i] = spawnType;
+    rand_ints_per_ptcl[ipp*i+1] = tgtType;
+    if (spawnType == 0) {
+      //Spawn on a vertex of the tet
+      //The vertex index
+      rand_ints_per_ptcl[ipp*i+2] = rand() % 4;
+    }
+    else if (spawnType == 1) {
+      //Spawn on an edge of the tet
+      //The edge index
+      rand_ints_per_ptcl[ipp*i+2] = rand() % 6;
+      //Portion along the edge
+      rand_num_per_ptcl[rpp*i] = dist(generator);
+    }
+    else if (spawnType == 2) {
+      //Spawn on a face of the tet
+      //The face index
+      rand_ints_per_ptcl[ipp*i+2] = rand() % 4;
+      //The two parameters controlling the place in the triangle
+      o::Real x = dist(generator);
+      o::Real y = dist(generator);
+      if (x+y > 1) {
+        x = 1-x;
+        y = 1-y;
+      }
+      rand_num_per_ptcl[rpp*i] = x;
+      rand_num_per_ptcl[rpp*i+1] = y;
+    }
+    else if (spawnType == 3) {
+      //Spawn in the interior of the tet
+      //The three parameters that control location in the tet
+      o::Real x = dist(generator);
+      o::Real y = dist(generator);
+      o::Real z = dist(generator);
+      if (x+y > 1) {
+        x = 1-x;
+        y = 1-y;
+      }
+      if (y+z > 1) {
+        o::Real tmp = z;
+        z = 1 - x - y;
+        y = 1 - tmp;
+      }
+      else if (x + y + z > 1) {
+        o::Real tmp = z;
+        z = x + y + z  - 1;
+        x = 1 - y - tmp;
+      }
+      rand_num_per_ptcl[rpp*i] = x;
+      rand_num_per_ptcl[rpp*i+1] = y;
+      rand_num_per_ptcl[rpp*i+2] = z;
+    }
+    if (tgtType == 0) {
+      //Move through a vertex
+      rand_ints_per_ptcl[ipp*i+3] = rand() % 4;
+    }
+    else if (tgtType == 1) {
+      //Move through an edge
+      rand_ints_per_ptcl[ipp*i+3] = rand() % 6;
+      rand_num_per_ptcl[rpp*i+3] = dist(generator);
+    }
+  }
+
+  //Transfer random numbers to device
+  o::Write<o::Real> rand_nums(rand_num_per_ptcl);
+  o::Write<o::LO> rand_ints(rand_ints_per_ptcl);
+
+  auto cells2verts = mesh.ask_down(3,0).ab2b;
+  auto cells2edges = mesh.ask_down(3,1).ab2b;
+  auto cells2faces = mesh.ask_down(3,2).ab2b;
+  auto faces2verts = mesh.ask_down(2,0).ab2b;
+  auto edges2verts = mesh.ask_down(1,0).ab2b;
+  auto coords = mesh.coords();
+
+  auto x_ps_d = ptcls->get<0>();
+  auto x_ps_tgt = ptcls->get<1>();
+  auto pids = ptcls->get<2>();
+  auto motion = ptcls->get<3>();
+
+  auto placeParticles = PS_LAMBDA(const int e, const int ptcl, const int mask) {
+    if (mask > 0) {
+      const o::LO spawnType = rand_ints[ipp*ptcl];
+      if (spawnType == 0) {
+        //Set particle position on vertex
+        const o::LO vertIndex = rand_ints[ipp*ptcl+2];
+        const o::LO vertID = cells2verts[4*e+vertIndex];
+        x_ps_d(ptcl, 0) = coords[3*vertID];
+        x_ps_d(ptcl, 1) = coords[3*vertID+1];
+        x_ps_d(ptcl, 2) = coords[3*vertID+2];
+      }
+      else if (spawnType == 1) {
+        //Set particle on edge
+        const o::LO edgeIndex = rand_ints[ipp*ptcl+2];
+        const o::LO edgeID = cells2edges[6*e+edgeIndex];
+        const auto edgeVerts = o::gather_verts<2>(edges2verts, edgeID);
+        const auto edgeCoords = o::gather_vectors<2,3>(coords, edgeVerts);
+        const o::Vector<3> dir = edgeCoords[1] - edgeCoords[0];
+        const o::Real dist = rand_nums[rpp*ptcl];
+        for (int i = 0; i < 3; ++i)
+          x_ps_d(ptcl, i) = edgeCoords[0][i] + dist * dir[i];
+      }
+      else if (spawnType == 2) {
+        //Set particle on face
+        const o::LO triIndex = rand_ints[ipp*ptcl+2];
+        const o::LO triID = cells2faces[4*e + triIndex];
+        auto faceVerts = o::gather_verts<3>(faces2verts, triID);
+        auto vtxCoords = o::gather_vectors<3,3>(coords, faceVerts);
+        o::Real r1 = rand_nums[rpp*ptcl];
+        o::Real r2 = rand_nums[rpp*ptcl+1];
+        // X = A + r1(B-A) + r2(C-A)
+        for (int i = 0; i < 3; i++)
+          x_ps_d(ptcl,i) = vtxCoords[0][i] + r1 * (vtxCoords[1][i] - vtxCoords[0][i])
+            + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
+      }
+      else if (spawnType == 3) {
+        //Set particle in the tet
+        auto elmVerts = o::gather_verts<4>(cells2verts, o::LO(e));
+        auto vtxCoords = o::gather_vectors<4,3>(coords, elmVerts);
+        const o::Real s = rand_nums[rpp*ptcl];
+        const o::Real t = rand_nums[rpp*ptcl + 1];
+        const o::Real u = rand_nums[rpp*ptcl + 2];
+        const o::Real a = 1 - s - t - u;
+        for (int i = 0; i < 3; i++) {
+          x_ps_d(ptcl, i) = a * vtxCoords[0][i] + s * vtxCoords[1][i]
+            + t * vtxCoords[2][i] + u * vtxCoords[3][i];
+        }
+      }
+      const o::LO tgtType = rand_ints[ipp*ptcl + 1];
+      const o::Vector<3> ptclPos = p::makeVector3(ptcl, x_ps_d);
+      o::Vector<3> tgtCoord;
+
+      if (tgtType == 0) {
+        const o::LO vertIndex = rand_ints[ipp*ptcl+3];
+        const o::LO vertID = cells2verts[4*e+vertIndex];
+        for (int i =0; i < 3; ++i) tgtCoord[i] = coords[3*vertID + i];
+      }
+      else if (tgtType == 1) {
+        const o::LO edgeIndex = rand_ints[ipp*ptcl+3];
+        const o::LO edgeID = cells2edges[6*e+edgeIndex];
+        const auto edgeVerts = o::gather_verts<2>(edges2verts, edgeID);
+        const auto edgeCoords = o::gather_vectors<2,3>(coords, edgeVerts);
+        const o::Vector<3> dir = edgeCoords[1] - edgeCoords[0];
+        const o::Real dist = rand_nums[rpp*ptcl+3];
+        for (int i = 0; i < 3; ++i)
+          tgtCoord[i] = edgeCoords[0][i] + dist * dir[i];
+      }
+      const o::Vector<3> dir = tgtCoord - ptclPos;
+      if (norm(dir) != 0) {
+        const o::Vector<3> ndir = normalize(dir);
+        for (int i = 0; i < 3; ++i) motion(ptcl, i) = ndir[i];
+      }
+      else {
+        for (int i = 0; i < 3; ++i) motion(ptcl, i) = 0;
+      }
+    }
+    pids(ptcl) = ptcl;
+    for (int i = 0; i < 3; ++i)
+      x_ps_tgt(ptcl, i) = x_ps_d(ptcl, i);
+  };
+  p::parallel_for(ptcls, placeParticles, "placeParticles");
 }
 
 void init3DInternal(o::Mesh mesh, PS* ptcls) {
@@ -351,8 +533,8 @@ void init_internal(o::Mesh mesh, PS* ptcls) {
 void init_edges(o::Mesh mesh, PS* ptcls) {
   if (mesh.dim() == 2)
     init_2D_edges(mesh, ptcls);
-  // else
-  //   init3DEdges(mesh, ptcls);
+  else
+    init_3D_edges(mesh, ptcls);
 }
 
 
@@ -419,7 +601,7 @@ bool check_inside_bbox(o::Mesh mesh, PS* ptcls, o::Write<o::LO> xFaces) {
         fail |= (ptcl_pos[i] > box.max[i] + 1e-8);
       }
       if (fail) {
-        printf("%d %f %f\n", ptcl ,ptcl_pos[0], ptcl_pos[1]);
+        printf("%d %f %f %f\n", ptcl ,ptcl_pos[0], ptcl_pos[1], ptcl_pos[2]);
       }
       Kokkos::atomic_add(&(failures[0]), (o::LO)fail);
     }
@@ -461,7 +643,7 @@ bool check_intersections_3d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> intersectio
         xpoint[i] = x_points[3 * ptcl + i];
       Omega_h::Vector<3> bcc;
       bool pass = p::find_barycentric_tri_simple(abc, xpoint, bcc);
-      if(pass && !p::all_positive(bcc)) {
+      if(pass && !p::all_positive(bcc, 1e-8)) {
         Kokkos::atomic_add(&(failures[0]),1);
         printf("[ERROR] Particle intersected with model boundary outside the intersection face!\n");
       }

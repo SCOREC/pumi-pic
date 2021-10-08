@@ -43,7 +43,7 @@ namespace pumipic {
     Omega_h::Vector<4> &bcc) {
   for(Omega_h::LO i=0; i<4; ++i) 
     bcc[i] = -1;
-  o::Real tol = 1.0e-20;
+  o::Real tol = 1.0e-8;
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
@@ -94,9 +94,11 @@ namespace pumipic {
           if(!all_positive(faceBcc,1e-8)) {
             if (debug) {
               printf("%d Particle not in element! ptcl %d elem %d => %d "
-                     "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
+                     "orig %.15f %.15f bcc %.15f %.15f %.15f\n",
                      rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
                      faceBcc[0], faceBcc[1], faceBcc[2]);
+              printf("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
+                     elmCoords[1][0], elmCoords[1][1], elmCoords[2][0], elmCoords[2][1]);
             }
             Kokkos::atomic_add(&(numNotInElem[0]), 1);
             elem_ids[pid] = -1;

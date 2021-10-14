@@ -14,6 +14,7 @@
 #include "pumipic_kktypes.hpp"
 #include "pumipic_profiling.hpp"
 
+#define PP_SEARCH_EPSILON 1e-8
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
@@ -91,11 +92,11 @@ namespace pumipic {
           auto ptclOrigin = makeVector2(pid, x_ps_orig);
           Omega_h::Vector<3> faceBcc;
           barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
-          if(!all_positive(faceBcc,1e-8)) {
+          if(!all_positive(faceBcc, PP_SEARCH_EPSILON)) {
             if (debug) {
-              printf("%d Particle not in element! ptcl %d elem %d => %d "
+              printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f bcc %.15f %.15f %.15f\n",
-                     rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
+                     rank, pid, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
                      faceBcc[0], faceBcc[1], faceBcc[2]);
               printf("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
                      elmCoords[1][0], elmCoords[1][1], elmCoords[2][0], elmCoords[2][1]);
@@ -119,11 +120,11 @@ namespace pumipic {
           auto ptclOrigin = makeVector3(pid, x_ps_orig);
           Omega_h::Vector<4> bcc;
           barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
-          if(!all_positive(bcc,1e-8)) {
+          if(!all_positive(bcc, PP_SEARCH_EPSILON)) {
             if (debug) {
-              printf("%d Particle not in element! ptcl %d elem %d => %d "
-                     "orig %.15f %.15f %.15f bcc %.3f %.3f %.3f %.3f\n",
-                     rank, ptcl, e, searchElm,
+              printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
+                     "orig %.15f %.15f %.15f bcc %.15f %.15f %.15f %.15f\n",
+                     rank, pid, ptcl, e, searchElm,
                      ptclOrigin[0], ptclOrigin[1], ptclOrigin[2],
                      bcc[0], bcc[1], bcc[2], bcc[3]);
             }
@@ -150,22 +151,27 @@ namespace pumipic {
    */
   OMEGA_H_DEVICE bool moller_trumbore_line_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
                                                     const o::Vector<3>& orig, const o::Vector<3>& dest,
-                                                    o::Vector<3>& xpoint, o::Real tol, o::LO flip) {
+                                                    o::Vector<3>& xpoint, const o::Real tol, const o::LO flip,
+                                                    o::Real& dproj, o::Real& closeness) {
     const o::LO vtx1 = 2 - flip;
     const o::LO vtx2 = flip + 1;
     const o::Vector<3> edge1 = faceVerts[vtx1] - faceVerts[0];
     const o::Vector<3> edge2 = faceVerts[vtx2] - faceVerts[0];
     const o::Vector<3> dir = o::normalize(dest - orig);
+    const o::Vector<3> faceNorm = o::cross(edge2, edge1);
     const o::Vector<3> pvec = o::cross(dir, edge2);
-    const o::Real det = o::inner_product(edge1, pvec);
-    const o::Real invdet = 1.0/det;
+    dproj = o::inner_product(dir, faceNorm);
+    const o::Real invdet = 1.0/dproj;
+    //u, v, (1-u-v) define the intersection point on the plane of the triangle
     const o::Vector<3> tvec = orig - faceVerts[0];
     const o::Real u = invdet * o::inner_product(tvec, pvec);
     const o::Vector<3> qvec = o::cross(tvec, edge1);
     const o::Real v = invdet * o::inner_product(dir, qvec);
+    //t is the distance the intersection point is along the particle path
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
-    return  (det >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0+tol);
+    closeness = min(fabs(u+v), fabs(u+v-1));
+    return  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
   }
 
   //Simple 2d line segment intersection routine
@@ -182,13 +188,19 @@ namespace pumipic {
     const o::Real s = o::inner_product(normp, orig - edgeVerts[vtx1]);
     const o::Real t = o::inner_product(norm, orig - edgeVerts[vtx1]);
     xpoint = orig + (t / det) * path;
-      // printf("V0 %f %f V1 %f %f\n", edgeVerts[vtx1][0], edgeVerts[vtx1][1], edgeVerts[vtx2][0], edgeVerts[vtx2][1]);
-      // printf("Path %f %f Norm %f %f\n", path[0], path[1], norm[0], norm[1]);
-
-      // printf("flip=%d det=%f s=%f t=%f xpoint %f %f\n",
-      //        flip, det, s/det, t/det, xpoint[0], xpoint[1]);
     return det >= tol && s >= -tol && s <= det+tol && t >= -tol && t <= det+tol;
   }
+
+  OMEGA_H_DEVICE o::LO find_exit_face_bcc_3d(const o::Real elmArea, const o::Matrix<3, 4>& elmCoords,
+                                             const o::Vector<3>& ptclOrigin, o::LO& ptcl_done) {
+    Omega_h::Vector<4> bcc;
+    barycentric_tet(elmArea, elmCoords, ptclOrigin, bcc);
+    auto isDestInParentElm = all_positive(bcc);
+    ptcl_done = isDestInParentElm;
+    //Find min and set exit face
+    return min_index(bcc, 4);
+  }
+  
 
   template <class ParticleType, typename Segment3d>
   void find_exit_face(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
@@ -232,14 +244,9 @@ namespace pumipic {
             auto elmVerts = o::gather_verts<4>(elm2verts, searchElm);
             const auto elmCoords = o::gather_vectors<4,3>(coords, elmVerts);
             auto ptclOrigin = makeVector3(pid, x_ps_tgt);
-            Omega_h::Vector<4> bcc;
-            barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
-            auto isDestInParentElm = all_positive(bcc);
-            ptcl_done[pid] = isDestInParentElm;
-            //Find min and set exit face
-            const int idx = min_index(bcc, 4);
+            const o::LO face_id = find_exit_face_bcc_3d(elmArea[searchElm], elmCoords, ptclOrigin, ptcl_done[pid]);
             const auto faces = o::gather_down<4>(elmDown, searchElm);
-            lastExit[pid] = faces[idx];
+            lastExit[pid] = faces[face_id];
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_bcc_3d");
@@ -265,7 +272,7 @@ namespace pumipic {
               const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
               const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
               const o::LO flip = isFaceFlipped(ei, ev2v, faceVerts);
-              const bool success = line_edge_2d(edge, orig, dest, xpts, 1e-8, flip);
+              const bool success = line_edge_2d(edge, orig, dest, xpts, PP_SEARCH_EPSILON, flip);
               if (success) {
                 lastExit[ptcl] = edge_id;
                 xPoints[2*ptcl] = xpts[0]; xPoints[2*ptcl+1] = xpts[1];
@@ -282,23 +289,38 @@ namespace pumipic {
             const auto searchElm = elem_ids[ptcl];
             OMEGA_H_CHECK(searchElm >= 0);
             const auto tetv2v = o::gather_verts<4>(elm2verts, searchElm);
+              const auto tetCoords = o::gather_vectors<4,3>(coords, tetv2v);
             const auto dest = makeVector3(ptcl, x_ps_tgt);
             const auto orig = makeVector3(ptcl, x_ps_orig);
             const auto face_ids = o::gather_down<4>(elmDown, searchElm);
             auto xpts = o::zero_vector<3>();
             lastExit[ptcl] = -1;
+            o::Real quality = -1;
+            o::LO bestFace = -1;
             for(int fi=0; fi<4; ++fi) {
               const auto face_id = face_ids[fi];
               const auto fv2v = o::gather_verts<3>(bridgeVerts, face_id);
               const auto face = o::gather_vectors<3,3>(coords, fv2v);
               const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
-              const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts, 1e-8, flip);
+              o::Real dproj;
+              o::Real closeness;
+              const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts,
+                                                                 PP_SEARCH_EPSILON, flip, dproj, closeness);
               if (success) {
                 lastExit[ptcl] = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
               }
+              if (dproj > -PP_SEARCH_EPSILON && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
+                quality = closeness;
+                bestFace = face_id;
+                xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
+              }
             }
-            ptcl_done[ptcl] = (lastExit[ptcl] == -1);
+
+            //If line intersection fails then use BCC method
+            if (lastExit[ptcl] == -1) {              
+                lastExit[ptcl] = bestFace;
+            }
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
@@ -401,7 +423,7 @@ namespace pumipic {
     if (elem_ids.size() == 0) {
       //Setup new parent id arrays
       elem_ids = o::Write<o::LO>(psCapacity, -1, "search_elem_ids");
-      auto setInitial = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      auto setInitial = PS_LAMBDA(const int e, const int pid, const int mask) {
         if(mask) {
           elem_ids[pid] = e;
         }
@@ -411,12 +433,21 @@ namespace pumipic {
       parallel_for(ptcls, setInitial, "search_setInitial");
     }
     else {
-      auto setInitial = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      auto setInitial = PS_LAMBDA(const int e, const int pid, const int mask) {
         if((mask && elem_ids[pid] == -1) || (!mask))
           ptcl_done[pid] = 1;
       };
       parallel_for(ptcls, setInitial, "search_setInitial");
     }
+
+    //Finish particles that didn't move
+    auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
+      const o::Vector<3> start = makeVector3(pid, x_ps_orig);
+      const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
+      if (o::norm(end - start) < PP_SEARCH_EPSILON)
+        ptcl_done[pid] = 1;
+    };
+    parallel_for(ptcls, finishUnmoved, "search_finishUnmoved");
     
     if (requireIntersection) {
       //Setup intersection arrays

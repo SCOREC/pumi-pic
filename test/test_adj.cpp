@@ -540,8 +540,8 @@ void init_edges(o::Mesh mesh, PS* ptcls) {
 
 o::Real get_push_distance(o::Mesh mesh) {
   if (mesh.dim() == 2)
-    return determine_distance<2>(mesh) / 20;
-  return determine_distance<3>(mesh) / 20;
+    return determine_distance<2>(mesh) / (3*sqrt(mesh.nelems()));
+  return determine_distance<3>(mesh) / (3*pow(mesh.nelems(), 1.0/3));
 }
 
 //Push particles
@@ -599,9 +599,6 @@ bool check_inside_bbox(o::Mesh mesh, PS* ptcls, o::Write<o::LO> xFaces) {
       for (int i = 0; i < DIM; ++i) {
         fail |= (ptcl_pos[i] < box.min[i] - 1e-8);
         fail |= (ptcl_pos[i] > box.max[i] + 1e-8);
-      }
-      if (fail) {
-        printf("%d %f %f %f\n", ptcl ,ptcl_pos[0], ptcl_pos[1], ptcl_pos[2]);
       }
       Kokkos::atomic_add(&(failures[0]), (o::LO)fail);
     }
@@ -717,7 +714,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
       for (int i = 0; i < DIM; ++i) {
         if (fabs(dir[i] - dir2[i]) > 1e-8 && dir[i] > 1e-8 && dir2[i] > 1e-8) {
           Kokkos::atomic_add(&(failures[0]), 1);
-          printf("[ERROR] Intersection point is not along the particle path\n  Ptcl:%d Start:<%f %f> End:<%f %f> xPoint:<%f %f>\n", ptcl , orig[0], orig[1], tgt[0], tgt[1], xpoint[0], xpoint[1]);
+          printf("[ERROR] Intersection point is not along the particle path\n");
         }
       }
       

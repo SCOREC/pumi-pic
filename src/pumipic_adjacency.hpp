@@ -17,8 +17,33 @@
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
-namespace pumipic
-{
+namespace pumipic {
+
+  /*
+    Top Level adjacency search routine
+
+    @param[in] mesh The omega_h mesh
+    @param[in] ptcls The particle structure
+    @param[in] x_ps_orig The prepush coordinates of particles
+    @param[in] x_ps_tgt The pushed coordinates of particles
+    @param[in] pids The particle ids
+    @param[out] elem_ids The new parent elements found by search. The passed in values will be used as the current parent element if provided
+    @param[in] looplimit The max number of search loops to provide. Defaults to 0 - no limit on loops
+    @param[in] requireIntersection If true, intersection with model boundaries will be calculated
+    @param[out] inter_points Will be filled with the intersection points of particle paths with model boundaries
+    @param[out] inter_faces Will be filled with the mesh faces on a model boundary the particle path intersected with
+    @param[in] debug Turn on to output debug information
+  */
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                   Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
+                   o::Write<o::LO>& elem_ids,
+                   bool requireIntersection,
+                   o::Write<o::LO>& inter_faces,
+                   o::Write<o::Real>& inter_points,
+                   int looplimit = 0, 
+                   int debug = 0);
+
 
 /*
    see description: Omega_h_simplex.hpp, Omega_h_refine_topology.hpp line 26
@@ -973,7 +998,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     bool debug = false) {
 
   const auto btime = pumipic_prebarrier();
-  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
+  Kokkos::Profiling::pushRegion("pumipic_search_mesh_2d");
   Kokkos::Timer timer;
 
   int rank, comm_size;
@@ -1139,3 +1164,5 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 
 } //namespace
 #endif //define
+
+#include "pumipic_adjacency.tpp"

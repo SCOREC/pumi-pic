@@ -1,5 +1,6 @@
 set(HEADERS
   pumipic_adjacency.hpp
+  pumipic_adjacency.tpp
   pumipic_push.hpp
   pumipic_lb.hpp
   pumipic_ptcl_ops.hpp

@@ -29,7 +29,7 @@ namespace pumipic {
       const lid_t process = new_process(particle_id);
       if (mask && (process != comm_rank)) {
         const lid_t process_index = dist.index(process);
-        Kokkos::atomic_increment<lid_t>(&num_send_particles(process_index));
+        Kokkos::atomic_increment(&num_send_particles(process_index));
       }
     };
     parallel_for(count_sending_particles);
@@ -114,6 +114,7 @@ namespace pumipic {
       delete [] count_send_requests;
     }
 
+
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
       destroyViews<DataTypes, memory_space>(send_particle);
@@ -123,6 +124,7 @@ namespace pumipic {
       return;
     }
 
+    fprintf(stderr, "After checking: Rank %d send: %d recv: %d\n", comm_rank, num_sending_to, num_receiving_from);
     //Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_recv_particles, offset_recv_particles);

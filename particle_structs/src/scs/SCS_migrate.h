@@ -10,7 +10,7 @@ namespace pumipic {
       buffer += sprintf(buffer, "%s\n", err_buffer);
     }
   }
-  
+
   template<class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
                                                   Distributor<MemSpace> dist,
@@ -58,8 +58,10 @@ namespace pumipic {
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld())
-      checkMPIError(ptr, PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
+      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
+      /*checkMPIError(ptr, PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
                                            dist.mpi_comm(), count_recv_requests));
+      */
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
@@ -109,7 +111,7 @@ namespace pumipic {
 
     //Wait until all counts are received
     //Debug output from wallall TODO remove
-    checkMPIError(ptr, PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE));
+    //checkMPIError(ptr, PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE));
     delete [] count_recv_requests;
 
     //Print nonzero values of send and recv arrays TODO delete
@@ -127,7 +129,7 @@ namespace pumipic {
         ptr += sprintf(ptr, " %d:%d", i, nrp_h(i));
     }
     ptr+= sprintf(ptr, "\n");
- 
+
     //Count the number of processes being sent to and recv from
     lid_t num_sending_to = 0, num_receiving_from = 0;
     Kokkos::parallel_reduce("sum_senders", comm_size,
@@ -146,7 +148,11 @@ namespace pumipic {
       delete [] count_send_requests;
     }
 
-    
+    ptr += sprintf(ptr, "Rank %d sending to: %d | recveiving from: %d\n", comm_rank, num_sending_to, num_receiving_from);
+
+    // fprintf(stderr, "\n%s\n", debug_buffer);
+    // fflush(stderr);
+
 
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {
@@ -157,12 +163,7 @@ namespace pumipic {
       return;
     }
 
-    ptr += sprintf(ptr, "After checking: Rank %d send: %d recv: %d\n", comm_rank, num_sending_to, num_receiving_from);
 
-    fprintf(stderr, "\n%s\n", debug_buffer);
-    fflush(stderr);
-    MPI_Barrier(MPI_COMM_WORLD);
-    
     //Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
     exclusive_scan(num_recv_particles, offset_recv_particles);

@@ -1,15 +1,5 @@
 #pragma once
 namespace pumipic {
-  //check and output mpi error. templated to avoid needing cpp file. TODO delete
-  template <class ErrorT>
-  void checkMPIError(char*& buffer, ErrorT ierr) {
-    if (ierr != MPI_SUCCESS) {
-      char err_buffer[MPI_MAX_ERROR_STRING];
-      int result_len;
-      MPI_Error_string(ierr, err_buffer, &result_len);
-      buffer += sprintf(buffer, "%s\n", err_buffer);
-    }
-  }
 
   template<class DataTypes, typename MemSpace>
     void SellCSigma<DataTypes, MemSpace>::migrate(kkLidView new_element, kkLidView new_process,
@@ -34,9 +24,6 @@ namespace pumipic {
       return;
     }
 
-    //Begin gathering debug printing TODO delete
-    char debug_buffer[20000];
-    char* ptr = debug_buffer + sprintf(debug_buffer, "Rank %d has %d particles and capacity %d\n", comm_rank, nPtcls(), capacity());
 
     //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
@@ -57,11 +44,12 @@ namespace pumipic {
       count_send_requests = new MPI_Request[num_send_ranks];
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
-    if (dist.isWorld())
+    if (dist.isWorld()) {
+      //Note using a blocking Alltoall because the code crashes on Summit when >1024 ranks
       PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
-      /*checkMPIError(ptr, PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
-                                           dist.mpi_comm(), count_recv_requests));
+      /*PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
       */
+    }
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
@@ -109,26 +97,10 @@ namespace pumipic {
                                                                     new_process,
                                                                     send_index);
 
-    //Wait until all counts are received
-    //Debug output from wallall TODO remove
-    //checkMPIError(ptr, PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE));
+    //Wait until all counts are received Note: disabled on world because of crashing on Summit when >1024 processes
+    if (!dist.isWorld())
+      PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
-
-    //Print nonzero values of send and recv arrays TODO delete
-    auto nsp_h = deviceToHost(num_send_particles);
-    auto nrp_h = deviceToHost(num_recv_particles);
-    ptr += sprintf(ptr, "Nonzero Sends:");
-    for (int i = 0; i < comm_size; ++i) {
-      if (nsp_h(i) > 0)
-        ptr += sprintf(ptr, " %d:%d", i, nsp_h(i));
-    }
-    ptr+= sprintf(ptr, "\n");
-    ptr += sprintf(ptr, "Nonzero Recvs:");
-    for (int i = 0; i < comm_size; ++i) {
-      if (nrp_h(i) > 0)
-        ptr += sprintf(ptr, " %d:%d", i, nrp_h(i));
-    }
-    ptr+= sprintf(ptr, "\n");
 
     //Count the number of processes being sent to and recv from
     lid_t num_sending_to = 0, num_receiving_from = 0;
@@ -147,12 +119,6 @@ namespace pumipic {
                                    MPI_STATUSES_IGNORE);
       delete [] count_send_requests;
     }
-
-    ptr += sprintf(ptr, "Rank %d sending to: %d | recveiving from: %d\n", comm_rank, num_sending_to, num_receiving_from);
-
-    // fprintf(stderr, "\n%s\n", debug_buffer);
-    // fflush(stderr);
-
 
     //If no particles are being sent or received, perform rebuild
     if (num_sending_to == 0 && num_receiving_from == 0) {

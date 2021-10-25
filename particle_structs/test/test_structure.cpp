@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
       delete structures[i];
     structures.clear();
   }
+  
   //Finalize and print failures
   int total_fails = 0;
   MPI_Reduce(&fails, &total_fails, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -135,7 +136,6 @@ int main(int argc, char* argv[]) {
       printf("%d tests failed\n", total_fails);
   }
   return total_fails;
-
 }
 
 

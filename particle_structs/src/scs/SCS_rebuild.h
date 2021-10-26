@@ -291,6 +291,8 @@ namespace pumipic {
     MTVs tmp = ptcl_data;
     ptcl_data = scs_data_swap;
     scs_data_swap = tmp;
+    if (always_realloc)
+      destroyViews<DataTypes, memory_space>(scs_data_swap);
     std::size_t tmp_size = current_size;
     current_size = swap_size;
     swap_size = tmp_size;

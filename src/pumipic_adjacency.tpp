@@ -44,7 +44,6 @@ namespace pumipic {
     Omega_h::Vector<4> &bcc) {
   for(Omega_h::LO i=0; i<4; ++i) 
     bcc[i] = -1;
-  o::Real tol = 1.0e-8;
 
   Omega_h::Real vals[4];
   Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
@@ -57,7 +56,7 @@ namespace pumipic {
   }
 
   Omega_h::Real inv_vol = 0.0;
-  if(parentVol > tol)
+  if(parentVol > 0)
     inv_vol = 1.0/parentVol;
   else {
     return 0;

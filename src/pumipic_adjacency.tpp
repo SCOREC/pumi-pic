@@ -508,14 +508,14 @@ namespace pumipic {
         found = false;
       ++loops;
 
-      o::LO nr;
-      Kokkos::parallel_reduce(ptcl_done.size(), OMEGA_H_LAMBDA(const o::LO ptcl, o::LO& count) {
-          count += (ptcl_done[ptcl] == 0);
-          if (loops > 10000 && ptcl_done[ptcl] == 0)
-            printf("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
-        }, nr);
-      if (loops % 10 == 0)
-        printf("Loop %d: %d remaining\n", loops, nr);
+      // o::LO nr;
+      // Kokkos::parallel_reduce(ptcl_done.size(), OMEGA_H_LAMBDA(const o::LO ptcl, o::LO& count) {
+      //     count += (ptcl_done[ptcl] == 0);
+      //     if (loops > 10000 && ptcl_done[ptcl] == 0)
+      //       printf("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
+      //   }, nr);
+      // if (loops % 10 == 0)
+      //   printf("Loop %d: %d remaining\n", loops, nr);
       //Check iteration count
       if(looplimit && loops >= looplimit) {
         Omega_h::Write<o::LO> numNotFound(1,0);

@@ -14,7 +14,6 @@
 #include "pumipic_kktypes.hpp"
 #include "pumipic_profiling.hpp"
 
-#define PP_SEARCH_EPSILON 1e-8
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
@@ -72,7 +71,7 @@ namespace pumipic {
   o::LO check_initial_parents(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
                               Segment3d x_ps_orig, SegmentInt pids,
                               o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
-                              o::Reals elmArea, bool debug = false) {
+                              o::Reals elmArea, const o::Real& tol, bool debug = false) {
     const auto dim = mesh.dim();
     const auto elm2verts = mesh.ask_elem_verts();
     const auto coords = mesh.coords();
@@ -91,7 +90,7 @@ namespace pumipic {
           auto ptclOrigin = makeVector2(pid, x_ps_orig);
           Omega_h::Vector<3> faceBcc;
           barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
-          if(!all_positive(faceBcc, PP_SEARCH_EPSILON)) {
+          if(!all_positive(faceBcc, tol)) {
             if (debug) {
               printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f bcc %.15f %.15f %.15f\n",
@@ -119,7 +118,7 @@ namespace pumipic {
           auto ptclOrigin = makeVector3(pid, x_ps_orig);
           Omega_h::Vector<4> bcc;
           barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
-          if(!all_positive(bcc, PP_SEARCH_EPSILON)) {
+          if(!all_positive(bcc, tol)) {
             if (debug) {
               printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f %.15f bcc %.15f %.15f %.15f %.15f\n",
@@ -169,7 +168,7 @@ namespace pumipic {
     //t is the distance the intersection point is along the particle path
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
-    closeness = min(fabs(u+v), fabs(u+v-1));
+    closeness = max(max(min(fabs(u), fabs(1-u)), min(fabs(v),fabs(1-v))), min(fabs(u+v), fabs(1-u-v)));
     return  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
   }
 
@@ -206,7 +205,7 @@ namespace pumipic {
                       Segment3d x_ps_orig, Segment3d x_ps_tgt,
                       o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
                       o::Reals elmArea, bool useBcc, o::Write<o::LO> lastExit,
-                      o::Write<o::Real> xPoints) {
+                      o::Write<o::Real> xPoints, const o::Real& tol) {
     const auto dim = mesh.dim();
     const auto elm2verts = mesh.ask_elem_verts();
     const auto coords = mesh.coords();
@@ -265,13 +264,16 @@ namespace pumipic {
             const auto orig = makeVector2(ptcl, x_ps_orig);
             const auto edge_ids = o::gather_down<3>(elmDown, searchElm);
             auto xpts = o::zero_vector<2>();
+            const o::LO prevExit = lastExit[ptcl];
             lastExit[ptcl] = -1;
             for(int ei=0; ei<3; ++ei) {
               const auto edge_id = edge_ids[ei];
+              if (edge_id == prevExit)
+                continue;
               const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
               const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
               const o::LO flip = isFaceFlipped(ei, ev2v, faceVerts);
-              const bool success = line_edge_2d(edge, orig, dest, xpts, PP_SEARCH_EPSILON, flip);
+              const bool success = line_edge_2d(edge, orig, dest, xpts, tol, flip);
               if (success) {
                 lastExit[ptcl] = edge_id;
                 xPoints[2*ptcl] = xpts[0]; xPoints[2*ptcl+1] = xpts[1];
@@ -293,23 +295,26 @@ namespace pumipic {
             const auto orig = makeVector3(ptcl, x_ps_orig);
             const auto face_ids = o::gather_down<4>(elmDown, searchElm);
             auto xpts = o::zero_vector<3>();
+            const o::LO prevExit = lastExit[ptcl];
             lastExit[ptcl] = -1;
             o::Real quality = -1;
             o::LO bestFace = -1;
             for(int fi=0; fi<4; ++fi) {
               const auto face_id = face_ids[fi];
+              if (face_id == prevExit)
+                continue;
               const auto fv2v = o::gather_verts<3>(bridgeVerts, face_id);
               const auto face = o::gather_vectors<3,3>(coords, fv2v);
               const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
               o::Real dproj;
               o::Real closeness;
               const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts,
-                                                                 PP_SEARCH_EPSILON, flip, dproj, closeness);
+                                                                 tol, flip, dproj, closeness);
               if (success) {
                 lastExit[ptcl] = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
               }
-              if (dproj > -PP_SEARCH_EPSILON && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
+              if (dproj > -tol && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
                 quality = closeness;
                 bestFace = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
@@ -320,6 +325,7 @@ namespace pumipic {
             if (lastExit[ptcl] == -1) {              
                 lastExit[ptcl] = bestFace;
             }
+            ptcl_done[ptcl] = (lastExit[ptcl] == -1);
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
@@ -385,6 +391,17 @@ namespace pumipic {
     };
     parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
   }
+
+  o::Real compute_tolerance_from_area(o::Reals elmArea) {
+    o::Real min_area;
+    Kokkos::parallel_reduce(elmArea.size(), OMEGA_H_LAMBDA(const o::LO elm, o::Real& area) {
+        if (elmArea[elm] < area)
+          area = elmArea[elm];
+      }, Kokkos::Min<o::Real>(min_area));
+    o::Real tol = max(1e-15 / min_area, 1e-8);
+    printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
+    return tol;
+  }
   
   template <class ParticleType, typename Segment3d, typename SegmentInt>
   bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
@@ -408,6 +425,8 @@ namespace pumipic {
     o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
     const auto elmArea = measure_elements_real(&mesh);
     bool useBcc = !requireIntersection;
+    o::Real tol = compute_tolerance_from_area(elmArea);
+    
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     
@@ -443,7 +462,7 @@ namespace pumipic {
     auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
       const o::Vector<3> start = makeVector3(pid, x_ps_orig);
       const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
-      if (o::norm(end - start) < PP_SEARCH_EPSILON)
+      if (o::norm(end - start) < tol)
         ptcl_done[pid] = 1;
     };
     parallel_for(ptcls, finishUnmoved, "search_finishUnmoved");
@@ -465,7 +484,7 @@ namespace pumipic {
    }
 
     //Ensure all particles are within their starting element
-    check_initial_parents(mesh, ptcls, x_ps_orig, pids, elem_ids, ptcl_done, elmArea, debug);
+    check_initial_parents(mesh, ptcls, x_ps_orig, pids, elem_ids, ptcl_done, elmArea, tol, debug);
 
     bool found = false;
     int loops = 0;
@@ -473,7 +492,7 @@ namespace pumipic {
     //Iteratively find the next element until parent element is reached for each particle
     while (!found) {
       //Find intersection face
-      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points);
+      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
       //Check if intersection face is exposed
       check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, side_is_exposed,
                                requireIntersection, inter_faces);
@@ -489,6 +508,14 @@ namespace pumipic {
         found = false;
       ++loops;
 
+      o::LO nr;
+      Kokkos::parallel_reduce(ptcl_done.size(), OMEGA_H_LAMBDA(const o::LO ptcl, o::LO& count) {
+          count += (ptcl_done[ptcl] == 0);
+          if (loops > 10000 && ptcl_done[ptcl] == 0)
+            printf("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
+        }, nr);
+      if (loops % 10 == 0)
+        printf("Loop %d: %d remaining\n", loops, nr);
       //Check iteration count
       if(looplimit && loops >= looplimit) {
         Omega_h::Write<o::LO> numNotFound(1,0);

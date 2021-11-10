@@ -392,7 +392,8 @@ namespace pumipic {
     parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
   }
 
-  o::Real compute_tolerance_from_area(o::Reals elmArea) {
+  template <typename Array>
+  o::Real compute_tolerance_from_area(Array elmArea) {
     o::Real min_area;
     Kokkos::parallel_reduce(elmArea.size(), OMEGA_H_LAMBDA(const o::LO elm, o::Real& area) {
         if (elmArea[elm] < area)

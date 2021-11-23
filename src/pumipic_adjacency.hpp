@@ -1004,12 +1004,19 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
   // store the last crossed edge
   o::Write<o::LO> lastEdge(psCapacity,-1);
+  const o::LO nelems = mesh.nelems();
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       if (elem_ids[pid] == -1) {
         elem_ids[pid] = e;
       }
       ptcl_done[pid] = 0;
+      // handle situations where particle may be outside the simulation domain
+      // after field-following based operation
+      if (elem_ids[pid] == -nelems) {
+        elem_ids[pid] = -1;
+        ptcl_done[pid] = 1;
+      }
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -1029,17 +1036,8 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       auto ptclOrigin = makeVector2(pid, x_ps_d);
       Omega_h::Vector<3> faceBcc;
       barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
-      if(!all_positive(faceBcc,1e-8)) {
-        if (debug) {
-          printf("%d Particle not in element! ptcl %d elem %d => %d "
-                 "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
-                 rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
-                 faceBcc[0], faceBcc[1], faceBcc[2]);
-        }
-        Kokkos::atomic_add(&(numNotInElem[0]), 1);
-        elem_ids[pid] = -1;
-        ptcl_done[pid] = 1;
-      }
+      //Note: particles are not necessarily in the correct element to start
+      // with, due to field-following based particle->mesh association.
     } //if active
   };
   ps::parallel_for(ptcls, checkParent);

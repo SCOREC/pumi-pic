@@ -47,6 +47,9 @@ bob_public_dep(Omega_h)
 # kokkos target, and nvcc_wrapper, provide sufficient flags.
 set_property(TARGET Omega_h::omega_h PROPERTY INTERFACE_COMPILE_OPTIONS "")
 
+include(CheckCXXSymbolExists)
+check_cxx_symbol_exists(ask_revClass "Omega_h_mesh.hpp" OMEGA_HAS_REVCLASS)
+
 set(ENGPAR_ENABLED true)
 include_directories(${ENGPAR_INCLUDE_DIR})
 message(STATUS "Found EnGPar")

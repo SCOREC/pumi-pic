@@ -71,9 +71,11 @@ mpi_test(lb_r4 4 ./test_lb
          testing_cube_4.ptn)
 
 #reverse classification tests
-mpi_test(revClass_r1 1 ./test_revClass
-         ${TEST_DATA_DIR}/cube/7k.osh
-         ignored)
+if(OMEGA_HAS_REVCLASS)
+  mpi_test(revClass_r1 1 ./test_revClass
+           ${TEST_DATA_DIR}/cube/7k.osh
+           ignored)
+endif()
 
 #pseudo-simulation tests
 

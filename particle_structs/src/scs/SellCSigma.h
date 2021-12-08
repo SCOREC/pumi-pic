@@ -265,7 +265,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
 
   //Allocate the SCS and backup with extra space
   lid_t cap = capacity_;
-  particle_mask = Kokkos::View<bool*>("particle_mask", cap);
+  particle_mask = Kokkos::View<bool*>(Kokkos::ViewAllocateWithoutInitializing("particle_mask"), cap);
   if (extra_padding > 0)
     cap *= (1 + extra_padding);
   CreateViews<device_type, DataTypes>(ptcl_data, cap);

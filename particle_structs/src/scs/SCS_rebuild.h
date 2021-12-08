@@ -45,7 +45,7 @@ namespace pumipic {
 
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
-    kkLidView counting_offset_index("counting_offset_index", numRows() + 1);
+    kkLidView counting_offset_index(Kokkos::ViewAllocateWithoutInitializing("counting_offset_index"), numRows() + 1);
     exclusive_scan(new_particles_per_row, offset_new_particles);
     Kokkos::deep_copy(counting_offset_index, offset_new_particles);
 
@@ -56,7 +56,7 @@ namespace pumipic {
         }, num_ptcls);
       return true;
     }
-    kkLidView movingPtclIndices("movingPtclIndices", num_moving_ptcls);
+    kkLidView movingPtclIndices(Kokkos::ViewAllocateWithoutInitializing("movingPtclIndices"), num_moving_ptcls);
     kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
     //Gather moving particle list
     auto gatherMovingPtcls = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
@@ -83,7 +83,7 @@ namespace pumipic {
       });
 
     //Assign hole index for moving particles
-    kkLidView holes("holeIndex", num_moving_ptcls);
+    kkLidView holes(Kokkos::ViewAllocateWithoutInitializing("holeIndex"), num_moving_ptcls);
     auto assignPtclsToHoles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
       const lid_t row = element_to_row_local(element_id);
       if (!mask) {
@@ -207,7 +207,7 @@ namespace pumipic {
                      new_capacity);
 
     //Allocate the SCS
-    Kokkos::View<bool*, MemSpace> new_particle_mask("new_particle_mask", new_capacity);
+    Kokkos::View<bool*, MemSpace> new_particle_mask(Kokkos::ViewAllocateWithoutInitializing("new_particle_mask"), new_capacity);
     if (always_realloc || swap_size < new_capacity ||
         swap_size * minimize_size < new_capacity) {
       destroyViews<DataTypes, memory_space>(scs_data_swap);
@@ -219,7 +219,7 @@ namespace pumipic {
 
 
     /* //Fill the SCS */
-    kkLidView interior_slice_of_chunk("interior_slice_of_chunk", new_num_slices);
+    kkLidView interior_slice_of_chunk(Kokkos::ViewAllocateWithoutInitializing("interior_slice_of_chunk"), new_num_slices);
     Kokkos::parallel_for("set_interior_slice_of_chunk", Kokkos::RangePolicy<>(1,new_num_slices),
                          KOKKOS_LAMBDA(const lid_t& i) {
                            const lid_t my_chunk = new_slice_to_chunk(i);
@@ -262,7 +262,7 @@ namespace pumipic {
 
     //Add new particles
     lid_t num_new_ptcls = new_particle_elements.size();
-    kkLidView new_particle_indices("new_particle_scs_indices", num_new_ptcls);
+    kkLidView new_particle_indices(Kokkos::ViewAllocateWithoutInitializing("new_particle_scs_indices"), num_new_ptcls);
 
     Kokkos::parallel_for("set_new_particle", num_new_ptcls, KOKKOS_LAMBDA(const lid_t& i) {
         lid_t new_elem = new_particle_elements(i);

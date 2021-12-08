@@ -113,7 +113,7 @@ namespace pumipic {
 
       char name[100];
       sprintf(name, "datatype_view_%d", num);
-      views[0] = new MemberTypeView<T, Device>(name, size);
+      views[0] = new MemberTypeView<T, Device>(Kokkos::ViewAllocateWithoutInitializing(name), size);
       MemberTypeView<T, Device> view = *static_cast<MemberTypeView<T, Device>*>(views[0]);
       CreateViewsImpl<Device, Types...>(views+1, size, num+1);
     }

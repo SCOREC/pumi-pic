@@ -22,9 +22,12 @@ namespace pumipic {
                                                           kkLidView& row_element,
                                                           kkLidView& element_row) {
     nchunks = num_elems / C_ + (num_elems % C_ != 0);
-    chunk_widths = kkLidView("chunk_widths", nchunks);
-    row_element = kkLidView("row_element", nchunks * C_);
-    element_row = kkLidView("element_row", nchunks * C_);
+    chunk_widths = kkLidView(Kokkos::ViewAllocateWithoutInitializing("chunk_widths"), 
+			     nchunks);
+    row_element = kkLidView(Kokkos::ViewAllocateWithoutInitializing("row_element"), 
+			    nchunks * C_);
+    element_row = kkLidView(Kokkos::ViewAllocateWithoutInitializing("element_row"), 
+			    nchunks * C_);
     kkLidView empty("empty_elems", 1);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t element = ptcls(i).second;
@@ -112,7 +115,7 @@ namespace pumipic {
                                                            kkLidView chunk_widths,
                                                            kkLidView& offs,
                                                            kkLidView& s2c, lid_t& cap) {
-    kkLidView slices_per_chunk("slices_per_chunk", nChunks + 1);
+    kkLidView slices_per_chunk(Kokkos::ViewAllocateWithoutInitializing("slices_per_chunk"), nChunks + 1);
     const lid_t V_local = V_;
     Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t width = chunk_widths(i);
@@ -126,8 +129,9 @@ namespace pumipic {
 
     nSlices = getLastValue<lid_t>(offset_nslices);
     offs = kkLidView("SCS offset", nSlices + 1);
-    s2c = kkLidView("slice to chunk", nSlices);
-    kkLidView slice_size("slice_size", nSlices + 1);
+    s2c = kkLidView(Kokkos::ViewAllocateWithoutInitializing("slice to chunk"), nSlices);
+    kkLidView slice_size(Kokkos::ViewAllocateWithoutInitializing("slice_size"), 
+			 nSlices + 1);
     const lid_t nat_size = V_*C_;
     const lid_t C_local = C_;
     Kokkos::parallel_for(nChunks, KOKKOS_LAMBDA(const lid_t& i) {
@@ -154,7 +158,8 @@ namespace pumipic {
     //Get start of each chunk
     auto offsets_cpy = offsets;
     auto slice_to_chunk_cpy = slice_to_chunk;
-    chunk_starts = kkLidView("chunk_starts", num_chunks);
+    chunk_starts = kkLidView(Kokkos::ViewAllocateWithoutInitializing("chunk_starts"), 
+			     num_chunks);
     lid_t cap_local = capacity_;
     lid_t first_s2c = getFirstValue(slice_to_chunk);
     Kokkos::parallel_for(Kokkos::RangePolicy<>(first_s2c+1,num_chunks), KOKKOS_LAMBDA(const lid_t& i) {
@@ -186,6 +191,8 @@ namespace pumipic {
               const lid_t particle_id = start+(p*team_size);
               if (element_id < ne)
                 mask(particle_id) = p < ptcls(row).first;
+	      else
+		mask(particle_id) = false;
             });
         });
     });
@@ -200,16 +207,14 @@ namespace pumipic {
     kkLidView element_to_row_local = element_to_row;
     //Setup starting point for each row
     lid_t C_local = C_;
-    kkLidView row_starts("row_starts", numRows());
-    kkLidView row_index("row_index", numRows());
-    kkLidView row_ends("row_ends", numRows());
+    kkLidView row_index(Kokkos::ViewAllocateWithoutInitializing("row_index"), numRows());
     Kokkos::parallel_for(numRows(), KOKKOS_LAMBDA(const int& i) {
       int chunk = i / C_local;
       int row_of_chunk = i % C_local;
       row_index(i) = chunk_starts(chunk) + row_of_chunk;
     });
 
-    kkLidView particle_indices("new_particle_scs_indices", given_particles);
+    kkLidView particle_indices(Kokkos::ViewAllocateWithoutInitializing("new_particle_scs_indices"), given_particles);
     Kokkos::parallel_for(given_particles, KOKKOS_LAMBDA(const lid_t& i) {
       lid_t new_elem = particle_elements(i);
       lid_t new_row = element_to_row_local(new_elem);

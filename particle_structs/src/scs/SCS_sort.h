@@ -10,8 +10,8 @@ namespace pumipic {
     if (sigma > 1) {
       lid_t i;
 #ifdef PP_USE_CUDA
-      Kokkos::View<lid_t*, typename MemSpace::device_type> elem_ids("elem_ids", num_elems);
-      Kokkos::View<lid_t*, typename MemSpace::device_type> temp_ppe("temp_ppe", num_elems);
+      Kokkos::View<lid_t*, typename MemSpace::device_type> elem_ids(Kokkos::ViewAllocateWithoutInitializing("elem_ids"), num_elems);
+      Kokkos::View<lid_t*, typename MemSpace::device_type> temp_ppe(Kokkos::ViewAllocateWithoutInitializing("temp_ppe"), num_elems);
       Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
           temp_ppe(i) = -ptcls_per_elem(i);
           elem_ids(i) = i;

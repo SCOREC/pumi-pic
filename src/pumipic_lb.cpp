@@ -397,6 +397,10 @@ namespace pumipic {
     Omega_h::Write<LO> elem_sbars = picparts.createCommArray<LO>(dim, 1, 0);
     numberCore(start, nce, device_map, local_sbar, elem_sbars);
 
+    using memspace = Kokkos::DefaultExecutionSpace::memory_space;
+    Kokkos::View<LO*, memspace, Kokkos::MemoryTraits<Kokkos::Unmanaged> >
+           elem_sbars_u(elem_sbars.data(), elem_sbars.size());
+
     //Communicate core numbering to buffers
     int nbuffers = picparts.numBuffers(dim) - 1;
     Omega_h::HostWrite<LO> buffer_ranks = picparts.bufferedRanks(dim);
@@ -406,9 +410,9 @@ namespace pumipic {
       int buffer_rank = buffer_ranks[i];
       int nents_start = offsets_nents_host[buffer_rank];
       int nents_size = offsets_nents_host[buffer_rank + 1] - nents_start;
-      PS_Comm_Irecv(elem_sbars.view(), nents_start, nents_size,
+      PS_Comm_Irecv(elem_sbars_u, nents_start, nents_size,
                     buffer_rank, 0, comm->get_impl(), recv_requests + i);
-      PS_Comm_Isend(elem_sbars.view(), start, nce,
+      PS_Comm_Isend(elem_sbars_u, start, nce,
                     buffer_rank, 0, comm->get_impl(), send_requests + i);
     }
 

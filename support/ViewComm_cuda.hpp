@@ -34,15 +34,17 @@ bool checkCudaAwareMPI();
   template <typename ViewT>
   IsCuda<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
                                          int sender, int tag, MPI_Comm comm) {
-    ViewT new_view("recv_view", size);
+    using Type = ViewType<ViewT>;
+    using Space = ViewSpace<ViewT>;
+    Kokkos::View<Type,Space> new_view("recv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
     int ret = MPI_Recv(new_view.data(), new_view.size(),
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
 #else
-    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
+    typename Kokkos::View<Type>::HostMirror view_host = create_mirror_view(new_view);
     int ret = MPI_Recv(view_host.data(), view_host.size(),
-                       MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                       MpiType<BT<Type> >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
     //Copy received values to device and move it to the proper indices of the view
     deep_copy(new_view, view_host);

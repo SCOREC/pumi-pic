@@ -204,14 +204,15 @@ namespace pumipic {
 
   template <typename T> struct Subview {
     template <typename View>
-    static View subview(View view, int start, int size) {
-      View new_view("subview", size);
+    static Kokkos::View<typename View::data_type, typename View::memory_space> subview(View view, int start, int size) {
+      Kokkos::View<typename View::data_type, typename View::memory_space> new_view("subview", size);
       Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
         new_view(i) = view(start + i);
       });
       return new_view;
     }
   };
+  //FIXME
   template <typename T, size_t N> struct Subview<T[N]> {
     template <typename View>
     static View subview(View view, int start, int size) {

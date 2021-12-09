@@ -45,8 +45,8 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
   lid_t c = ps::getLastValue<lid_t>(count);
   if (c != num_ptcls) {
     fprintf(stderr, "[ERROR] Test %s: Number of particles found in parallel_for "
-            "does not match the number of particles on rank %d"
-            "[(parallel_for)%d != %d(actual)]]n", name, comm_rank,
+            "does not match the number of particles on rank %d "
+            "[(parallel_for)%d != %d(actual)]]\n", name, comm_rank,
             c, num_ptcls);
     ++fails;
   }

@@ -207,7 +207,7 @@ namespace pumipic {
                      new_capacity);
 
     //Allocate the SCS
-    Kokkos::View<bool*, MemSpace> new_particle_mask(Kokkos::ViewAllocateWithoutInitializing("new_particle_mask"), new_capacity);
+    Kokkos::View<bool*, MemSpace> new_particle_mask("new_particle_mask", new_capacity);
     if (always_realloc || swap_size < new_capacity ||
         swap_size * minimize_size < new_capacity) {
       destroyViews<DataTypes, memory_space>(scs_data_swap);
@@ -219,7 +219,7 @@ namespace pumipic {
 
 
     /* //Fill the SCS */
-    kkLidView interior_slice_of_chunk(Kokkos::ViewAllocateWithoutInitializing("interior_slice_of_chunk"), new_num_slices);
+    kkLidView interior_slice_of_chunk("interior_slice_of_chunk", new_num_slices);
     Kokkos::parallel_for("set_interior_slice_of_chunk", Kokkos::RangePolicy<>(1,new_num_slices),
                          KOKKOS_LAMBDA(const lid_t& i) {
                            const lid_t my_chunk = new_slice_to_chunk(i);
@@ -236,7 +236,7 @@ namespace pumipic {
         }
       });
     C_ = old_C;
-    kkLidView new_indices("new_scs_index", capacity());
+    kkLidView new_indices(Kokkos::ViewAllocateWithoutInitializing("new_scs_index"), capacity());
     auto copySCS = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t new_elem = new_element(particle_id);
       //TODO remove conditional

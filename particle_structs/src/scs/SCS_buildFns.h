@@ -158,8 +158,7 @@ namespace pumipic {
     //Get start of each chunk
     auto offsets_cpy = offsets;
     auto slice_to_chunk_cpy = slice_to_chunk;
-    chunk_starts = kkLidView(Kokkos::ViewAllocateWithoutInitializing("chunk_starts"), 
-			     num_chunks);
+    chunk_starts = kkLidView("chunk_starts", num_chunks);
     lid_t cap_local = capacity_;
     lid_t first_s2c = getFirstValue(slice_to_chunk);
     Kokkos::parallel_for(Kokkos::RangePolicy<>(first_s2c+1,num_chunks), KOKKOS_LAMBDA(const lid_t& i) {

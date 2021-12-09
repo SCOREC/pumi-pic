@@ -175,27 +175,27 @@ namespace pumipic {
     return lastVal;
   }
 
-  template <typename ViewT>
+  template <typename ViewT, typename ViewT2>
   PP_INLINE typename std::enable_if<ViewT::rank == 1>::type copyViewToView(ViewT dst, int dstind,
-                                                                           ViewT src, int srcind){
+                                                                           ViewT2 src, int srcind){
     dst(dstind) = src(srcind);
   }
-  template <typename ViewT>
+  template <typename ViewT, typename ViewT2>
   PP_INLINE typename std::enable_if<ViewT::rank == 2>::type copyViewToView(ViewT dst, int dstind,
-                                                                           ViewT src, int srcind){
+                                                                           ViewT2 src, int srcind){
     for (int i = 0; i < dst.extent(1); ++i)
       dst(dstind, i) = src(srcind, i);
   }
-  template <typename ViewT>
+  template <typename ViewT, typename ViewT2>
   PP_INLINE typename std::enable_if<ViewT::rank == 3>::type copyViewToView(ViewT dst, int dstind,
-                                                                           ViewT src, int srcind){
+                                                                           ViewT2 src, int srcind){
     for (int i = 0; i < dst.extent(1); ++i)
       for (int j = 0; j < dst.extent(2); ++j)
         dst(dstind, i, j) = src(srcind, i, j);
   }
-  template <typename ViewT>
+  template <typename ViewT, typename ViewT2>
   PP_INLINE typename std::enable_if<ViewT::rank == 4>::type copyViewToView(ViewT dst, int dstind,
-                                                                           ViewT src, int srcind){
+                                                                           ViewT2 src, int srcind){
     for (int i = 0; i < dst.extent(1); ++i)
       for (int j = 0; j < dst.extent(2); ++j)
         for (int k = 0; k < dst.extent(3); ++k)

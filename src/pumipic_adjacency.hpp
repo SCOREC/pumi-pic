@@ -1022,7 +1022,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       ptcl_done[pid] = 1;
     }
   };
-  parallel_for(ptcls, lamb);
+  parallel_for(ptcls, lamb, "pumipic_set_ptcl_done");
 
   Omega_h::Write<o::LO> numNotInElem(1, 0);
   auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -1040,7 +1040,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       // with, due to field-following based particle->mesh association.
     } //if active
   };
-  ps::parallel_for(ptcls, checkParent);
+  ps::parallel_for(ptcls, checkParent, "pumipic_checkParent");
   Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
   if (numNotInElem_h[0] > 0) {
     fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
@@ -1068,7 +1068,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         lastEdge[pid] = edges[idx];
       }
     };
-    parallel_for(ptcls, checkCurrentElm);
+    parallel_for(ptcls, checkCurrentElm, "pumipic_checkCurrentElm");
 
     auto checkExposedEdges = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {

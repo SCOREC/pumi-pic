@@ -347,7 +347,10 @@ namespace {
 
     //Globally number the elements
     GlobalNumberer gnr(comm_size, owner, rank_offset_nelms, elem_gid);
-    Omega_h::parallel_scan(owner.size(), gnr);
+    using ExecSpace = Kokkos::DefaultExecutionSpace;
+    using StaticSched = Kokkos::Schedule<Kokkos::Static>;
+    using Policy = Kokkos::RangePolicy<ExecSpace, StaticSched, Omega_h::LO>;
+    Kokkos::parallel_scan("createGlobalNumbering", Policy(0,owner.size()), gnr);
     return rank_offset_nelms;
   }
 

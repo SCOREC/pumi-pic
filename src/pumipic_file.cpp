@@ -169,7 +169,10 @@ namespace pumipic {
       Omega_h::binary::read_array(in_str, mesh->ent_to_comm_arr_index_per_dim[i],
                                    compress, swap);
       //Read is complete part
+      assert(cudaSuccess == cudaDeviceSynchronize());
+      fprintf(stderr, "0.1\n");
       Omega_h::binary::read_array(in_str, mesh->is_complete_part[i], compress, swap);
+      fprintf(stderr, "0.2\n");
       //read num_bounds
       Omega_h::binary::read_value(in_str, mesh->num_bounds[i], swap);
       //read num_boundaries

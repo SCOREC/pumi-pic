@@ -1,5 +1,6 @@
 #include <ppView.h>
 #include <cmath>
+#include <mpi.h>
 
 namespace pp = pumipic;
 
@@ -8,13 +9,14 @@ int parallelFor();
 int parallelReduce();
 
 int main(int argc,char* argv[]) {
+  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
   int fails = 0;
-
   fails += constructTypes();
   fails += parallelFor();
   fails += parallelReduce();
   Kokkos::finalize();
+  MPI_Finalize();
   if (!fails) {
     printf("All Tests Passed\n");
   }
@@ -23,7 +25,6 @@ int main(int argc,char* argv[]) {
   }
   return fails;
 }
-
 
 typedef double Vector3f[3];
 int constructTypes() {

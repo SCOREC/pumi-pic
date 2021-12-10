@@ -159,18 +159,18 @@ int main(int argc, char** argv) {
   auto fwdTagVals = mesh->get_array<o::Real>(o::VERT, fwdTagName);
   Omega_h::parallel_for(mesh->nverts(), OMEGA_H_LAMBDA(const int& i) {
     if(i==3) {
-      OMEGA_H_CHECK(o::are_close(fwdTagVals[i],2.0));
+      assert(o::are_close(fwdTagVals[i],2.0));
     } else if(i==2) {
-      OMEGA_H_CHECK(o::are_close(fwdTagVals[i],12.0));
+      assert(o::are_close(fwdTagVals[i],12.0));
     } else if(i==8) {
-      OMEGA_H_CHECK(o::are_close(fwdTagVals[i],0.0));
+      assert(o::are_close(fwdTagVals[i],0.0));
     } else {
-      OMEGA_H_CHECK(o::are_close(fwdTagVals[i],2.0/3.0));
+      assert(o::are_close(fwdTagVals[i],2.0/3.0));
     }
   });
   auto bkwdTagVals = mesh->get_array<o::Real>(o::VERT, bkwdTagName);
   Omega_h::parallel_for(mesh->nverts(), OMEGA_H_LAMBDA(const int& i) {
-      OMEGA_H_CHECK(o::are_close(fwdTagVals[i],bkwdTagVals[i]));
+      assert(o::are_close(fwdTagVals[i],bkwdTagVals[i]));
   });
 
   //cleanup

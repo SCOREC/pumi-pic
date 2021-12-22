@@ -33,6 +33,8 @@ if(IS_TESTING)
   endif()
 endif()
 
+# find MPI
+find_package(MPI REQUIRED)
 #get the mpirun binary/script
 get_filename_component(COMPILER_DIR "${CMAKE_CXX_COMPILER}" PATH)
 find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")

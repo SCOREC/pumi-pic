@@ -33,6 +33,9 @@ if(IS_TESTING)
   endif()
 endif()
 
+# find MPI
+set(pumipic_USE_MPI_DEFAULT ON)
+bob_public_dep(MPI 3)
 #get the mpirun binary/script
 get_filename_component(COMPILER_DIR "${CMAKE_CXX_COMPILER}" PATH)
 find_program(MPIRUN NAMES mpirun PATHS "${COMPILER_DIR}")

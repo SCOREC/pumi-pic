@@ -562,10 +562,16 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   o::Write<o::LO> ptcl_done(psCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
+  bool set_ids = false;
+  if (elem_ids.size() == 0) {
+    elem_ids = o::Write<o::LO>(psCapacity);
+    set_ids = true;
+  }
   auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
-      ptcl_done[pid] = 0;
+      if (set_ids)
+        elem_ids[pid] = e;
+      ptcl_done[pid] = (elem_ids[pid] == -1);
       if (debug)
         printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {

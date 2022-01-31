@@ -104,7 +104,9 @@ macro(setup_repo repo_name repo_url)
 endmacro(setup_repo)
 
 SET(CONFIGURE_MASTER
+  "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"
+  "-DPS_IS_TESTING=ON"
   "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
 
 message(STATUS "configure options ${CONFIGURE_MASTER}")

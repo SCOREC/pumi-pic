@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.20)
 
 
 SET(CTEST_DO_SUBMIT ON)
 SET(CTEST_TEST_TYPE Nightly)
 
-set(CTEST_SITE             "blockade.scorec.rpi.edu" )
-set(CTEST_DASHBOARD_ROOT   "/fasttmp/cwsmith/nightlyBuilds" )
+set(CTEST_SITE             "cranium.scorec.rpi.edu" )
+set(CTEST_DASHBOARD_ROOT   "/lore/cwsmith/nightlyBuilds/pumipic")
 set(CTEST_CMAKE_GENERATOR  "Unix Makefiles" )
 set(CTEST_BUILD_CONFIGURATION  RelWithDebInfo)
 

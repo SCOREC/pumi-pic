@@ -338,12 +338,18 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(psCapacity,-1, "elem_ids_next");
+  bool set_ids = false;
+  if (elem_ids.size() == 0) {
+    elem_ids = o::Write<o::LO>(psCapacity);
+    set_ids = true;
+  }
   Kokkos::Profiling::popRegion();
 
   auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
-      ptcl_done[pid] = 0;
+      if (set_ids)
+        elem_ids[pid] = e;
+      ptcl_done[pid] = (elem_ids[pid] == -1)*2;
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 2;

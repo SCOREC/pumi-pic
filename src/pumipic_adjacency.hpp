@@ -358,7 +358,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   parallel_for(ptcls, fill, "searchMesh_fill_elem_ids");
 
   auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if( mask > 0) {
+    if( mask > 0 && ptcl_done[pid] != 2) {
       const auto orig = makeVector3(pid, x_ps_d);
       if(!isPointWithinElemTet(mesh2verts, coords, orig, e, tol)) {
         if(debug)

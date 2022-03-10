@@ -70,7 +70,8 @@ namespace pumipic {
     void printMetrics() const;
     void printFormat(const char* prefix) const;
 
-    void checkpoint(std::string path);
+    void checkpointWrite(std::string path);
+    void checkpointRead(std::string path);
 
     // Do not call these functions:
     kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);

@@ -58,7 +58,9 @@ int main(int argc, char** argv) {
   PS* ptcls = createPS(picparts);
 
   //write checkpoint
-  ptcls->checkpoint("/path/to/output/file");
+  std::string file = "../../pumi-pic/pumipic-data/checkpoint/test.bp";
+  ptcls->checkpointWrite(file);
+  ptcls->checkpointRead(file);
 
   return 0;
 }

@@ -1053,7 +1053,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       //active particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto edges = o::gather_down<3>(faceEdges, searchElm);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
@@ -1073,7 +1072,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     auto checkExposedEdges = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         assert(lastEdge[pid] != -1);
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
@@ -1088,7 +1086,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     auto setNextElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         auto bridge = lastEdge[pid];
         auto e2f_first = e2f_offsets[bridge];
         auto e2f_last = e2f_offsets[bridge+1];

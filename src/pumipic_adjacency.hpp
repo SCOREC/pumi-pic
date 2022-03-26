@@ -1117,7 +1117,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           const auto ptclDest = makeVector2(pid, xtgt_ps_d);
           const auto ptclOrigin = makeVector2(pid, x_ps_d);
           if (debug) {
-            printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+            printf("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
                    rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                    ptclDest[0], ptclDest[1]);
           }

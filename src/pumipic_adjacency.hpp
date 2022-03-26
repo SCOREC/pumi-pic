@@ -1023,28 +1023,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   };
   parallel_for(ptcls, lamb);
 
-  //TODO: below code is not needed at all
-  Omega_h::Write<o::LO> numNotInElem(1, 0);
-  auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    //inactive particle that is still moving to its target position
-    if( mask > 0 && !ptcl_done[pid] ) {
-      auto searchElm = elem_ids[pid];
-      OMEGA_H_CHECK(searchElm >= 0);
-      auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
-      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-      auto ptclOrigin = makeVector2(pid, x_ps_d);
-      Omega_h::Vector<3> faceBcc;
-      barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
-      //Note: particles are not necessarily in the correct element to start
-      // with, due to field-following based particle->mesh association.
-    } //if active
-  };
-  ps::parallel_for(ptcls, checkParent);
-  Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
-  if (numNotInElem_h[0] > 0) {
-    fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
-            "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
-  }
   bool found = false;
   int loops = 0;
   while(!found) {

@@ -1035,7 +1035,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
         const auto ptclDest = makeVector2(pid, xtgt_ps_d);
-        const auto ptclOrigin = makeVector2(pid, x_ps_d);
         Omega_h::Vector<3> faceBcc;
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
         auto isDestInParentElm = all_positive(faceBcc);
@@ -1117,35 +1116,23 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   return found;
 }
 
-OMEGA_H_DEVICE bool search_mesh_2d(o::Read<o::I8>& side_is_exposed,
-                                   o::LOs faces2verts,
-                                   o::Reals coords,
-                                   o::LOs edge_verts,
-                                   o::Adj faces2edges,
-                                   o::Adj edges2faces,
-                                   o::Reals triArea,
-                                   // particle origin
-                                   const o::Vector<2> ptclOrigin,
-                                   // particle destination
-                                   const o::Vector<2> ptclDest,
-                                   // particle id
-                                   const o::LO pid,
-                                   // parent element id for the target positions
-                                   o::LO& elem_id,
-                                   // [optional] number of loops before giving up
-                                   o::LO looplimit = 0,
-                                   bool debug = false) {
-
-  //TODO: better supply these in
-//  const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
-//  const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
-
-//  const auto side_is_exposed = mark_exposed_sides(&mesh);
-//  const auto faces2verts = mesh.ask_elem_verts();
-//  const auto coords = mesh.coords();
-//  const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
-//  const auto faceEdges = faces2edges.ab2b;
-//  const auto triArea = measure_elements_real(&mesh);
+OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
+                                    const o::LOs faces2verts,
+                                    const o::Reals coords,
+                                    const o::Adj faces2edges,
+                                    const o::Adj edges2faces,
+                                    const o::Reals triArea,
+                                    // particle origin
+                                    const o::Vector<2> ptclOrigin,
+                                    // particle destination
+                                    const o::Vector<2> ptclDest,
+                                    // particle id
+                                    const o::LO pid,
+                                    // starting element for particle search
+                                    const o::LO initial_elem,
+                                    // [optional] number of loops before giving up
+                                    const o::LO looplimit = 0,
+                                    const bool debug = false) {
 
   // 0: particle is not done yet.
   // 1: particle has hit a boundary or reached its destination
@@ -1155,6 +1142,7 @@ OMEGA_H_DEVICE bool search_mesh_2d(o::Read<o::I8>& side_is_exposed,
   bool found = false;
   o::LO loops = 0;
   const o::LOs faceEdges = faces2edges.ab2b;
+  o::LO elem_id = initial_elem;
   while (!found) {
     //active particle that is still moving to its target position
     if (!ptcl_done) {
@@ -1210,13 +1198,13 @@ OMEGA_H_DEVICE bool search_mesh_2d(o::Read<o::I8>& side_is_exposed,
                ptclDest[0], ptclDest[1]);
       }
       elem_id = -1;
-      fprintf(stderr, "ERROR: loop limit %d exceeded, particle is "
+      printf("ERROR: loop limit %d exceeded, particle is "
               "not found; deleting them.\n", looplimit);
       break;
     }
   }
 
-  return found;
+  return elem_id;
 }
 
 } //namespace

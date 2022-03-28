@@ -1130,8 +1130,7 @@ OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
                                     const o::LO pid,
                                     // starting element for particle search
                                     const o::LO initial_elem,
-                                    // [optional] number of loops before giving up
-                                    const o::LO looplimit = 0,
+                                    o::LO& loops,
                                     const bool debug = false) {
 
   // 0: particle is not done yet.
@@ -1140,7 +1139,7 @@ OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
   // store the last crossed edge
   o::LO lastEdge = -1;
   bool found = false;
-  o::LO loops = 0;
+  loops = 0;
   const o::LOs faceEdges = faces2edges.ab2b;
   o::LO elem_id = initial_elem;
   while (!found) {
@@ -1188,20 +1187,6 @@ OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
     found = ptcl_done ? true: false;
     ++loops;
 
-    if (loops >= looplimit && !ptcl_done) {
-      const o::LO searchElm = elem_id;
-      elem_id = -1;
-      //TODO: use preprocessor macro
-      if (debug) {
-        printf("elm %d ptcl %d notFound %g %g to %g %g\n",
-               searchElm, pid, ptclOrigin[0], ptclOrigin[1],
-               ptclDest[0], ptclDest[1]);
-      }
-      elem_id = -1;
-      printf("ERROR: loop limit %d exceeded, particle is "
-              "not found; deleting them.\n", looplimit);
-      break;
-    }
   }
 
   return elem_id;

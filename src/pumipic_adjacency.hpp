@@ -1141,7 +1141,7 @@ OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
   // store the last crossed edge
   o::LO lastEdge = -1;
   bool found = false;
-  o::LO loops = 0;
+  loops = 0;
   const o::LOs faceEdges = faces2edges.ab2b;
   o::LO elem_id = initial_elem;
   while (!found) {

@@ -1116,24 +1116,24 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   return found;
 }
 
-OMEGA_H_DEVICE o::LO search_mesh_2d(const o::Read<o::I8> side_is_exposed,
-                                    const o::LOs faces2verts,
-                                    const o::Reals coords,
-                                    const o::Adj faces2edges,
-                                    const o::Adj edges2faces,
-                                    const o::Reals triArea,
-                                    // particle origin
-                                    const o::Vector<2> ptclOrigin,
-                                    // particle destination
-                                    const o::Vector<2> ptclDest,
-                                    // particle id
-                                    const o::LO pid,
-                                    // starting element for particle search
-                                    const o::LO initial_elem,
-                                    o::LO& loops,
-                                    // [optional] number of loops before giving up
-                                    const o::LO looplimit = 0,
-                                    const bool debug = false) {
+OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
+                                       const o::LOs faces2verts,
+                                       const o::Reals coords,
+                                       const o::Adj faces2edges,
+                                       const o::Adj edges2faces,
+                                       const o::Reals triArea,
+                                       // particle origin
+                                       const o::Vector<2> ptclOrigin,
+                                       // particle destination
+                                       const o::Vector<2> ptclDest,
+                                       // particle id
+                                       const o::LO pid,
+                                       // starting element for particle search
+                                       const o::LO initial_elem,
+                                       o::LO& loops,
+                                       // [optional] number of loops before giving up
+                                       const o::LO looplimit = 0,
+                                       const bool debug = false) {
 
   // 0: particle is not done yet.
   // 1: particle has hit a boundary or reached its destination

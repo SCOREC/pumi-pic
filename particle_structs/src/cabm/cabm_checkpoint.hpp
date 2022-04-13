@@ -1,8 +1,66 @@
 #pragma once
 #include <ppTiming.hpp>
 #include <adios2.h>
+#include <type_traits>
 
 namespace pumipic {
+
+  // Templated AoSoA Write
+  template <typename PS, typename... Types> struct AoSoAPut;
+  template <typename Device, std::size_t M, typename CMDT, typename ViewT, typename... Types> struct AoSoAPutImpl;
+  //Per type Adios2::Put for AoSoA
+  template <typename PS, std::size_t M, typename CMDT, typename ViewT>
+  struct AoSoAPutImpl<PS, M, CMDT, ViewT> {
+    using host_space = Kokkos::HostSpace;
+    typedef Cabana::AoSoA<CMDT, host_space> Aosoa;
+    AoSoAPutImpl(PS* ps, const Aosoa, adios2::IO &io, adios2::Engine &engine) {}
+  };
+  template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename T, typename... Types>
+  struct AoSoAPutImpl<PS, M, CMDT, ViewT, T, Types...> {
+    using host_space = Kokkos::HostSpace;
+    typedef Cabana::AoSoA<CMDT, host_space> Aosoa;
+
+    AoSoAPutImpl(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+      enclose(ps, src, io, engine);
+      AoSoAPutImpl<PS, M+1, CMDT, ViewT, Types...>(ps, src, io, engine);
+    }
+    void enclose(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+      // get basic type of T (if T is an array-type)
+      using element_T = typename std::remove_all_extents<T>::type;
+      // get slice
+      auto sliceM = Cabana::slice<M>(src);
+      element_T* sliceM_ptr = sliceM.data();
+      int num_soa = sliceM.extent( 0 );
+      int A_stride_0 = sliceM.stride( 0 );
+      int total_size = num_soa*A_stride_0;
+      // get variable name
+      std::string varname = "type";
+      varname = varname + std::to_string(M); // "typeM"
+      // set up variable
+      adios2::Dims shape{static_cast<size_t>(total_size)};
+      adios2::Dims start{0};
+      adios2::Dims count{static_cast<size_t>(total_size)};
+      adios2::Variable<element_T> var = io.DefineVariable<element_T>(varname, shape, start, count);
+      // copy slice
+      engine.Put(var, sliceM_ptr);
+    }
+  };
+  //High level Adios2::Put for AoSoA
+  template <typename PS, typename... Types>
+  struct AoSoAPut<PS, MemberTypes<Types...> > {
+    using host_space = Kokkos::HostSpace;
+    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, host_space> Aosoa;
+    typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
+
+    AoSoAPut(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+      AoSoAPutImpl<PS, 0, CM_DT, typename PS::kkLidView, Types...>(ps, src, io, engine);
+    }
+  };
+
+  // Templated AoSoA Read
+  // TODO
+
+
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::checkpointWrite(std::string path) {
     const auto btime = prebarrier();
@@ -43,6 +101,9 @@ namespace pumipic {
       kkLidView particles_per_element_d("particles_per_element_d", num_elems);
       kkLidView particle_elements_d("particle_elements_d", num_ptcls);
 
+      kkLidView particle_new_indices_d("particle_new_indices_d", capacity_);
+      kkLidView particle_id_temp("particle_id_temp", 1);
+
       kkLidView parentElms_cpy = parentElms_;
       const auto soa_len = AoSoA_t::vector_length;
       const auto activeSliceIdx = aosoa_->number_of_members-1;
@@ -52,18 +113,26 @@ namespace pumipic {
           lid_t elm = parentElms_cpy(soa);
           // count particles in each element
           Kokkos::atomic_increment<lid_t>(&particles_per_element_d(elm));
-          particle_elements_d(soa*soa_len+tuple) = elm;
+          // get particle element for each id in later MTVs
+          int ptcl_id = Kokkos::atomic_fetch_add(&(particle_id_temp(0)),1);
+          particle_elements_d(ptcl_id) = elm;
         }
       };
       Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
       Cabana::simd_parallel_for(simd_policy, atomic, "atomic");
 
+      // Copy to host for non-BP4 compliance
       kkLidHostMirror particles_per_element_h = deviceToHost(particles_per_element_d);
       kkLidHostMirror particle_elements_h = deviceToHost(particle_elements_d);
       kkGidHostMirror element_to_gid_h = deviceToHost(element_to_gid);
 
-      // TODO: AoSoA variable saving
-
+      // AoSoA variable saving
+      // copy AoSoA to host for non-BP4 compliance
+      using HstAoSoA_t = Cabana::AoSoA<CM_DT,host_space>;
+      HstAoSoA_t aosoa_h;
+      aosoa_h.resize(capacity_);
+      Cabana::deep_copy(aosoa_h, *aosoa_);
+      
       engine.BeginStep();
       engine.Put(var_num_elems, num_elems);
       engine.Put(var_num_ptcls, num_ptcls);
@@ -74,6 +143,8 @@ namespace pumipic {
       engine.Put(var_ppe, particles_per_element_h.data());
       engine.Put(var_ptcl_elems, particle_elements_h.data());
       engine.Put(var_gids, element_to_gid_h.data());
+
+      AoSoAPut<CabM<DataTypes, MemSpace>, DataTypes>(this, aosoa_h, io, engine);
       engine.EndStep();
 
       engine.Close();

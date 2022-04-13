@@ -2,29 +2,30 @@
 #include <ppTiming.hpp>
 #include <adios2.h>
 #include <type_traits>
+#include <sstream>
 
 namespace pumipic {
 
   // Templated AoSoA Write
-  template <typename PS, typename... Types> struct AoSoAPut;
-  template <typename Device, std::size_t M, typename CMDT, typename ViewT, typename... Types> struct AoSoAPutImpl;
+  template <typename... Types> struct AoSoAPut;
+  template <std::size_t M, typename CMDT, typename... Types> struct AoSoAPutImpl;
   //Per type Adios2::Put for AoSoA
-  template <typename PS, std::size_t M, typename CMDT, typename ViewT>
-  struct AoSoAPutImpl<PS, M, CMDT, ViewT> {
+  template <std::size_t M, typename CMDT>
+  struct AoSoAPutImpl<M, CMDT> {
     using host_space = Kokkos::HostSpace;
     typedef Cabana::AoSoA<CMDT, host_space> Aosoa;
-    AoSoAPutImpl(PS* ps, const Aosoa, adios2::IO &io, adios2::Engine &engine) {}
+    AoSoAPutImpl(const Aosoa, adios2::IO &io, adios2::Engine &engine) {}
   };
-  template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename T, typename... Types>
-  struct AoSoAPutImpl<PS, M, CMDT, ViewT, T, Types...> {
+  template <std::size_t M, typename CMDT, typename T, typename... Types>
+  struct AoSoAPutImpl<M, CMDT, T, Types...> {
     using host_space = Kokkos::HostSpace;
     typedef Cabana::AoSoA<CMDT, host_space> Aosoa;
 
-    AoSoAPutImpl(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
-      enclose(ps, src, io, engine);
-      AoSoAPutImpl<PS, M+1, CMDT, ViewT, Types...>(ps, src, io, engine);
+    AoSoAPutImpl(const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+      enclose(src, io, engine);
+      AoSoAPutImpl<M+1, CMDT, Types...>(src, io, engine);
     }
-    void enclose(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+    void enclose(const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
       // get basic type of T (if T is an array-type)
       using element_T = typename std::remove_all_extents<T>::type;
       // get slice
@@ -35,7 +36,10 @@ namespace pumipic {
       int total_size = num_soa*A_stride_0;
       // get variable name
       std::string varname = "type";
-      varname = varname + std::to_string(M); // "typeM"
+      size_t m = M;
+      std::stringstream ss;
+      ss << varname << m; 
+      varname = ss.str(); // "typeM"
       // set up variable
       adios2::Dims shape{static_cast<size_t>(total_size)};
       adios2::Dims start{0};
@@ -46,14 +50,14 @@ namespace pumipic {
     }
   };
   //High level Adios2::Put for AoSoA
-  template <typename PS, typename... Types>
-  struct AoSoAPut<PS, MemberTypes<Types...> > {
+  template <typename... Types>
+  struct AoSoAPut<MemberTypes<Types...> > {
     using host_space = Kokkos::HostSpace;
     typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, host_space> Aosoa;
     typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
 
-    AoSoAPut(PS* ps, const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
-      AoSoAPutImpl<PS, 0, CM_DT, typename PS::kkLidView, Types...>(ps, src, io, engine);
+    AoSoAPut(const Aosoa &src, adios2::IO &io, adios2::Engine &engine) {
+      AoSoAPutImpl<0, CM_DT, Types...>(src, io, engine);
     }
   };
 
@@ -70,7 +74,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if (!comm_rank) {
-      fprintf(stderr, "doing adios2 stuff in cabm checkpointWrite\n");
+      fprintf(stderr, "CabM checkpointing...\n");
 
       // TODO: Fix hardcoding of config location
       std::string config = "/gpfs/u/home/MPFS/MPFSmttw/scratch/pumipicAdios2/build-dcsRhel8-gcc74-pumipic/adios2.xml";
@@ -144,7 +148,7 @@ namespace pumipic {
       engine.Put(var_ptcl_elems, particle_elements_h.data());
       engine.Put(var_gids, element_to_gid_h.data());
 
-      AoSoAPut<CabM<DataTypes, MemSpace>, DataTypes>(this, aosoa_h, io, engine);
+      AoSoAPut<DataTypes>(aosoa_h, io, engine);
       engine.EndStep();
 
       engine.Close();
@@ -163,7 +167,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if (!comm_rank) {
-      fprintf(stderr, "doing adios2 stuff in cabm checkpointRead\n");
+      fprintf(stderr, "CabM starting from checkpoint...\n");
 
       // TODO: Fix hardcoding of config location
       std::string config = "/gpfs/u/home/MPFS/MPFSmttw/scratch/pumipicAdios2/build-dcsRhel8-gcc74-pumipic/adios2.xml";

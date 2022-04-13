@@ -6,8 +6,8 @@
 #include <Omega_h_for.hpp>
 #include <pumipic_lb.hpp>
 
-
-typedef pumipic::MemberTypes<int> Particle;
+typedef double Vector3[3];
+typedef pumipic::MemberTypes<int, Vector3, short, int> Particle;
 typedef pumipic::ParticleStructure<Particle> PS;
 
 PS* createPS(pumipic::Mesh& picparts);

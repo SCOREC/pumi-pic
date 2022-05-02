@@ -14,6 +14,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
   public:
+    template <typename MSpace> using Mirror = CabM<DataTypes, MSpace>;
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
     using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -34,7 +35,6 @@ namespace pumipic {
     using CM_DT = PS_DTBool<DataTypes>;
     using AoSoA_t = Cabana::AoSoA<CM_DT,device_type>;
 
-    CabM() = delete;
     CabM(const CabM&) = delete;
     CabM& operator=(const CabM&) = delete;
 
@@ -47,11 +47,16 @@ namespace pumipic {
     CabM(CabM_Input<DataTypes, MemSpace>&);
     ~CabM();
 
+    template <class MSpace>
+    Mirror<MSpace>* copy();
+
     //Functions from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::nElems;
     using ParticleStructure<DataTypes, MemSpace>::nPtcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
+    using ParticleStructure<DataTypes, MemSpace>::copy;
+
 
     template <std::size_t N>
     Slice<N> get() { return Slice<N>(Cabana::slice<N, AoSoA_t>(*aosoa_, "get<>()")); }
@@ -77,6 +82,8 @@ namespace pumipic {
     void setActive(const kkLidView particles_per_element);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
+
+    template <typename DT, typename MSpace> friend class CabM;
 
   private:
     //The User defined Kokkos policy
@@ -108,7 +115,9 @@ namespace pumipic {
     AoSoA_t* aosoa_;
     // extra AoSoA copy for swapping (same size as aosoa_)
     AoSoA_t* aosoa_swap;
-    
+
+    //Private constructor for copy()
+    CabM() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
 
   /**
@@ -356,6 +365,38 @@ namespace pumipic {
     }
     ss << "\n";
     std::cout << ss.str();
+  }
+
+  template<class DataTypes, typename MemSpace>
+  template <class MSpace>
+  CabM<DataTypes, MemSpace>::Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
+    Mirror<MSpace>* mirror_copy = new CabM<DataTypes, MSpace>();
+    //Call Particle structures copy
+    mirror_copy->copy(this);
+    //Copy constants
+    mirror_copy->num_soa_ = num_soa_;
+    mirror_copy->padding_start = padding_start;
+    mirror_copy->extra_padding = extra_padding;
+
+    //copy AoSoA
+    mirror_copy->aosoa_ = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_->label()).append("_mirror"), aosoa_->size());
+    Cabana::deep_copy(*(mirror_copy->aosoa_), *aosoa_);
+    //Create the swap space
+    mirror_copy->aosoa_swap = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_swap->label()).append("_mirror"), aosoa_swap->size());
+    Cabana::deep_copy(*(mirror_copy->aosoa_swap), *aosoa_swap);
+
+    //Deep copy each view
+    mirror_copy->parentElms_ = typename Mirror<MSpace>::kkLidView("mirror parentElms_",
+                                                                  parentElms_.size());
+    Kokkos::deep_copy(mirror_copy->parentElms_, parentElms_);
+    mirror_copy->offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
+    Kokkos::deep_copy(mirror_copy->offsets, offsets);
+    mirror_copy->element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
+                                                                     element_to_gid.size());
+    Kokkos::deep_copy(mirror_copy->element_to_gid, element_to_gid);
+    //Deep copy the gid mapping
+    mirror_copy->element_gid_to_lid.create_copy_view(element_gid_to_lid);
+    return mirror_copy;
   }
 
 }

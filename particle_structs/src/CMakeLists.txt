@@ -76,6 +76,11 @@ target_include_directories(particleStructs INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dps>
   $<INSTALL_INTERFACE:include>)
 
+if (ENABLE_CABANA)
+   target_compile_definitions(particleStructs INTERFACE -DPP_ENABLE_CAB)
+
+endif()
+
 pumipic_export_lib(particleStructs "${HEADERS}")
 
 bob_end_subdir()

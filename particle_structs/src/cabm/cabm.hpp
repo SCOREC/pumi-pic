@@ -415,6 +415,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CabM : public ParticleStructure<DataTypes, MemSpace> {
   public:
+    template <typename MSpace> using Mirror = CabM<DataTypes, MSpace>;
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
     using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -464,6 +465,9 @@ namespace pumipic {
 
     void printMetrics() const {reportError();}
     void printFormat(const char* prefix) const {reportError();}
+
+    template <class MSpace>
+    Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
     void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "

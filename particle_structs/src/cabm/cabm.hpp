@@ -234,7 +234,7 @@ namespace pumipic {
   */
   template <class DataTypes, typename MemSpace>
   template <typename FunctionType>
-  void CabM<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string s) {
+  void CabM<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
     if (nPtcls() == 0)
       return;
 
@@ -256,7 +256,7 @@ namespace pumipic {
         const lid_t elm = parentElms_cpy(soa); // calculate element
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
-      }, "parallel_for");
+      }, name);
   }
 
   template <class DataTypes, typename MemSpace>

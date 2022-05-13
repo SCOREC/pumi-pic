@@ -232,6 +232,10 @@ namespace pumipic {
         const lid_t elm = parentElms_cpy(particle_id); // calculate element
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, "parallel_for");
+#ifdef PP_USE_CUDA
+    cudaFree(fn_d);
+#endif
+
   }
 
   template <class DataTypes, typename MemSpace>

@@ -222,7 +222,10 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::~CabM() { delete aosoa_; }
+  CabM<DataTypes, MemSpace>::~CabM() {
+    delete aosoa_;
+    delete aosoa_swap;
+  }
 
   /**
    * a parallel for-loop that iterates through all particles
@@ -257,6 +260,10 @@ namespace pumipic {
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, name);
+#ifdef PP_USE_CUDA
+    cudaFree(fn_d);
+#endif
+
   }
 
   template <class DataTypes, typename MemSpace>

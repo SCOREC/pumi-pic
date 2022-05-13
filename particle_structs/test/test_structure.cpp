@@ -14,19 +14,30 @@ void finalize() {
   MPI_Finalize();
 }
 
+#ifdef PP_USE_CUDA
+//Copied and edited from: https://forums.developer.nvidia.com/t/best-way-to-report-memory-consumption-in-cuda/21042
+double get_mem_usage() {
+  size_t free_byte, total_byte;
+
+  auto cuda_status = cudaMemGetInfo( &free_byte, &total_byte );
+  if ( cudaSuccess != cuda_status ){
+    fprintf(stderr, "Error: cudaMemGetInfo fails, %s \n",
+            cudaGetErrorString(cuda_status));
+    exit(1);
+  }
+  double free_db = (double)free_byte;
+  double total_db = (double)total_byte;
+  double used_db = total_db - free_db;
+  return used_db/1024/1024/1024;
+}
+#else
+double get_mem_usage() {
+  return 0;
+}
+#endif
 //Structure adding functions
-int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
-int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
-int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
-int addDPSs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info);
+PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe, kkGidView element_gids,
+                       kkLidView particle_elements, PS::MTVs particle_info, std::string& name);
 
 //Simple tests of constructors
 int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
@@ -66,16 +77,21 @@ int main(int argc, char* argv[]) {
     finalize();
     return 0;
   }
-
+  bool check_memory = false;
+#ifdef PP_USE_CUDA
+  //memory checking fails when running in parallel on 1 device (SCOREC machines)
+  //Band-aid fix only check memory when comm_size <= available GPUs
+  //TODO? Alternative fix: barrier + fence before every check on memory usage?
+  int ndevices;
+  cudaGetDeviceCount(&ndevices);
+  check_memory = (comm_size <= ndevices);
+#endif
   char filename[256];
   sprintf(filename, "%s_%d.ptl", argv[1], comm_rank);
   //Local count of fails
   int fails = 0;
+  double initial_memory = get_mem_usage();
   {
-    //Vector of structures to run all the tests on
-    std::vector<PS*> structures;
-    //Vector of names for each structure
-    std::vector<std::string> names;
 
     //General structure parameters
     lid_t num_elems;
@@ -86,45 +102,56 @@ int main(int argc, char* argv[]) {
     PS::MTVs particle_info;
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
-
-    //Add SCS
-    fails += addSCSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
-                     particle_elements, particle_info);
-    //Add CSR
-    fails += addCSRs(structures, names, num_elems, num_ptcls, ppe, element_gids,
-                     particle_elements, particle_info);
-#ifdef PP_ENABLE_CAB
-    //Add CabM
-    fails += addCabMs(structures, names, num_elems, num_ptcls, ppe, element_gids,
-                     particle_elements, particle_info);
-    //Add DPS
-    fails += addDPSs(structures, names, num_elems, num_ptcls, ppe, element_gids,
-                     particle_elements, particle_info);
-#endif
-
-    //Run each structure on every test
-    for (int i = 0; i < structures.size(); ++i) {
-      fails += testCounts(names[i].c_str(), structures[i], num_elems, num_ptcls);
-      fails += testParticleExistence(names[i].c_str(), structures[i], num_ptcls);
-      fails += setValues(names[i].c_str(), structures[i]);
+    int num = 0;
+    while(true) {
+      double mem_i = get_mem_usage();
+      std::string name;
+      PS* structure = buildNextStructure(num++, num_elems, num_ptcls, ppe, element_gids,
+                                         particle_elements, particle_info, name);
+      if (name == "FAIL")
+        ++fails;
+      if (!structure)
+        break;
+      double mem_s = get_mem_usage();
+      fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
+      fails += testParticleExistence(name.c_str(), structure, num_ptcls);
+      fails += setValues(name.c_str(), structure);
       Kokkos::fence();
-      fails += pseudoPush(names[i].c_str(), structures[i]);
+      fails += pseudoPush(name.c_str(), structure);
       Kokkos::fence();
-      fails += testMetrics(names[i].c_str(), structures[i]);
-      fails += testRebuild(names[i].c_str(), structures[i]);
-      fails += testMigration(names[i].c_str(), structures[i]);
-      //fails += testCopy(names[i].c_str(), structures[i]);
-      fails += testSegmentComp(names[i].c_str(), structures[i]);
-      fails += migrateToEmptyAndRefill(names[i].c_str(), structures[i]);
+      fails += testMetrics(name.c_str(), structure);
+      double mem_pr = get_mem_usage();
+      if (check_memory && fabs(mem_pr - mem_s) > .00001) {
+        fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name, mem_pr - mem_s);
+        ++fails;
+      }
+      fails += testRebuild(name.c_str(), structure);
+      fails += testMigration(name.c_str(), structure);
+      double mem_pb = get_mem_usage();
+      fails += testCopy(name.c_str(), structure);
+      fails += testSegmentComp(name.c_str(), structure);
+      double mem_pd = get_mem_usage();
+      if (check_memory && fabs(mem_pd - mem_pb) > .00001) {
+        fprintf(stderr, "[ERROR] Structure %s memory usage changed in later tests [%f]\n", name, mem_pd - mem_pb);
+        ++fails;
+      }
+      fails += migrateToEmptyAndRefill(name.c_str(), structure);
+      delete structure;
+      double mem_f = get_mem_usage();
+      if (check_memory && fabs(mem_f - mem_i) > .00001) {
+        ++fails;
+        fprintf(stderr, "[ERROR] Memory usage changed during structure %s"
+                "| Initial: %f GB | Final: %f GB | Diff: %f GB\n", name.c_str(),
+                mem_i, mem_f, mem_f - mem_i);
+      }
     }
-
-    //Cleanup
     ps::destroyViews<Types>(particle_info);
-    for (size_t i = 0; i < structures.size(); ++i)
-      delete structures[i];
-    structures.clear();
   }
-  
+  double final_memory = get_mem_usage();
+  if (check_memory && fabs(final_memory - initial_memory) > .00001) {
+    ++fails;
+    fprintf(stderr, "[ERROR] Memory usage changed | Initial: %f GB | Final: %f GB | Diff: %f GB\n", initial_memory, final_memory, final_memory - initial_memory);
+  }
   //Finalize and print failures
   int total_fails = 0;
   MPI_Reduce(&fails, &total_fails, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -138,101 +165,68 @@ int main(int argc, char* argv[]) {
   return total_fails;
 }
 
-
-int addSCSs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
-  int fails = 0;
-  //Build SCS with C = 32, sigma = ne, V = 1024
+PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe, kkGidView element_gids,
+                       kkLidView particle_elements, PS::MTVs particle_info, std::string& name) {
+  name="";
+  std::string error_message;
   try {
-    lid_t maxC = 32;
-    lid_t sigma = num_elems;
-    lid_t V = 1024;
-    Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
-    PS* s = new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
-                                                element_gids, particle_elements, particle_info);
-    structures.push_back(s);
-    names.push_back("scs_C32_SMAX_V1024");
+    if (num == 0) {
+      //Build SCS with C = 32, sigma = ne, V = 1024
+      error_message = "SCS (C=32, sigma=ne, V=1024)";
+      lid_t maxC = 32;
+      lid_t sigma = num_elems;
+      lid_t V = 1024;
+      Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
+      name = "scs_C32_SMAX_V1024";
+      return new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
+                                                 element_gids, particle_elements, particle_info);
+    }
+    else if (num == 1) {
+      //Build SCS with C = 32, sigma = 1, V = 10
+      error_message = "SCS (C=32, sigma=1, V=10)";
+      lid_t maxC = 32;
+      lid_t sigma = 1;
+      lid_t V = 10;
+      Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
+      name = "scs_C32_S1_V10";
+      return  new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
+                                                  element_gids, particle_elements, particle_info);
+    }
+    else if (num == 2) {
+      //CSR
+      error_message = "CSR";
+      name = "csr";
+      Kokkos::TeamPolicy<ExeSpace> policy(num_elems, 32);
+      return new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                          element_gids, particle_elements, particle_info);
+    }
+#ifdef PP_ENABLE_CAB
+    else if (num == 3) {
+      //CabM
+      error_message = "CabM";
+      name = "cabm";
+      Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+      return new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                           element_gids, particle_elements, particle_info);
+    }
+    else if (num == 4) {
+      //DPS
+      error_message = "DPS";
+      name = "dps";
+      Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+      return new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                          element_gids, particle_elements, particle_info);
+    }
+#endif
+    return NULL;
   }
   catch(...) {
-    fprintf(stderr, "[ERROR] Construction of SCS (C=32, sigma=ne, V=1024) failed on rank %d\n",
-            comm_rank);
-    ++fails;
+    fprintf(stderr, "[ERROR] Construction of %s failed on rank %d\n", error_message, comm_rank);
+    name = "FAIL\n";
+    return NULL;
   }
-  return fails;
-  //Build SCS with C = 32, sigma = 1, V = 10
-  try {
-    lid_t maxC = 32;
-    lid_t sigma = 1;
-    lid_t V = 10;
-    Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
-    PS* s = new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
-                                                element_gids, particle_elements, particle_info);
-    structures.push_back(s);
-    names.push_back("scs_C32_S1_V10");
-  }
-  catch(...) {
-    fprintf(stderr, "[ERROR] Construction of SCS (C=32, sigma=1, V=10) failed on rank %d\n",
-            comm_rank);
-    ++fails;
-  }
-  return fails;
+  return NULL;
 }
-
-int addCSRs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
-  int fails = 0;
-  try {
-    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
-    PS* s = new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
-                                         element_gids, particle_elements, particle_info);
-    structures.push_back(s);
-    names.push_back("csr");
-  }
-  catch(...) {
-    fprintf(stderr, "[ERROR] Construction of CSR failed on rank %d\n", comm_rank);
-    ++fails;
-  }
-  return fails;
-}
-
-int addCabMs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
-  int fails = 0;
-  try {
-    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
-    PS* s = new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
-                                         element_gids, particle_elements, particle_info);
-    structures.push_back(s);
-    names.push_back("cabm");
-  }
-  catch(...) {
-    fprintf(stderr, "[ERROR] Construction of CabM failed on rank %d\n", comm_rank);
-    ++fails;
-  }
-  return fails;
-}
-
-int addDPSs(std::vector<PS*>& structures, std::vector<std::string>& names,
-            lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
-            kkGidView element_gids, kkLidView particle_elements, PS::MTVs particle_info) {
-  int fails = 0;
-  try {
-    Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
-    PS* s = new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
-                                         element_gids, particle_elements, particle_info);
-    structures.push_back(s);
-    names.push_back("dps");
-  }
-  catch(...) {
-    fprintf(stderr, "[ERROR] Construction of DPS failed on rank %d\n", comm_rank);
-    ++fails;
-  }
-  return fails;
-}
-
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure) {
@@ -244,7 +238,6 @@ int testRebuild(const char* name, PS* structure) {
   fails += rebuildNewPtcls(name, structure);
   fails += rebuildPtclsDestroyed(name, structure);
   fails += rebuildNewAndDestroyed(name, structure);
-
   return fails;
 }
 
@@ -254,7 +247,6 @@ int testMigration(const char* name, PS* structure) {
   int fails = 0;
   fails += migrateSendRight(name, structure);
   fails += migrateSendToOne(name, structure);
-
   return fails;
 }
 
@@ -274,6 +266,13 @@ int testMetrics(const char* name, PS* structure) {
 }
 
 int testCopy(const char* name, PS* structure) {
+  if (dynamic_cast<ps::SellCSigma<Types, MemSpace>*>(structure) == NULL
+#ifdef PP_ENABLE_CAB
+      && dynamic_cast<ps::CabM<Types, MemSpace>*>(structure) == NULL
+#endif
+    ) {
+    return 0;
+  }
   printf("testCopy %s\n", name);
 
   int fails = 0;

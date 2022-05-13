@@ -17,8 +17,10 @@ void finalize() {
 #ifdef PP_USE_CUDA
 //Copied and edited from: https://forums.developer.nvidia.com/t/best-way-to-report-memory-consumption-in-cuda/21042
 double get_mem_usage() {
+  //Barrier+fence to ensure readings are accurate when sharing GPUs in parallel.
+  MPI_Barrier(MPI_COMM_WORLD);
+  Kokkos::fence();
   size_t free_byte, total_byte;
-
   auto cuda_status = cudaMemGetInfo( &free_byte, &total_byte );
   if ( cudaSuccess != cuda_status ){
     fprintf(stderr, "Error: cudaMemGetInfo fails, %s \n",
@@ -79,13 +81,10 @@ int main(int argc, char* argv[]) {
   }
   bool check_memory = false;
 #ifdef PP_USE_CUDA
-  //memory checking fails when running in parallel on 1 device (SCOREC machines)
-  //Band-aid fix only check memory when comm_size <= available GPUs
-  //TODO? Alternative fix: barrier + fence before every check on memory usage?
-  int ndevices;
-  cudaGetDeviceCount(&ndevices);
-  check_memory = (comm_size <= ndevices);
+  //Only check GPU memory with CUDA; TODO add memory functions for other devices?
+  check_memory = true;
 #endif
+  printf("CHECK: %d\n", check_memory);
   char filename[256];
   sprintf(filename, "%s_%d.ptl", argv[1], comm_rank);
   //Local count of fails
@@ -103,28 +102,31 @@ int main(int argc, char* argv[]) {
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
     int num = 0;
+    //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
       double mem_i = get_mem_usage();
       std::string name;
       PS* structure = buildNextStructure(num++, num_elems, num_ptcls, ppe, element_gids,
                                          particle_elements, particle_info, name);
+      //Check if construction of structure failed
       if (name == "FAIL")
         ++fails;
+      //structure is NULL on last/failed call to buildNextStructure
       if (!structure)
         break;
+      //Run all tests on the structure
       double mem_s = get_mem_usage();
       fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
       fails += testParticleExistence(name.c_str(), structure, num_ptcls);
       fails += setValues(name.c_str(), structure);
-      Kokkos::fence();
       fails += pseudoPush(name.c_str(), structure);
-      Kokkos::fence();
       fails += testMetrics(name.c_str(), structure);
       double mem_pr = get_mem_usage();
       if (check_memory && fabs(mem_pr - mem_s) > .00001) {
         fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name, mem_pr - mem_s);
         ++fails;
       }
+      //Memory changes are expected in rebuild/migration (the structure check at the end will ensure no memory leaks)
       fails += testRebuild(name.c_str(), structure);
       fails += testMigration(name.c_str(), structure);
       double mem_pb = get_mem_usage();

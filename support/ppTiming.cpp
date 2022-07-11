@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <math.h> //log10, trunc, etc...
 namespace {
   int verbosity = 0;
   int enable_timing = 0;

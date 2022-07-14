@@ -142,7 +142,11 @@ void particleSearch(p::Mesh& picparts,
   });
 
   const int sigma = INT_MAX; // full sorting
+#ifdef PP_USE_CUDA
+  const int V = 32;
+#else
   const int V = 1;
+#endif
   Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, V);
   //Create the particle structure
   PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,

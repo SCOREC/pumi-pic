@@ -92,6 +92,37 @@ OMEGA_H_DEVICE Omega_h::LO min3(Omega_h::Vector<3> a) {
   return idx;
 }
 
+template <class T> OMEGA_H_DEVICE
+Omega_h::LO find_min_no_exp(const T a, const T exp_num, Omega_h::LO n){
+  
+  Omega_h::LO ind=0;
+  Omega_h::Real min = a[0];
+  for (Omega_h::LO i=0; i<n; ++i){
+    if(exp_num[i]==0){
+      ind = i;
+      min = a[i];
+      break;
+    }
+  }
+ 
+  
+  Omega_h::LO ind_track=0;
+  Omega_h::LO ind_ret=0;
+  
+  for(Omega_h::LO i=ind; i<n-1; ++i) {
+    if(exp_num[i+1]==0) {
+      ind_track++;
+      if(a[i+1]<min){
+        min = a[i+1];
+        ind = i+1;
+	ind_ret=ind_track;
+      }
+      
+    }
+  }
+  return ind_ret;
+}
+
 template <class T> OMEGA_H_DEVICE  
 Omega_h::LO min_index(const T a, Omega_h::LO n) {
   Omega_h::LO ind=0;

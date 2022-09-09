@@ -1102,8 +1102,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       };
       ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
       Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
-              "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
+      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
+              "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0],
+              ptcls->getName().c_str());
       break;
     }
   }

@@ -27,7 +27,7 @@ namespace pumipic {
 
     // If serial, skip migration
     if (comm_size == 1) {
-      RecordTime("CabM particle migration", timer.seconds(), btime);
+      RecordTime(name + " particle migration", timer.seconds(), btime);
       rebuild(new_element, new_particle_elements, new_particle_info);
       Kokkos::Profiling::popRegion();
       return;
@@ -127,7 +127,7 @@ namespace pumipic {
     if (num_sending_to == 0 && num_receiving_from == 0) {
       destroyViews<DataTypes, memory_space>(send_particle);
       rebuild(new_element, new_particle_elements, new_particle_info);
-      RecordTime("CabM particle migration", timer.seconds(), btime);
+      RecordTime(name + " particle migration", timer.seconds(), btime);
       Kokkos::Profiling::popRegion();
       return;
     }
@@ -221,7 +221,7 @@ namespace pumipic {
     destroyViews<DataTypes, memory_space>(send_particle);
     destroyViews<DataTypes, memory_space>(recv_particle);
     
-    RecordTime("CabM particle migration", timer.seconds() - temp, btime);
+    RecordTime(name +" particle migration", timer.seconds() - temp, btime);
 
     Kokkos::Profiling::popRegion();
   }

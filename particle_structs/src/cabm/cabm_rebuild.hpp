@@ -55,7 +55,7 @@ namespace pumipic {
         particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
       });
 
-    RecordTime("CabM count active particles", overall_timer.seconds());
+    RecordTime(name + " count active particles", overall_timer.seconds());
     Kokkos::Timer setup_timer; // timer for aosoa setup
 
     // prepare a new aosoa to store the shuffled particles
@@ -77,7 +77,7 @@ namespace pumipic {
       newAosoa = aosoa_swap;
     }
 
-    RecordTime("CabM move/destroy setup", setup_timer.seconds());
+    RecordTime(name + " move/destroy setup", setup_timer.seconds());
     Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
     kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
@@ -120,7 +120,7 @@ namespace pumipic {
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     setActive(elmDegree_d);
 
-    RecordTime("CabM move/destroy existing particles", existing_timer.seconds());
+    RecordTime(name + " move/destroy existing particles", existing_timer.seconds());
     Kokkos::Timer add_timer; // timer for adding particles
 
     // add new particles
@@ -139,8 +139,8 @@ namespace pumipic {
         soa_indices, soa_ptcl_indices); // copy data over
     }
 
-    RecordTime("CabM add particles", add_timer.seconds());
-    RecordTime("CabM rebuild", overall_timer.seconds(), btime);
+    RecordTime(name + " add particles", add_timer.seconds());
+    RecordTime(name + " rebuild", overall_timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
   }
 

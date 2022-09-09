@@ -196,7 +196,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if(!comm_rank)
-      fprintf(stderr, "building CabM\n");
+      fprintf(stderr, "building CabM for %s\n", name.c_str());
     
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);

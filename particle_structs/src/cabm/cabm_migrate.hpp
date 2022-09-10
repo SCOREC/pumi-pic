@@ -53,8 +53,10 @@ namespace pumipic {
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld())
-      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
-                        dist.mpi_comm(), count_recv_requests);
+//      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
+//                        dist.mpi_comm(), count_recv_requests);
+      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1,
+                       dist.mpi_comm());
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {

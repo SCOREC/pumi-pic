@@ -6,6 +6,7 @@ namespace pumipic {
                                                   Distributor<MemSpace> dist,
                                                   kkLidView new_particle_elements,
                                                   MTVs new_particle_info) {
+
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_migrate");
     Kokkos::Timer timer;
@@ -23,13 +24,14 @@ namespace pumipic {
       return;
     }
 
+
     //Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
     auto count_sending_particles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t process = new_process(particle_id);
       if (mask && (process != comm_rank)) {
         const lid_t process_index = dist.index(process);
-        Kokkos::atomic_increment<lid_t>(&num_send_particles(process_index));
+        Kokkos::atomic_increment(&num_send_particles(process_index));
       }
     };
     parallel_for(count_sending_particles);
@@ -42,9 +44,12 @@ namespace pumipic {
       count_send_requests = new MPI_Request[num_send_ranks];
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
-    if (dist.isWorld())
-      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
-                        dist.mpi_comm(), count_recv_requests);
+    if (dist.isWorld()) {
+      //Note using a blocking Alltoall because the code crashes on Summit when >1024 ranks
+      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
+      /*PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
+      */
+    }
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
@@ -92,8 +97,9 @@ namespace pumipic {
                                                                     new_process,
                                                                     send_index);
 
-    //Wait until all counts are received
-    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
+    //Wait until all counts are received Note: disabled on world because of crashing on Summit when >1024 processes
+    if (!dist.isWorld())
+      PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
 
     //Count the number of processes being sent to and recv from
@@ -122,6 +128,7 @@ namespace pumipic {
       Kokkos::Profiling::popRegion();
       return;
     }
+
 
     //Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);

@@ -57,6 +57,12 @@ namespace pumipic {
           \   |   /
             \ | /
               1
+   triangle:
+              1
+             / \
+            1   0
+           /     \
+          2---2---0
 */
 
 #define TriVerts 3
@@ -64,16 +70,19 @@ namespace pumipic {
 //compute the area coordinates formed by each edge of searchElm
 //the coordinates are returned in the order of the edges bounding
 //searchElm
+// vertex_major is to specify whether the returned Bcc will be in edge based
+// notation or vertex based notation; default is edge based notation
 OMEGA_H_DEVICE void barycentric_tri(
-    const o::Reals triArea,
-    const o::Matrix<TriDim, TriVerts> &faceCoords,
-    const o::Vector<TriDim> &pos,
-    o::Vector<TriVerts> &bcc,
-    const int searchElm) {
+  const o::Reals triArea,
+  const o::Matrix<TriDim, TriVerts> &faceCoords,
+  const o::Vector<TriDim> &pos,
+  o::Vector<TriVerts> &bcc,
+  const int searchElm, const bool vertex_major=false) {
   const auto parent_area = triArea[searchElm];
+  const auto vshift = vertex_major ? 1 : 0;
   for(int i=0; i<3; i++) {
-    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, i, 0);
-    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, i, 1);
+    const auto kIdx = simplex_down_template(o::FACE, o::EDGE, (i+vshift)%3, 0);
+    const auto lIdx = simplex_down_template(o::FACE, o::EDGE, (i+vshift)%3, 1);
     const auto kxy = faceCoords[kIdx];
     const auto lxy = faceCoords[lIdx];
     o::Few<o::Vector<2>, 2> tri;
@@ -1022,7 +1031,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   const auto side_is_exposed = mark_exposed_sides(&mesh);
   const auto faces2verts = mesh.ask_elem_verts();
   const auto coords = mesh.coords();
-  const auto edge_verts =  mesh.ask_verts_of(o::EDGE);
   const auto faceEdges = faces2edges.ab2b;
   const auto triArea = measure_elements_real(&mesh);
 
@@ -1032,12 +1040,19 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
   // store the last crossed edge
   o::Write<o::LO> lastEdge(psCapacity,-1);
+  const o::LO nelems = mesh.nelems();
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       if (elem_ids[pid] == -1) {
         elem_ids[pid] = e;
       }
       ptcl_done[pid] = 0;
+      // handle situations where particle may be outside the simulation domain
+      // after field-following based operation
+      if (elem_ids[pid] == -nelems) {
+        elem_ids[pid] = -1;
+        ptcl_done[pid] = 1;
+      }
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -1045,37 +1060,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   };
   parallel_for(ptcls, lamb);
 
-  Omega_h::Write<o::LO> numNotInElem(1, 0);
-  auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    //inactive particle that is still moving to its target position
-    if( mask > 0 && !ptcl_done[pid] ) {
-      auto searchElm = elem_ids[pid];
-      auto ptcl = pid_d(pid);
-      OMEGA_H_CHECK(searchElm >= 0);
-      auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
-      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-      auto ptclOrigin = makeVector2(pid, x_ps_d);
-      Omega_h::Vector<3> faceBcc;
-      barycentric_tri(triArea, faceCoords, ptclOrigin, faceBcc, searchElm);
-      if(!all_positive(faceBcc,1e-8)) {
-        if (debug) {
-          printf("%d Particle not in element! ptcl %d elem %d => %d "
-                 "orig %.15f %.15f bcc %.3f %.3f %.3f\n",
-                 rank, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
-                 faceBcc[0], faceBcc[1], faceBcc[2]);
-        }
-        Kokkos::atomic_add(&(numNotInElem[0]), 1);
-        elem_ids[pid] = -1;
-        ptcl_done[pid] = 1;
-      }
-    } //if active
-  };
-  ps::parallel_for(ptcls, checkParent);
-  Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
-  if (numNotInElem_h[0] > 0) {
-    fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
-            "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
-  }
   bool found = false;
   int loops = 0;
   while(!found) {
@@ -1083,13 +1067,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       //active particle that is still moving to its target position
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         OMEGA_H_CHECK(searchElm >= 0);
         const auto edges = o::gather_down<3>(faceEdges, searchElm);
         const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
         const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
         const auto ptclDest = makeVector2(pid, xtgt_ps_d);
-        const auto ptclOrigin = makeVector2(pid, x_ps_d);
         Omega_h::Vector<3> faceBcc;
         barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
         auto isDestInParentElm = all_positive(faceBcc);
@@ -1102,8 +1084,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
 
     auto checkExposedEdges = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         assert(lastEdge[pid] != -1);
         auto bridge = lastEdge[pid];
         auto exposed = side_is_exposed[bridge];
@@ -1118,7 +1098,6 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
     auto setNextElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
-        auto ptcl = pid_d(pid);
         auto bridge = lastEdge[pid];
         auto e2f_first = e2f_offsets[bridge];
         auto e2f_last = e2f_offsets[bridge+1];
@@ -1150,7 +1129,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           const auto ptclDest = makeVector2(pid, xtgt_ps_d);
           const auto ptclOrigin = makeVector2(pid, x_ps_d);
           if (debug) {
-            printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+            printf("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
                    rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                    ptclDest[0], ptclDest[1]);
           }
@@ -1160,8 +1139,9 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       };
       ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
       Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
-              "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
+      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
+              "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0],
+              ptcls->getName().c_str());
       break;
     }
   }
@@ -1172,6 +1152,98 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
   PrintAdditionalTimeInfo(buffer, 1);
   Kokkos::Profiling::popRegion();
   return found;
+}
+
+OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
+                                       const o::LOs faces2verts,
+                                       const o::Reals coords,
+                                       const o::Adj faces2edges,
+                                       const o::Adj edges2faces,
+                                       const o::Reals triArea,
+                                       // particle origin
+                                       const o::Vector<2> ptclOrigin,
+                                       // particle destination
+                                       const o::Vector<2> ptclDest,
+                                       // particle id
+                                       const o::LO pid,
+                                       // starting element for particle search
+                                       const o::LO initial_elem,
+                                       o::LO& loops,
+                                       // [optional] number of loops before giving up
+                                       const o::LO looplimit = 0,
+                                       const bool debug = false) {
+
+  // 0: particle is not done yet.
+  // 1: particle has hit a boundary or reached its destination
+  o::LO ptcl_done = 0;
+  // store the last crossed edge
+  o::LO lastEdge = -1;
+  bool found = false;
+  loops = 0;
+  const o::LOs faceEdges = faces2edges.ab2b;
+  o::LO elem_id = initial_elem;
+  while (!found) {
+    //active particle that is still moving to its target position
+    if (!ptcl_done) {
+      const o::LO searchElm = elem_id;
+      OMEGA_H_CHECK(searchElm >= 0);
+      const auto edges = o::gather_down<3>(faceEdges, searchElm);
+      const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
+      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+      Omega_h::Vector<3> faceBcc;
+      barycentric_tri(triArea, faceCoords, ptclDest, faceBcc, searchElm);
+      ptcl_done = all_positive(faceBcc);
+      const o::LO idx = min3(faceBcc);
+      lastEdge = edges[idx];
+    }
+
+    if (!ptcl_done) {
+      assert(lastEdge != -1);
+      const o::LO bridge = lastEdge;
+      const auto exposed = side_is_exposed[bridge];
+      ptcl_done = exposed;
+      //leaves domain if exposed
+      if (exposed) elem_id = -1;
+    }
+
+    auto e2f_vals = edges2faces.ab2b; // CSR value array
+    auto e2f_offsets = edges2faces.a2ab; // CSR offset array, index by mesh edge ids
+    if (!ptcl_done) {
+      const o::LO searchElm = elem_id;
+      const o::LO bridge = lastEdge;
+      const o::LO e2f_first = e2f_offsets[bridge];
+      const o::LO e2f_last = e2f_offsets[bridge+1];
+      const o::LO upFaces = e2f_last - e2f_first;
+      assert(upFaces == 2);
+      const o::LO faceA = e2f_vals[e2f_first];
+      const o::LO faceB = e2f_vals[e2f_first+1];
+      assert(faceA != faceB);
+      assert(faceA == searchElm || faceB == searchElm);
+      const o::LO nextElm = (faceA == searchElm) ? faceB : faceA;
+      elem_id = nextElm;
+    }
+
+    // check if we have found the particle final element
+    found = ptcl_done ? true: false;
+    ++loops;
+
+    if (loops >= looplimit && !ptcl_done) {
+      const o::LO searchElm = elem_id;
+      elem_id = -1;
+      //TODO: use preprocessor macro
+      if (debug) {
+        printf("elm %d ptcl %d notFound %g %g to %g %g\n",
+               searchElm, pid, ptclOrigin[0], ptclOrigin[1],
+               ptclDest[0], ptclDest[1]);
+      }
+      elem_id = -1;
+      printf("ERROR: loop limit %d exceeded, particle %d is "
+              "not found; deleting them.\n", looplimit, pid);
+      break;
+    }
+  }
+
+  return elem_id;
 }
 
 } //namespace

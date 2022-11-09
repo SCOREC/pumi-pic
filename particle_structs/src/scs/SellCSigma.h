@@ -265,11 +265,12 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
 
   //Allocate the SCS and backup with extra space
   lid_t cap = capacity_;
-  particle_mask = Kokkos::View<bool*>("particle_mask", cap);
+  particle_mask = Kokkos::View<bool*>(Kokkos::ViewAllocateWithoutInitializing("particle_mask"), cap);
   if (extra_padding > 0)
     cap *= (1 + extra_padding);
   CreateViews<device_type, DataTypes>(ptcl_data, cap);
-  CreateViews<device_type, DataTypes>(scs_data_swap, cap);
+  if (!always_realloc)
+    CreateViews<device_type, DataTypes>(scs_data_swap, cap);
   swap_size = current_size = cap;
 
   if (num_ptcls > 0) {
@@ -386,7 +387,8 @@ SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>
 template<class DataTypes, typename MemSpace>
 void SellCSigma<DataTypes, MemSpace>::destroy() {
   destroyViews<DataTypes, memory_space>(ptcl_data);
-  destroyViews<DataTypes, memory_space>(scs_data_swap);
+  if (!always_realloc)
+    destroyViews<DataTypes, memory_space>(scs_data_swap);
 }
 template<class DataTypes, typename MemSpace>
 SellCSigma<DataTypes, MemSpace>::~SellCSigma() {

@@ -81,7 +81,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   
   cudaMemGetInfo(&free, &total);
   const long used_after=total-free;
-  if (used_before != used_after) {
+  if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s has allocated too much memory\n", structure_names[structure]);
     fails += 1;
   }
@@ -130,7 +130,7 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   
   cudaMemGetInfo(&free, &total);
   const long used_after=total-free;
-  if (used_before != used_after) {
+  if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s::rebuild has allocated too much memory\n", structure_names[structure]);
     fails += 1;
   }
@@ -190,8 +190,8 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   
   cudaMemGetInfo(&free, &total);
   const long used_after=total-free;
-  if (used_before != used_after) {
-    fprintf(stderr, "[ERROR] %s::rebuild has allocated too much memory\n", structure_names[structure]);
+  if (used_before < used_after) {
+    fprintf(stderr, "[ERROR] %s::migrate has allocated too much memory\n", structure_names[structure]);
     fails += 1;
   }
 

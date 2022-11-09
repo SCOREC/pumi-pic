@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.20)
 
 
 SET(CTEST_DO_SUBMIT ON)
 SET(CTEST_TEST_TYPE Nightly)
 
-set(CTEST_SITE             "blockade.scorec.rpi.edu" )
-set(CTEST_DASHBOARD_ROOT   "/fasttmp/cwsmith/nightlyBuilds" )
+set(CTEST_SITE             "cranium.scorec.rpi.edu" )
+set(CTEST_DASHBOARD_ROOT   "/lore/cwsmith/nightlyBuilds/pumipic")
 set(CTEST_CMAKE_GENERATOR  "Unix Makefiles" )
 set(CTEST_BUILD_CONFIGURATION  RelWithDebInfo)
 
@@ -104,7 +104,9 @@ macro(setup_repo repo_name repo_url)
 endmacro(setup_repo)
 
 SET(CONFIGURE_MASTER
+  "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"
+  "-DPS_IS_TESTING=ON"
   "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
 
 message(STATUS "configure options ${CONFIGURE_MASTER}")

@@ -120,14 +120,16 @@ namespace pumipic {
       num_ptcls = old->num_ptcls;
       capacity_ = old->capacity_;
       num_rows = old->num_rows;
-      if (std::is_same<memory_space, typename Space2::memory_space>::value) {
-        ptcl_data = old->ptcl_data;
-      }
-      else {
-        auto first_data_view = static_cast<MTV<0>*>(old->ptcl_data[0]);
-        int s = first_data_view->size() / BaseType<DataType<0> >::size;
-        ptcl_data = createMemberViews<DataTypes, Space>(s);
-        CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, old->ptcl_data);
+      if (dynamic_cast<CabM<DataTypes, Space>*>(this) == NULL) {
+        if (std::is_same<memory_space, typename Space2::memory_space>::value) {
+          ptcl_data = old->ptcl_data;
+        }
+        else {
+          auto first_data_view = static_cast<MTV<0>*>(old->ptcl_data[0]);
+          int s = first_data_view->size() / BaseType<DataType<0> >::size;
+          ptcl_data = createMemberViews<DataTypes, Space>(s);
+          CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, old->ptcl_data);
+        }
       }
     }
     template <typename DT, typename Space2> friend class ParticleStructure;

@@ -17,6 +17,7 @@ namespace pumipic {
     View() : view_() {}
     View(lid_t size) : view_("ppView", size) {}
     View(std::string name, lid_t size) : view_(name, size) {}
+    View(Kokkos::ViewAllocateWithoutInitializing name, lid_t size) : view_(name, size) {}
     View(const Kokkos::View<T, ArrayLayout, Space>& v) : view_(v) {}
     // View(const Kokkos::View<T, Space>& v) {Kokkos::deep_copy(view_,v);}
     // View(const Kokkos::View<T>& v) {Kokkos::deep_copy(view_,v);}

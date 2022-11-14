@@ -543,8 +543,6 @@ namespace {
         //transfer classification
         ppClassId[pp_ent] = full_classId[full_ent_id];
         ppClassDim[pp_ent] = full_classDim[full_ent_id];
-      } else {
-        printf("entity %d %d is not new\n", dim, full_ent_id);
       }
     };
     Omega_h::parallel_for(full_mesh.nents(dim), getDownAndClass, "getDownAndClass");
@@ -570,8 +568,6 @@ namespace {
       if (pp_ent >= 0) {
         ppClassId[pp_ent] = full_classId[full_ent_id];
         ppClassDim[pp_ent] = full_classDim[full_ent_id];
-      } else {
-        printf("entity %d %d is not new\n", vdim, full_ent_id);
       }
     };
     Omega_h::parallel_for(pp_num_verts, getClass, "getClass");

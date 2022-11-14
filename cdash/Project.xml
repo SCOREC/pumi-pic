@@ -1,4 +1,6 @@
 <Project name="pumi-pic">
-  <SubProject name="pumipic-master">
+  <SubProject name="pumipic-master-omegah1050">
+  </SubProject>
+  <SubProject name="pumipic-master-omegahMaster">
   </SubProject>
 </Project>

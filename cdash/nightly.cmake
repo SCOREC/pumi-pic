@@ -103,14 +103,28 @@ macro(setup_repo repo_name repo_url)
   submit_part(${repo_name} "Update")
 endmacro(setup_repo)
 
-SET(CONFIGURE_MASTER
+set(OMEGAH_1050_INSTALL "${CTEST_DASHBOARD_ROOT}/build-omegah1050-cranium-cuda114/install")
+SET(CONFIGURE_MASTER_OMEGAH1050
   "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"
   "-DPS_IS_TESTING=ON"
+  "-DOmega_h_PREFIX=${OMEGAH_1050_INSTALL}"
   "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
 
-message(STATUS "configure options ${CONFIGURE_MASTER}")
-build_subproject(pumipic-master "${CONFIGURE_MASTER}")
-test_subproject(pumipic-master)
+set(OMEGAH_MASTER_INSTALL "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install")
+SET(CONFIGURE_MASTER_OMEGAH_MASTER
+  "-DCMAKE_CXX_COMPILER=mpicxx"
+  "-DIS_TESTING=ON"
+  "-DPS_IS_TESTING=ON"
+  "-DOmega_h_PREFIX=${OMEGAH_MASTER_INSTALL}"
+  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
+
+message(STATUS "configure options ${CONFIGURE_MASTER_OMEGAH1050}")
+build_subproject(pumipic-master-omegah1050 "${CONFIGURE_MASTER_OMEGAH1050}")
+test_subproject(pumipic-master-omegah1050)
+
+message(STATUS "configure options ${CONFIGURE_MASTER_OMEGAH_MASTER}")
+build_subproject(pumipic-master-omegahMaster "${CONFIGURE_MASTER_OMEGAH_MASTER}")
+test_subproject(pumipic-master-omegahMaster)
 
 message("DONE")

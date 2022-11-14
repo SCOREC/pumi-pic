@@ -291,7 +291,7 @@ namespace {
   //Ownership of lower entity dimensions is determined by the minimum owner of surrounding elements
   Omega_h::LOs defineOwners(Omega_h::Mesh& m, int dim, Omega_h::CommPtr comm,
                             Omega_h::LOs elm_owner) {
-    int comm_size = comm->size(), comm_rank = comm->rank();
+    int comm_size = comm->size();
     Omega_h::Adj ent_to_elm = m.ask_up(dim, m.dim());
     Omega_h::Write<Omega_h::LO> ent_owner(m.nents(dim), "ent_owner");
     auto determineOwner = OMEGA_H_LAMBDA(const Omega_h::LO& ent_id) {
@@ -397,7 +397,6 @@ namespace {
                        Omega_h::Write<Omega_h::LO> is_safe,
                        Omega_h::LOs owner, Omega_h::Write<Omega_h::LO> has_part) {
     int rank = comm->rank();
-    int comm_size = comm->size();
     Omega_h::Write<Omega_h::LO> is_visited(mesh.nelems());
     Omega_h::Write<Omega_h::LO> is_visited_next(mesh.nelems());
     const auto initVisit = OMEGA_H_LAMBDA( Omega_h::LO elem_id){
@@ -405,7 +404,7 @@ namespace {
       is_visited_next[elem_id] = is_visited[elem_id];
     };
     Omega_h::parallel_for(mesh.nelems(), initVisit, "initVisit");
-    auto initSelfPart = OMEGA_H_LAMBDA(Omega_h::LO i) {
+    auto initSelfPart = OMEGA_H_LAMBDA(Omega_h::LO) {
       has_part[rank] = true;
     };
     Omega_h::parallel_for(1, initSelfPart);

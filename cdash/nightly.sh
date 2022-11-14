@@ -26,8 +26,7 @@ export CMAKE_PREFIX_PATH=$engpar:$kk:$oh:$pumipic:$CMAKE_PREFIX_PATH
 export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
-[ ! -d kokkos ] && git clone git@github.com:kokkos/kokkos.git
-cd kokkos && git pull && cd -
+[ ! -d kokkos ] && git clone -b 3.4.01 git@github.com:kokkos/kokkos.git
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \

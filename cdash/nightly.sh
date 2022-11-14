@@ -28,7 +28,7 @@ export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 cd $root
 [ ! -d kokkos ] && git clone git@github.com:kokkos/kokkos.git
 cd kokkos && git pull && cd -
-[ -d $kk ] && rm -rf ${kk}
+[ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
   -DKokkos_ARCH_TURING75=ON \
@@ -43,7 +43,7 @@ cmake --build ${kk%%install} --target install -j 24
 cd $root
 [ ! -d EnGPar] && git clone git@github.com:SCOREC/EnGPar.git
 cd EnGPar && git pull && cd -
-[ -d $engpar ] && rm -rf ${engpar}
+[ -d $engpar ] && rm -rf ${engpar%%install}
 cmake -S EnGPar -B ${engpar%%install} \
   -DCMAKE_INSTALL_PREFIX=$engpar \
   -DCMAKE_C_COMPILER="mpicc" \
@@ -57,7 +57,7 @@ cmake --build ${engpar%%install} --target install -j8
 cd $root
 [ ! -d omega_h ] && git clone git@github.com:SCOREC/omega_h.git
 cd omega_h && git checkout master && git pull && cd -
-[ -d $oh ] && rm -rf ${oh}
+[ -d $oh ] && rm -rf ${oh%%install}
 cmake -S omega_h -B ${oh%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \
@@ -73,7 +73,7 @@ cmake -S omega_h -B ${oh%%install} \
 cmake --build ${oh%%install} --target install -j8
 
 cd omega_h && git checkout scorec-v10.5.0 && cd -
-[ -d $oh1050 ] && rm -rf ${oh1050}
+[ -d $oh1050 ] && rm -rf ${oh1050%%install}
 cmake -S omega_h -B ${oh1050%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \

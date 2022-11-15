@@ -349,7 +349,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> elem_ids_next(psCapacity,-1, "elem_ids_next");
   bool set_ids = false;
   if (elem_ids.size() == 0) {
-    elem_ids = o::Write<o::LO>(psCapacity);
+    elem_ids = o::Write<o::LO>(psCapacity,-1,"elem_ids");
     set_ids = true;
   }
   Kokkos::Profiling::popRegion();
@@ -579,7 +579,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
   bool set_ids = false;
   if (elem_ids.size() == 0) {
-    elem_ids = o::Write<o::LO>(psCapacity);
+    elem_ids = o::Write<o::LO>(psCapacity,-1,"elem_ids");
     set_ids = true;
   }
   auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {

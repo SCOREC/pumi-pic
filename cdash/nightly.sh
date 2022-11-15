@@ -77,7 +77,7 @@ cmake -S omega_h -B ${oh1050%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \
   -DCMAKE_BUILD_TYPE=debug \
-  -DCMAKE_INSTALL_PREFIX=$oh \
+  -DCMAKE_INSTALL_PREFIX=$oh1050 \
   -DBUILD_SHARED_LIBS=OFF \
   -DOmega_h_USE_Kokkos=ON \
   -DOmega_h_USE_CUDA=on \

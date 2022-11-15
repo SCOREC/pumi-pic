@@ -103,7 +103,8 @@ macro(setup_repo repo_name repo_url)
   submit_part(${repo_name} "Update")
 endmacro(setup_repo)
 
-set(OMEGAH_1050_INSTALL "${CTEST_DASHBOARD_ROOT}/build-omegah1050-cranium-cuda114/install")
+set(OMEGAH_1050_INSTALL
+  "${CTEST_DASHBOARD_ROOT}/build-omegah1050-cranium-cuda114/install/lib/cmake/Omega_h")
 SET(CONFIGURE_MASTER_OMEGAH1050
   "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"
@@ -111,7 +112,8 @@ SET(CONFIGURE_MASTER_OMEGAH1050
   "-DOmega_h_PREFIX=${OMEGAH_1050_INSTALL}"
   "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
 
-set(OMEGAH_MASTER_INSTALL "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install")
+set(OMEGAH_MASTER_INSTALL
+  "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install/lib/cmake/Omega_h")
 SET(CONFIGURE_MASTER_OMEGAH_MASTER
   "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"

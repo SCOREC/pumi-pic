@@ -4,7 +4,7 @@
 source /etc/profile.d/modules.sh
 source /etc/profile
 
-export root=$PWD # This is the directory containing the kokkos and omega_h repos as subdirs
+export root=/lore/cwsmith/nightlyBuilds/pumipic
 
 module use /opt/scorec/spack/dev/lmod/linux-rhel7-x86_64/Core
 module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core

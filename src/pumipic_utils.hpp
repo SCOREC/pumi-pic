@@ -493,14 +493,18 @@ OMEGA_H_DEVICE o::LO getFaceMap(const o::LO i) {
   return fmap[i];
 }
 
+OMEGA_H_DEVICE bool isFaceFlipped(const o::LO ei, const o::Few<o::LO, 2>& ev2v, 
+                                  const o::Few<o::LO, 3>& facev2v) {
+  const o::LO index = (ev2v[0] == facev2v[0]) ? 1 : (ev2v[0] == facev2v[1]) ? 2 : 0;
+  return ev2v[1] != facev2v[index];
+}
+
 OMEGA_H_DEVICE bool isFaceFlipped(const o::LO fi, const o::Few<o::LO, 3>& fv2v, 
   const o::Few<o::LO, 4>& tetv2v) {
-  auto matInd1 = getFaceMap(fi*2);
-  auto matInd2 = getFaceMap(fi*2+1);
-  bool flip = true;
-  if(fv2v[1] == tetv2v[matInd1] && fv2v[2] == tetv2v[matInd2])
-    flip = false;
-  return flip;       
+  const o::LO matInd1 = getFaceMap(fi*2);
+  const o::LO matInd2 = getFaceMap(fi*2+1);
+  const o::LO index = (fv2v[0] == tetv2v[matInd1]) ? 1 : (fv2v[1] == tetv2v[matInd1]) ? 2 : 0;
+  return tetv2v[matInd2] != fv2v[index];
 }
 
 //TODO: this is not tested ?

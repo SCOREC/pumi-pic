@@ -17,8 +17,33 @@
 namespace o = Omega_h;
 namespace ps = particle_structs;
 
-namespace pumipic
-{
+namespace pumipic {
+
+  /*
+    Top Level adjacency search routine
+
+    @param[in] mesh The omega_h mesh
+    @param[in] ptcls The particle structure
+    @param[in] x_ps_orig The prepush coordinates of particles
+    @param[in] x_ps_tgt The pushed coordinates of particles
+    @param[in] pids The particle ids
+    @param[out] elem_ids The new parent elements found by search. The passed in values will be used as the current parent element if provided
+    @param[in] looplimit The max number of search loops to provide. Defaults to 0 - no limit on loops
+    @param[in] requireIntersection If true, intersection with model boundaries will be calculated
+    @param[out] inter_points Will be filled with the intersection points of particle paths with model boundaries
+    @param[out] inter_faces Will be filled with the mesh faces on a model boundary the particle path intersected with
+    @param[in] debug Turn on to output debug information
+  */
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                   Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
+                   o::Write<o::LO>& elem_ids,
+                   bool requireIntersection,
+                   o::Write<o::LO>& inter_faces,
+                   o::Write<o::Real>& inter_points,
+                   int looplimit = 0, 
+                   int debug = 0);
+
 
 /*
    see description: Omega_h_simplex.hpp, Omega_h_refine_topology.hpp line 26
@@ -322,12 +347,18 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   o::Write<o::LO> ptcl_done(psCapacity, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(psCapacity,-1, "elem_ids_next");
+  bool set_ids = false;
+  if (elem_ids.size() == 0) {
+    elem_ids = o::Write<o::LO>(psCapacity);
+    set_ids = true;
+  }
   Kokkos::Profiling::popRegion();
 
   auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
-      ptcl_done[pid] = 0;
+      if (set_ids)
+        elem_ids[pid] = e;
+      ptcl_done[pid] = (elem_ids[pid] == -1)*2;
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 2;
@@ -336,7 +367,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
   parallel_for(ptcls, fill, "searchMesh_fill_elem_ids");
 
   auto checkParent = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if( mask > 0) {
+    if( mask > 0 && ptcl_done[pid] != 2) {
       const auto orig = makeVector3(pid, x_ps_d);
       if(!isPointWithinElemTet(mesh2verts, coords, orig, e, tol)) {
         if(debug)
@@ -546,10 +577,16 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   o::Write<o::LO> ptcl_done(psCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
   o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
+  bool set_ids = false;
+  if (elem_ids.size() == 0) {
+    elem_ids = o::Write<o::LO>(psCapacity);
+    set_ids = true;
+  }
   auto fill = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      elem_ids[pid] = e;
-      ptcl_done[pid] = 0;
+      if (set_ids)
+        elem_ids[pid] = e;
+      ptcl_done[pid] = (elem_ids[pid] == -1);
       if (debug)
         printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {
@@ -982,7 +1019,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     bool debug = false) {
 
   const auto btime = pumipic_prebarrier();
-  Kokkos::Profiling::pushRegion("pumpipic_search_mesh_2d");
+  Kokkos::Profiling::pushRegion("pumipic_search_mesh_2d");
   Kokkos::Timer timer;
 
   int rank, comm_size;
@@ -1211,3 +1248,5 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
 
 } //namespace
 #endif //define
+
+#include "pumipic_adjacency.tpp"

@@ -192,7 +192,7 @@ void search(p::Mesh& picparts, PS* ptcls, bool output) {
   assert(ptcls->nElems() == mesh->nelems());
   Omega_h::LO maxLoops = 100;
   const auto psCapacity = ptcls->capacity();
-  o::Write<o::LO> elem_ids(psCapacity,-1);
+  o::Write<o::LO> elem_ids;
   Kokkos::Timer timer;
   auto x = ptcls->get<0>();
   auto xtgt = ptcls->get<1>();

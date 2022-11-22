@@ -1,6 +1,10 @@
 #simple tests
 mpi_test(barycentric_3 1 ./barycentric test1)
 
+#Search tests
+mpi_test(test_adj_2d 1 ./test_adj ${TEST_DATA_DIR}/plate/tri8.osh)
+mpi_test(test_adj_3d 1 ./test_adj ${TEST_DATA_DIR}/cube/7k.osh)
+
 mpi_test(search2d 1 ./search2d
   ${TEST_DATA_DIR})
 

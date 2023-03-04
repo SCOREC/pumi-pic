@@ -293,13 +293,13 @@ dist_name names[num_dist_funcs] = {
   "GITRm Approximation"
 };
 
+} //end unnamed namespace
+
 void distribute_help() {
-  printf("\nUnknown distribution strategy. Available distributions:\n");
+  printf("\nAvailable distribution strategies:\n");
   for(int i=0; i<num_dist_funcs; i++)
     printf("%d - %s\n", i, distribute_name(i));
 }
-
-} //end unnamed namespace
 
 const char* distribute_name(int strat) {
   if(strat >= 0 && strat < num_dist_funcs) {

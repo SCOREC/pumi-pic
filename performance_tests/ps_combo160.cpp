@@ -5,12 +5,31 @@
 #include "../particle_structs/test/Distribute.h"
 #include <string>
 
+const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
+
 PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
 PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
 #ifdef PP_ENABLE_CAB
 PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
 #endif
+
+typedef std::map<int,std::string> mis;
+const mis StructIdxToString = {{0, "SCS"}, {1, "CSR"}, {2, "CabM"}, {3, "DPS"}};
+
+void structure_help() {
+  printf("\nAvailable particle structures:\n");
+  for(auto ps : StructIdxToString)
+    printf("%d - %s\n", ps.first, ps.second.c_str());
+}
+
+void printHelpAndExit() {
+  fprintf(stderr, "%s\n", usage);
+  structure_help();
+  distribute_help();
+  Kokkos::finalize();
+  exit(EXIT_FAILURE);
+}
 
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
@@ -23,7 +42,7 @@ int main(int argc, char* argv[]) {
 
   /* Check commandline arguments */
   // Required arguments
-  assert(argc >= 5);
+  if(argc < 5) printHelpAndExit();
   int num_elems = atoi(argv[1]);
   int num_ptcls = atoi(argv[2]);
   int strat = atoi(argv[3]);
@@ -54,7 +73,7 @@ int main(int argc, char* argv[]) {
     }
     else {
       fprintf(stderr, "Illegal argument: %s", argv[i]);
-      fprintf(stderr, "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]");
+      printHelpAndExit();
     }
   }
 

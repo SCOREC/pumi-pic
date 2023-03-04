@@ -20,6 +20,7 @@ template <typename PS>
 bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
                             typename PS::kkLidView new_elms);
 
+void distribute_help();
 const char* distribute_name(int strat);
 
 

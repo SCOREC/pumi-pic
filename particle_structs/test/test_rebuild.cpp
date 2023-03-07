@@ -58,7 +58,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
       failed(0) = 1;
     }
   };
-  Kokkos::parallel_for(structure->nElems(), checkElementSums, "checkElementSums");
+  Kokkos::parallel_for("checkElementSums", structure->nElems(), checkElementSums);
   fails += ps::getLastValue<lid_t>(failed);
 
   return fails;

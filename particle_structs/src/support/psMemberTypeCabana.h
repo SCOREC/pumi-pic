@@ -93,7 +93,7 @@ namespace pumipic {
         const lid_t pid = soa_ptcl_indices(index);
         copyViewToSoa<M>(dst.access(soa), pid, src, index);
       };
-      Kokkos::parallel_for(soa_indices.size(), MTVToAoSoA, "copyMTVtoAoSoA");
+      Kokkos::parallel_for("copyMTVtoAoSoA", soa_indices.size(), MTVToAoSoA);
     }
   };
 

@@ -7,13 +7,6 @@
 
 const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
 
-PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name);
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size);
-#ifdef PP_ENABLE_CAB
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
-PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name);
-#endif
-
 typedef std::map<int,std::string> mis;
 const mis StructIdxToString = {{0, "SCS"}, {1, "CSR"}, {2, "CabM"}, {3, "DPS"}};
 
@@ -31,23 +24,88 @@ void printHelpAndExit() {
   exit(EXIT_FAILURE);
 }
 
+struct PSOptions {
+  std::string size;
+  int structure;
+  int strat;
+  int num_elems;
+  int num_ptcls;
+  int ppe;
+  int team_size;
+  int vert_slice;
+  bool optimal;
+};
+
+template<typename DataTypes>
+pumipic::ParticleStructure<DataTypes, MemSpace>* createParticleStruct(PSOptions& options,
+    kkLidView ppe, kkLidView ptcl_elems, kkGidView element_gids) {
+  /* Create particle structure */
+  if (options.structure == 0) {
+    if (options.optimal) {
+      if (options.strat == 1) {
+        options.team_size = 512;
+        options.vert_slice = 8;
+      }
+      else if (options.strat == 2) {
+        options.team_size = 512;
+        options.vert_slice = 4;
+      }
+      else if (options.strat == 3) {
+        options.team_size = 128;
+        options.vert_slice = 8;
+      }
+    }
+    std::string name("Sell-"+std::to_string(options.team_size)+"-ne");
+    return createSCS<DataTypes>(options.num_elems, options.num_ptcls, ppe, element_gids,
+        options.team_size, options.num_elems, options.vert_slice, name);
+  }
+  else if (options.structure == 1) {
+    std::string name("CSR");
+    return createCSR<DataTypes>(options.num_elems, options.num_ptcls, ppe, element_gids, options.team_size);
+  }
+  else if (options.structure == 2) {
+    std::string name("CabM");
+#ifdef PP_ENABLE_CAB
+    return createCabM<DataTypes>(options.num_elems, options.num_ptcls, ppe, element_gids, options.team_size, name);
+#else
+    fprintf(stderr, "CabM requested, but PUMI-PIC was not built with Cabana enabled\n");
+#endif
+  }
+  else if (options.structure == 3) {
+    std::string name("DPS");
+#ifdef PP_ENABLE_CAB
+    return createDPS<DataTypes>(options.num_elems, options.num_ptcls, ppe, element_gids, options.team_size, name);
+#else
+    fprintf(stderr, "DPS requested, but PUMI-PIC was not built with Cabana enabled\n");
+#endif
+  }
+  else {
+    exit(EXIT_FAILURE);
+    return createSCS<DataTypes>(options.num_elems, options.num_ptcls, ppe, element_gids,
+        options.team_size, options.num_elems, options.vert_slice, "foo");
+  }
+}
+
 int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
+
+  PSOptions options;
   // Default values if not specified on command line
   double percentMoved = 0.5;
   double percentMovedProcess = 0.1;
-  int team_size = 32;
-  int vert_slice = 1024;
+  options.team_size = 32;
+  options.vert_slice = 1024;
 
   /* Check commandline arguments */
   // Required arguments
   if(argc < 5) printHelpAndExit();
-  int num_elems = atoi(argv[1]);
-  int num_ptcls = atoi(argv[2]);
-  int strat = atoi(argv[3]);
-  int structure = atoi(argv[4]);
-  bool optimal = false;
+  options.num_elems = atoi(argv[1]);
+  options.num_ptcls = atoi(argv[2]);
+  options.strat = atoi(argv[3]);
+  options.structure = atoi(argv[4]);
+  options.optimal = false;
+  options.size = "small";
 
   // Optional arguments specified with flags
   for (int i = 5; i < argc; i+=2) {
@@ -61,14 +119,14 @@ int main(int argc, char* argv[]) {
     }
     // -s = team_size (/chunk width)
     else if (std::string(argv[i]) == "-s") {
-      team_size = atoi(argv[i+1]);
+      options.team_size = atoi(argv[i+1]);
     }
     // -v = vertical slicing
     else if (std::string(argv[i]) == "-v") {
-      vert_slice = atoi(argv[i+1]);
+      options.vert_slice = atoi(argv[i+1]);
     }
     else if (std::string(argv[i]) == "--optimal") {
-      optimal = true;
+      options.optimal = true;
       i--;
     }
     else {
@@ -97,59 +155,18 @@ int main(int argc, char* argv[]) {
   { // Begin Kokkos region
 
     /* Create initial distribution of particles */
-    kkLidView ppe("ptcls_per_elem", num_elems);
-    kkLidView ptcl_elems("ptcl_elems", num_ptcls);
-    kkGidView element_gids("element_gids", num_elems);
-    Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
+    kkLidView ppe("ptcls_per_elem", options.num_elems);
+    kkLidView ptcl_elems("ptcl_elems", options.num_ptcls);
+    kkGidView element_gids("element_gids", options.num_elems);
+    Kokkos::parallel_for(options.num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
         element_gids(i) = i;
     });
     if (!comm_rank)
-      printf("Generating particle distribution with strategy: %s\n", distribute_name(strat));
-    distribute_particles(num_elems, num_ptcls, strat, ppe, ptcl_elems);
+      printf("Generating particle distribution with strategy: %s\n", distribute_name(options.strat));
+    distribute_particles(options.num_elems, options.num_ptcls, options.strat, ppe, ptcl_elems);
 
     std::string name;
-    PS160* ptcls;
-
-    /* Create particle structure */
-    if (structure == 0) {
-      if (optimal) {
-        if (strat == 1) {
-          team_size = 512;
-          vert_slice = 8;
-        }
-        else if (strat == 2) {
-          team_size = 512;
-          vert_slice = 4;
-        }
-        else if (strat == 3) {
-          team_size = 128;
-          vert_slice = 8;
-        }
-      }
-      name = ("Sell-"+std::to_string(team_size)+"-ne");
-      ptcls = createSCS(num_elems, num_ptcls, ppe, element_gids,
-                                                team_size, num_elems, vert_slice, name);
-    }
-    else if (structure == 1) {
-      name = "CSR";
-      ptcls = createCSR(num_elems, num_ptcls, ppe, element_gids, team_size);
-    }
-    else if (structure == 2) {
-      name = "CabM";
-#ifdef PP_ENABLE_CAB
-      ptcls = createCabM(num_elems, num_ptcls, ppe, element_gids, team_size, name);
-#else
-      fprintf(stderr, "CabM requested, but PUMI-PIC was not built with Cabana enabled\n");
-#endif
-    }
-    else if (structure == 3) {
-      name = "DPS";
-#ifdef PP_ENABLE_CAB
-      ptcls = createDPS(num_elems, num_ptcls, ppe, element_gids, team_size, name);
-#else
-      fprintf(stderr, "DPS requested, but PUMI-PIC was not built with Cabana enabled\n");
-#endif
-    }
+    auto ptcls = createParticleStruct<PerfTypes160>(options, ppe, ptcl_elems, element_gids);
 
     const int PS_ITERS = 100;
     const int ITERS = 100;
@@ -226,7 +243,7 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < ITERS; ++i) {
       kkLidView new_elms("new elems", ptcls->capacity());
       Kokkos::Timer t;
-      redistribute_particles(ptcls, strat, percentMoved, new_elms);
+      redistribute_particles(ptcls, options.strat, percentMoved, new_elms);
       pumipic::RecordTime("redistribute", t.seconds());
 
       Kokkos::Timer tp;
@@ -258,28 +275,3 @@ int main(int argc, char* argv[]) {
   Kokkos::finalize();
   return 0;
 }
-
-PS160* createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
-  Kokkos::TeamPolicy<ExeSpace> policy(32, C);
-  pumipic::SCS_Input<PerfTypes160> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
-  input.name = name;
-  return new pumipic::SellCSigma<PerfTypes160, MemSpace>(input);
-}
-PS160* createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
-  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  return new pumipic::CSR<PerfTypes160, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
-}
-#ifdef PP_ENABLE_CAB
-PS160* createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
-  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  pumipic::CabM_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
-  input.name = name;
-  return new pumipic::CabM<PerfTypes160, MemSpace>(input);
-}
-PS160* createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
-  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
-  pumipic::DPS_Input<PerfTypes160> input(policy, num_elems, num_ptcls, ppe, elm_gids);
-  input.name = name;
-  return new pumipic::DPS<PerfTypes160, MemSpace>(input);
-}
-#endif

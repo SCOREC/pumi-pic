@@ -23,3 +23,37 @@ typedef PS::kkGidView kkGidView;
 typedef std::vector<std::pair<std::string, PS*> > ParticleStructures;
 typedef std::vector<std::pair<std::string, PS160*> > ParticleStructures160;
 typedef std::vector<std::pair<std::string, PS264*> > ParticleStructures264;
+
+template<typename DataTypes>
+auto createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, C);
+  pumipic::SCS_Input<DataTypes> input(policy, sigma, V, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
+  return new pumipic::SellCSigma<DataTypes, MemSpace>(input);
+}
+
+template<typename DataTypes>
+auto createCSR(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  return new pumipic::CSR<DataTypes, MemSpace>(policy, num_elems, num_ptcls, ppe, elm_gids);
+}
+
+#ifdef PP_ENABLE_CAB
+template<typename DataTypes>
+auto createCabM(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  pumipic::CabM_Input<DataTypes> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
+  return new pumipic::CabM<DataTypes, MemSpace>(input);
+}
+
+template<typename DataTypes>
+auto createDPS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int team_size, std::string name) {
+  Kokkos::TeamPolicy<ExeSpace> policy(32, team_size);
+  pumipic::DPS_Input<DataTypes> input(policy, num_elems, num_ptcls, ppe, elm_gids);
+  input.name = name;
+  return new pumipic::DPS<DataTypes, MemSpace>(input);
+}
+#endif
+
+

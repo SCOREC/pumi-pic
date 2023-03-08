@@ -5,7 +5,9 @@
 #include "../particle_structs/test/Distribute.h"
 #include <string>
 
-const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n[-p percentMovedRebuild] [-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
+const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n"
+"[-t particleDataSize=small|large] [-p percentMovedRebuild]"
+"[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
 
 typedef std::map<int,std::string> mis;
 const mis StructIdxToString = {{0, "SCS"}, {1, "CSR"}, {2, "CabM"}, {3, "DPS"}};
@@ -97,6 +99,9 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   int comm_size; // get number of processes
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+  if (!comm_rank)
+    printf("Per particle user data size (B): %d\n", getTypeSize<DataTypes>());
 
   /* Create initial distribution of particles */
   kkLidView ppe("ptcls_per_elem", psOpts.num_elems);
@@ -247,7 +252,11 @@ void readOptions(int argc, char* argv[],
   // Optional arguments specified with flags
   for (int i = 5; i < argc; i+=2) {
     // -p = percent_moved
-    if (std::string(argv[i]) == "-p") {
+    if (std::string(argv[i]) == "-t") {
+      psOpts.size = argv[i+1];
+    }
+    // -p = percent_moved
+    else if (std::string(argv[i]) == "-p") {
       migrOpts.percentMoved = atof(argv[i+1]);
     }
     // -pp = percent_moved_to_new_process
@@ -267,7 +276,7 @@ void readOptions(int argc, char* argv[],
       i--;
     }
     else {
-      fprintf(stderr, "Illegal argument: %s", argv[i]);
+      fprintf(stderr, "Illegal argument: %s\n", argv[i]);
       printHelpAndExit();
     }
   }
@@ -292,7 +301,7 @@ int main(int argc, char* argv[]) {
   } else if(psOpts.size == "large") {
     runTest<PerfTypes264>(psOpts,migrOpts);
   } else {
-    fprintf(stderr, "Illegal argument for size: %s", psOpts.size.c_str());
+    fprintf(stderr, "Illegal argument for size: %s\n", psOpts.size.c_str());
     printHelpAndExit();
   }
   

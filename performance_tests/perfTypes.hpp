@@ -24,6 +24,17 @@ typedef std::vector<std::pair<std::string, PS*> > ParticleStructures;
 typedef std::vector<std::pair<std::string, PS160*> > ParticleStructures160;
 typedef std::vector<std::pair<std::string, PS264*> > ParticleStructures264;
 
+
+template<typename DataTypes>
+int getTypeSize() {
+  if(std::is_same<DataTypes, PerfTypes160>::value) return 160;
+  else if(std::is_same<DataTypes, PerfTypes264>::value) return 264;
+  else {
+    fprintf(stderr,"Error: unknown per particle data type\n");
+    exit(EXIT_FAILURE);
+  }
+}
+
 template<typename DataTypes>
 auto createSCS(int num_elems, int num_ptcls, kkLidView ppe, kkGidView elm_gids, int C, int sigma, int V, std::string name) {
   Kokkos::TeamPolicy<ExeSpace> policy(32, C);

@@ -36,9 +36,14 @@ struct PSOptions {
   bool optimal;
 };
 
+struct MigrationOptions {
+  double percentMoved;
+  double percentMovedProcess;
+};
+
 template<typename DataTypes>
-pumipic::ParticleStructure<DataTypes, MemSpace>* createParticleStruct(PSOptions& options,
-    kkLidView ppe, kkLidView ptcl_elems, kkGidView element_gids) {
+pumipic::ParticleStructure<DataTypes, MemSpace>*
+createParticleStruct(PSOptions& options, kkLidView ppe, kkLidView ptcl_elems, kkGidView element_gids) {
   /* Create particle structure */
   if (options.structure == 0) {
     if (options.optimal) {
@@ -86,60 +91,132 @@ pumipic::ParticleStructure<DataTypes, MemSpace>* createParticleStruct(PSOptions&
   }
 }
 
-int main(int argc, char* argv[]) {
-  Kokkos::initialize(argc, argv);
-  MPI_Init(&argc, &argv);
-
-  PSOptions options;
-  // Default values if not specified on command line
-  double percentMoved = 0.5;
-  double percentMovedProcess = 0.1;
-  options.team_size = 32;
-  options.vert_slice = 1024;
-
-  /* Check commandline arguments */
-  // Required arguments
-  if(argc < 5) printHelpAndExit();
-  options.num_elems = atoi(argv[1]);
-  options.num_ptcls = atoi(argv[2]);
-  options.strat = atoi(argv[3]);
-  options.structure = atoi(argv[4]);
-  options.optimal = false;
-  options.size = "small";
-
-  // Optional arguments specified with flags
-  for (int i = 5; i < argc; i+=2) {
-    // -p = percent_moved
-    if (std::string(argv[i]) == "-p") {
-      percentMoved = atof(argv[i+1]);
-    }
-    // -pp = percent_moved_to_new_process
-    else if (std::string(argv[i]) == "-pp") {
-      percentMovedProcess = atof(argv[i+1]);
-    }
-    // -s = team_size (/chunk width)
-    else if (std::string(argv[i]) == "-s") {
-      options.team_size = atoi(argv[i+1]);
-    }
-    // -v = vertical slicing
-    else if (std::string(argv[i]) == "-v") {
-      options.vert_slice = atoi(argv[i+1]);
-    }
-    else if (std::string(argv[i]) == "--optimal") {
-      options.optimal = true;
-      i--;
-    }
-    else {
-      fprintf(stderr, "Illegal argument: %s", argv[i]);
-      printHelpAndExit();
-    }
-  }
-
+template<typename DataTypes>
+void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
   int comm_rank; // get process rank
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   int comm_size; // get number of processes
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
+  /* Create initial distribution of particles */
+  kkLidView ppe("ptcls_per_elem", psOpts.num_elems);
+  kkLidView ptcl_elems("ptcl_elems", psOpts.num_ptcls);
+  kkGidView element_gids("element_gids", psOpts.num_elems);
+  Kokkos::parallel_for(psOpts.num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
+      element_gids(i) = i;
+      });
+  if (!comm_rank)
+    printf("Generating particle distribution with strategy: %s\n", distribute_name(psOpts.strat));
+  distribute_particles(psOpts.num_elems, psOpts.num_ptcls, psOpts.strat, ppe, ptcl_elems);
+
+  std::string name;
+  auto ptcls = createParticleStruct<DataTypes>(psOpts, ppe, ptcl_elems, element_gids);
+
+  const int PS_ITERS = 100;
+  const int ITERS = 100;
+
+  if (!comm_rank)
+    printf("Performing %d iterations of push on each structure\n", PS_ITERS);
+
+  /* Perform push & rebuild on the particle structures */
+  if (!comm_rank)
+    printf("Beginning push on structure %s\n", name.c_str());
+
+  // Per element data to access in pseudoPush
+  Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
+  Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
+      KOKKOS_LAMBDA(const int& e){
+      parentElmData(e) = std::sqrt((double)e) * e;
+      });
+
+  for (int i = 0; i < PS_ITERS; ++i) {
+    /* Begin Push Setup */
+    auto dbls = ptcls->template get<0>();
+    auto nums = ptcls->template get<1>();
+    auto lint = ptcls->template get<2>();
+
+    auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+      if (mask) {
+        for (int i = 0; i < 17; i++) {
+          dbls(p,i) = 10.3;
+          dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
+        }
+        for (int i = 0; i < 4; i++) {
+          nums(p,i) = 4*p + i;
+        }
+        lint(p) = p;
+      }
+      else {
+        for (int i = 0; i < 17; i++) {
+          dbls(p,i) = 0;
+        }
+        for (int i = 0; i < 4; i++) {
+          nums(p,i) = -1;
+        }
+        lint(p) = 0;
+      }
+    };
+
+    Kokkos::fence();
+    Kokkos::Timer pseudo_push_timer;
+    /* Begin push operations */
+    ps::parallel_for(ptcls,pseudoPush,"pseudo push");
+    Kokkos::fence();
+    /* End push */
+    float pseudo_push_time = pseudo_push_timer.seconds();
+    pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
+  }
+
+  int seed = 0; // set seed for uniformly random processes
+  Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
+
+  int* other_ranks = new int[comm_size-1];
+  int counter = 0;
+  for (int i = 0; i < comm_size; i++) {
+    if (i != comm_rank)
+      other_ranks[counter++] = i;
+  }
+  kkLidView other_ranks_d("other_ranks_d", comm_size-1);
+  pumipic::hostToDevice(other_ranks_d, other_ranks);
+
+  if (!comm_rank)
+    printf("Performing %d iterations of migrate/rebuild on each structure\n", ITERS);
+
+  if (!comm_rank)
+    printf("Beginning migrate on structure %s\n", name.c_str());
+  for (int i = 0; i < ITERS; ++i) {
+    kkLidView new_elms("new elems", ptcls->capacity());
+    Kokkos::Timer t;
+    redistribute_particles(ptcls, psOpts.strat, migrOpts.percentMoved, new_elms);
+    pumipic::RecordTime("redistribute", t.seconds());
+
+    Kokkos::Timer tp;
+    kkLidView new_process("new_process", ptcls->capacity());
+    if (comm_size > 1) {
+      auto to_new_processes = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+        if (mask) {
+          auto generator = pool.get_state();
+          double prob = generator.drand(1.0);
+          if (prob < migrOpts.percentMovedProcess)
+            new_process(p) = other_ranks_d( generator.urand(comm_size-1) ); // send particle to a different process
+          else
+            new_process(p) = comm_rank;
+          pool.free_state(generator);
+        }
+      };
+      pumipic::parallel_for(ptcls, to_new_processes, "to_new_processes");
+    }
+    pumipic::RecordTime("redistribute processes", tp.seconds());
+
+    ptcls->migrate(new_elms, new_process);
+  }
+
+  delete ptcls;
+}
+
+void printTestCommand(int argc, char* argv[]) {
+  int comm_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   if (!comm_rank) {
     fprintf(stderr, "Test Command:\n");
     for (int i = 0; i < argc; i++) {
@@ -147,130 +224,78 @@ int main(int argc, char* argv[]) {
     }
     fprintf(stderr, "\n");
   }
+}
+
+void readOptions(int argc, char* argv[],
+    MigrationOptions& migrOpts, PSOptions& psOpts) {
+  // Default values if not specified on command line
+  migrOpts.percentMoved = 0.5;
+  migrOpts.percentMovedProcess = 0.1;
+  psOpts.team_size = 32;
+  psOpts.vert_slice = 1024;
+
+  /* Check commandline arguments */
+  // Required arguments
+  if(argc < 5) printHelpAndExit();
+  psOpts.num_elems = atoi(argv[1]);
+  psOpts.num_ptcls = atoi(argv[2]);
+  psOpts.strat = atoi(argv[3]);
+  psOpts.structure = atoi(argv[4]);
+  psOpts.optimal = false;
+  psOpts.size = "small";
+
+  // Optional arguments specified with flags
+  for (int i = 5; i < argc; i+=2) {
+    // -p = percent_moved
+    if (std::string(argv[i]) == "-p") {
+      migrOpts.percentMoved = atof(argv[i+1]);
+    }
+    // -pp = percent_moved_to_new_process
+    else if (std::string(argv[i]) == "-pp") {
+      migrOpts.percentMovedProcess = atof(argv[i+1]);
+    }
+    // -s = team_size (/chunk width)
+    else if (std::string(argv[i]) == "-s") {
+      psOpts.team_size = atoi(argv[i+1]);
+    }
+    // -v = vertical slicing
+    else if (std::string(argv[i]) == "-v") {
+      psOpts.vert_slice = atoi(argv[i+1]);
+    }
+    else if (std::string(argv[i]) == "--optimal") {
+      psOpts.optimal = true;
+      i--;
+    }
+    else {
+      fprintf(stderr, "Illegal argument: %s", argv[i]);
+      printHelpAndExit();
+    }
+  }
+}
+
+int main(int argc, char* argv[]) {
+  Kokkos::initialize(argc, argv);
+  MPI_Init(&argc, &argv);
+
+  MigrationOptions migrOpts;
+  PSOptions psOpts;
+  readOptions(argc,argv,migrOpts,psOpts);
+
+  printTestCommand(argc, argv);
 
   /* Enable timing on every process */
   pumipic::SetTimingVerbosity(0);
   pumipic::enable_prebarrier();
 
-  { // Begin Kokkos region
-
-    /* Create initial distribution of particles */
-    kkLidView ppe("ptcls_per_elem", options.num_elems);
-    kkLidView ptcl_elems("ptcl_elems", options.num_ptcls);
-    kkGidView element_gids("element_gids", options.num_elems);
-    Kokkos::parallel_for(options.num_elems, KOKKOS_LAMBDA(const int i) { // set gids, sharing between all processes
-        element_gids(i) = i;
-    });
-    if (!comm_rank)
-      printf("Generating particle distribution with strategy: %s\n", distribute_name(options.strat));
-    distribute_particles(options.num_elems, options.num_ptcls, options.strat, ppe, ptcl_elems);
-
-    std::string name;
-    auto ptcls = createParticleStruct<PerfTypes160>(options, ppe, ptcl_elems, element_gids);
-
-    const int PS_ITERS = 100;
-    const int ITERS = 100;
-    
-    if (!comm_rank)
-      printf("Performing %d iterations of push on each structure\n", PS_ITERS);
-
-    /* Perform push & rebuild on the particle structures */
-    if (!comm_rank)
-      printf("Beginning push on structure %s\n", name.c_str());
-
-    // Per element data to access in pseudoPush
-    Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
-    Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
-        KOKKOS_LAMBDA(const int& e){
-      parentElmData(e) = std::sqrt((double)e) * e;
-    });
-
-    for (int i = 0; i < PS_ITERS; ++i) {
-      /* Begin Push Setup */
-      auto dbls = ptcls->get<0>();
-      auto nums = ptcls->get<1>();
-      auto lint = ptcls->get<2>();
-
-      auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-        if (mask) {
-          for (int i = 0; i < 17; i++) {
-            dbls(p,i) = 10.3;
-            dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
-          }
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = 4*p + i;
-          }
-          lint(p) = p;
-        }
-        else {
-          for (int i = 0; i < 17; i++) {
-            dbls(p,i) = 0;
-          }
-          for (int i = 0; i < 4; i++) {
-            nums(p,i) = -1;
-          }
-          lint(p) = 0;
-        }
-      };
-
-      Kokkos::fence();
-      Kokkos::Timer pseudo_push_timer;
-      /* Begin push operations */
-      ps::parallel_for(ptcls,pseudoPush,"pseudo push");
-      Kokkos::fence();
-      /* End push */
-      float pseudo_push_time = pseudo_push_timer.seconds();
-      pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
-    }
-
-    int seed = 0; // set seed for uniformly random processes
-    Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
-
-    int* other_ranks = new int[comm_size-1];
-    int counter = 0;
-    for (int i = 0; i < comm_size; i++) {
-      if (i != comm_rank)
-        other_ranks[counter++] = i;
-    }
-    kkLidView other_ranks_d("other_ranks_d", comm_size-1);
-    pumipic::hostToDevice(other_ranks_d, other_ranks);
-
-    if (!comm_rank)
-      printf("Performing %d iterations of migrate/rebuild on each structure\n", ITERS);
-
-    if (!comm_rank)
-      printf("Beginning migrate on structure %s\n", name.c_str());
-    for (int i = 0; i < ITERS; ++i) {
-      kkLidView new_elms("new elems", ptcls->capacity());
-      Kokkos::Timer t;
-      redistribute_particles(ptcls, options.strat, percentMoved, new_elms);
-      pumipic::RecordTime("redistribute", t.seconds());
-
-      Kokkos::Timer tp;
-      kkLidView new_process("new_process", ptcls->capacity());
-      if (comm_size > 1) {
-        auto to_new_processes = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-          if (mask) {
-            auto generator = pool.get_state();
-            double prob = generator.drand(1.0);
-            if (prob < percentMovedProcess)
-              new_process(p) = other_ranks_d( generator.urand(comm_size-1) ); // send particle to a different process
-            else
-              new_process(p) = comm_rank;
-            pool.free_state(generator);
-          }
-        };
-        pumipic::parallel_for(ptcls, to_new_processes, "to_new_processes");
-      }
-      pumipic::RecordTime("redistribute processes", tp.seconds());
-
-      ptcls->migrate(new_elms, new_process);
-    }
-
-    delete ptcls;
-
-  } // end Kokkos region
-
+  if(psOpts.size == "small") {
+    runTest<PerfTypes160>(psOpts,migrOpts);
+  } else if(psOpts.size == "large") {
+    runTest<PerfTypes264>(psOpts,migrOpts);
+  } else {
+    fprintf(stderr, "Illegal argument for size: %s", psOpts.size.c_str());
+    printHelpAndExit();
+  }
+  
   pumipic::SummarizeTime();
   Kokkos::finalize();
   return 0;

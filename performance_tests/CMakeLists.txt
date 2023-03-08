@@ -7,7 +7,6 @@ function(make_test exename srcname)
   target_link_libraries(${exename} pumipic Omega_h::omega_h)
 endfunction(make_test)
 
-make_test(ps_combo160 ps_combo160.cpp)
-make_test(ps_combo264 ps_combo264.cpp)
+make_test(ps_combo ps_combo.cpp)
 
 bob_end_subdir()

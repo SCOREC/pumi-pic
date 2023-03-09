@@ -6,7 +6,7 @@
 #include <string>
 
 const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n"
-"[-t particleDataSize=small|large] [-p percentMovedRebuild]"
+"[-t particleDataSize=small|medium|large] [-p percentMovedRebuild]"
 "[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
 
 typedef std::map<int,std::string> mis;
@@ -298,8 +298,10 @@ int main(int argc, char* argv[]) {
 
   if(psOpts.size == "small") {
     runTest<PerfTypes160>(psOpts,migrOpts);
-  } else if(psOpts.size == "large") {
+  } else if(psOpts.size == "medium") {
     runTest<PerfTypes264>(psOpts,migrOpts);
+  } else if(psOpts.size == "large") {
+    runTest<PerfTypes504>(psOpts,migrOpts);
   } else {
     fprintf(stderr, "Illegal argument for size: %s\n", psOpts.size.c_str());
     printHelpAndExit();

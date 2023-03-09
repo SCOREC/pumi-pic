@@ -9,6 +9,8 @@ typedef int Vector4i[4];
 typedef pumipic::MemberTypes<Vector17d, Vector4i, long int> PerfTypes160;
 typedef double Vector30d[30];
 typedef pumipic::MemberTypes<Vector30d, Vector4i, long int> PerfTypes264;
+typedef double Vector60d[60];
+typedef pumipic::MemberTypes<Vector60d, Vector4i, long int> PerfTypes504;
 
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef typename ExeSpace::memory_space MemSpace;
@@ -16,6 +18,7 @@ typedef typename ExeSpace::device_type Device;
 typedef pumipic::ParticleStructure<PerfTypes, MemSpace> PS;
 typedef pumipic::ParticleStructure<PerfTypes160, MemSpace> PS160;
 typedef pumipic::ParticleStructure<PerfTypes264, MemSpace> PS264;
+typedef pumipic::ParticleStructure<PerfTypes504, MemSpace> PS504;
 typedef PS::kkLidView kkLidView;
 typedef PS::kkGidView kkGidView;
 
@@ -23,12 +26,14 @@ typedef PS::kkGidView kkGidView;
 typedef std::vector<std::pair<std::string, PS*> > ParticleStructures;
 typedef std::vector<std::pair<std::string, PS160*> > ParticleStructures160;
 typedef std::vector<std::pair<std::string, PS264*> > ParticleStructures264;
+typedef std::vector<std::pair<std::string, PS504*> > ParticleStructures504;
 
 
 template<typename DataTypes>
 int getTypeSize() {
   if(std::is_same<DataTypes, PerfTypes160>::value) return 160;
   else if(std::is_same<DataTypes, PerfTypes264>::value) return 264;
+  else if(std::is_same<DataTypes, PerfTypes504>::value) return 504;
   else {
     fprintf(stderr,"Error: unknown per particle data type\n");
     exit(EXIT_FAILURE);

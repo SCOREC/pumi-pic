@@ -306,6 +306,7 @@ int main(int argc, char* argv[]) {
   }
   
   pumipic::SummarizeTime();
+  MPI_Finalize();
   Kokkos::finalize();
   return 0;
 }

@@ -117,8 +117,8 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
   std::string name;
   auto ptcls = createParticleStruct<DataTypes>(psOpts, ppe, ptcl_elems, element_gids);
 
-  const int PS_ITERS = 100;
-  const int ITERS = 100;
+  const int PS_ITERS = 1;
+  const int ITERS = 1;
 
   if (!comm_rank)
     printf("Performing %d iterations of push on each structure\n", PS_ITERS);

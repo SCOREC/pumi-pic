@@ -46,7 +46,9 @@ int main(int argc, char* argv[]) {
   fails += runTests<Kokkos::HostSpace>();
 
   //Test Cuda Functions
+#ifdef PS_CUDA_AWARE_MPI
   fails += runTests<Kokkos::CudaSpace>();
+#endif
 
   MPI_Finalize();
   Kokkos::finalize();

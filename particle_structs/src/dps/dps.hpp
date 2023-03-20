@@ -231,7 +231,7 @@ namespace pumipic {
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         const lid_t elm = parentElms_cpy(particle_id); // calculate element
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
-      }, "parallel_for");
+      }, s);
 #ifdef PP_USE_CUDA
     cudaFree(fn_d);
 #endif

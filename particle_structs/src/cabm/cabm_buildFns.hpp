@@ -47,7 +47,7 @@ namespace pumipic {
    * @exception num_soa != aosoa.numSoA()
   */
   template<class DataTypes, typename MemSpace>
-  CabM<DataTypes, MemSpace>::AoSoA_t*
+  typename CabM<DataTypes, MemSpace>::AoSoA_t*
   CabM<DataTypes, MemSpace>::makeAoSoA(const lid_t capacity, const lid_t num_soa) {
     AoSoA_t* aosoa = new AoSoA_t;
     *aosoa = AoSoA_t();

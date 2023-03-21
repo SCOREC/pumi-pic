@@ -10,7 +10,7 @@ namespace pumipic {
    * @exception num_soa != aosoa.numSoA()
   */
   template<class DataTypes, typename MemSpace>
-  DPS<DataTypes, MemSpace>::AoSoA_t*
+  typename DPS<DataTypes, MemSpace>::AoSoA_t*
   DPS<DataTypes, MemSpace>::makeAoSoA(const lid_t capacity, const lid_t num_soa) {
     AoSoA_t* aosoa = new AoSoA_t;
     *aosoa = AoSoA_t();

@@ -24,7 +24,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
     template<std::size_t N>
-    using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+    using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;

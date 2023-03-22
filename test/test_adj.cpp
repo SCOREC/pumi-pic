@@ -618,10 +618,10 @@ OMEGA_H_INLINE bool check_point_on_edge(const o::Few<o::Vector<2>, 2> verts, con
   const o::Real cross = o::cross(path, edge);
 
   return fabs(cross) <= tol &&
-    point[0] >= min(verts[0][0], verts[1][0]) - tol &&
-    point[1] >= min(verts[0][1], verts[1][1]) - tol &&
-    point[0] <= max(verts[0][0], verts[1][0]) + tol &&
-    point[1] <= max(verts[0][1], verts[1][1]) + tol;
+    point[0] >= std::min(verts[0][0], verts[1][0]) - tol &&
+    point[1] >= std::min(verts[0][1], verts[1][1]) - tol &&
+    point[0] <= std::max(verts[0][0], verts[1][0]) + tol &&
+    point[1] <= std::max(verts[0][1], verts[1][1]) + tol;
 }
 
 //3D test of intersection point within the intersection face

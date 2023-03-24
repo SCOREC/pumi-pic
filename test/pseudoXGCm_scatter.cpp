@@ -5,6 +5,8 @@
 #include "gyroScatter.hpp"
 #include <fstream>
 
+typedef Kokkos::DefaultExecutionSpace ExeSpace;
+
 void setPtclIds(PS* ptcls) {
   auto pid_d = ptcls->get<2>();
   auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
@@ -140,7 +142,7 @@ int main(int argc, char** argv) {
 
   const int sigma = INT_MAX; // full sorting
   const int V = 32;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  Kokkos::TeamPolicy<ExeSpace> policy = TeamPolicyAuto(10000, 32);
   //Create the particle structure
   PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                                        ptcls_per_elem, element_gids);

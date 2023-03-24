@@ -7,6 +7,7 @@
 #include <Kokkos_Core.hpp>
 #include "pumipic_mesh.hpp"
 #include <fstream>
+#include "team_policy.hpp"
 #define NUM_ITERATIONS 30
 
 using particle_structs::lid_t;
@@ -25,6 +26,7 @@ namespace ps = particle_structs;
 //-an integer to store the particles id
 typedef MemberTypes<Vector3d, Vector3d, int> Particle;
 typedef ps::ParticleStructure<Particle> PS;
+typedef Kokkos::DefaultExecutionSpace ExeSpace;
 
 void render(p::Mesh& picparts, int iter, int comm_rank) {
   std::stringstream ss;
@@ -467,7 +469,7 @@ int main(int argc, char** argv) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  Kokkos::TeamPolicy<ExeSpace> policy = TeamPolicyAuto(10000, 32);
   //Create the particle structure
   PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
                                        ptcls_per_elem, element_gids);

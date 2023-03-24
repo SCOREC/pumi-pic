@@ -21,6 +21,7 @@ using p::Vector3d;
  */
 typedef p::MemberTypes<Vector3d, Vector3d, int, Vector3d> Particle;
 typedef p::ParticleStructure<Particle> PS;
+typedef Kokkos::DefaultExecutionSpace ExeSpace;
 
 int setSourceElements(o::Mesh mesh, PS::kkLidView ppe, const int numPtcls) {
   auto numPpe = numPtcls / mesh.nelems();

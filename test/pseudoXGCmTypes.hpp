@@ -3,6 +3,7 @@
 #include "pumipic_kktypes.hpp"
 #include <particle_structs.hpp>
 #include <Kokkos_Core.hpp>
+#include "team_policy.hpp"
 
 using particle_structs::lid_t;
 using particle_structs::SellCSigma;

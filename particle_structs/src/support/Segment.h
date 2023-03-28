@@ -42,6 +42,8 @@ namespace pumipic {
     Segment() : is_view(false) {}
     Segment(ViewType v) : is_view(true), view(v) {}
     Segment(SliceType s) : is_view(false), slice(s) {}
+    int getRank() { return std::rank<Base>::value; }
+    template<int rankIdx> int getExtent() { return std::extent<Base,rankIdx>::value; }
     template <typename U, std::size_t N>
     using checkRank = typename std::enable_if<std::rank<Type>::value == N &&
                                               std::is_same<Type, U>::value,

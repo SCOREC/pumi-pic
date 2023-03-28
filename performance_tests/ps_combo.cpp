@@ -140,6 +140,9 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
     auto nums = ptcls->template get<1>();
     auto lint = ptcls->template get<2>();
 
+    std::cout << "dbls rank " << dbls.getRank() << "\n";
+    std::cout << "dbls extent0 " << dbls.template getExtent<0>() << "\n";
+
     auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
       if (mask) {
         for (int i = 0; i < 17; i++) {

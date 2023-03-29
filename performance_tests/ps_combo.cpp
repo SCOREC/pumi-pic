@@ -140,25 +140,27 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
     auto nums = ptcls->template get<1>();
     auto lint = ptcls->template get<2>();
 
-    std::cout << "dbls rank " << dbls.getRank() << "\n";
-    std::cout << "dbls extent0 " << dbls.template getExtent<0>() << "\n";
+    assert(dbls.getRank() == 1);
+    const auto dblsExtent = dbls.template getExtent<0>();
+    assert(nums.getRank() == 1);
+    const auto numsExtent = nums.template getExtent<0>();
 
     auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
       if (mask) {
-        for (int i = 0; i < 17; i++) {
+        for (int i = 0; i < dblsExtent; i++) {
           dbls(p,i) = 10.3;
           dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
         }
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < numsExtent; i++) {
           nums(p,i) = 4*p + i;
         }
         lint(p) = p;
       }
       else {
-        for (int i = 0; i < 17; i++) {
+        for (int i = 0; i < dblsExtent; i++) {
           dbls(p,i) = 0;
         }
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < numsExtent; i++) {
           nums(p,i) = -1;
         }
         lint(p) = 0;

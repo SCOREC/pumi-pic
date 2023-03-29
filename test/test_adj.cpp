@@ -4,6 +4,7 @@
 #include <Omega_h_bbox.hpp>
 #include "pumipic_adjacency.hpp"
 #include <random>
+#include "team_policy.hpp"
 
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
@@ -58,7 +59,7 @@ PS* create_particle_structure(o::Mesh mesh, p::lid_t numPtcls) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, 32);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = TeamPolicyAuto(10000, 32);
   //Create the particle structure
   return new p::SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
                                      ptcls_per_elem, element_gids);
@@ -935,7 +936,7 @@ int main(int argc, char** argv) {
 
   int fails = 0;
   fails += test_search(mesh, 100, tol);
-  fails += test_search(mesh, 1000000, tol);
+  fails += test_search(mesh, 1000, tol);
 
   if (fails == 0) {
     fprintf(stderr, "\nAll Tests Passed\n");

@@ -150,9 +150,11 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
 
     auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
       if (mask) {
-        for (int i = 0; i < dblsExtent; i++) {
+        for (int i = 0; i < dblsExtent; i++)
           dbls(p,i) = 10.3;
-        }
+        for (int i = 0; i < numsExtent; i++)
+          nums(p,i) = 42;
+        lint(p) = 1337;
       }
     };
 

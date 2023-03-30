@@ -151,9 +151,6 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
       if (mask) {
         for (int i = 0; i < dblsExtent; i++)
           dbls(p,i) = 10.3;
-        for (int i = 0; i < numsExtent; i++)
-          nums(p,i) = 42;
-        lint(p) = 1337;
       }
     };
 

@@ -7,7 +7,8 @@
 
 const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n"
 "[-t particleDataSize=small|medium|large] [-p percentMovedRebuild]"
-"[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]";
+"[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]"
+"[-pi pushIterations] [-ri rebuildIterations]";
 
 typedef std::map<int,std::string> mis;
 const mis StructIdxToString = {{0, "SCS"}, {1, "CSR"}, {2, "CabM"}, {3, "DPS"}};
@@ -25,6 +26,11 @@ void printHelpAndExit() {
   Kokkos::finalize();
   exit(EXIT_FAILURE);
 }
+
+struct TestOptions {
+  int pushIterations;
+  int rebuildIterations;
+};
 
 struct PSOptions {
   std::string size;
@@ -94,7 +100,7 @@ createParticleStruct(PSOptions& options, kkLidView ppe, kkLidView ptcl_elems, kk
 }
 
 template<typename DataTypes>
-void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
+void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) {
   int comm_rank; // get process rank
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   int comm_size; // get number of processes
@@ -117,11 +123,8 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
   std::string name;
   auto ptcls = createParticleStruct<DataTypes>(psOpts, ppe, ptcl_elems, element_gids);
 
-  const int PS_ITERS = 1;
-  const int ITERS = 1;
-
   if (!comm_rank)
-    printf("Performing %d iterations of push on each structure\n", PS_ITERS);
+    printf("Performing %d iterations of push on each structure\n", tOpts.pushIterations);
 
   /* Perform push & rebuild on the particle structures */
   if (!comm_rank)
@@ -134,7 +137,7 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
       parentElmData(e) = std::sqrt((double)e) * e;
       });
 
-  for (int i = 0; i < PS_ITERS; ++i) {
+  for (int i = 0; i < tOpts.pushIterations; ++i) {
     /* Begin Push Setup */
     auto dbls = ptcls->template get<0>();
     auto nums = ptcls->template get<1>();
@@ -149,21 +152,7 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
       if (mask) {
         for (int i = 0; i < dblsExtent; i++) {
           dbls(p,i) = 10.3;
-          dbls(p,i) = dbls(p,i) * dbls(p,i) * dbls(p,i) / std::sqrt((double)p) / std::sqrt((double)e) + parentElmData(e);
         }
-        for (int i = 0; i < numsExtent; i++) {
-          nums(p,i) = 4*p + i;
-        }
-        lint(p) = p;
-      }
-      else {
-        for (int i = 0; i < dblsExtent; i++) {
-          dbls(p,i) = 0;
-        }
-        for (int i = 0; i < numsExtent; i++) {
-          nums(p,i) = -1;
-        }
-        lint(p) = 0;
       }
     };
 
@@ -190,11 +179,11 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts) {
   pumipic::hostToDevice(other_ranks_d, other_ranks);
 
   if (!comm_rank)
-    printf("Performing %d iterations of migrate/rebuild on each structure\n", ITERS);
+    printf("Performing %d iterations of migrate/rebuild on each structure\n", tOpts.rebuildIterations);
 
   if (!comm_rank)
     printf("Beginning migrate on structure %s\n", name.c_str());
-  for (int i = 0; i < ITERS; ++i) {
+  for (int i = 0; i < tOpts.rebuildIterations; ++i) {
     kkLidView new_elms("new elems", ptcls->capacity());
     Kokkos::Timer t;
     redistribute_particles(ptcls, psOpts.strat, migrOpts.percentMoved, new_elms);
@@ -237,12 +226,14 @@ void printTestCommand(int argc, char* argv[]) {
 }
 
 void readOptions(int argc, char* argv[],
-    MigrationOptions& migrOpts, PSOptions& psOpts) {
+    MigrationOptions& migrOpts, PSOptions& psOpts, TestOptions& tOpts) {
   // Default values if not specified on command line
   migrOpts.percentMoved = 0.5;
   migrOpts.percentMovedProcess = 0.1;
   psOpts.team_size = 32;
   psOpts.vert_slice = 1024;
+  tOpts.pushIterations=100;
+  tOpts.rebuildIterations=100;
 
   /* Check commandline arguments */
   // Required arguments
@@ -278,7 +269,15 @@ void readOptions(int argc, char* argv[],
     }
     else if (std::string(argv[i]) == "--optimal") {
       psOpts.optimal = true;
-      i--;
+      i--; //there is no second argument to this option
+    }
+    // -pi = push iterations
+    else if (std::string(argv[i]) == "-pi") {
+      tOpts.pushIterations = atoi(argv[i+1]);
+    }
+    // -ri = rebuild iterations
+    else if (std::string(argv[i]) == "-ri") {
+      tOpts.rebuildIterations = atoi(argv[i+1]);
     }
     else {
       fprintf(stderr, "Illegal argument: %s\n", argv[i]);
@@ -293,7 +292,8 @@ int main(int argc, char* argv[]) {
 
   MigrationOptions migrOpts;
   PSOptions psOpts;
-  readOptions(argc,argv,migrOpts,psOpts);
+  TestOptions tOpts;
+  readOptions(argc,argv,migrOpts,psOpts,tOpts);
 
   printTestCommand(argc, argv);
 
@@ -302,11 +302,11 @@ int main(int argc, char* argv[]) {
   pumipic::enable_prebarrier();
 
   if(psOpts.size == "small") {
-    runTest<PerfTypes160>(psOpts,migrOpts);
+    runTest<PerfTypes160>(psOpts,migrOpts,tOpts);
   } else if(psOpts.size == "medium") {
-    runTest<PerfTypes264>(psOpts,migrOpts);
+    runTest<PerfTypes264>(psOpts,migrOpts,tOpts);
   } else if(psOpts.size == "large") {
-    runTest<PerfTypes504>(psOpts,migrOpts);
+    runTest<PerfTypes504>(psOpts,migrOpts,tOpts);
   } else {
     fprintf(stderr, "Illegal argument for size: %s\n", psOpts.size.c_str());
     printHelpAndExit();

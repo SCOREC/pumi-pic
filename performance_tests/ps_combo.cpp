@@ -8,7 +8,7 @@
 const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n"
 "[-t particleDataSize=small|medium|large] [-p percentMovedRebuild]"
 "[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]"
-"[-pi pushIterations] [-ri rebuildIterations]";
+"[-mwi memberWriteIterations] [-ri rebuildIterations]";
 
 typedef std::map<int,std::string> mis;
 const mis StructIdxToString = {{0, "SCS"}, {1, "CSR"}, {2, "CabM"}, {3, "DPS"}};
@@ -28,7 +28,7 @@ void printHelpAndExit() {
 }
 
 struct TestOptions {
-  int pushIterations;
+  int memberWriteIterations;
   int rebuildIterations;
 };
 
@@ -124,21 +124,20 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
   auto ptcls = createParticleStruct<DataTypes>(psOpts, ppe, ptcl_elems, element_gids);
 
   if (!comm_rank)
-    printf("Performing %d iterations of push on each structure\n", tOpts.pushIterations);
+    printf("Performing %d iterations of member write on each structure\n", tOpts.memberWriteIterations);
 
-  /* Perform push & rebuild on the particle structures */
+  /* Perform member write test & rebuild on the particle structures */
   if (!comm_rank)
-    printf("Beginning push on structure %s\n", name.c_str());
+    printf("Beginning member write test on structure %s\n", name.c_str());
 
-  // Per element data to access in pseudoPush
+  // Per element data to access in member write test
   Kokkos::View<double*> parentElmData("parentElmData", ptcls->nElems());
   Kokkos::parallel_for("parent_elem_data", parentElmData.size(),
       KOKKOS_LAMBDA(const int& e){
       parentElmData(e) = std::sqrt((double)e) * e;
       });
 
-  for (int i = 0; i < tOpts.pushIterations; ++i) {
-    /* Begin Push Setup */
+  for (int i = 0; i < tOpts.memberWriteIterations; ++i) {
     auto dbls = ptcls->template get<0>();
     auto nums = ptcls->template get<1>();
     auto lint = ptcls->template get<2>();
@@ -148,7 +147,7 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
     assert(nums.getRank() == 1);
     const auto numsExtent = nums.template getExtent<0>();
 
-    auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+    auto memberWrite = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
       if (mask) {
         for (int i = 0; i < dblsExtent; i++)
           dbls(p,i) = 10.3;
@@ -159,13 +158,11 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
     };
 
     Kokkos::fence();
-    Kokkos::Timer pseudo_push_timer;
-    /* Begin push operations */
-    ps::parallel_for(ptcls,pseudoPush,"pseudo push");
+    Kokkos::Timer member_write_timer;
+    ps::parallel_for(ptcls,memberWrite,"memberWrite");
     Kokkos::fence();
-    /* End push */
-    float pseudo_push_time = pseudo_push_timer.seconds();
-    pumipic::RecordTime(name+" pseudo-push", pseudo_push_time);
+    float member_write_time = member_write_timer.seconds();
+    pumipic::RecordTime(name+" member-write", member_write_time);
   }
 
   int seed = 0; // set seed for uniformly random processes
@@ -234,7 +231,7 @@ void readOptions(int argc, char* argv[],
   migrOpts.percentMovedProcess = 0.1;
   psOpts.team_size = 32;
   psOpts.vert_slice = 1024;
-  tOpts.pushIterations=100;
+  tOpts.memberWriteIterations=100;
   tOpts.rebuildIterations=100;
 
   /* Check commandline arguments */
@@ -273,9 +270,9 @@ void readOptions(int argc, char* argv[],
       psOpts.optimal = true;
       i--; //there is no second argument to this option
     }
-    // -pi = push iterations
-    else if (std::string(argv[i]) == "-pi") {
-      tOpts.pushIterations = atoi(argv[i+1]);
+    // -mwi = member write iterations
+    else if (std::string(argv[i]) == "-mwi") {
+      tOpts.memberWriteIterations = atoi(argv[i+1]);
     }
     // -ri = rebuild iterations
     else if (std::string(argv[i]) == "-ri") {

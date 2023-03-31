@@ -137,29 +137,45 @@ void runTest(PSOptions& psOpts, MigrationOptions& migrOpts, TestOptions& tOpts) 
       parentElmData(e) = std::sqrt((double)e) * e;
       });
 
+  auto dbls = ptcls->template get<0>();
+  auto nums = ptcls->template get<1>();
+  auto lint = ptcls->template get<2>();
+
+  assert(dbls.getRank() == 1);
+  const auto dblsExtent = dbls.template getExtent<0>();
+  assert(nums.getRank() == 1);
+  const auto numsExtent = nums.template getExtent<0>();
+
+  auto memberWriteDbls = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+    if (mask) {
+      for (int i = 0; i < dblsExtent; i++)
+        dbls(p,i) = 10.3;
+    }
+  };
+
   for (int i = 0; i < tOpts.memberWriteIterations; ++i) {
-    auto dbls = ptcls->template get<0>();
-    auto nums = ptcls->template get<1>();
-    auto lint = ptcls->template get<2>();
-
-    assert(dbls.getRank() == 1);
-    const auto dblsExtent = dbls.template getExtent<0>();
-    assert(nums.getRank() == 1);
-    const auto numsExtent = nums.template getExtent<0>();
-
-    auto memberWrite = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
-      if (mask) {
-        for (int i = 0; i < dblsExtent; i++)
-          dbls(p,i) = 10.3;
-      }
-    };
-
     Kokkos::fence();
-    Kokkos::Timer member_write_timer;
-    ps::parallel_for(ptcls,memberWrite,"memberWrite");
+    Kokkos::Timer memberWriteDbls_timer;
+    ps::parallel_for(ptcls,memberWriteDbls,"memberWriteDbls");
     Kokkos::fence();
-    float member_write_time = member_write_timer.seconds();
-    pumipic::RecordTime(name+" member-write", member_write_time);
+    pumipic::RecordTime(name+" member-write-dbls", memberWriteDbls_timer.seconds());
+  }
+
+  auto memberWriteDblsAndInts = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+    if (mask) {
+      for (int i = 0; i < dblsExtent; i++)
+        dbls(p,i) = 10.3;
+      for (int i = 0; i < numsExtent; i++)
+        nums(p,i) = 42;
+    }
+  };
+
+  for (int i = 0; i < tOpts.memberWriteIterations; ++i) {
+    Kokkos::fence();
+    Kokkos::Timer memberWriteDblsAndInts_timer;
+    ps::parallel_for(ptcls,memberWriteDblsAndInts,"memberWriteDblsAndInts");
+    Kokkos::fence();
+    pumipic::RecordTime(name+" member-write-dblsAndInts", memberWriteDblsAndInts_timer.seconds());
   }
 
   int seed = 0; // set seed for uniformly random processes

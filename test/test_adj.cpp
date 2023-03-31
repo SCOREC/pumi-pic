@@ -936,7 +936,11 @@ int main(int argc, char** argv) {
 
   int fails = 0;
   fails += test_search(mesh, 100, tol);
+#ifdef PP_USE_CUDA
+  fails += test_search(mesh, 1000000, tol);
+#else
   fails += test_search(mesh, 1000, tol);
+#endif
 
   if (fails == 0) {
     fprintf(stderr, "\nAll Tests Passed\n");

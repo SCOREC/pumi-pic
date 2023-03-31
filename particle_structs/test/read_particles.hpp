@@ -41,7 +41,7 @@ void readParticles(char* particle_file, int& num_elems, int& num_ptcls,
   lid_t* pElems_h = new lid_t[num_ptcls];
   int* pIds = new int[num_ptcls];
   Vector3* val1s = new Vector3[num_ptcls];
-  bool* val2s = new bool[num_ptcls];
+  short* val2s = new short[num_ptcls];
   int* val3s = new int[num_ptcls];
   for (int i = 0; i < num_ptcls; ++i) {
     in_str >> pElems_h[i] >> pIds[i];

@@ -6,7 +6,7 @@
 #include <string>
 
 const char* usage = "Usage argument: ./ps_combo160 num_elms num_ptcls distribution structure_type\n"
-"[-t particleDataSize=small|medium|large] [-p percentMovedRebuild]"
+"[-t particleDataSize=tiny|small|medium|large] [-p percentMovedRebuild]"
 "[-pp percentMovedMigrate] [-s team_size] [-v vertical_slicing] [--optimal]"
 "[-mwi memberWriteIterations] [-ri rebuildIterations]";
 
@@ -313,7 +313,9 @@ int main(int argc, char* argv[]) {
   pumipic::SetTimingVerbosity(0);
   pumipic::enable_prebarrier();
 
-  if(psOpts.size == "small") {
+  if(psOpts.size == "tiny") {
+    runTest<PerfTypes48>(psOpts,migrOpts,tOpts);
+  } else if(psOpts.size == "small") {
     runTest<PerfTypes160>(psOpts,migrOpts,tOpts);
   } else if(psOpts.size == "medium") {
     runTest<PerfTypes264>(psOpts,migrOpts,tOpts);

@@ -303,7 +303,9 @@ int testCopy(const char* name, PS* structure) {
   }
   //Copy particle structure back to the device
   PS* device_structure = ps::copy<DeviceSpace>(host_structure);
+#ifdef PP_USE_CUDA
   delete host_structure;
+#endif
   if (device_structure->nElems() != structure->nElems()) {
     fprintf(stderr, "[ERROR] Test %s: Failed to copy nElems() back to device on rank %d\n",
             name, comm_rank);
@@ -363,7 +365,9 @@ int testCopy(const char* name, PS* structure) {
             name);
     ++fails;
   }
+#ifdef PP_USE_CUDA
   delete device_structure;
+#endif
   return fails;
 }
 

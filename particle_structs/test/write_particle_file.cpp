@@ -51,9 +51,17 @@ int main(int argc, char* argv[]) {
     delete [] pElems;
 
     auto pids = ps::getMemberView<Types, 0>(particle_info);
-    Kokkos::parallel_for(num_ptcls, KOKKOS_LAMBDA(const int& i) {
-        pids(i) = i;
-      });
+    auto val1 = ps::getMemberView<Types, 1>(particle_info);
+    auto val2 = ps::getMemberView<Types, 2>(particle_info);
+    auto val3 = ps::getMemberView<Types, 3>(particle_info);
+    Kokkos::parallel_for(num_ptcls, KOKKOS_LAMBDA(const int &i) {
+      pids(i) = i;
+      for (int j = 0; j < 3; ++j) {
+        val1(i,j) = 0;
+      }
+      val2(i) = 0;
+      val3(i) = 0;
+    });
 
     char filename[256];
     sprintf(filename, "%s_%d.ptl", argv[5], comm_rank);

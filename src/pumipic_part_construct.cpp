@@ -63,8 +63,8 @@ namespace pumipic {
     }
     is_full_mesh = false;
     // **********Determine safe zone and ghost region**************** //
-    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
-    Omega_h::Write<Omega_h::LO> has_part(comm_size);
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 0);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size, 0);
     int bridge_dim = 0;
     bfsBufferLayers(mesh, bridge_dim, comm, safe_layers, ghost_layers, is_safe,
                     owner, has_part);

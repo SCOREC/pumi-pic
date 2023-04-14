@@ -149,14 +149,22 @@ namespace pumipic {
                  View ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
+      //Kokkos::View<int*, Kokkos::DefaultExecutionSpace> hasFailed(1);
+      MemberTypeView<int, Device> hasFailed(1);
       int size = dst.extent(0);
       Kokkos::parallel_for(ps_indices.size(), KOKKOS_LAMBDA(const int& i) {
         const int index = ps_indices(i);
         if (index >= size || index < 0) {
           printf("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
+	  hasFailed(0) = 1;
         }
         CopyViewToView<T,Device>(dst, index, src, i);
       });
+      auto hasFailed_h = deviceToHost(hasFailed);
+      if( hasFailed_h(0) ) {
+	fprintf(stderr, "[ERROR] index out of range in view-to-view copy\n");
+	exit(EXIT_FAILURE);
+      }
       CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);
     }
   };

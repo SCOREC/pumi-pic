@@ -142,8 +142,12 @@ namespace pumipic {
     // Add new particles to counts
     Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t new_elem = new_particle_elements(i);
+        if (new_elem != -1) {
+	  //count error
+	}
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
       });
+    //TODO exit if error count != 0
 
     //Reduce the count of particles
     lid_t activePtcls;

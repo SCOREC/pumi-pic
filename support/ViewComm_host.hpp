@@ -30,10 +30,16 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                         int sender, int tag, MPI_Comm comm, MPI_Request* req) {
+  ViewT new_view("irecv_view", size);
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  return MPI_Irecv(view.data() + offset, size*size_per_entry,
-                   MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                   sender, tag, comm, req);
+  typename ViewT::HostMirror view_host = create_mirror_view(new_view);
+  int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
+                      MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                      sender, tag, comm, req);
+  Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
+    copyViewToView(view,i+offset, new_view, i);
+  });
+  return ret;
 }
 
 //Wait

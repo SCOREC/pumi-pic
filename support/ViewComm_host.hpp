@@ -2,6 +2,7 @@
 template <typename Space> using IsHost =
   typename std::enable_if<Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                      Kokkos::HostSpace>::accessible, int>::type;
+
 //Send
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
@@ -25,13 +26,12 @@ template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
                                         int dest, int tag, MPI_Comm comm, MPI_Request* req) {
   auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
-  auto view_host = deviceToHost(subview);
-  int ret = MPI_Isend(view_host.data(), view_host.size(),
+  int ret = MPI_Isend(subview.data(), subview.size(),
                       MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
                       tag, comm, req);
   // Noop that will keep the view_host around until the lambda is removed
   get_map()[req] = [=](){
-    (void)view_host;
+    (void)subview;
   };
   return ret;
 }
@@ -42,8 +42,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                         int sender, int tag, MPI_Comm comm, MPI_Request* req) {
   ViewT new_view("irecv_view", size);
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  typename ViewT::HostMirror view_host = create_mirror_view(new_view);
-  int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
+  int ret = MPI_Irecv(new_view.data(), size * size_per_entry,
                       MpiType<BT<ViewType<ViewT> > >::mpitype(),
                       sender, tag, comm, req);
   get_map()[req] = [=](){
@@ -79,6 +78,7 @@ IsHost<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats
   }
   return ret;
 }
+
 //Alltoall
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,

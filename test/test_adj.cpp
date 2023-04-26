@@ -939,7 +939,7 @@ int main(int argc, char** argv) {
 #ifdef PP_USE_CUDA
   fails += test_search(mesh, 1000000, tol);
 #else
-  fails += test_search(mesh, 1000, tol);
+  fails += test_search(mesh, 100000, tol);
 #endif
 
   if (fails == 0) {

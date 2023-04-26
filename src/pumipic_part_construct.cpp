@@ -339,8 +339,9 @@ namespace {
       }
       ++(vals[own]);
     }
-    OMEGA_H_DEVICE void join(value_type update,
-                             const value_type input) const {
+    OMEGA_H_DEVICE void join(volatile value_type update,
+                             const volatile value_type input) const
+    {
       for(int i = 0; i < value_count; ++i) {
         update[i] += input[i];
       }

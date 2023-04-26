@@ -92,7 +92,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
                                             ViewT recv, int recv_size,
-                                            MPI_Comm comm, MPI_Request *request) {
+                                            MPI_Comm comm, MPI_Request* request) {
   return MPI_Ialltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        comm, request);

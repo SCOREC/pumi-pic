@@ -168,7 +168,7 @@ namespace pumipic {
     //t is the distance the intersection point is along the particle path
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
-    closeness = std::max(std::max(std::min(fabs(u), fabs(1 - u)), std::min(fabs(v), fabs(1 - v))), std::min(fabs(u + v), fabs(1 - u - v)));
+    closeness = max(max(min(fabs(u), fabs(1 - u)), min(fabs(v), fabs(1 - v))), min(fabs(u + v), fabs(1 - u - v)));
     return  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
   }
 

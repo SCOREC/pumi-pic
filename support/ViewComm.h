@@ -317,8 +317,6 @@ namespace pumipic {
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
   Irecv_Map& get_map();
 
-  // Function to print out compile/runtime checks of OpenMPI cuda aware support
-  bool checkCudaAwareMPI();
 
 #include "ViewComm_host.hpp"
 

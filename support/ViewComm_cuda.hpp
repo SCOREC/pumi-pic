@@ -12,10 +12,7 @@
 #define PS_CUDA_AWARE_MPI
 #endif
 
-  // Function to print out compile/runtime checks of OpenMPI cuda aware support
-  bool checkCudaAwareMPI();
-
-  // Send
+//Send
   template <typename ViewT>
   IsCuda<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
                                          int dest, int tag, MPI_Comm comm) {

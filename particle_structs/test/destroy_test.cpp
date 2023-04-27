@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 void getCudaMemInfo(size_t* free, size_t* total)
 {
 #ifdef PP_USE_CUDA
-  cudaMemGetInfo(&free, &total);
+  cudaMemGetInfo(free, total);
 #endif
 }
 

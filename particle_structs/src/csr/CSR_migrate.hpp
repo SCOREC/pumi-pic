@@ -189,7 +189,8 @@ namespace pumipic {
     auto element_gid_to_lid_local = element_gid_to_lid;
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
-        const lid_t index = element_gid_to_lid_local.find(gid);
+        lid_t index = element_gid_to_lid_local.find(gid);
+        if (index < 0) index = 0;
         recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
 

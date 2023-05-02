@@ -311,13 +311,8 @@ const char* distribute_name(int strat) {
 }
 
 bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipic::gid_t* gids) {
-  //For now only building a ring of elements
-  //Assumes the number of elements on each process is the same
-  int starting_index = (ne-1) * comm_rank;
   for (int i = 0; i < ne; ++i)
-    gids[i] = starting_index+i;
-  if (comm_rank == comm_size-1 && comm_size != 1 && ne > 0)
-    gids[ne-1] = 0;
+    gids[i] = i;
   return true;
 }
 

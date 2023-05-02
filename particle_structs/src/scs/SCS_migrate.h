@@ -187,10 +187,10 @@ namespace pumipic {
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         lid_t index = element_gid_to_lid_local.find(gid);
-        if (element_gid_to_lid_local.valid_at(index))
-          recv_element(i) = element_gid_to_lid_local.value_at(index);
-        else 
-          recv_element(i) = 0;
+#ifndef NDEBUG
+        assert(element_gid_to_lid_local.valid_at(index));
+#endif
+        recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
 
     /********** Set particles that were sent to non existent on this process *********/

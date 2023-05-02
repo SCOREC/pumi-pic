@@ -52,7 +52,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
 
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);
@@ -100,7 +100,7 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
   
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);
@@ -151,7 +151,7 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
   
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);

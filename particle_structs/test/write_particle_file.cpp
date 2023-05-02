@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
 
   {
     ps::gid_t* gids = new ps::gid_t[num_elems];
-    distribute_elements(num_elems, elem_strat, comm_rank, comm_size, gids);
+    distribute_elements(num_elems, elem_strat, gids);
 
     int* ppe = new int[num_elems];
     std::vector<int>* ids = new std::vector<int>[num_elems];

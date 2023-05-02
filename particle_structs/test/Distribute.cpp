@@ -310,7 +310,7 @@ const char* distribute_name(int strat) {
   }
 }
 
-bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipic::gid_t* gids) {
+bool distribute_elements(int ne, int strat, pumipic::gid_t* gids) {
   for (int i = 0; i < ne; ++i)
     gids[i] = i;
   return true;

@@ -1,3 +1,4 @@
+#pragma once
 
 Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> TeamPolicyAuto(int league_size, int team_size)
 {

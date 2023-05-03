@@ -59,7 +59,7 @@ PS* create_particle_structure(o::Mesh mesh, p::lid_t numPtcls) {
   //are reasonable initial settings for OpenMP.
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = TeamPolicyAuto(10000, 32);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = pumipic::TeamPolicyAuto(10000, 32);
   //Create the particle structure
   return new p::SellCSigma<Particle>(policy, sigma, V, ne, actualParticles,
                                      ptcls_per_elem, element_gids);

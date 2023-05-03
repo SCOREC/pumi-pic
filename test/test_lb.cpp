@@ -158,7 +158,7 @@ int testBalancePS(pumipic::Mesh& picparts, pumipic::ParticleBalancer& balancer) 
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   const int C = 32;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = TeamPolicyAuto(10000, C);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = pumipic::TeamPolicyAuto(10000, C);
 
   PS* ptcls = new pumipic::SellCSigma<Particle>(policy, sigma, V, picparts->nelems(),
                                                 num_ptcls, ptcls_per_elem, element_gids);

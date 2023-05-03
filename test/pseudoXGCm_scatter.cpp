@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
 
   const int sigma = INT_MAX; // full sorting
   const int V = 32;
-  Kokkos::TeamPolicy<ExeSpace> policy = TeamPolicyAuto(10000, 32);
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(10000, 32);
   //Create the particle structure
   PS* ptcls = new SellCSigma<Particle>(policy, sigma, V, ne, numPtcls,
                                        ptcls_per_elem, element_gids);

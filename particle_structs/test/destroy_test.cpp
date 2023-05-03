@@ -58,7 +58,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po = TeamPolicyAuto(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
   
   // create and destroy structure
   size_t free, total;
@@ -106,7 +106,7 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po = TeamPolicyAuto(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
 
   // check rebuild doesn't allocate extra memory
   PS* ptcls;
@@ -157,7 +157,7 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po = TeamPolicyAuto(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
 
   // check rebuild doesn't allocate extra memory
   PS* ptcls;

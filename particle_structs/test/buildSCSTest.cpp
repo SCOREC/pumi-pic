@@ -48,7 +48,7 @@ bool defaultTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView e
   printf("\nBeginning DefaultTest\n");
   int sigma = INT_MAX;
   int V = 2;
-  Kokkos::TeamPolicy<exe_space> po = TeamPolicyAuto(4, 4);
+  Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(4, 4);
   SellCSigma<Type, exe_space>* scs =
     new SellCSigma<Type, exe_space>(po, sigma, V, ne, np, ptcls_per_elem, element_gids);
 
@@ -76,7 +76,7 @@ bool noSortTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
   printf("\nBeginning NoSort Test\n");
   int sigma = 1;
   int V = 2;
-  Kokkos::TeamPolicy<exe_space> po = TeamPolicyAuto(4, 4);
+  Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(4, 4);
   SellCSigma<Type, exe_space>* scs =
     new SellCSigma<Type, exe_space>(po, sigma, V, ne, np, ptcls_per_elem, element_gids);
 
@@ -104,7 +104,7 @@ bool largeCTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
   printf("\nBeginning Large C/V Test\n");
   int sigma = INT_MAX;
   int V = 1024;
-  Kokkos::TeamPolicy<exe_space> po = TeamPolicyAuto(4, 32);
+  Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(4, 32);
   SellCSigma<Type, exe_space>* scs =
     new SellCSigma<Type, exe_space>(po, sigma, V, ne, np, ptcls_per_elem, element_gids);
 

@@ -2,32 +2,29 @@
 template <typename Space> using IsHost =
   typename std::enable_if<Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                      Kokkos::HostSpace>::accessible, int>::type;
-
 //Send
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
                                        int dest, int tag, MPI_Comm comm) {
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  return MPI_Send(view.data() + offset, size * size_per_entry,
+  return MPI_Send(view.data() + offset, size*size_per_entry,
                   MpiType<BT<ViewType<ViewT> > >::mpitype(), dest, tag, comm);
 }
-
 //Recv
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
                                        int sender, int tag, MPI_Comm comm) {
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  return MPI_Recv(view.data() + offset, size * size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
+  return MPI_Recv(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                   sender, tag, comm, MPI_STATUS_IGNORE);
 }
-
 //Isend
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
                                         int dest, int tag, MPI_Comm comm, MPI_Request* req) {
 #ifdef PP_USE_CUDA
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  return MPI_Isend(view.data() + offset, size * size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
+  return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                    dest, tag, comm, req);
 #else
   auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
@@ -41,14 +38,13 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
   return ret;
 #endif
 }
-
 //Irecv
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                         int sender, int tag, MPI_Comm comm, MPI_Request* req) {
 #ifdef PP_USE_CUDA
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
-  return MPI_Irecv(view.data() + offset, size * size_per_entry,
+  return MPI_Irecv(view.data() + offset, size*size_per_entry,
                    MpiType<BT<ViewType<ViewT> > >::mpitype(),
                    sender, tag, comm, req);
 #else
@@ -99,7 +95,6 @@ IsHost<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats
   return ret;
 #endif
 }
-
 //Alltoall
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
@@ -126,6 +121,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int c
   return MPI_Reduce(send_view.data(), recv_view.data(), count,
                     MpiType<BT<ViewType<ViewT> > >::mpitype(),
                     op, root, comm);
+
 }
 
 //allreduce

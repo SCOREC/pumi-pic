@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
-#include <cmath>
+#include <cmath> // trunc, log10
 namespace {
   int verbosity = 0;
   int enable_timing = 0;

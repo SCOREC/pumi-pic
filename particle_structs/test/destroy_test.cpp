@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
   return total_fails;
 }
 
-void getCudaMemInfo(size_t* free, size_t* total)
+void getMemUsage(size_t* free, size_t* total)
 {
 #ifdef PP_USE_CUDA
   cudaMemGetInfo(free, total);
@@ -68,7 +68,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   
   // create and destroy structure
   size_t free, total;
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   PS* ptcls;
@@ -87,7 +87,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
 
   delete ptcls;
 
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s has allocated too much memory\n", structure_names[structure]);
@@ -131,12 +131,12 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   PS::kkLidView new_element("new_element", ptcls->capacity());
   
   size_t free, total;
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   ptcls->rebuild(new_element);
   
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s::rebuild has allocated too much memory\n", structure_names[structure]);
@@ -191,12 +191,12 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
     });
   
   size_t free, total;
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   ptcls->migrate(new_element, new_process);
 
-  getCudaMemInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s::migrate has allocated too much memory\n", structure_names[structure]);

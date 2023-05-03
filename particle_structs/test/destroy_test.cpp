@@ -3,6 +3,7 @@
 #include "Distribute.h"
 #include <mpi.h>
 #include "team_policy.hpp"
+#include "ppMemUsage.hpp"
 
 const char* structure_names[4] = { "SCS", "CSR", "CabM", "DPS" };
 int comm_rank, comm_size;
@@ -39,13 +40,6 @@ int main(int argc, char* argv[]) {
   if (!comm_rank && total_fails == 0)
     printf("All tests passed\n");
   return total_fails;
-}
-
-void getMemUsage(size_t* free, size_t* total)
-{
-#ifdef PP_USE_CUDA
-  cudaMemGetInfo(free, total);
-#endif
 }
 
 bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {

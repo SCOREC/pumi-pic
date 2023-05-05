@@ -413,6 +413,9 @@ int iSendRecvWaitAllTest(const char* name) {
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
     });
+    delete [] statuses;
+    delete [] send_requests;
+    delete [] recv_requests;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);

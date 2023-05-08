@@ -139,6 +139,20 @@ namespace pumipic {
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
     };
     parallel_for(countNewParticles, "countNewParticles");
+
+    // check for new particles that are inactive (the parent element is set to -1)
+    kkLidView hasInactivePtcls("hasInactivePtcsl", 1);
+    Kokkos::parallel_for("checkForInactivePtcls", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
+      const lid_t new_elem = new_particle_elements(i);
+      if (new_elem == -1) hasInactivePtcls(0) = 1;
+    });
+    auto hasInactivePtcls_h = deviceToHost(hasInactivePtcls);
+    if( hasInactivePtcls_h(0) ) {
+      fprintf(stderr, "[ERROR] there are new particles being added that are marked"
+                      "as inactive (element id set to -1)\n");
+      exit(EXIT_FAILURE);
+    }
+
     // Add new particles to counts
     Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t new_elem = new_particle_elements(i);

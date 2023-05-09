@@ -25,6 +25,10 @@ int main(int argc, char* argv[]) {
   int elem_strat = atoi(argv[3]);
   int ptcl_strat = atoi(argv[4]);
 
+  #ifndef PP_USE_CUDA
+  num_ptcls = std::min(num_ptcls, 100000);
+  #endif
+
   {
     ps::gid_t* gids = new ps::gid_t[num_elems];
     distribute_elements(num_elems, elem_strat, gids);

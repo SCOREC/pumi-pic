@@ -196,7 +196,7 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
     fprintf(stderr, "[ERROR] %s::migrate has allocated too much memory\n", structure_names[structure]);
     fails += 1;
   }
-
+  delete [] comm_rank_h;
   delete ptcls;
   return fails;
 }

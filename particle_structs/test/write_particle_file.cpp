@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
     char filename[256];
     sprintf(filename, "%s_%d.ptl", argv[5], comm_rank);
     writeParticles(filename, num_elems, num_ptcls, ppe_k, eGids_k, pElems_k, particle_info);
-
+    ps::destroyViews<Types>(particle_info);
   }
   MPI_Finalize();
   Kokkos::finalize();

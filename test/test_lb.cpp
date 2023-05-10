@@ -174,6 +174,7 @@ int testBalancePS(pumipic::Mesh& picparts, pumipic::ParticleBalancer& balancer) 
   double imb = printImb(ptcls);
   if (imb > 1.5)
     ++fail;
+  delete ptcls;
   return fail;
 }
 

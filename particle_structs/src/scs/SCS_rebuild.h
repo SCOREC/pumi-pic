@@ -135,7 +135,7 @@ namespace pumipic {
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
     auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
       const lid_t new_elem = new_element(particle_id);
-      if (new_elem != -1 && mask)
+      if (mask && new_elem != -1)
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
     };
     parallel_for(countNewParticles, "countNewParticles");
@@ -275,6 +275,8 @@ namespace pumipic {
     if (new_particle_elements.size() > 0)
       CopyViewsToViews<kkLidView, DataTypes>(scs_data_swap, new_particles, new_particle_indices);
     RecordTime(name + " ViewsToViews", time_newPtcls.seconds());
+
+    
 
     //set scs to point to new values
     C_ = new_C;

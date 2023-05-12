@@ -276,8 +276,6 @@ namespace pumipic {
       CopyViewsToViews<kkLidView, DataTypes>(scs_data_swap, new_particles, new_particle_indices);
     RecordTime(name + " ViewsToViews", time_newPtcls.seconds());
 
-    
-
     //set scs to point to new values
     C_ = new_C;
     num_ptcls = new_num_ptcls;

@@ -85,6 +85,7 @@ o::LOs searchAndBuildMap(o::Mesh* mesh, o::Reals element_centroids,
   };
   ps::parallel_for(gyro_ps, createGyroMapping);
   delete gyro_ps;
+  particle_structs::destroyViews<Point>(point_info);
   return o::LOs(gyro_avg_map);
 }
 

@@ -563,6 +563,7 @@ namespace {
     Omega_h::Write<Omega_h::I8> ppClassDim(pp_num_verts);
 
     auto init = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
+      ppClassId[full_ent_id] = 0;
       ppClassDim[full_ent_id] = 0;
     };
     Omega_h::parallel_for(pp_num_verts, init, "init");

@@ -335,7 +335,7 @@ private:
           }
         }
       };
-      Omega_h::parallel_for(ptcls_per_elem.size(), selectParticles, "selectParticles");
+      Omega_h::parallel_for(ptcls_per_elem.size() - 1, selectParticles, "selectParticles");
       Omega_h::Write<Omega_h::LO> finished(1,0);
       auto checkPlan = OMEGA_H_LAMBDA(const int id) {
         if (send_wgts[id] > 0) {

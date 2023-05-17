@@ -151,10 +151,15 @@ namespace pumipic {
       mesh.add_tag(i, "rank_lids", 1, rank_lids);
     }
 
+    for (int i = 0; i < 4; ++i) {
+      num_cores[i] = 0;
+      num_bounds[i] = 0;
+      num_boundaries[i] = 0;
+    }
+
     /***************** Count the number of parts in the picpart ****************/
     num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
-    for (int i = 0; i < dim; ++i)
-      num_cores[i] = 0;
+
     /***************** Count Number of Entities in the PICpart *************/
     //Mark all entities owned by a part with has_part[part] = true as staying
     Omega_h::Write<Omega_h::LO> buf_ents[4];

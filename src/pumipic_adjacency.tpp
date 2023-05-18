@@ -349,8 +349,8 @@ namespace pumipic {
       if( mask > 0 && !ptcl_done[pid] ) {
         auto searchElm = elem_ids[pid];
         assert(lastExit[pid] != -1);
-        const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
-        const auto face_ids = o::gather_down<4>(elmDown, searchElm);
+        const auto tetv2v = o::gather_verts<3>(mesh2verts, searchElm);
+        const auto face_ids = o::gather_down<3>(elmDown, searchElm);
         const o::LO bridge = lastExit[pid];
         const bool exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
@@ -461,10 +461,12 @@ namespace pumipic {
 
     //Finish particles that didn't move
     auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
-      const o::Vector<3> start = makeVector3(pid, x_ps_orig);
-      const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
-      if (o::norm(end - start) < tol)
-        ptcl_done[pid] = 1;
+      if  (mask){
+        const o::Vector<3> start = makeVector3(pid, x_ps_orig);
+        const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
+        if (o::norm(end - start) < tol)
+          ptcl_done[pid] = 1;
+      }
     };
     parallel_for(ptcls, finishUnmoved, "search_finishUnmoved");
     

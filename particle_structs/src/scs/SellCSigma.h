@@ -337,6 +337,8 @@ typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_
 template<class DataTypes, typename MemSpace>
 template <class MSpace>
 SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
+  if (std::is_same<memory_space, typename MSpace::memory_space>::value)
+    return this;
   const auto cmax = maxChunk<MSpace>(C_max);
   Mirror<MSpace>* mirror_copy = new SellCSigma<DataTypes, MSpace>(cmax);
   //Call Particle structures copy

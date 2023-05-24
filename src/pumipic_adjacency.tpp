@@ -340,17 +340,9 @@ namespace pumipic {
                                 o::Write<o::LO> lastExit, o::Bytes side_is_exposed,
                                 bool requireIntersection,
                                 o::Write<o::LO> xFace) {
-    o::LO dim = mesh.dim();
-    const auto bridgeVerts =  mesh.ask_verts_of(dim - 1);
-    const auto mesh2verts = mesh.ask_elem_verts();
-    const auto elmDown = mesh.ask_down(dim, dim - 1).ab2b;
-    const auto coords = mesh.coords();
     auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto searchElm = elem_ids[pid];
         assert(lastExit[pid] != -1);
-        const auto tetv2v = o::gather_verts<3>(mesh2verts, searchElm);
-        const auto face_ids = o::gather_down<3>(elmDown, searchElm);
         const o::LO bridge = lastExit[pid];
         const bool exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;

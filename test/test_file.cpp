@@ -115,7 +115,5 @@ int main(int argc, char** argv) {
   if (!rank) {
     printf("All Tests Passed\n");
   }
-  if (read_picparts.isFullMesh())
-    delete read_picparts.mesh();
   return 0;
 }

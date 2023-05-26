@@ -98,7 +98,7 @@ jobs:
         -DBUILD_TESTING=on
         -DCMAKE_CXX_COMPILER="mpicxx"
         -DCMAKE_C_COMPILER="mpicc"
-        -DCMAKE_INSTALL_PREFIX=build-kokkos/install
+        -DCMAKE_INSTALL_PREFIX=build-kokkos/install/lib64/cmake/Kokkos
         -DKokkos_PREFIX=build-kokkos/install/lib64/cmake/Kokkos
     
     - name: Omega_h Build

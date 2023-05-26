@@ -1,0 +1,30 @@
+name: build-test
+on: push
+
+jobs:
+  buildTest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++]
+        language: ['cpp']
+        
+    steps:
+    
+    - name: Install CMake
+      run: |
+        sudo apt-get update -yq
+        sudo apt-get install -yq cmake
+        cmake --version
+        /usr/bin/cmake --version
+
+    - name: Install mpi
+      run: |
+        sudo apt-get update -yq
+        sudo apt-get install -yq mpich libmpich-dev
+        
+    - name: Kokkos Checkout repo
+      uses: actions/checkout@v2
+      with:
+        repository: kokkos/kokkos
+        path: kokkos

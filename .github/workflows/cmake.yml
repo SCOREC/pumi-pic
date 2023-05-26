@@ -4,6 +4,11 @@ on: push
 jobs:
   buildTest:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       matrix:
         compiler: [g++]
@@ -33,7 +38,6 @@ jobs:
       run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
 
     - name: Kokkos Configure CMake
-      shell: bash
       working-directory: ${{ runner.temp }}/build-kokkos
       run: /usr/bin/cmake $GITHUB_WORKSPACE/kokkos
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
@@ -46,7 +50,6 @@ jobs:
     
     - name: Kokkos Build
       working-directory: ${{ runner.temp }}/build-kokkos
-      shell: bash
       run: |
         /usr/bin/cmake --build . --parallel 2
         /usr/bin/cmake --install .

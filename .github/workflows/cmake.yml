@@ -35,10 +35,10 @@ jobs:
         path: kokkos
 
     - name: Kokkos Create Directory
-      run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
+      run: cmake -E make_directory build-kokkos
 
     - name: Kokkos Configure CMake
-      working-directory: ${{ runner.temp }}/build-kokkos
+      working-directory: build-kokkos
       run: /usr/bin/cmake $GITHUB_WORKSPACE/kokkos
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
         -DKokkos_ENABLE_SERIAL=ON
@@ -46,9 +46,9 @@ jobs:
         -DKokkos_ENABLE_CUDA=off
         -DKokkos_ENABLE_CUDA_LAMBDA=off
         -DKokkos_ENABLE_DEBUG=on
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
+        -DCMAKE_INSTALL_PREFIX=build-kokkos/install
     
     - name: Kokkos Build
-      working-directory: ${{ runner.temp }}/build-kokkos
+      working-directory: build-kokkos
       run: /usr/bin/cmake --build . -j8 --target install
   

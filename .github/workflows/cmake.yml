@@ -38,7 +38,7 @@ jobs:
       run: cmake -E make_directory build-kokkos
 
     - name: Kokkos Configure CMake
-      run: /usr/bin/cmake -S kokkos -B build-kokkos
+      run: cmake -S kokkos -B build-kokkos
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
         -DKokkos_ENABLE_SERIAL=ON
         -DKokkos_ENABLE_OPENMP=off
@@ -48,5 +48,5 @@ jobs:
         -DCMAKE_INSTALL_PREFIX=build-kokkos/install
     
     - name: Kokkos Build
-      run: /usr/bin/cmake --build build-kokkos -j8 --target install
+      run: cmake --build build-kokkos -j8 --target install
   

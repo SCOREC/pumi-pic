@@ -75,4 +75,34 @@ jobs:
     
     - name: EnGPar Build
       run: cmake --build build-engpar -j8 --target install
+
+    # Build Omega_h
+        
+    - name: Omega_h Checkout repo
+      uses: actions/checkout@v3
+      with:
+        repository: sandialabs/omega_h
+        path: omega_h
+
+    - name: Omega_h Create Directory
+      run: cmake -E make_directory build-omega_h
+
+    - name: Omega_h Configure CMake
+      run: cmake -S omega_h -B build-omega_h
+        -DCMAKE_INSTALL_PREFIX=build-omega_h/install
+        -DBUILD_SHARED_LIBS=OFF
+        -DOmega_h_USE_Kokkos=ON
+        -DOmega_h_USE_CUDA=off
+        -DOmega_h_USE_MPI=on
+        -DCMAKE_BUILD_TYPE=Debug
+        -DBUILD_TESTING=on
+        -DCMAKE_CXX_COMPILER=`which mpicxx`
+        -DCMAKE_C_COMPILER=`which mpicc`
+        -DKokkos_PREFIX=build-kokkos/install/lib64/cmake
+    
+    - name: Omega_h Build
+      run: cmake --build build-omega_h -j8 --target install
+
+    - name: Omega_h Test
+      run: ctest --test-dir build-omega_h
   

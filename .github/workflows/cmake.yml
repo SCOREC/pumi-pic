@@ -96,9 +96,9 @@ jobs:
         -DOmega_h_USE_MPI=on
         -DCMAKE_BUILD_TYPE=Debug
         -DBUILD_TESTING=on
-        -DCMAKE_CXX_COMPILER=`which mpicxx`
-        -DCMAKE_C_COMPILER=`which mpicc`
-        -DKokkos_PREFIX=build-kokkos
+        -DCMAKE_CXX_COMPILER="mpicxx"
+        -DCMAKE_C_COMPILER="mpicc"
+        -DKokkos_PREFIX=build-kokkos/lib64/cmake/Kokkos
     
     - name: Omega_h Build
       run: cmake --build build-omega_h -j8 --target install

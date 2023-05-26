@@ -24,7 +24,30 @@ jobs:
         sudo apt-get install -yq mpich libmpich-dev
         
     - name: Kokkos Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         repository: kokkos/kokkos
         path: kokkos
+
+    - name: Kokkos Create Directory
+      run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
+
+    - name: Kokkos Configure CMake
+      shell: bash
+      working-directory: ${{ runner.temp }}/build-kokkos
+      run: /usr/bin/cmake $GITHUB_WORKSPACE/kokkos
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+        -DKokkos_ENABLE_SERIAL=ON
+        -DKokkos_ENABLE_OPENMP=off
+        -DKokkos_ENABLE_CUDA=off
+        -DKokkos_ENABLE_CUDA_LAMBDA=off
+        -DKokkos_ENABLE_DEBUG=on
+        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
+    
+    - name: Kokkos Build
+      working-directory: ${{ runner.temp }}/build-kokkos
+      shell: bash
+      run: |
+        /usr/bin/cmake --build . --parallel 2
+        /usr/bin/cmake --install .
+  

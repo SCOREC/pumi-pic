@@ -50,7 +50,5 @@ jobs:
     
     - name: Kokkos Build
       working-directory: ${{ runner.temp }}/build-kokkos
-      run: |
-        /usr/bin/cmake --build . --parallel 2
-        /usr/bin/cmake --install .
+      run: /usr/bin/cmake --build . -j8 --install .
   

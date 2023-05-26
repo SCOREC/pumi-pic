@@ -27,6 +27,8 @@ jobs:
       run: |
         sudo apt-get update -yq
         sudo apt-get install -yq mpich libmpich-dev
+
+    # Build Kokkos
         
     - name: Kokkos Checkout repo
       uses: actions/checkout@v3
@@ -49,4 +51,28 @@ jobs:
     
     - name: Kokkos Build
       run: cmake --build build-kokkos -j8 --target install
+
+    # Build EnGPar
+        
+    - name: EnGPar Checkout repo
+      uses: actions/checkout@v3
+      with:
+        repository: SCOREC/EnGPar
+        path: engpar
+
+    - name: EnGPar Create Directory
+      run: cmake -E make_directory build-engpar
+
+    - name: EnGPar Configure CMake
+      run: cmake -S engpar -B build-engpar
+        -DCMAKE_INSTALL_PREFIX=build-engpar/install
+        -DCMAKE_C_COMPILER="mpicc"
+        -DCMAKE_CXX_COMPILER="mpicxx"
+        -DCMAKE_CXX_FLAGS="-std=c++11"
+        -DENABLE_PARMETIS=OFF
+        -DENABLE_PUMI=OFF
+        -DIS_TESTING=OFF
+    
+    - name: EnGPar Build
+      run: cmake --build build-engpar -j8 --target install
   

@@ -98,7 +98,7 @@ jobs:
         -DBUILD_TESTING=on
         -DCMAKE_CXX_COMPILER=`which mpicxx`
         -DCMAKE_C_COMPILER=`which mpicc`
-        -DKokkos_PREFIX=build-kokkos/install/lib64/cmake/Kokkos
+        -DKokkos_PREFIX=build-kokkos
     
     - name: Omega_h Build
       run: cmake --build build-omega_h -j8 --target install

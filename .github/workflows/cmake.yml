@@ -40,13 +40,13 @@ jobs:
       run: cmake -E make_directory build-kokkos
 
     - name: Kokkos Configure CMake
-      run: cmake -S kokkos -B build-kokkos  \
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
-        -DCMAKE_INSTALL_PREFIX=build-kokkos/install \
-        -DKokkos_ENABLE_SERIAL=ON \
-        -DKokkos_ENABLE_OPENMP=off  \
-        -DKokkos_ENABLE_CUDA=off  \
-        -DKokkos_ENABLE_CUDA_LAMBDA=off \
+      run: cmake -S kokkos -B build-kokkos
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+        -DCMAKE_INSTALL_PREFIX=build-kokkos/install
+        -DKokkos_ENABLE_SERIAL=ON
+        -DKokkos_ENABLE_OPENMP=off
+        -DKokkos_ENABLE_CUDA=off
+        -DKokkos_ENABLE_CUDA_LAMBDA=off
         -DKokkos_ENABLE_DEBUG=on
     
     - name: Kokkos Build
@@ -65,12 +65,12 @@ jobs:
 
     - name: EnGPar Configure CMake
       run: cmake -S engpar -B build-engpar
-        -DCMAKE_INSTALL_PREFIX=build-engpar/install \
-        -DCMAKE_C_COMPILER="mpicc"  \
-        -DCMAKE_CXX_COMPILER="mpicxx" \
-        -DCMAKE_CXX_FLAGS="-std=c++11"  \
-        -DENABLE_PARMETIS=OFF \
-        -DENABLE_PUMI=OFF \
+        -DCMAKE_INSTALL_PREFIX=build-engpar/install
+        -DCMAKE_C_COMPILER="mpicc"
+        -DCMAKE_CXX_COMPILER="mpicxx"
+        -DCMAKE_CXX_FLAGS="-std=c++11"
+        -DENABLE_PARMETIS=OFF
+        -DENABLE_PUMI=OFF
         -DIS_TESTING=OFF
     
     - name: EnGPar Build
@@ -88,17 +88,17 @@ jobs:
       run: cmake -E make_directory build-omega_h
 
     - name: Omega_h Configure CMake
-      run: cmake -S omega_h -B build-omega_h  \
-        -DCMAKE_INSTALL_PREFIX=build-omega_h/install  \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DOmega_h_USE_Kokkos=ON \
-        -DOmega_h_USE_CUDA=off  \
-        -DOmega_h_USE_MPI=on  \
-        -DCMAKE_BUILD_TYPE=Debug  \
-        -DBUILD_TESTING=on  \
-        -DCMAKE_CXX_COMPILER="mpicxx" \
-        -DCMAKE_C_COMPILER="mpicc"  \
+      run: cmake -S omega_h -B build-omega_h
+        -DCMAKE_INSTALL_PREFIX=build-omega_h/install
         -DCMAKE_PREFIX_PATH=build-kokkos/install/lib/cmake/
+        -DBUILD_SHARED_LIBS=OFF
+        -DOmega_h_USE_Kokkos=ON
+        -DOmega_h_USE_CUDA=off
+        -DOmega_h_USE_MPI=on
+        -DCMAKE_BUILD_TYPE=Debug
+        -DBUILD_TESTING=on
+        -DCMAKE_CXX_COMPILER="mpicxx"
+        -DCMAKE_C_COMPILER="mpicc"
     
     - name: Omega_h Build
       run: cmake --build build-omega_h -j8 --target install

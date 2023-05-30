@@ -88,7 +88,8 @@ jobs:
       run: cmake -E make_directory build-omega_h
 
     - name: Omega_h Configure CMake
-      run: cmake -S omega_h -B build-omega_h
+      working-directory: $GITHUB_WORKSPACE/build-omega_h
+      run: cmake $GITHUB_WORKSPACE/omega_h
         -DCMAKE_INSTALL_PREFIX=build-omega_h/install
         -DCMAKE_PREFIX_PATH=build-kokkos/install/lib/cmake/
         -DBUILD_SHARED_LIBS=OFF

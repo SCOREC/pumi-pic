@@ -41,13 +41,13 @@ jobs:
 
     - name: Kokkos Configure CMake
       run: cmake -S kokkos -B build-kokkos
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
         -DCMAKE_INSTALL_PREFIX=build-kokkos/install
         -DKokkos_ENABLE_SERIAL=ON
         -DKokkos_ENABLE_OPENMP=off
         -DKokkos_ENABLE_CUDA=off
         -DKokkos_ENABLE_CUDA_LAMBDA=off
         -DKokkos_ENABLE_DEBUG=on
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
     
     - name: Kokkos Build
       run: cmake --build build-kokkos -j8 --target install
@@ -88,10 +88,9 @@ jobs:
       run: cmake -E make_directory build-omega_h
 
     - name: Omega_h Configure CMake
-      working-directory: build-omega_h
-      run: cmake ../omega_h
-        -DCMAKE_INSTALL_PREFIX=build-omega_h/install
+      run: cmake -S omega_h -B build-omega_h
         -DKokkos_DIR=build-kokkos/install/lib/cmake/
+        -DCMAKE_INSTALL_PREFIX=build-omega_h/install
         -DBUILD_SHARED_LIBS=OFF
         -DOmega_h_USE_Kokkos=ON
         -DOmega_h_USE_CUDA=off

@@ -42,12 +42,12 @@ jobs:
     - name: Kokkos Configure CMake
       run: cmake -S kokkos -B build-kokkos  \
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} \
+        -DCMAKE_INSTALL_PREFIX=build-kokkos/install \
         -DKokkos_ENABLE_SERIAL=ON \
         -DKokkos_ENABLE_OPENMP=off  \
         -DKokkos_ENABLE_CUDA=off  \
         -DKokkos_ENABLE_CUDA_LAMBDA=off \
-        -DKokkos_ENABLE_DEBUG=on  \
-        -DCMAKE_INSTALL_PREFIX=./build-kokkos/install
+        -DKokkos_ENABLE_DEBUG=on
     
     - name: Kokkos Build
       run: cmake --build build-kokkos -j8 --target install

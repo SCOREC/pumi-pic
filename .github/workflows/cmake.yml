@@ -108,6 +108,7 @@ jobs:
     - name: PUMI-PIC Checkout repo
       uses: actions/checkout@v3
       with:
+        submodules: recursive
         repository: SCOREC/pumi-pic
         path: pumi-pic
 

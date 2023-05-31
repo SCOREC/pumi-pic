@@ -89,7 +89,7 @@ jobs:
 
     - name: Omega_h Configure CMake
       run: cmake -S omega_h -B build-omega_h
-        -DKokkos_DIR="build-kokkos/install/lib/cmake"
+        -DCMAKE_PREFIX_PATH=build-kokkos/install/lib/cmake
         -DCMAKE_INSTALL_PREFIX=build-omega_h/install
         -DBUILD_SHARED_LIBS=OFF
         -DOmega_h_USE_Kokkos=ON

@@ -42,12 +42,12 @@ jobs:
     - name: Kokkos Configure CMake
       run: cmake -S $GITHUB_WORKSPACE/kokkos -B ${{ runner.temp }}/build-kokkos
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
         -DKokkos_ENABLE_SERIAL=ON
         -DKokkos_ENABLE_OPENMP=off
         -DKokkos_ENABLE_CUDA=off
         -DKokkos_ENABLE_CUDA_LAMBDA=off
         -DKokkos_ENABLE_DEBUG=on
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
     
     - name: Kokkos Build
       run: cmake --build ${{ runner.temp }}/build-kokkos -j8 --target install
@@ -89,8 +89,8 @@ jobs:
 
     - name: Omega_h Configure CMake
       run: cmake -S $GITHUB_WORKSPACE/omega_h -B ${{ runner.temp }}/build-omega_h
-        -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-omega_h/install
+        -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
         -DBUILD_SHARED_LIBS=OFF
         -DOmega_h_USE_Kokkos=ON
         -DOmega_h_USE_CUDA=off
@@ -103,6 +103,32 @@ jobs:
     - name: Omega_h Build
       run: cmake --build ${{ runner.temp }}/build-omega_h -j8 --target install
 
-    - name: Omega_h Test
-      run: ctest --test-dir ${{ runner.temp }}/build-omega_h
+    # Build PUMI-PIC
+        
+    - name: PUMI-PIC Checkout repo
+      uses: actions/checkout@v3
+      with:
+        repository: SCOREC/pumi-pic
+        path: pumi-pic
+
+    - name: PUMI-PIC Create Directory
+      run: cmake -E make_directory ${{ runner.temp }}/build-pumi-pic
+
+    - name: PUMI-PIC Configure CMake
+      run: cmake -S $GITHUB_WORKSPACE/pumi-pic -B ${{ runner.temp }}/build-pumi-pic
+        -DCMAKE_CXX_COMPILER=mpicxx  \
+        -DIS_TESTING=ON  \
+        -DPS_IS_TESTING=ON  \
+        -DCMAKE_BUILD_TYPE=Debug  \
+        -DTEST_DATA_DIR=$GITHUB_WORKSPACE/pumi-pic/pumipic-data  \
+        -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install  \
+        -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install  \
+        -DEnGPar_PREFIX=${{ runner.temp }}/build-engpar/install  \
+        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-pumi-pic/install
+    
+    - name: PUMI-PIC Build
+      run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
+
+    - name: PUMI-PIC Test
+      run: ctest --test-dir ${{ runner.temp }}/build-pumi-pic
   

@@ -34,13 +34,13 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: kokkos/kokkos
-        path: ${{ runner.temp }}/kokkos
+        path: kokkos
 
     - name: Kokkos Create Directory
       run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
 
     - name: Kokkos Configure CMake
-      run: cmake -S ${{ runner.temp }}/kokkos -B ${{ runner.temp }}/build-kokkos
+      run: cmake -S $GITHUB_WORKSPACE/kokkos -B ${{ runner.temp }}/build-kokkos
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
         -DKokkos_ENABLE_SERIAL=ON
         -DKokkos_ENABLE_OPENMP=off
@@ -58,13 +58,13 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: SCOREC/EnGPar
-        path: ${{ runner.temp }}/engpar
+        path: engpar
 
     - name: EnGPar Create Directory
       run: cmake -E make_directory ${{ runner.temp }}/build-engpar
 
     - name: EnGPar Configure CMake
-      run: cmake -S ${{ runner.temp }}/engpar -B ${{ runner.temp }}/build-engpar
+      run: cmake -S $GITHUB_WORKSPACE/engpar -B ${{ runner.temp }}/build-engpar
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-engpar/install
         -DCMAKE_C_COMPILER="mpicc"
         -DCMAKE_CXX_COMPILER="mpicxx"
@@ -82,13 +82,13 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: sandialabs/omega_h
-        path: ${{ runner.temp }}/omega_h
+        path: omega_h
 
     - name: Omega_h Create Directory
       run: cmake -E make_directory ${{ runner.temp }}/build-omega_h
 
     - name: Omega_h Configure CMake
-      run: cmake -S ${{ runner.temp }}/omega_h -B ${{ runner.temp }}/build-omega_h
+      run: cmake -S $GITHUB_WORKSPACE/omega_h -B ${{ runner.temp }}/build-omega_h
         -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-omega_h/install
         -DBUILD_SHARED_LIBS=OFF

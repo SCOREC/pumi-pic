@@ -16,10 +16,8 @@ jobs:
       
     steps:
 
-    # - name: Install mpi
-    #   run: |
-    #     sudo apt-get update -yq
-    #     sudo apt-get install -yq mpich libmpich-dev
+    - name: Install mpi
+      run: sudo apt-get install -yq mpich libmpich-dev
 
     # Build Kokkos
         

@@ -16,12 +16,12 @@ jobs:
       
     steps:
     
-    - name: Install CMake
-      run: |
-        sudo apt-get update -yq
-        sudo apt-get install -yq cmake
-        cmake --version
-        /usr/bin/cmake --version
+    # - name: Install CMake
+    #   run: |
+    #     sudo apt-get update -yq
+    #     sudo apt-get install -yq cmake
+    #     cmake --version
+    #     /usr/bin/cmake --version
 
     - name: Install mpi
       run: |

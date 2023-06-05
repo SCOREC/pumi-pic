@@ -25,6 +25,12 @@ jobs:
       run: sudo apt-get install -yq mpich libmpich-dev
 
     # Build Kokkos
+
+    - name: Cache Kokkos Build
+      uses: actions/cache@v3
+      with:
+        key: build-kokkos
+        path: ${{ runner.temp }}/build-kokkos
         
     - name: Kokkos Checkout repo
       uses: actions/checkout@v3

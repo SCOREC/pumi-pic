@@ -28,20 +28,24 @@ jobs:
 
     - name: Cache Kokkos Build
       uses: actions/cache@v3
+      id: build-kokkos
       with:
         key: build-kokkos
         path: ${{ runner.temp }}/build-kokkos
         
     - name: Kokkos Checkout repo
+      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
       uses: actions/checkout@v3
       with:
         repository: kokkos/kokkos
         path: kokkos
 
     - name: Kokkos Create Directory
+      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
       run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
 
     - name: Kokkos Configure CMake
+      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
       run: cmake -S $GITHUB_WORKSPACE/kokkos -B ${{ runner.temp }}/build-kokkos
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
@@ -52,6 +56,7 @@ jobs:
         -DKokkos_ENABLE_DEBUG=on
     
     - name: Kokkos Build
+      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
       run: cmake --build ${{ runner.temp }}/build-kokkos -j8 --target install
 
     # Build EnGPar

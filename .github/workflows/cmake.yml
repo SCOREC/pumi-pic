@@ -132,6 +132,38 @@ jobs:
       if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
       run: cmake --build ${{ runner.temp }}/build-omega_h -j8 --target install
 
+    # Build Cabana
+
+    - name: Cache Cabana Build
+      uses: actions/cache@v3
+      id: build-cabana
+      with:
+        key: build-cabana
+        path: ${{ runner.temp }}/build-cabana
+        
+    - name: Cabana Checkout repo
+      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
+      uses: actions/checkout@v3
+      with:
+        repository: sandialabs/cabana
+        path: cabana
+
+    - name: Cabana Create Directory
+      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
+      run: cmake -E make_directory ${{ runner.temp }}/build-cabana
+
+    - name: Cabana Configure CMake
+      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
+      run: cmake -S $GITHUB_WORKSPACE/cabana -B ${{ runner.temp }}/build-cabana
+        -DCMAKE_BUILD_TYPE="Release" \
+        -DCMAKE_CXX_COMPILER=$GITHUB_WORKSPACE/kokkos/bin/nvcc_wrapper \
+        -DCabana_ENABLE_Cuda=ON \
+        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-cabana/install
+    
+    - name: Cabana Build
+      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
+      run: cmake --build ${{ runner.temp }}/build-cabana -j8 --target install
+
     # Build PUMI-PIC
         
     - name: PUMI-PIC Checkout repo

@@ -107,7 +107,7 @@ jobs:
       if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
       uses: actions/checkout@v3
       with:
-        repository: sandialabs/omega_h
+        repository: SCOREC/omega_h
         path: omega_h
 
     - name: Omega_h Create Directory
@@ -145,7 +145,7 @@ jobs:
       if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
       uses: actions/checkout@v3
       with:
-        repository: sandialabs/cabana
+        repository: ECP-copa/cabana
         path: cabana
 
     - name: Cabana Create Directory
@@ -186,6 +186,8 @@ jobs:
         -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
         -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
         -DEnGPar_PREFIX=${{ runner.temp }}/build-engpar/install
+        -DCabana_INSTALL_DIR=${{ runner.temp }}/build-cabana/install  \
+        -DENABLE_CABANA=on \
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-pumi-pic/install
         -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
     

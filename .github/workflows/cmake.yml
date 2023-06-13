@@ -156,7 +156,7 @@ jobs:
       if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
       run: cmake -S $GITHUB_WORKSPACE/cabana -B ${{ runner.temp }}/build-cabana
         -DCMAKE_BUILD_TYPE="Release"
-        -DCMAKE_CXX_COMPILER=$GITHUB_WORKSPACE/kokkos/bin/nvcc_wrapper
+        -DCMAKE_CXX_COMPILER=mpicxx
         -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
         -DCabana_ENABLE_Cuda=ON
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-cabana/install

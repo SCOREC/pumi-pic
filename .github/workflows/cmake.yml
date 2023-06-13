@@ -187,7 +187,7 @@ jobs:
         -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
         -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
         -DEnGPar_PREFIX=${{ runner.temp }}/build-engpar/install
-        -DCabana_INSTALL_DIR=${{ runner.temp }}/build-cabana/install
+        -DCabana_PREFIX=${{ runner.temp }}/build-cabana/install
         -DENABLE_CABANA=on
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-pumi-pic/install
         -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake

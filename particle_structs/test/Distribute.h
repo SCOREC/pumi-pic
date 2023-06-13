@@ -8,7 +8,7 @@
 #include <SupportKK.h>
 
 
-bool distribute_elements(int ne, int strat, int comm_rank, int comm_size, pumipic::gid_t* gids);
+bool distribute_elements(int ne, int strat, pumipic::gid_t* gids);
 
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,
                           std::vector<int>* ids);

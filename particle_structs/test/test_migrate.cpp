@@ -44,7 +44,7 @@ int migrateSendRight(const char* name, PS* structure) {
                pid, local_rank);
         failures(0) = 1;
       }
-      if (e != 0 && rank != local_rank) {
+      if (e != num_elems - 1 && rank != local_rank) {
         printf("[ERROR] Incorrectly received particle %d from rank %d to rank %d in element %d\n", pid, rank, local_rank, e);
         failures(0) = 1;
       }

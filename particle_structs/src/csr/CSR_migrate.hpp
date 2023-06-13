@@ -87,8 +87,8 @@ namespace pumipic {
     auto element_to_gid_local = element_to_gid;
     auto gatherParticlesToSend = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t process = new_process(particle_id);
-      const lid_t process_index = dist.index(process);
       if (mask && process != comm_rank) {
+        const lid_t process_index = dist.index(process);
         send_index(particle_id) =
           Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process_index)),1);
         const lid_t index = send_index(particle_id);
@@ -190,6 +190,7 @@ namespace pumipic {
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
+        assert(element_gid_to_lid_local.valid_at(index));
         recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
 

@@ -46,7 +46,9 @@ int main(int argc, char* argv[]) {
   fails += runTests<Kokkos::HostSpace>();
 
   //Test Cuda Functions
+#ifdef PP_USE_CUDA
   fails += runTests<Kokkos::CudaSpace>();
+#endif
 
   MPI_Finalize();
   Kokkos::finalize();
@@ -411,6 +413,9 @@ int iSendRecvWaitAllTest(const char* name) {
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
     });
+    delete [] statuses;
+    delete [] send_requests;
+    delete [] recv_requests;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);

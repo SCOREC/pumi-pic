@@ -2,6 +2,8 @@
 #include "read_particles.hpp"
 #include "Distribute.h"
 #include <mpi.h>
+#include "team_policy.hpp"
+#include "ppMemUsage.hpp"
 
 const char* structure_names[4] = { "SCS", "CSR", "CabM", "DPS" };
 int comm_rank, comm_size;
@@ -44,7 +46,7 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
 
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);
@@ -56,11 +58,11 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
   
   // create and destroy structure
   size_t free, total;
-  cudaMemGetInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   PS* ptcls;
@@ -78,8 +80,8 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   }
 
   delete ptcls;
-  
-  cudaMemGetInfo(&free, &total);
+
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s has allocated too much memory\n", structure_names[structure]);
@@ -92,7 +94,7 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
   
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);
@@ -104,7 +106,7 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
 
   // check rebuild doesn't allocate extra memory
   PS* ptcls;
@@ -123,12 +125,12 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
   PS::kkLidView new_element("new_element", ptcls->capacity());
   
   size_t free, total;
-  cudaMemGetInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   ptcls->rebuild(new_element);
   
-  cudaMemGetInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s::rebuild has allocated too much memory\n", structure_names[structure]);
@@ -143,7 +145,7 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   int fails = 0;
   
   ps::gid_t* gids = new ps::gid_t[ne_in];
-  distribute_elements(ne_in, 0, comm_rank, comm_size, gids);
+  distribute_elements(ne_in, 0, gids);
   int* ptcls_per_elem = new int[ne_in];
   std::vector<int>* ids = new std::vector<int>[ne_in];
   distribute_particles(ne_in, np_in, 2, ptcls_per_elem, ids);
@@ -155,7 +157,7 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
   ps::hostToDevice(element_gids_v, gids);
   delete [] ptcls_per_elem;
   delete [] gids;
-  Kokkos::TeamPolicy<ExeSpace> po(4, 32);
+  Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
 
   // check rebuild doesn't allocate extra memory
   PS* ptcls;
@@ -183,18 +185,18 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
     });
   
   size_t free, total;
-  cudaMemGetInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used_before=total-free;
 
   ptcls->migrate(new_element, new_process);
-  
-  cudaMemGetInfo(&free, &total);
+
+  getMemUsage(&free, &total);
   const long used_after=total-free;
   if (used_before < used_after) {
     fprintf(stderr, "[ERROR] %s::migrate has allocated too much memory\n", structure_names[structure]);
     fails += 1;
   }
-
+  delete [] comm_rank_h;
   delete ptcls;
   return fails;
 }

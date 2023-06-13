@@ -1,6 +1,7 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 #include <cmath>
+#include "team_policy.hpp"
 
 int comm_rank, comm_size;
 
@@ -178,7 +179,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       lid_t maxC = 32;
       lid_t sigma = num_elems;
       lid_t V = 1024;
-      Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(4, maxC);
       name = "scs_C32_SMAX_V1024";
       return new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
                                                  element_gids, particle_elements, particle_info);
@@ -189,7 +190,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       lid_t maxC = 32;
       lid_t sigma = 1;
       lid_t V = 10;
-      Kokkos::TeamPolicy<ExeSpace> policy(4, maxC);
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(4, maxC);
       name = "scs_C32_S1_V10";
       return  new ps::SellCSigma<Types, MemSpace>(policy, sigma, V, num_elems, num_ptcls, ppe,
                                                   element_gids, particle_elements, particle_info);
@@ -198,7 +199,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       //CSR
       error_message = "CSR";
       name = "csr";
-      Kokkos::TeamPolicy<ExeSpace> policy(num_elems, 32);
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems, 32);
       return new ps::CSR<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                           element_gids, particle_elements, particle_info);
     }
@@ -207,7 +208,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       //CabM
       error_message = "CabM";
       name = "cabm";
-      Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
       return new ps::CabM<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                            element_gids, particle_elements, particle_info);
     }
@@ -215,7 +216,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       //DPS
       error_message = "DPS";
       name = "dps";
-      Kokkos::TeamPolicy<ExeSpace> policy(num_elems,32);
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
       return new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                           element_gids, particle_elements, particle_info);
     }
@@ -268,6 +269,9 @@ int testMetrics(const char* name, PS* structure) {
 }
 
 int testCopy(const char* name, PS* structure) {
+  #ifndef PP_USE_CUDA
+    return 0;
+  #endif
   if (dynamic_cast<ps::SellCSigma<Types, MemSpace>*>(structure) == NULL
 #ifdef PP_ENABLE_CAB
       && dynamic_cast<ps::CabM<Types, MemSpace>*>(structure) == NULL

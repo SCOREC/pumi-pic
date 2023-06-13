@@ -45,10 +45,7 @@ namespace pumipic {
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld()) {
-      //Note using a blocking Alltoall because the code crashes on Summit when >1024 ranks
-      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
-      /*PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
-      */
+      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
     }
     else {
       int request_index = 0;
@@ -82,8 +79,8 @@ namespace pumipic {
     auto element_to_gid_local = element_to_gid;
     auto gatherParticlesToSend = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
       const lid_t process = new_process(particle_id);
-      const lid_t process_index = dist.index(process);
       if (mask && process != comm_rank) {
+        const lid_t process_index = dist.index(process);
         send_index(particle_id) =
           Kokkos::atomic_fetch_add(&(offset_send_particles_temp(process_index)),1);
         const lid_t index = send_index(particle_id);
@@ -97,9 +94,7 @@ namespace pumipic {
                                                                     new_process,
                                                                     send_index);
 
-    //Wait until all counts are received Note: disabled on world because of crashing on Summit when >1024 processes
-    if (!dist.isWorld())
-      PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
+    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
     delete [] count_recv_requests;
 
     //Count the number of processes being sent to and recv from
@@ -187,6 +182,7 @@ namespace pumipic {
     Kokkos::parallel_for(np_recv, KOKKOS_LAMBDA(const lid_t& i) {
         const gid_t gid = recv_element(i);
         const lid_t index = element_gid_to_lid_local.find(gid);
+        assert(element_gid_to_lid_local.valid_at(index));
         recv_element(i) = element_gid_to_lid_local.value_at(index);
       });
 

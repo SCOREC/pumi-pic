@@ -5,6 +5,7 @@
 #include <pumipic_mesh.hpp>
 #include <Omega_h_for.hpp>
 #include <pumipic_lb.hpp>
+#include "team_policy.hpp"
 
 
 typedef pumipic::MemberTypes<int> Particle;
@@ -157,7 +158,7 @@ int testBalancePS(pumipic::Mesh& picparts, pumipic::ParticleBalancer& balancer) 
   const int sigma = INT_MAX; // full sorting
   const int V = 1024;
   const int C = 32;
-  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy(10000, C);
+  Kokkos::TeamPolicy<Kokkos::DefaultExecutionSpace> policy = pumipic::TeamPolicyAuto(10000, C);
 
   PS* ptcls = new pumipic::SellCSigma<Particle>(policy, sigma, V, picparts->nelems(),
                                                 num_ptcls, ptcls_per_elem, element_gids);
@@ -173,6 +174,7 @@ int testBalancePS(pumipic::Mesh& picparts, pumipic::ParticleBalancer& balancer) 
   double imb = printImb(ptcls);
   if (imb > 1.5)
     ++fail;
+  delete ptcls;
   return fail;
 }
 

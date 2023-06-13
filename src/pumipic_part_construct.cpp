@@ -63,8 +63,8 @@ namespace pumipic {
     }
     is_full_mesh = false;
     // **********Determine safe zone and ghost region**************** //
-    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems());
-    Omega_h::Write<Omega_h::LO> has_part(comm_size);
+    Omega_h::Write<Omega_h::LO> is_safe(mesh.nelems(), 0);
+    Omega_h::Write<Omega_h::LO> has_part(comm_size, 0);
     int bridge_dim = 0;
     bfsBufferLayers(mesh, bridge_dim, comm, safe_layers, ghost_layers, is_safe,
                     owner, has_part);
@@ -151,10 +151,15 @@ namespace pumipic {
       mesh.add_tag(i, "rank_lids", 1, rank_lids);
     }
 
+    for (int i = 0; i < 4; ++i) {
+      num_cores[i] = 0;
+      num_bounds[i] = 0;
+      num_boundaries[i] = 0;
+    }
+
     /***************** Count the number of parts in the picpart ****************/
     num_cores[dim] = sumPositives(has_part.size(),has_part) - 1;
-    for (int i = 0; i < dim; ++i)
-      num_cores[i] = 0;
+
     /***************** Count Number of Entities in the PICpart *************/
     //Mark all entities owned by a part with has_part[part] = true as staying
     Omega_h::Write<Omega_h::LO> buf_ents[4];
@@ -339,8 +344,8 @@ namespace {
       }
       ++(vals[own]);
     }
-    OMEGA_H_DEVICE void join(volatile value_type update,
-                             const volatile value_type input) const {
+    OMEGA_H_DEVICE void join(value_type update,
+                             const value_type input) const {
       for(int i = 0; i < value_count; ++i) {
         update[i] += input[i];
       }
@@ -561,6 +566,12 @@ namespace {
     auto full_classDim = full_mesh.get_array<Omega_h::I8>(vdim, "class_dim");
     Omega_h::Write<Omega_h::ClassId> ppClassId(pp_num_verts);
     Omega_h::Write<Omega_h::I8> ppClassDim(pp_num_verts);
+
+    auto init = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
+      ppClassId[full_ent_id] = 0;
+      ppClassDim[full_ent_id] = 0;
+    };
+    Omega_h::parallel_for(pp_num_verts, init, "init");
 
     auto getClass = OMEGA_H_LAMBDA(Omega_h::LO full_ent_id) {
       const Omega_h::LO pp_ent = full2pp_entIds[full_ent_id];

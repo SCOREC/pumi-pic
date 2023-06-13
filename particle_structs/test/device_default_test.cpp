@@ -4,6 +4,7 @@
 #include <particle_structs.hpp>
 #include <psAssert.h>
 #include "Distribute.h"
+#include "team_policy.hpp"
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
@@ -28,7 +29,7 @@ int main(int argc, char* argv[]) {
 
     particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);
 
-    Kokkos::TeamPolicy<exe_space> po(4, 4);
+    Kokkos::TeamPolicy<exe_space> po = TeamPolicyAuto(4, 4);
     SCS* scs = new SCS(po, 5, 2, ne, np, ptcls_per_elem_v, element_gids_v);
 
     delete [] ptcls_per_elem;

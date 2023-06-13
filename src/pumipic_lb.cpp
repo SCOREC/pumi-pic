@@ -79,6 +79,7 @@ namespace pumipic {
 
     //Build N-graph from indices (CPU)
     buildNgraph(comm);
+    MPI_Type_free(&bufferStride);
   }
 
   ParticleBalancer::SBarUnmap::iterator ParticleBalancer::insert(Parts& p) {

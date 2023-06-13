@@ -38,19 +38,19 @@ mpi_test(file_rw_cube_4 4
   ./file_rw
   ${TEST_DATA_DIR}/cube.msh
   testing_cube_4.ptn
-  full full
+  bfs full
   test_cube_file)
 mpi_test(file_rw_xgc_24k_1 1
   ./file_rw
   ${TEST_DATA_DIR}/xgc/24k.osh
   ignored
-  full full
+  bfs full
   ${TEST_DATA_DIR}/xgc/24k)
 mpi_test(file_rw_xgc_24k_4 4
   ./file_rw
   ${TEST_DATA_DIR}/xgc/24k.osh
   ${TEST_DATA_DIR}/xgc/24k_4.cpn
-  full bfs
+  bfs bfs
   ${TEST_DATA_DIR}/xgc/24k)
 mpi_test(file_rw_xgc_120k_1 1
   ./file_rw

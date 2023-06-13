@@ -168,7 +168,7 @@ namespace pumipic {
     //t is the distance the intersection point is along the particle path
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
-    closeness = max(max(min(fabs(u), fabs(1-u)), min(fabs(v),fabs(1-v))), min(fabs(u+v), fabs(1-u-v)));
+    closeness = Kokkos::max(Kokkos::max(Kokkos::min(fabs(u), fabs(1 - u)), Kokkos::min(fabs(v), fabs(1 - v))), Kokkos::min(fabs(u + v), fabs(1 - u - v)));
     return  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
   }
 
@@ -340,17 +340,9 @@ namespace pumipic {
                                 o::Write<o::LO> lastExit, o::Bytes side_is_exposed,
                                 bool requireIntersection,
                                 o::Write<o::LO> xFace) {
-    o::LO dim = mesh.dim();
-    const auto bridgeVerts =  mesh.ask_verts_of(dim - 1);
-    const auto mesh2verts = mesh.ask_elem_verts();
-    const auto elmDown = mesh.ask_down(dim, dim - 1).ab2b;
-    const auto coords = mesh.coords();
     auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto searchElm = elem_ids[pid];
         assert(lastExit[pid] != -1);
-        const auto tetv2v = o::gather_verts<4>(mesh2verts, searchElm);
-        const auto face_ids = o::gather_down<4>(elmDown, searchElm);
         const o::LO bridge = lastExit[pid];
         const bool exposed = side_is_exposed[bridge];
         ptcl_done[pid] = exposed;
@@ -399,7 +391,7 @@ namespace pumipic {
         if (elmArea[elm] < area)
           area = elmArea[elm];
       }, Kokkos::Min<o::Real>(min_area));
-    o::Real tol = max(1e-15 / min_area, 1e-8);
+    o::Real tol = std::max(1e-15 / min_area, 1e-8);
     printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }
@@ -461,10 +453,12 @@ namespace pumipic {
 
     //Finish particles that didn't move
     auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
-      const o::Vector<3> start = makeVector3(pid, x_ps_orig);
-      const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
-      if (o::norm(end - start) < tol)
-        ptcl_done[pid] = 1;
+      if  (mask){
+        const o::Vector<3> start = makeVector3(pid, x_ps_orig);
+        const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
+        if (o::norm(end - start) < tol)
+          ptcl_done[pid] = 1;
+      }
     };
     parallel_for(ptcls, finishUnmoved, "search_finishUnmoved");
     

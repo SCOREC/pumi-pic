@@ -9,7 +9,8 @@
 #include <engpar.h>
 #include <particle_structs.hpp>
 
-namespace {
+namespace pumipic {
+
   typedef std::set<int> Parts;
   class PartsHash {
   public:
@@ -21,8 +22,6 @@ namespace {
       return h;
     }
   };
-}
-namespace pumipic {
 
   //Print particle imbalance statistics
   template <class PS>

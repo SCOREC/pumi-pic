@@ -5,6 +5,7 @@
 #include <particle_structs.hpp>
 #include "Distribute.h"
 #include <ppAssert.h>
+#include "team_policy.hpp"
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
@@ -31,7 +32,7 @@ int main(int argc, char** argv) {
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne,np, 0, ptcls_per_elem, ids);
   typedef Kokkos::DefaultExecutionSpace exe_space;
-  Kokkos::TeamPolicy<exe_space> po(128, 4);
+  Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(128, 4);
   typedef SellCSigma<Type2> SCS;
   {
     SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);

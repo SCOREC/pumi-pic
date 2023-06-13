@@ -34,9 +34,9 @@ int rebuildNoChanges(const char* name, PS* structure) {
   kkLidView new_element_sums("new_element_sums", structure->nElems());
   kkLidView failed = kkLidView("failed", 1);
   auto checkSameElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    const lid_t id = pID(p);
-    const lid_t dest_elem = new_element(id);
     if (mask) {
+      const lid_t id = pID(p);
+      const lid_t dest_elem = new_element(id);
       Kokkos::atomic_add(&(new_element_sums[e]), id);
       if (dest_elem != e) {
         printf("[ERROR] Particle %d was moved to incorrect element %d on %s "
@@ -150,12 +150,15 @@ int rebuildNewPtcls(const char* name, PS* structure) {
   kkLidView new_particle_elements("new_particle_elements", nnp);
   auto new_particles = particle_structs::createMemberViews<Types>(nnp);
   auto new_particle_access = particle_structs::getMemberView<Types,0>(new_particles);
+  auto val1 = particle_structs::getMemberView<Types,1>(new_particles);
+  auto val2 = particle_structs::getMemberView<Types,2>(new_particles);
   lid_t cap = structure->capacity();
   //Assign new ptcl elements and identifiers
   Kokkos::parallel_for("new_particle_elements", nnp,
       KOKKOS_LAMBDA (const int& i){
       new_particle_elements(i) = i%ne;
       new_particle_access(i) = i+cap;
+      val1(i, 0) = val1(i, 1) = val1(i, 2) = val2(i) = 0;
   });
   //Rebuild with new ptcls
   structure->rebuild(new_element, new_particle_elements, new_particles);
@@ -282,11 +285,14 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
   kkLidView new_particle_elements("new_particle_elements", nnp);
   auto new_particles = particle_structs::createMemberViews<Types>(nnp);
   auto new_particle_access = particle_structs::getMemberView<Types,0>(new_particles);
+  auto val1 = particle_structs::getMemberView<Types,1>(new_particles);
+  auto val2 = particle_structs::getMemberView<Types,2>(new_particles);
   lid_t cap = structure->capacity();
   Kokkos::parallel_for("new_particle_elements", nnp,
       KOKKOS_LAMBDA (const int& i){
       new_particle_elements(i) = i%ne;
       new_particle_access(i) = i+cap;
+      val1(i, 0) = val1(i, 1) = val1(i, 2) = val2(i) = 0;
   });
   //Rebuild with elements removed
   structure->rebuild(new_element, new_particle_elements, new_particles);

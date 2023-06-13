@@ -135,7 +135,7 @@ namespace pumipic {
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
     auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
       const lid_t new_elem = new_element(particle_id);
-      if (new_elem != -1 && mask)
+      if (mask && new_elem != -1)
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
     };
     parallel_for(countNewParticles, "countNewParticles");

@@ -156,6 +156,7 @@ jobs:
       if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
       run: cmake -S $GITHUB_WORKSPACE/cabana -B ${{ runner.temp }}/build-cabana
         -DCMAKE_BUILD_TYPE="Release"
+        -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
         -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
         -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
         -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-cabana/install

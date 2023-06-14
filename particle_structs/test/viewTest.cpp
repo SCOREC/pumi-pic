@@ -1,5 +1,5 @@
 #include <ppView.h>
-#include <cmath>
+#include <particle_structs.hpp>
 
 namespace pp = pumipic;
 
@@ -7,14 +7,16 @@ int constructTypes();
 int parallelFor();
 int parallelReduce();
 
-int main(int argc,char* argv[]) {
+int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
+  MPI_Init(&argc, &argv);
   int fails = 0;
 
   fails += constructTypes();
   fails += parallelFor();
   fails += parallelReduce();
   Kokkos::finalize();
+  MPI_Finalize();
   if (!fails) {
     printf("All Tests Passed\n");
   }

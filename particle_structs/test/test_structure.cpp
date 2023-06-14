@@ -272,13 +272,9 @@ int testCopy(const char* name, PS* structure) {
   #ifndef PP_USE_CUDA
     return 0;
   #endif
-  if (dynamic_cast<ps::SellCSigma<Types, MemSpace>*>(structure) == NULL
-#ifdef PP_ENABLE_CAB
-      && dynamic_cast<ps::CabM<Types, MemSpace>*>(structure) == NULL
-#endif
-    ) {
+  if (dynamic_cast<ps::CSR<Types, MemSpace>*>(structure) != NULL)
     return 0;
-  }
+    
   printf("testCopy %s\n", name);
 
   int fails = 0;

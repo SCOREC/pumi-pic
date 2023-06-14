@@ -44,6 +44,10 @@ namespace pumipic {
     if (cabm) {
       return cabm->template copy<MSpace>();
     }
+    DPS<DataTypes, MemSpace>* dps = dynamic_cast<DPS<DataTypes, MemSpace>*>(old);
+    if (dps) {
+      return dps->template copy<MSpace>();
+    }
 
     fprintf(stderr, "[ERROR] Structure does not support copy\n");
     throw 1;

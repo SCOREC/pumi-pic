@@ -120,7 +120,7 @@ namespace pumipic {
       num_ptcls = old->num_ptcls;
       capacity_ = old->capacity_;
       num_rows = old->num_rows;
-      if (dynamic_cast<CabM<DataTypes, Space>*>(this) == NULL && dynamic_cast<DPS<DataTypes, Space>*>(this) == NULL) {
+      if (dynamic_cast<CabM<DataTypes, Space>*>(this) == NULL) {
         if (std::is_same<memory_space, typename Space2::memory_space>::value) {
           ptcl_data = old->ptcl_data;
         }

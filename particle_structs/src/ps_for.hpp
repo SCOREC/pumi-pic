@@ -38,7 +38,7 @@ namespace pumipic {
     }
     CSR<DataTypes, MemSpace>* csr = dynamic_cast<CSR<DataTypes, MemSpace>*>(old);
     if (csr) {
-      //return csr->template copy<MSpace>();
+      return csr->template copy<MSpace>();
     }
     CabM<DataTypes, MemSpace>* cabm = dynamic_cast<CabM<DataTypes, MemSpace>*>(old);
     if (cabm) {

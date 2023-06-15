@@ -38,11 +38,15 @@ namespace pumipic {
     }
     CSR<DataTypes, MemSpace>* csr = dynamic_cast<CSR<DataTypes, MemSpace>*>(old);
     if (csr) {
-      //return csr->template copy<MSpace>();
+      return csr->template copy<MSpace>();
     }
     CabM<DataTypes, MemSpace>* cabm = dynamic_cast<CabM<DataTypes, MemSpace>*>(old);
     if (cabm) {
       return cabm->template copy<MSpace>();
+    }
+    DPS<DataTypes, MemSpace>* dps = dynamic_cast<DPS<DataTypes, MemSpace>*>(old);
+    if (dps) {
+      return dps->template copy<MSpace>();
     }
 
     fprintf(stderr, "[ERROR] Structure does not support copy\n");

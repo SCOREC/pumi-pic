@@ -14,6 +14,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class DPS : public ParticleStructure<DataTypes, MemSpace> {
   public:
+    template <typename MSpace> using Mirror = DPS<DataTypes, MSpace>;
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
     using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -33,7 +34,6 @@ namespace pumipic {
     using DPS_DT = PS_DTBool<DataTypes>;
     using AoSoA_t = Cabana::AoSoA<DPS_DT,device_type>;
 
-    DPS() = delete;
     DPS(const DPS&) = delete;
     DPS& operator=(const DPS&) = delete;
 
@@ -46,11 +46,15 @@ namespace pumipic {
     DPS(DPS_Input<DataTypes, MemSpace>&);
     ~DPS();
 
+    template <class MSpace>
+    Mirror<MSpace>* copy();
+
     //Functions from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::nElems;
     using ParticleStructure<DataTypes, MemSpace>::nPtcls;
     using ParticleStructure<DataTypes, MemSpace>::capacity;
     using ParticleStructure<DataTypes, MemSpace>::numRows;
+    using ParticleStructure<DataTypes, MemSpace>::copy;
 
     template <std::size_t N>
     Slice<N> get() { return Slice<N>(Cabana::slice<N, AoSoA_t>(*aosoa_, "get<>()")); }
@@ -76,6 +80,8 @@ namespace pumipic {
     void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info, kkLidView& parentElms);
     void setParentElms(const kkLidView particles_per_element, kkLidView& parentElms);
 
+    template <typename DT, typename MSpace> friend class DPS;
+
   private:
     //The User defined Kokkos policy
     PolicyType policy;
@@ -100,6 +106,9 @@ namespace pumipic {
     kkLidView parentElms_;
     // particle data
     AoSoA_t* aosoa_;
+
+    //Private constructor for copy()
+    DPS() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
 
   /**
@@ -238,6 +247,36 @@ namespace pumipic {
 
   }
 
+  template<class DataTypes, typename MemSpace>
+  template <class MSpace>
+  DPS<DataTypes, MemSpace>::Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
+    if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
+      fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
+      exit(EXIT_FAILURE);
+    }
+    Mirror<MSpace>* mirror_copy = new DPS<DataTypes, MSpace>();
+    //Call Particle structures copy
+    mirror_copy->copy(this);
+    //Copy constants
+    mirror_copy->num_soa_ = num_soa_;
+    mirror_copy->extra_padding = extra_padding;
+
+    //Copy AoSoA
+    mirror_copy->aosoa_ = new typename DPS<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_->label()).append("_mirror"), aosoa_->size());
+    Cabana::deep_copy(*(mirror_copy->aosoa_), *aosoa_);
+
+    //Deep copy each view
+    mirror_copy->parentElms_ = typename Mirror<MSpace>::kkLidView("mirror parentElms_",
+                                                                    parentElms_.size());
+    Kokkos::deep_copy(mirror_copy->parentElms_, parentElms_);
+    mirror_copy->element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
+                                                                    element_to_gid.size());
+    Kokkos::deep_copy(mirror_copy->element_to_gid, element_to_gid);
+    //Deep copy the gid mapping
+    mirror_copy->element_gid_to_lid.create_copy_view(element_gid_to_lid);
+    return mirror_copy;
+  }
+
   template <class DataTypes, typename MemSpace>
   void DPS<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
@@ -286,6 +325,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class DPS : public ParticleStructure<DataTypes, MemSpace> {
   public:
+    template <typename MSpace> using Mirror = DPS<DataTypes, MSpace>;
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
     using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -335,6 +375,9 @@ namespace pumipic {
 
     void printMetrics() const {reportError();}
     void printFormat(const char* prefix) const {reportError();}
+
+    template <class MSpace>
+    Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
     void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "

@@ -15,6 +15,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace = DefaultMemSpace>
   class CSR : public ParticleStructure<DataTypes, MemSpace> {
   public:
+    template <typename MSpace> using Mirror = CSR<DataTypes, MSpace>;
     using typename ParticleStructure<DataTypes, MemSpace>::execution_space;
     using typename ParticleStructure<DataTypes, MemSpace>::memory_space;
     using typename ParticleStructure<DataTypes, MemSpace>::device_type;
@@ -29,7 +30,6 @@ namespace pumipic {
 
     typedef CSR_Input<DataTypes,MemSpace> Input_T;
 
-    CSR() = delete;
     CSR(const CSR&) = delete;
     CSR& operator=(const CSR&) = delete;
 
@@ -41,6 +41,9 @@ namespace pumipic {
         MTVs particle_info = NULL);
     CSR(Input_T& input);
     ~CSR();
+
+    template <class MSpace>
+    Mirror<MSpace>* copy();
 
     //Functions from ParticleStructure
     using ParticleStructure<DataTypes, MemSpace>::nElems;
@@ -66,6 +69,8 @@ namespace pumipic {
     // Do not call these functions:
     void createGlobalMapping(kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void initCsrData(kkLidView particle_elements, MTVs particle_info);
+
+    template <typename DT, typename MSpace> friend class CSR;
 
   private:
     // The User defined Kokkos policy
@@ -99,6 +104,9 @@ namespace pumipic {
     bool always_realloc;
     double minimize_size;
     double padding_amount;
+
+    //Private constructor for copy()
+    CSR() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
 
   /**
@@ -259,6 +267,34 @@ namespace pumipic {
     std::cout << ss.str();
   }
 
+  template<class DataTypes, typename MemSpace>
+  template <class MSpace>
+  CSR<DataTypes, MemSpace>::Mirror<MSpace>* CSR<DataTypes, MemSpace>::copy() {
+    if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
+      fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
+      exit(EXIT_FAILURE);
+    }
+    Mirror<MSpace>* mirror_copy = new CSR<DataTypes, MSpace>();
+    //Call Particle structures copy
+    mirror_copy->copy(this);
+    //Copy constants
+    mirror_copy->swap_capacity_ = swap_capacity_;
+    mirror_copy->always_realloc = always_realloc;
+    mirror_copy->minimize_size = minimize_size;
+    mirror_copy->padding_amount = padding_amount;
+
+    //Create the swap space
+    mirror_copy->ptcl_data_swap = createMemberViews<DataTypes, memory_space>(swap_capacity_);
+    //Deep copy each view
+    mirror_copy->offsets = typename Mirror<MSpace>::kkLidView("mirror offsets", offsets.size());
+    Kokkos::deep_copy(mirror_copy->offsets, offsets);
+    mirror_copy->element_to_gid = typename Mirror<MSpace>::kkGidView("mirror element_to_gid",
+                                                                    element_to_gid.size());
+    Kokkos::deep_copy(mirror_copy->element_to_gid, element_to_gid);
+    //Deep copy the gid mapping
+    mirror_copy->element_gid_to_lid.create_copy_view(element_gid_to_lid);
+    return mirror_copy;
+  }
 } // end namespace pumipic
 
 #include "CSR_buildFns.hpp"

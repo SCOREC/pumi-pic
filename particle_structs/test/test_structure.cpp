@@ -2,6 +2,7 @@
 #include "read_particles.hpp"
 #include <cmath>
 #include "team_policy.hpp"
+#include "ppMemUsage.hpp"
 
 int comm_rank, comm_size;
 
@@ -15,29 +16,18 @@ void finalize() {
   MPI_Finalize();
 }
 
-#ifdef PP_USE_CUDA
 //Copied and edited from: https://forums.developer.nvidia.com/t/best-way-to-report-memory-consumption-in-cuda/21042
 double get_mem_usage() {
   //Barrier+fence to ensure readings are accurate when sharing GPUs in parallel.
   MPI_Barrier(MPI_COMM_WORLD);
   Kokkos::fence();
   size_t free_byte, total_byte;
-  auto cuda_status = cudaMemGetInfo( &free_byte, &total_byte );
-  if ( cudaSuccess != cuda_status ){
-    fprintf(stderr, "Error: cudaMemGetInfo fails, %s \n",
-            cudaGetErrorString(cuda_status));
-    exit(1);
-  }
+  getMemUsage( &free_byte, &total_byte );
   double free_db = (double)free_byte;
   double total_db = (double)total_byte;
   double used_db = total_db - free_db;
   return used_db/1024/1024/1024;
 }
-#else
-double get_mem_usage() {
-  return 0;
-}
-#endif
 //Structure adding functions
 PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe, kkGidView element_gids,
                        kkLidView particle_elements, PS::MTVs particle_info, std::string& name);

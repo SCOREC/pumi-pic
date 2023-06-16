@@ -3,11 +3,6 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Sort.hpp>
 
-#ifdef PP_USE_CUDA
-#include <thrust/sort.h>
-#include <thrust/device_ptr.h>
-#endif
-
 void performSorting(Kokkos::View<int*> arr, const char* name) {
   Kokkos::View<int*> copy("arr_copy", arr.size());
   Kokkos::parallel_for("copy_array", arr.size(), KOKKOS_LAMBDA(const int i) {
@@ -16,14 +11,8 @@ void performSorting(Kokkos::View<int*> arr, const char* name) {
   Kokkos::Timer t;
   Kokkos::sort(arr, 0, arr.size());
   double kokkos_t = t.seconds();
-#ifdef PP_USE_CUDA
-  thrust::device_ptr<int> arr_d(copy.data());
-  t.reset();
-  thrust::sort(arr_d, arr_d + arr.size());
-#endif
-  double thrust_t = t.seconds();
 
-  printf("%s kokkos: %.6f thrust: %.6f\n", name, kokkos_t, thrust_t);
+  printf("%s sort time: %.6f\n", name, kokkos_t);
 }
 
 int main(int argc, char** argv) {

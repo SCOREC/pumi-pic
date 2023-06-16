@@ -4,11 +4,6 @@
 #include <random>
 #include <math.h>
 #include <cstdlib>
-#ifdef PP_USE_CUDA
-#include <cuda.h>
-#include <curand.h>
-#include <curand_kernel.h>
-#endif
 namespace {
 
 void even_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* ids) {

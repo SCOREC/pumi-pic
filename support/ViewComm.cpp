@@ -34,4 +34,26 @@ namespace pumipic {
     return false;
   }
 
+  //Adapted from: https://docs.open-mpi.org/en/v5.0.x/man-openmpi/man3/MPIX_Query_rocm_support.3.html#mpix-query-rocm-support
+  bool checkROMcAwareMPI()
+  {
+    bool happy = false;
+#if defined(OMPI_HAVE_MPI_EXT_ROCM) && OMPI_HAVE_MPI_EXT_ROCM
+    happy = (bool) MPIX_Query_rocm_support();
+#endif
+
+    if (happy) {
+      printf("This Open MPI installation has ROCm-aware support.\n");
+      return true;
+    } 
+    else {
+      printf("This Open MPI installation does not have ROCm-aware support.\n");
+      return false;
+    }
+  }
+
+  bool checkGPUAwareMPI()
+  {
+    return checkCudaAwareMPI() || checkROMcAwareMPI();
+  }
 }

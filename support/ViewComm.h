@@ -318,7 +318,7 @@ namespace pumipic {
   Irecv_Map& get_map();
 
   // Function to print out compile/runtime checks of OpenMPI cuda aware support
-  bool checkCudaAwareMPI();
+  bool checkGPUAwareMPI();
 
 #include "ViewComm_host.hpp"
 

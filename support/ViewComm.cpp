@@ -35,7 +35,7 @@ namespace pumipic {
   }
 
   //Adapted from: https://docs.open-mpi.org/en/v5.0.x/man-openmpi/man3/MPIX_Query_rocm_support.3.html#mpix-query-rocm-support
-  bool checkROMcAwareMPI()
+  bool checkROCmAwareMPI()
   {
     bool happy = false;
 #if defined(OMPI_HAVE_MPI_EXT_ROCM) && OMPI_HAVE_MPI_EXT_ROCM
@@ -54,6 +54,6 @@ namespace pumipic {
 
   bool checkGPUAwareMPI()
   {
-    return checkCudaAwareMPI() || checkROMcAwareMPI();
+    return checkCudaAwareMPI() || checkROCmAwareMPI();
   }
 }

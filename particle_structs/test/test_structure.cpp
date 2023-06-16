@@ -6,8 +6,10 @@
 
 int comm_rank, comm_size;
 
-#ifdef PP_USE_CUDA
+#if defined(PP_USE_CUDA)
 typedef Kokkos::CudaSpace DeviceSpace;
+#elif defined(PP_USE_HIP)
+typedef Kokkos::HIPSpace DeviceSpace;
 #else
 typedef Kokkos::HostSpace DeviceSpace;
 #endif

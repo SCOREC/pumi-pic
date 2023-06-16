@@ -46,6 +46,10 @@ if ("OPENMP" IN_LIST KOKKOS_DEVICES)
   add_definitions(-DPP_USE_OPENMP)
   target_compile_definitions(support INTERFACE -DPP_USE_OPENMP)
 endif()
+if ("HIP" IN_LIST KOKKOS_DEVICES)
+  add_definitions(-DPP_USE_HIP)
+  target_compile_definitions(support INTERFACE -DPP_USE_HIP)
+endif()
 
 pumipic_export_lib(support "${HEADERS}")
 

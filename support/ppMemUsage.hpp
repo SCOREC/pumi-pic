@@ -15,8 +15,10 @@ void hostGetMem(size_t* free, size_t* total) {
 
 void getMemUsage(size_t* free, size_t* total)
 {
-#ifdef PP_USE_CUDA
+#if defined(PP_USE_CUDA)
   cudaMemGetInfo(free, total);
+#elif defined(PP_USE_HIP)
+  hipMemGetInfo(free, total);
 #else
   hostGetMem(free, total);
 #endif

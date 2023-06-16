@@ -45,9 +45,11 @@ int main(int argc, char* argv[]) {
   //Test Host Functions
   fails += runTests<Kokkos::HostSpace>();
 
-  //Test Cuda Functions
-#ifdef PP_USE_CUDA
+  //Test GPU Functions
+#if defined(PP_USE_CUDA)
   fails += runTests<Kokkos::CudaSpace>();
+#elif defined(PP_USE_HIP)
+  fails += runTests<Kokkos::HIPSpace>();
 #endif
 
   MPI_Finalize();

@@ -73,8 +73,7 @@ int main(int argc, char* argv[]) {
     return 0;
   }
   bool check_memory = false;
-#ifdef PP_USE_CUDA
-  //Only check GPU memory with CUDA; TODO add memory functions for other devices?
+#ifdef PP_USE_GPU
   check_memory = true;
 #endif
   printf("CHECK: %d\n", check_memory);
@@ -261,7 +260,7 @@ int testMetrics(const char* name, PS* structure) {
 }
 
 int testCopy(const char* name, PS* structure) {
-  #ifndef PP_USE_CUDA
+  #ifndef PP_USE_GPU
     return 0;
   #endif
 

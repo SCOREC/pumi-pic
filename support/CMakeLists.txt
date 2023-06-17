@@ -50,6 +50,10 @@ if ("HIP" IN_LIST KOKKOS_DEVICES)
   add_definitions(-DPP_USE_HIP)
   target_compile_definitions(support INTERFACE -DPP_USE_HIP)
 endif()
+if (("CUDA" IN_LIST Kokkos_DEVICES) OR ("HIP" IN_LIST KOKKOS_DEVICES))
+  add_definitions(-DPP_USE_GPU)
+  target_compile_definitions(support INTERFACE -DPP_USE_GPU)
+endif()
 
 pumipic_export_lib(support "${HEADERS}")
 

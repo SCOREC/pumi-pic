@@ -10,16 +10,16 @@
 #include "ellipticalPush.hpp"
 #include <random>
 #include <ppTiming.hpp>
+#include "ppMemUsage.hpp"
 #define ELEMENT_SEED 1024*1024
 #define PARTICLE_SEED 512*512
 
 void getMemImbalance(int hasptcls) {
-#ifdef PP_USE_CUDA
   int comm_rank, comm_size;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
   size_t free, total;
-  cudaMemGetInfo(&free, &total);
+  getMemUsage(&free, &total);
   const long used=total-free;
   long maxused=0;
   long totused=0;
@@ -36,7 +36,6 @@ void getMemImbalance(int hasptcls) {
   if( used == maxused ) {
     printf("%d peak mem usage %ld, avg usage %f\n", comm_rank, maxused, avg);
   }
-#endif
 }
 
 void getPtclImbalance(lid_t ptclCnt) {

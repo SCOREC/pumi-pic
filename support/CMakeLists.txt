@@ -6,7 +6,7 @@ set(HEADERS
   SupportKK.h
   ViewComm.h
   ViewComm_host.hpp
-  ViewComm_cuda.hpp
+  ViewComm_gpu.hpp
   ppAssert.h
   ppTiming.hpp
 )

@@ -1,12 +1,19 @@
   /************** Cuda Communication functions **************/
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   //Return type check to see if the memory space is not the host space
-  template <typename Space> using IsCuda =
+
+#if defined(PP_USE_CUDA)
+typedef Kokkos::CudaSpace DeviceSpace;
+#elif defined(PP_USE_HIP)
+typedef Kokkos::HIPSpace DeviceSpace;
+#endif
+
+  template <typename Space> using IsGPU =
     typename std::enable_if<!Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                         Kokkos::HostSpace>::accessible &&
                       Kokkos::SpaceAccessibility<typename Space::memory_space,
-                                                 Kokkos::CudaSpace>::accessible, int>::type;
+                                                 DeviceSpace>::accessible, int>::type;
 //Cuda-aware check for OpenMPI 2.0+ taken from https://github.com/kokkos/kokkos/issues/2003
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
 #define PS_CUDA_AWARE_MPI
@@ -14,7 +21,7 @@
 
 //Send
   template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
+  IsGPU<ViewSpace<ViewT> > PS_Comm_Send(ViewT view, int offset, int size,
                                          int dest, int tag, MPI_Comm comm) {
     auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
 
@@ -29,7 +36,7 @@
   }
   //Recv
   template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
+  IsGPU<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
                                          int sender, int tag, MPI_Comm comm) {
     ViewT new_view("recv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
@@ -52,7 +59,7 @@
 
   //Isend
   template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
+  IsGPU<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
                                   int dest, int tag, MPI_Comm comm, MPI_Request* req) {
     auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
 #ifdef PS_CUDA_AWARE_MPI
@@ -73,7 +80,7 @@
   }
   //Irecv
   template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
+  IsGPU<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                   int sender, int tag, MPI_Comm comm, MPI_Request* req) {
     ViewT new_view("irecv_view", size);
 #ifdef PS_CUDA_AWARE_MPI
@@ -102,7 +109,7 @@
 
   //Wait
   template <typename Space>
-  IsCuda<Space> PS_Comm_Wait(MPI_Request* req, MPI_Status* stat) {
+  IsGPU<Space> PS_Comm_Wait(MPI_Request* req, MPI_Status* stat) {
 #ifdef PS_CUDA_AWARE_MPI
     return MPI_Wait(req, stat);
 #else
@@ -118,7 +125,7 @@
 
   //Waitall
   template <typename Space>
-  IsCuda<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
+  IsGPU<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
 #ifdef PS_CUDA_AWARE_MPI
     return MPI_Waitall(num_reqs, reqs, stats);
 #else
@@ -137,7 +144,7 @@
 
   //Alltoall
   template <typename ViewT>
-  IsCuda<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
+  IsGPU<ViewSpace<ViewT> > PS_Comm_Alltoall(ViewT send, int send_size,
                                                ViewT recv, int recv_size,
                                                MPI_Comm comm) {
 #ifdef PS_CUDA_AWARE_MPI
@@ -155,7 +162,7 @@
 
 //Ialltoall
 template <typename ViewT>
-IsCuda<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
+IsGPU<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
                                             ViewT recv, int recv_size,
                                             MPI_Comm comm, MPI_Request* request) {
 #ifdef PS_CUDA_AWARE_MPI
@@ -178,7 +185,7 @@ IsCuda<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
 
 //reduce
 template <typename ViewT>
-IsCuda<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count,
+IsGPU<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int count,
                                          MPI_Op op, int root, MPI_Comm comm) {
 
 #ifdef PS_CUDA_AWARE_MPI
@@ -201,7 +208,7 @@ IsCuda<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int c
 
 //allreduce
 template <typename ViewT>
-IsCuda<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count,
+IsGPU<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count,
                                             MPI_Op op, MPI_Comm comm) {
 #ifdef PS_CUDA_AWARE_MPI
   return MPI_Allreduce(send_view.data(), recv_view.data(), count,

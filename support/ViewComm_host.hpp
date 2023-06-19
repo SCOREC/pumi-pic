@@ -22,7 +22,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Recv(ViewT view, int offset, int size,
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
                                         int dest, int tag, MPI_Comm comm, MPI_Request* req) {
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
   return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                    dest, tag, comm, req);
@@ -42,7 +42,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
 template <typename ViewT>
 IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                         int sender, int tag, MPI_Comm comm, MPI_Request* req) {
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   int size_per_entry = BaseType<ViewType<ViewT> >::size;
   return MPI_Irecv(view.data() + offset, size*size_per_entry,
                    MpiType<BT<ViewType<ViewT> > >::mpitype(),
@@ -65,7 +65,7 @@ IsHost<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
 //Wait
 template <typename Space>
 IsHost<Space> PS_Comm_Wait(MPI_Request* req, MPI_Status* stat) {
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   return MPI_Wait(req, stat);
 #else
   int ret = MPI_Wait(req, stat);
@@ -81,7 +81,7 @@ IsHost<Space> PS_Comm_Wait(MPI_Request* req, MPI_Status* stat) {
 //Waitall
 template <typename Space>
 IsHost<Space> PS_Comm_Waitall(int num_reqs, MPI_Request* reqs, MPI_Status* stats) {
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   return MPI_Waitall(num_reqs, reqs, stats);
 #else
   int ret = MPI_Waitall(num_reqs, reqs, stats);

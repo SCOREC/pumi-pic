@@ -3,12 +3,6 @@
 #ifdef PP_USE_GPU
   //Return type check to see if the memory space is not the host space
 
-#if defined(PP_USE_CUDA)
-typedef Kokkos::CudaSpace DeviceSpace;
-#elif defined(PP_USE_HIP)
-typedef Kokkos::HIPSpace DeviceSpace;
-#endif
-
   template <typename Space> using IsGPU =
     typename std::enable_if<!Kokkos::SpaceAccessibility<typename Space::memory_space,
                                                         Kokkos::HostSpace>::accessible &&

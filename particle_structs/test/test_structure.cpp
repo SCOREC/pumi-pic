@@ -6,13 +6,6 @@
 
 int comm_rank, comm_size;
 
-#if defined(PP_USE_CUDA)
-typedef Kokkos::CudaSpace DeviceSpace;
-#elif defined(PP_USE_HIP)
-typedef Kokkos::HIPSpace DeviceSpace;
-#else
-typedef Kokkos::HostSpace DeviceSpace;
-#endif
 void finalize() {
   Kokkos::finalize();
   MPI_Finalize();

@@ -4,6 +4,7 @@
 #include "SupportKK.h"
 #include <unordered_map>
 #include <mpi.h>
+#include "ppMemUsage.hpp"
 namespace pumipic {
   /* Routines to be abstracted
      MPI_Allgather/NCCL
@@ -322,7 +323,7 @@ namespace pumipic {
 
 #include "ViewComm_host.hpp"
 
-#include "ViewComm_cuda.hpp"
+#include "ViewComm_gpu.hpp"
 
 
 }

@@ -257,7 +257,9 @@ namespace pumipic {
     }
 
     //Create load balancer
-    ptcl_balancer = new ParticleBalancer(*this);
+    //TODO: comment out load balancer creation for now to avoid hang on
+    // Perlmutter due to MPI_Isend, MPI_Irecv.
+    //ptcl_balancer = new ParticleBalancer(*this);
 
   }
 }

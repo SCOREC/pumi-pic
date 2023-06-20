@@ -49,7 +49,7 @@ namespace pumipic {
     // refill offset here
     auto offsets_new = kkLidView("offsets", num_elems+1); // CopyPSToPS uses orig offsets
     Kokkos::deep_copy(offsets_new, offsets);
-    exclusive_scan(particles_per_element, offsets_new);
+    exclusive_scan(particles_per_element, offsets_new, execution_space());
 
     // Determine new_indices for all of the existing particles
     kkLidView row_indices(Kokkos::ViewAllocateWithoutInitializing("row indices"), num_elems+1);

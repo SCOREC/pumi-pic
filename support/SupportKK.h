@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_StdAlgorithms.hpp>
 #include "ppView.h"
 #include "ppMacros.h"
 #ifdef PP_USE_CUDA
@@ -23,20 +24,9 @@ namespace pumipic {
 
      The wrapper works for both Kokkos views and pumipic views on the device only
    */
-  template <typename ViewT>
-  void exclusive_scan(ViewT entries, ViewT result) {
-#ifdef PP_USE_CUDA
-    thrust::exclusive_scan(thrust::device /*ThrustSpace<ViewT::memory_space>::space */,
-                           entries.data(), entries.data() + entries.size(), result.data(), 0);
-#else
-    auto exclusive_sum = KOKKOS_LAMBDA(const int index, typename ViewT::value_type& cur, const bool final) {
-      if (final) {
-        result(index) = cur;
-      }
-      cur += entries(index);
-    };
-    Kokkos::parallel_scan("exclusive_scan", entries.size(), exclusive_sum);
-#endif
+  template <typename ViewT, typename Space>
+  void exclusive_scan(ViewT entries, ViewT result, Space space) {
+    Kokkos::Experimental::exclusive_scan(space, entries, result, 0);
   }
   template <typename ViewT>
   void inclusive_scan(ViewT entries, ViewT result) {

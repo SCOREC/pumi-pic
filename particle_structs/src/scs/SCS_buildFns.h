@@ -125,7 +125,7 @@ namespace pumipic {
         slices_per_chunk(i) = val1 + val3;
       });
     kkLidView offset_nslices("offset_nslices",nChunks+1);
-    exclusive_scan(slices_per_chunk, offset_nslices);
+    exclusive_scan(slices_per_chunk, offset_nslices, execution_space());
 
     nSlices = getLastValue<lid_t>(offset_nslices);
     offs = kkLidView("SCS offset", nSlices + 1);
@@ -147,7 +147,7 @@ namespace pumipic {
       }
     });
 
-    exclusive_scan(slice_size, offs);
+    exclusive_scan(slice_size, offs, execution_space());
     cap = getLastValue<lid_t>(offs);
   }
   template<class DataTypes, typename MemSpace>

@@ -296,7 +296,7 @@ private:
     //Offset sum the ptcls per elem and get total number of particles
     ViewT offsets = ViewT("ptcl per elem offsets", ptcls_per_elem.size() + 1);
     Kokkos::resize(ptcls_per_elem, ptcls_per_elem.size() + 1);
-    exclusive_scan(ptcls_per_elem, offsets);
+    exclusive_scan(ptcls_per_elem, offsets, Kokkos::DefaultExecutionSpace());
 
     //Array of new processes per particle
     lid_t nptcls = getLastValue(offsets);

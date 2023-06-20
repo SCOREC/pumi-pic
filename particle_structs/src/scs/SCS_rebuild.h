@@ -46,7 +46,7 @@ namespace pumipic {
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
     kkLidView counting_offset_index(Kokkos::ViewAllocateWithoutInitializing("counting_offset_index"), numRows() + 1);
-    exclusive_scan(new_particles_per_row, offset_new_particles);
+    exclusive_scan(new_particles_per_row, offset_new_particles, execution_space());
     Kokkos::deep_copy(counting_offset_index, offset_new_particles);
 
     int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);

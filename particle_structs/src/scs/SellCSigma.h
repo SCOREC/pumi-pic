@@ -14,10 +14,6 @@
 #include "SCSPair.h"
 #include "scs_input.hpp"
 #include <particle_structs.hpp>
-#ifdef PP_USE_CUDA
-#include <thrust/sort.h>
-#include <thrust/device_ptr.h>
-#endif
 #include <ppTiming.hpp>
 #include <sstream>
 
@@ -41,7 +37,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   template <std::size_t N>
   using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
 #else

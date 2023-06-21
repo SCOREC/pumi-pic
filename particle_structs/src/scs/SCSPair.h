@@ -27,7 +27,7 @@ struct MyPair {
 
 }
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
 namespace Kokkos {
   using pumipic::MyPair;
   PP_DEVICE_VAR MyPair ma = MyPair(10000000);

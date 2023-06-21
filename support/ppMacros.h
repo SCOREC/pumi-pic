@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
 #define PP_INLINE __host__ __device__ inline
 #define PP_DEVICE __device__ inline
 #define PS_LAMBDA [=] __device__

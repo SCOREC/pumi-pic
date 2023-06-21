@@ -183,13 +183,7 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
     if (nPtcls() == 0)
       return;
-    FunctionType* fn_d;
-#ifdef PP_USE_CUDA
-    cudaMalloc(&fn_d, sizeof(FunctionType));
-    cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-#else
-    fn_d = &fn;
-#endif
+    FunctionType* fn_d = gpuMemcpy(fn);
     const lid_t league_size = num_elems;
     const lid_t team_size = policy.team_size();
     const PolicyType policy(league_size, team_size);
@@ -209,7 +203,7 @@ namespace pumipic {
           (*fn_d)(elm, particle_id, mask);
         });
     });
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
     cudaFree(fn_d);
 #endif
   }

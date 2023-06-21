@@ -530,13 +530,7 @@ typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Seria
 SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
   if (nPtcls() == 0)
     return;
-  FunctionType* fn_d;
-#ifdef PP_USE_CUDA
-  cudaMalloc(&fn_d, sizeof(FunctionType));
-  cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-#else
-  fn_d = &fn;
-#endif
+  FunctionType* fn_d = gpuMemcpy(fn);
   const lid_t league_size = num_slices;
   const lid_t team_size = C_;
   const PolicyType policy(league_size, team_size);
@@ -560,7 +554,7 @@ SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name
       });
     });
   });
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   cudaFree(fn_d);
 #endif
 }

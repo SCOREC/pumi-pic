@@ -242,13 +242,7 @@ namespace pumipic {
       return;
 
     // move function pointer to GPU (if needed)
-    FunctionType* fn_d;
-    #ifdef PP_USE_CUDA
-        cudaMalloc(&fn_d, sizeof(FunctionType));
-        cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-    #else
-        fn_d = &fn;
-    #endif
+    FunctionType* fn_d = gpuMemcpy(fn);
     kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
     const auto activeSliceIdx = aosoa_->number_of_members-1;
@@ -260,8 +254,8 @@ namespace pumipic {
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, name);
-#ifdef PP_USE_CUDA
-    cudaFree(fn_d);
+#ifdef PP_USE_GPU
+    gpuFree(fn_d);
 #endif
 
   }

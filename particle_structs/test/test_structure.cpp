@@ -131,7 +131,6 @@ int main(int argc, char* argv[]) {
                 "| Initial: %f GB | Final: %f GB | Diff: %f GB\n", name.c_str(),
                 mem_i, mem_f, mem_f - mem_i);
       }
-      break;
     }
     ps::destroyViews<Types>(particle_info);
   }

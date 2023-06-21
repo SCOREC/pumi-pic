@@ -32,3 +32,29 @@ static void getMemUsage(size_t* free, size_t* total)
   hostGetMem(free, total);
 #endif
 }
+
+template <typename FunctionType>
+FunctionType* gpuMemcpy(FunctionType& fn)
+{
+  FunctionType* fn_d;
+  #ifdef PP_USE_CUDA
+    cudaMalloc(&fn_d, sizeof(FunctionType));
+    cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+  #elif defined(PP_USE_HIP)
+    hipMalloc(&fn_d, sizeof(FunctionType));
+    hipMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+  #else
+    fn_d = &fn;
+  #endif
+  return fn_d;
+}
+
+template <typename FunctionType>
+void gpuFree(FunctionType& fn_d)
+{
+  #ifdef PP_USE_CUDA
+    cudaFree(fn_d);
+  #elif defined(PP_USE_HIP)
+    hipFree(fn_d);
+  #endif
+}

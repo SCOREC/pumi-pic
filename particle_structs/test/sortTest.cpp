@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Sort.hpp>
+#include <mpi.h>
 
 void performSorting(Kokkos::View<int*> arr, const char* name) {
   Kokkos::View<int*> copy("arr_copy", arr.size());
@@ -18,6 +19,7 @@ void performSorting(Kokkos::View<int*> arr, const char* name) {
 int main(int argc, char** argv) {
 
   Kokkos::initialize(argc,argv);
+  MPI_Init(&argc, &argv);
   int n = atoi(argv[1]);
 
   {
@@ -41,5 +43,6 @@ int main(int argc, char** argv) {
   }
 
   Kokkos::finalize();
+  MPI_Finalize();
   return 0;
 }

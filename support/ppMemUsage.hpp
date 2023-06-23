@@ -42,7 +42,7 @@ FunctionType* gpuMemcpy(FunctionType& fn)
     cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
   #elif defined(PP_USE_HIP)
     hipMalloc(&fn_d, sizeof(FunctionType));
-    hipMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
+    hipMemcpy(fn_d,&fn, sizeof(FunctionType), hipMemcpyHostToDevice);
   #else
     fn_d = &fn;
   #endif

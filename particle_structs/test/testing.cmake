@@ -2,6 +2,8 @@ mpi_test(type_test 1 ./typeTest)
 
 mpi_test(sort_test 1 ./sortTest 5000)
 
+mpi_test(scanTest 1 ./scanTest)
+
 mpi_test(view_test 1 ./viewTest)
 
 mpi_test(initParticles 1 ./initParticles)

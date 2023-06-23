@@ -15,7 +15,7 @@ namespace pumipic {
   }
   template <typename ViewT, typename Space>
   void inclusive_scan(ViewT entries, ViewT result, Space space) {
-    Kokkos::Experimental::inclusive_scan(space, entries, result, 0);
+    Kokkos::Experimental::inclusive_scan(space, entries, result);
   }
   /* Taken from https://stackoverflow.com/questions/31762958/check-if-class-is-a-template-specialization
      Checks if type is a specialization of a class template

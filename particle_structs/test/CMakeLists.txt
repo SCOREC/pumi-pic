@@ -10,6 +10,8 @@ make_test(typeTest typeTest.cpp)
 
 make_test(sortTest sortTest.cpp)
 
+make_test(scanTest scanTest.cpp)
+
 make_test(viewTest viewTest.cpp)
 
 make_test(buildSCSTest buildSCSTest.cpp)

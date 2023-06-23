@@ -551,7 +551,7 @@ SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name
     });
   });
 #ifdef PP_USE_GPU
-  cudaFree(fn_d);
+  gpuFree(fn_d);
 #endif
 }
 

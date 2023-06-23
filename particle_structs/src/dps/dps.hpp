@@ -236,7 +236,7 @@ namespace pumipic {
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, s);
 #ifdef PP_USE_GPU
-    cudaFree(fn_d);
+    gpuFree(fn_d);
 #endif
 
   }

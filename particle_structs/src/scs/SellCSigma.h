@@ -130,10 +130,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
     };
     ps::parallel_for(scs, lamb, name);
   */
-  template <typename FunctionType, class U = MemSpace>
-  typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
-  template <typename FunctionType, class U = MemSpace>
-  typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
+  template <typename FunctionType>
+  void parallel_for(FunctionType& fn, std::string s="");
 
   //Prints the format of the SCS labeled by prefix
   void printFormat(const char* prefix = "") const;
@@ -521,9 +519,8 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 }
 
 template <class DataTypes, typename MemSpace>
-template <typename FunctionType, typename U>
-typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type
-SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
+template <typename FunctionType>
+void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
   if (nPtcls() == 0)
     return;
   FunctionType* fn_d = gpuMemcpy(fn);
@@ -553,27 +550,6 @@ SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name
 #ifdef PP_USE_GPU
   gpuFree(fn_d);
 #endif
-}
-
-template <class DataTypes, typename MemSpace>
-template <typename FunctionType, typename U>
-typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type
-SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
-  if (nPtcls() == 0)
-    return;
-  for (int slice = 0; slice < num_slices; ++slice) {
-    const lid_t rowLen = (offsets(slice+1)-offsets(slice))/C_;
-    for (int slice_row = 0; slice_row < C_; ++slice_row) {
-      const lid_t row = slice_to_chunk(slice) * C_ + slice_row;
-      const lid_t element_id = row_to_element(row);
-      const lid_t start = offsets(slice) + slice_row;
-      for (int ptcl = 0; ptcl < rowLen; ++ptcl) {
-        const lid_t particle_id = start + ptcl*C_;
-        const lid_t mask = particle_mask[particle_id];
-        fn(element_id, particle_id, mask);
-      }
-    }
-  }
 }
 
 } // end namespace pumipic

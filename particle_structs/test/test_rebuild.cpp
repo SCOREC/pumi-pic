@@ -112,7 +112,6 @@ int rebuildNewElems(const char* name, PS* structure) {
   ps::parallel_for(structure, checkElement, "checkElement");
   fails += ps::getLastValue<lid_t>(failed);
 
-  failed == kkLidView("failed", 1);
   auto checkElementSums = KOKKOS_LAMBDA(const int i) {
     const lid_t old_sum = element_sums(i);
     const lid_t new_sum = new_element_sums(i);

@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
       fails += testMetrics(name.c_str(), structure);
       double mem_pr = get_mem_usage();
       if (check_memory && fabs(mem_pr - mem_s) > .00001) {
-        fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name, mem_pr - mem_s);
+        fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name.c_str(), mem_pr - mem_s);
         ++fails;
       }
       //Memory changes are expected in rebuild/migration (the structure check at the end will ensure no memory leaks)
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
       fails += testSegmentComp(name.c_str(), structure);
       double mem_pd = get_mem_usage();
       if (check_memory && fabs(mem_pd - mem_pb) > .00001) {
-        fprintf(stderr, "[ERROR] Structure %s memory usage changed in later tests [%f]\n", name, mem_pd - mem_pb);
+        fprintf(stderr, "[ERROR] Structure %s memory usage changed in later tests [%f]\n", name.c_str(), mem_pd - mem_pb);
         ++fails;
       }
       fails += migrateToEmptyAndRefill(name.c_str(), structure);
@@ -208,7 +208,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
     return NULL;
   }
   catch(...) {
-    fprintf(stderr, "[ERROR] Construction of %s failed on rank %d\n", error_message, comm_rank);
+    fprintf(stderr, "[ERROR] Construction of %s failed on rank %d\n", error_message.c_str(), comm_rank);
     name = "FAIL\n";
     return NULL;
   }

@@ -39,7 +39,7 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
 
 #ifdef PP_USE_GPU
   template <std::size_t N>
-  using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+  using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 #else
   template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
 template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
@@ -332,7 +332,7 @@ typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_
 
 template<class DataTypes, typename MemSpace>
 template <class MSpace>
-SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
+typename SellCSigma<DataTypes, MemSpace>::template Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
   if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
     fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
     exit(EXIT_FAILURE);

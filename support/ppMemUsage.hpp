@@ -27,7 +27,7 @@ static void getMemUsage(size_t* free, size_t* total)
 #if defined(PP_USE_CUDA)
   cudaMemGetInfo(free, total);
 #elif defined(PP_USE_HIP)
-  hipMemGetInfo(free, total);
+  auto error = hipMemGetInfo(free, total);
 #else
   hostGetMem(free, total);
 #endif
@@ -41,8 +41,8 @@ FunctionType* gpuMemcpy(FunctionType& fn)
     cudaMalloc(&fn_d, sizeof(FunctionType));
     cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
   #elif defined(PP_USE_HIP)
-    hipMalloc(&fn_d, sizeof(FunctionType));
-    hipMemcpy(fn_d,&fn, sizeof(FunctionType), hipMemcpyHostToDevice);
+    auto error1 = hipMalloc(&fn_d, sizeof(FunctionType));
+    auto error2 = hipMemcpy(fn_d,&fn, sizeof(FunctionType), hipMemcpyHostToDevice);
   #else
     fn_d = &fn;
   #endif
@@ -55,6 +55,6 @@ void gpuFree(FunctionType& fn_d)
   #ifdef PP_USE_CUDA
     cudaFree(fn_d);
   #elif defined(PP_USE_HIP)
-    hipFree(fn_d);
+    auto error = hipFree(fn_d);
   #endif
 }

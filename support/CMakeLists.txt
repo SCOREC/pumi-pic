@@ -33,6 +33,7 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
+target_link_libraries(support PUBLIC MPI::MPI_CXX)
 if(ENABLE_CABANA)
   target_link_libraries(support PUBLIC Cabana::cabanacore)
 endif()

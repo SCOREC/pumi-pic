@@ -9,6 +9,7 @@ set(HEADERS
   ViewComm_gpu.hpp
   ppAssert.h
   ppTiming.hpp
+  ppMemUsage.hpp
 )
 
 set(SOURCES

@@ -2,7 +2,7 @@
 
 #ifdef PP_USE_GPU
 #define PP_INLINE __host__ __device__ inline
-#define PP_DEVICE __device__ inline
+#define PP_DEVICE __host__ __device__ inline
 #define PS_LAMBDA [=] __host__ __device__
 #define PP_DEVICE_VAR __device__
 #else

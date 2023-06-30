@@ -27,8 +27,7 @@ namespace pumipic {
     const auto num_new_ptcls = new_particle_elements.size();
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree_d("elmDegree", num_elems);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto active = Cabana::slice<CM_DT::size-1>(*aosoa_);
 
     // first loop to count number of particles per new element (atomic)
     assert(new_element.size() == capacity_);

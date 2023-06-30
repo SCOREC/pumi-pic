@@ -249,8 +249,7 @@ namespace pumipic {
     FunctionType* fn_d = gpuMemcpy(fn);
     kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    const auto mask = Cabana::slice<activeSliceIdx>(*aosoa_); // get active mask
+    const auto mask = Cabana::slice<CM_DT::size-1>(*aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
@@ -267,8 +266,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask = Cabana::slice<CM_DT::size-1>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
     Kokkos::parallel_for("count_padding", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -317,8 +315,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
 
     kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask_slice = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask_slice = Cabana::slice<CM_DT::size-1>(*aosoa_);
     Kokkos::parallel_for("copy_mask", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         mask(ptcl_id) = mask_slice(ptcl_id);

@@ -243,7 +243,7 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   template <class MSpace>
-  DPS<DataTypes, MemSpace>::Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
+  typename DPS<DataTypes, MemSpace>::template Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
       fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);

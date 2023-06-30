@@ -76,9 +76,13 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
+    typename ParticleStructure<DataTypes, MemSpace>::kkLidView
+    buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+
+    typename ParticleStructure<DataTypes, MemSpace>::kkLidView
+    getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+
     void setActive(const kkLidView particles_per_element);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
@@ -370,7 +374,7 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   template <class MSpace>
-  CabM<DataTypes, MemSpace>::Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
+  typename CabM<DataTypes, MemSpace>::template Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
       fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);

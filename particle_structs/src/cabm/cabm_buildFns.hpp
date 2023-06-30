@@ -91,7 +91,7 @@ namespace pumipic {
 
     const lid_t num_elements = particles_per_element.size();
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = DataTypes::size-1;
+    const auto activeSliceIdx = aosoa_->number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,

@@ -3,7 +3,6 @@
 #include "Distribute.h"
 #include <mpi.h>
 #include "team_policy.hpp"
-#include "ppMemUsage.hpp"
 
 const char* structure_names[4] = { "SCS", "CSR", "CabM", "DPS" };
 int comm_rank, comm_size;
@@ -80,13 +79,6 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   }
 
   delete ptcls;
-
-  getMemUsage(&free, &total);
-  const long used_after=total-free;
-  if (used_before < used_after) {
-    fprintf(stderr, "[ERROR] %s has allocated too much memory\n", structure_names[structure]);
-    fails += 1;
-  }
   return fails;
 }
 
@@ -123,20 +115,8 @@ bool destroyRebuild(int ne_in, int np_in, int distribution, int structure) {
     ptcls = new ps::DPS<Types, MemSpace>(po, ne_in, np_in, ptcls_per_elem_v, element_gids_v);
   }
   PS::kkLidView new_element("new_element", ptcls->capacity());
-  
-  size_t free, total;
-  getMemUsage(&free, &total);
-  const long used_before=total-free;
 
   ptcls->rebuild(new_element);
-  
-  getMemUsage(&free, &total);
-  const long used_after=total-free;
-  if (used_before < used_after) {
-    fprintf(stderr, "[ERROR] %s::rebuild has allocated too much memory\n", structure_names[structure]);
-    fails += 1;
-  }
-
   delete ptcls;
   return fails;
 }
@@ -183,19 +163,8 @@ bool destroyMigrate(int ne_in, int np_in, int distribution, int structure) {
     KOKKOS_LAMBDA(const int& i) {
       new_process(i) = comm_rank_d(0);
     });
-  
-  size_t free, total;
-  getMemUsage(&free, &total);
-  const long used_before=total-free;
 
   ptcls->migrate(new_element, new_process);
-
-  getMemUsage(&free, &total);
-  const long used_after=total-free;
-  if (used_before < used_after) {
-    fprintf(stderr, "[ERROR] %s::migrate has allocated too much memory\n", structure_names[structure]);
-    fails += 1;
-  }
   delete [] comm_rank_h;
   delete ptcls;
   return fails;

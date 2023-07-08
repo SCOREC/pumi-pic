@@ -60,10 +60,6 @@ bool destroyConstructor(int ne_in, int np_in, int distribution, int structure) {
   Kokkos::TeamPolicy<ExeSpace> po = pumipic::TeamPolicyAuto(4, 32);
   
   // create and destroy structure
-  size_t free, total;
-  getMemUsage(&free, &total);
-  const long used_before=total-free;
-
   PS* ptcls;
   if (structure == 0) {
     ptcls = new ps::SellCSigma<Types, MemSpace>(po, 5,2, ne_in, np_in, ptcls_per_elem_v, element_gids_v);

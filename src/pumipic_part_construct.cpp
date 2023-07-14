@@ -120,8 +120,21 @@ namespace pumipic {
     int comm_size = comm->size();
     int dim = mesh.dim();
 
+    for (int i = 0; i < 4; ++i) {
+      num_cores[i] = 0;
+      num_bounds[i] = 0;
+      num_entites[i] = 0;
+      num_boundaries[i] = 0;
+      bounded_ent_ids[i] = Omega_h::LOs(0);
+      offset_ents_per_rank_per_dim[i] = Omega_h::LOs(0);
+      ent_to_comm_arr_index_per_dim[i] = Omega_h::LOs(0);
+      buffered_parts[i] = Omega_h::HostWrite<Omega_h::LO>(0);
+      boundary_parts[i] = Omega_h::HostWrite<Omega_h::LO>(0);
+      is_complete_part[i] = Omega_h::HostWrite<Omega_h::LO>(0);
+      offset_bounded_per_dim[i] = Omega_h::HostWrite<Omega_h::LO>(0);
+    }
+
     //Get global entity counts from full mesh
-    num_entites[3] = 0;
     for (int i = 0; i <= dim; ++i) {
       num_entites[i] = mesh.nents(i);
     }
@@ -149,12 +162,6 @@ namespace pumipic {
       auto rank_lids = rankLidNumbering(owner_dim[i], rank_offset_nents[i],
                                         ent_gids);
       mesh.add_tag(i, "rank_lids", 1, rank_lids);
-    }
-
-    for (int i = 0; i < 4; ++i) {
-      num_cores[i] = 0;
-      num_bounds[i] = 0;
-      num_boundaries[i] = 0;
     }
 
     /***************** Count the number of parts in the picpart ****************/

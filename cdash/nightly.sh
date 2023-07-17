@@ -1,16 +1,15 @@
 #!/bin/bash
 
 #load system modules
-source /etc/profile.d/modules.sh
-source /etc/profile
+# source /etc/profile.d/modules.sh
+# source /etc/profile
 
 export root=/lore/castia5/nightlyBuilds/pumipic
 
-module use /opt/scorec/spack/dev/lmod/linux-rhel7-x86_64/Core
-module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core
-module load gcc/7.4.0-c5aaloy cuda/11.4
-module load mpich/3.3.1-bfezl2l
-module load cmake
+module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core 
+module use /opt/scorec/spack/v0154_2/lmod/linux-rhel7-x86_64/Core 
+module load gcc/10.1.0 mpich
+module load cuda/11.4 cmake
 
 function getname() {
   name=$1
@@ -26,7 +25,7 @@ export CMAKE_PREFIX_PATH=$engpar:$kk:$oh:$pumipic:$CMAKE_PREFIX_PATH
 export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
-[ ! -d kokkos ] && git clone -b 3.4.01 git@github.com:kokkos/kokkos.git
+[ ! -d kokkos ] && git clone -b 4.0.01 git@github.com:kokkos/kokkos.git
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
@@ -60,7 +59,7 @@ cd omega_h && git checkout master && git pull && cd -
 cmake -S omega_h -B ${oh%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_BUILD_TYPE=debug \
+  -DCMAKE_BUILD_TYPE=release \
   -DCMAKE_INSTALL_PREFIX=$oh \
   -DBUILD_SHARED_LIBS=OFF \
   -DOmega_h_USE_Kokkos=ON \
@@ -76,7 +75,7 @@ cd omega_h && git checkout scorec-v10.5.0 && cd -
 cmake -S omega_h -B ${oh1050%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_BUILD_TYPE=debug \
+  -DCMAKE_BUILD_TYPE=release \
   -DCMAKE_INSTALL_PREFIX=$oh1050 \
   -DBUILD_SHARED_LIBS=OFF \
   -DOmega_h_USE_Kokkos=ON \
@@ -99,6 +98,6 @@ git pull
 git submodule init
 git submodule update
 
-mpicxx -show
-#run nightly test script
-ctest -VV -D Nightly -S $d/repos/pumipic/cdash/nightly.cmake
+# mpicxx -show
+# #run nightly test script
+# ctest -VV -D Nightly -S $d/repos/pumipic/cdash/nightly.cmake

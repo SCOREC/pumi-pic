@@ -39,7 +39,7 @@ cmake -S kokkos -B ${kk%%install} \
 cmake --build ${kk%%install} --target install -j 24
 
 cd $root
-[ ! -d EnGPar] && git clone git@github.com:SCOREC/EnGPar.git
+[ ! -d EnGPar ] && git clone git@github.com:SCOREC/EnGPar.git
 cd EnGPar && git pull && cd -
 [ -d $engpar ] && rm -rf ${engpar%%install}
 cmake -S EnGPar -B ${engpar%%install} \
@@ -98,6 +98,6 @@ git pull
 git submodule init
 git submodule update
 
-# mpicxx -show
-# #run nightly test script
-# ctest -VV -D Nightly -S $d/repos/pumipic/cdash/nightly.cmake
+mpicxx -show
+#run nightly test script
+ctest -VV -D Nightly -S $d/repos/pumipic/cdash/nightly.cmake

@@ -5,7 +5,7 @@ SET(CTEST_DO_SUBMIT ON)
 SET(CTEST_TEST_TYPE Nightly)
 
 set(CTEST_SITE             "cranium.scorec.rpi.edu" )
-set(CTEST_DASHBOARD_ROOT   "/lore/cwsmith/nightlyBuilds/pumipic")
+set(CTEST_DASHBOARD_ROOT   "/lore/castia5/nightlyBuilds/pumipic")
 set(CTEST_CMAKE_GENERATOR  "Unix Makefiles" )
 set(CTEST_BUILD_CONFIGURATION  RelWithDebInfo)
 

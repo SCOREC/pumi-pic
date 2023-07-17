@@ -4,7 +4,7 @@
 source /etc/profile.d/modules.sh
 source /etc/profile
 
-export root=/lore/cwsmith/nightlyBuilds/pumipic
+export root=/lore/castia5/nightlyBuilds/pumipic
 
 module use /opt/scorec/spack/dev/lmod/linux-rhel7-x86_64/Core
 module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core
@@ -90,7 +90,7 @@ cmake --build ${oh1050%%install} --target install -j8
 set +e
 set +x
 
-d=/lore/cwsmith/nightlyBuilds/pumipic
+d=/lore/castia5/nightlyBuilds/pumipic
 cd $d
 #remove old compilation
 [ -d build_pumipic ] && rm -rf build_pumipic/

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #load system modules
-# source /etc/profile.d/modules.sh
-# source /etc/profile
+source /etc/profile.d/modules.sh
+source /etc/profile
 
 export root=/lore/castia5/nightlyBuilds/pumipic
 

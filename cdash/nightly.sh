@@ -19,7 +19,6 @@ function getname() {
 export engpar=$root/`getname engpar`/install # This is where engpar will be (or is) installed
 export kk=$root/`getname kokkos`/install   # This is where kokkos will be (or is) installed
 export oh=$root/`getname omegah`/install  # This is where omega_h will be (or is) installed
-export oh1050=$root/`getname omegah1050`/install
 export pumipic=$root/`getname pumipic`/install # This is where PumiPIC will be (or is) installed
 export CMAKE_PREFIX_PATH=$engpar:$kk:$oh:$pumipic:$CMAKE_PREFIX_PATH
 export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
@@ -70,22 +69,6 @@ cmake -S omega_h -B ${oh%%install} \
   -DBUILD_TESTING=on  \
   -DKokkos_PREFIX=$kk/lib64/cmake
 cmake --build ${oh%%install} --target install -j8
-
-cd omega_h && git checkout scorec-v10.5.0 && cd -
-[ -d $oh1050 ] && rm -rf ${oh1050%%install}
-cmake -S omega_h -B ${oh1050%%install} \
-  -DCMAKE_CXX_COMPILER=mpicxx \
-  -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_BUILD_TYPE=release \
-  -DCMAKE_INSTALL_PREFIX=$oh1050 \
-  -DBUILD_SHARED_LIBS=OFF \
-  -DOmega_h_USE_Kokkos=ON \
-  -DOmega_h_USE_CUDA=on \
-  -DOmega_h_CUDA_ARCH=75 \
-  -DOmega_h_USE_MPI=on  \
-  -DBUILD_TESTING=on  \
-  -DKokkos_PREFIX=$kk/lib64/cmake
-cmake --build ${oh1050%%install} --target install -j8
 
 set +e
 set +x

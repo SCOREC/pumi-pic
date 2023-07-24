@@ -87,6 +87,10 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
+if (PP_ENABLE_MEMCHECK)
+  find_program(VALGRIND "valgrind")
+endif()
+
 # testing helper function
 function(mpi_test TESTNAME PROCS EXE)
   add_test(

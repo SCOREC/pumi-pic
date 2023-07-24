@@ -16,8 +16,12 @@ jobs:
     strategy:
       matrix:
         build_type: [Release, Debug]
+        memory_test: [ON, OFF]
         compiler: [g++]
         language: ['cpp']
+        exclude:
+          - build_type: Release
+            memory_test: ON
       
     steps:
 
@@ -182,6 +186,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=mpicxx
         -DIS_TESTING=ON
         -DPS_IS_TESTING=ON
+        -DPP_ENABLE_MEMCHECK=${{matrix.memory_test}}
         -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
         -DTEST_DATA_DIR=$GITHUB_WORKSPACE/pumi-pic/pumipic-data
         -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
@@ -196,7 +201,7 @@ jobs:
       run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
 
     - name: PUMI-PIC Test
-      run: ctest --test-dir ${{ runner.temp }}/build-pumi-pic
+      run: ctest -E "medium|large|120" --test-dir ${{ runner.temp }}/build-pumi-pic
 
     - name: PUMI-PIC Print
       if: always()

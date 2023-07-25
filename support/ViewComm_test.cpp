@@ -32,8 +32,8 @@ int runTests() {
   return fails;
 }
 int main(int argc, char* argv[]) {
-  Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
+  Kokkos::initialize(argc, argv);
 
   pumipic::checkCudaAwareMPI();
 
@@ -207,7 +207,7 @@ int iSendRecvWaitTest(const char* name, int msg_size) {
                 "returned error code %d\n", comm_rank, i, ret);
       }
     }
-    Kokkos::parallel_for(ExecPolicy(exec, 0, msg_size), KOKKOS_LAMBDA(const int i) {
+    Kokkos::parallel_for(ExecPolicy(exec, 0, msg_smedium|large|120ize), KOKKOS_LAMBDA(const int i) {
         if (recv_view(i) != prev_rank) {
           printf("[ERROR] Rank %d: Recevied incorrect value in element %d "
                  "[(actual) %d != %d (should be)]\n", local_rank, i, recv_view(i), prev_rank);

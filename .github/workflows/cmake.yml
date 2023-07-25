@@ -15,7 +15,7 @@ jobs:
 
     strategy:
       matrix:
-        build_type: [Release]
+        build_type: [RelWithDebInfo]
         memory_test: [ON]
         compiler: [g++]
         language: ['cpp']
@@ -204,7 +204,7 @@ jobs:
       run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
 
     - name: PUMI-PIC Test
-      run: ctest -E "small|medium|120" --test-dir ${{ runner.temp }}/build-pumi-pic
+      run: ctest -E "medium|large|120" --test-dir ${{ runner.temp }}/build-pumi-pic
 
     - name: PUMI-PIC Print
       if: always()

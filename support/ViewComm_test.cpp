@@ -363,7 +363,7 @@ int iSendRecvWaitAllTest(const char* name) {
     });
     delete [] send_requests;
     delete [] recv_requests;
-    // delete [] statuses;
+    delete [] statuses;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);

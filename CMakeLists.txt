@@ -89,7 +89,7 @@ message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
 
 if (PP_ENABLE_MEMCHECK)
   find_program(VALGRIND "valgrind")
-  set(VALGRIND_ARGS "--leak-check=full --error-exitcode=1")
+  set(VALGRIND_ARGS "--leak-check=full" "--error-exitcode=1")
 endif()
 
 # testing helper function

@@ -33,7 +33,7 @@ int runTests() {
 }
 int main(int argc, char* argv[]) {
   // MPI_Init(&argc, &argv);
-  // Kokkos::initialize(argc, argv);
+  Kokkos::initialize(argc, argv);
 
 //   pumipic::checkCudaAwareMPI();
 
@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
 // #endif
 
   // MPI_Finalize();
-  // Kokkos::finalize();
+  Kokkos::finalize();
   return fails;
 }
 

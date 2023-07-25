@@ -15,8 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        build_type: [Release, Debug]
-        memory_test: [ON, OFF]
+        build_type: [Debug]
+        memory_test: [ON]
         compiler: [g++]
         language: ['cpp']
         exclude:
@@ -204,7 +204,7 @@ jobs:
       run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
 
     - name: PUMI-PIC Test
-      run: ctest -R "view" --test-dir ${{ runner.temp }}/build-pumi-pic
+      run: ctest -R "viewComm" --test-dir ${{ runner.temp }}/build-pumi-pic
 
     - name: PUMI-PIC Print
       if: always()

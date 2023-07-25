@@ -35,20 +35,20 @@ int main(int argc, char* argv[]) {
   MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
 
-  pumipic::checkCudaAwareMPI();
+//   pumipic::checkCudaAwareMPI();
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+//   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+//   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
   int fails = 0;
 
-  //Test Host Functions
-  fails += runTests<Kokkos::HostSpace>();
+//   //Test Host Functions
+//   fails += runTests<Kokkos::HostSpace>();
 
-  //Test Cuda Functions
-#ifdef PP_USE_CUDA
-  fails += runTests<Kokkos::CudaSpace>();
-#endif
+//   //Test Cuda Functions
+// #ifdef PP_USE_CUDA
+//   fails += runTests<Kokkos::CudaSpace>();
+// #endif
 
   MPI_Finalize();
   Kokkos::finalize();

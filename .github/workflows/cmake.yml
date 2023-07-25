@@ -26,7 +26,7 @@ jobs:
     steps:
 
     - name: Install mpi
-      run: sudo apt-get install -yq mpich
+      run: sudo apt-get install -yq mpich libmpich-dev
 
     - name: Install Valgrind
       run: sudo apt-get install -yq valgrind

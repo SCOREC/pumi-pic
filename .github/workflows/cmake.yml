@@ -7,7 +7,7 @@ on:
 
 jobs:
   buildTest:
-    runs-on: [linux, x64]
+    runs-on: ubuntu-latest
 
     defaults:
       run:

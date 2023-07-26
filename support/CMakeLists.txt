@@ -57,6 +57,11 @@ if (("CUDA" IN_LIST Kokkos_DEVICES) OR ("HIP" IN_LIST Kokkos_DEVICES))
   target_compile_definitions(support INTERFACE -DPP_USE_GPU)
 endif()
 
+if(PS_USE_GPU_AWARE_MPI)
+  add_definitions(-DPS_GPU_AWARE_MPI)
+  target_compile_definitions(support INTERFACE -DPS_GPU_AWARE_MPI)
+endif()
+
 pumipic_export_lib(support "${HEADERS}")
 
 if(IS_TESTING)

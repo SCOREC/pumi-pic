@@ -294,12 +294,11 @@ private:
     int comm_rank = picparts.comm()->rank();
 
     //Offset sum the ptcls per elem and get total number of particles
-    ViewT offsets = ViewT("ptcl per elem offsets", ptcls_per_elem.size() + 1);
-    Kokkos::resize(ptcls_per_elem, ptcls_per_elem.size() + 1);
+    ViewT offsets = ViewT("ptcl per elem offsets", ptcls_per_elem.size());
     exclusive_scan(ptcls_per_elem, offsets);
 
     //Array of new processes per particle
-    lid_t nptcls = getLastValue(offsets);
+    lid_t nptcls = getLastValue(offsets) + getLastValue(ptcls_per_elem);
     Kokkos::View<int*> new_procs("new procs", nptcls);
     auto setSelf = OMEGA_H_LAMBDA(const int ptcl) {
       new_procs[ptcl] = comm_rank;

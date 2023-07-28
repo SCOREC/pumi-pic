@@ -576,7 +576,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(psCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
+  o::Write<o::LO> elem_ids_next(psCapacity, -1);
   bool set_ids = false;
   if (elem_ids.size() == 0) {
     elem_ids = o::Write<o::LO>(psCapacity);
@@ -605,7 +605,6 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
     //pid is same for a particle between iterations in this while loop
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
-      elem_ids_next[pid] = -1;
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = elem_ids[pid];
         OMEGA_H_CHECK(elmId >= 0);

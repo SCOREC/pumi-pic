@@ -51,50 +51,19 @@
   template <typename ViewT>
   IsGPU<ViewSpace<ViewT> > PS_Comm_Isend(ViewT view, int offset, int size,
                                   int dest, int tag, MPI_Comm comm, MPI_Request* req) {
-    auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
-#ifdef PS_GPU_AWARE_MPI
-    return MPI_Isend(subview.data(), subview.size(),
-                     MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
-                     tag, comm, req);
-#else
-    auto view_host = deviceToHost(subview);
-    int ret =  MPI_Isend(view_host.data(), view_host.size(),
-                         MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
-                         tag, comm, req);
-    //Noop that will keep the view_host around until the lambda is removed
-    get_map()[req] = [=]() {
-      (void)view_host;
-    };
-    return ret;
-#endif
+    Kokkos::fence();
+    int size_per_entry = BaseType<ViewType<ViewT> >::size;
+    return MPI_Isend(view.data() + offset, size*size_per_entry, MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                   dest, tag, comm, req);
   }
   //Irecv
   template <typename ViewT>
   IsGPU<ViewSpace<ViewT> > PS_Comm_Irecv(ViewT view, int offset, int size,
                                   int sender, int tag, MPI_Comm comm, MPI_Request* req) {
-    ViewT new_view("irecv_view", size);
-#ifdef PS_GPU_AWARE_MPI
-    int ret = MPI_Irecv(new_view.data(), new_view.size(),
-                        MpiType<BT<ViewType<ViewT> > >::mpitype(), sender,
-                        tag, comm, req);
-#else
     int size_per_entry = BaseType<ViewType<ViewT> >::size;
-    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
-    int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
-                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
-                        sender, tag, comm, req);
-#endif
-    get_map()[req] = [=]() {
-#ifndef PS_GPU_AWARE_MPI
-      deep_copy(new_view, view_host);
-#endif
-      Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-          copyViewToView(view,i+offset, new_view, i);
-      });
-    };
-
-    return ret;
-
+    return MPI_Irecv(view.data() + offset, size*size_per_entry,
+                   MpiType<BT<ViewType<ViewT> > >::mpitype(),
+                   sender, tag, comm, req);
   }
 
   //Wait
@@ -179,6 +148,7 @@ IsGPU<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int co
                                          MPI_Op op, int root, MPI_Comm comm) {
 
 #ifdef PS_GPU_AWARE_MPI
+  Kokkos::fence();
   return MPI_Reduce(send_view.data(), recv_view.data(), count,
                     MpiType<BT<ViewType<ViewT> > >::mpitype(),
                     op, root, comm);
@@ -201,6 +171,7 @@ template <typename ViewT>
 IsGPU<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int count,
                                             MPI_Op op, MPI_Comm comm) {
 #ifdef PS_GPU_AWARE_MPI
+  Kokkos::fence();
   return MPI_Allreduce(send_view.data(), recv_view.data(), count,
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),op, comm);
 #else

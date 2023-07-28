@@ -21,13 +21,13 @@ int runTests() {
   fails += sendRecvTest<Space>("Small send/recv",10);
   fails += sendRecvTest<Space>("Large send/recv",10000);
 
-  // fails += iSendRecvWaitTest<Space>("Small Isend/Irecv + Wait", 10);
-  // fails += iSendRecvWaitTest<Space>("Large Isend/Irecv + Wait", 10000);
+  fails += iSendRecvWaitTest<Space>("Small Isend/Irecv + Wait", 10);
+  fails += iSendRecvWaitTest<Space>("Large Isend/Irecv + Wait", 10000);
 
-  // fails += iSendRecvWaitAllTest<Space>("Isend/Irecv + Waitall");
+  fails += iSendRecvWaitAllTest<Space>("Isend/Irecv + Waitall");
 
-  // fails += reduceTest<Space>("Reduce");
-  // fails += allReduceTest<Space>("Allreduce");
+  fails += reduceTest<Space>("Reduce");
+  fails += allReduceTest<Space>("Allreduce");
 
   return fails;
 }

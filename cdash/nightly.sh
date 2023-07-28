@@ -59,7 +59,7 @@ cd omega_h && git checkout master && git pull && cd -
 cmake -S omega_h -B ${oh%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \
   -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_BUILD_TYPE=release \
+  -DCMAKE_BUILD_TYPE=debug \
   -DCMAKE_INSTALL_PREFIX=$oh \
   -DBUILD_SHARED_LIBS=OFF \
   -DOmega_h_USE_Kokkos=ON \

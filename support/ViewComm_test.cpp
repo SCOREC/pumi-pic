@@ -32,8 +32,8 @@ int runTests() {
   return fails;
 }
 int main(int argc, char* argv[]) {
-  MPI_Init(&argc, &argv);
   Kokkos::initialize(argc, argv);
+  MPI_Init(&argc, &argv);
 
   pumipic::checkCudaAwareMPI();
 

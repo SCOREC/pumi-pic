@@ -206,6 +206,11 @@ jobs:
       run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
 
     - name: PUMI-PIC Test
+      if: ${{matrix.memory_test == 'OFF'}}
+      run: ctest --test-dir ${{ runner.temp }}/build-pumi-pic
+
+    - name: PUMI-PIC Test
+      if: ${{matrix.memory_test == 'ON'}}
       run: ctest -E "medium|large|120" --test-dir ${{ runner.temp }}/build-pumi-pic
 
     - name: PUMI-PIC Print

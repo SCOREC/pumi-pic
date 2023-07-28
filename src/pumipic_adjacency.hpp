@@ -605,6 +605,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
     //pid is same for a particle between iterations in this while loop
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       //inactive particle that is still moving to its target position
+      elem_ids_next[pid] = -1;
       if( mask > 0 && !ptcl_done[pid] ) {
         auto elmId = elem_ids[pid];
         OMEGA_H_CHECK(elmId >= 0);

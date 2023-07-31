@@ -2,6 +2,7 @@ name: build-test
 on: 
   push:
   pull_request:
+    types: [opened, reopened]
   schedule:
     - cron: '12 14 * * 3'
 

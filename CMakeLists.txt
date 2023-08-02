@@ -74,8 +74,8 @@ set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
 set(KOKKOS_ENABLED true)
 
-if(KOKKOS_VERSION VERSION_GREATER_EQUAL 4.0.01)
-    message(FATAL_ERROR "Kokkos version >= 4.0.01 required")
+if(Kokkos_VERSION VERSION_LESS 4.0.01)
+    message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
 endif()
 
 set(debug_flag)

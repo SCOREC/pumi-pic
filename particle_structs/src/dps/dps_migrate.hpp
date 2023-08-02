@@ -53,11 +53,7 @@ namespace pumipic {
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld())
-#ifdef PP_USE_GPU
-      PS_Comm_Alltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm());
-#else //Causes test to fail on Frontier     
       PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
-#endif
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
@@ -71,6 +67,9 @@ namespace pumipic {
         }
       }
     }
+
+    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
+    delete [] count_recv_requests;
     
     // Gather sending particle data
     // Perform an ex-sum on num_send_particles & num_recv_particles
@@ -104,12 +103,6 @@ namespace pumipic {
     CopyParticlesToSendFromAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(this, send_particle, *aosoa_,
                                                                     new_process, send_index);
     
-    // Wait until all counts are received
-#ifdef PP_USE_GPU
-    if (!dist.isWorld())
-#endif //Causes test to fail on Frontier
-      PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
-    delete [] count_recv_requests;
 
     // Count the number of processes being sent to and recv from
     lid_t num_sending_to = 0, num_receiving_from = 0;

@@ -13,7 +13,7 @@ namespace pumipic {
       const lid_t new_elem = new_element(particle_id);
 
       const lid_t row = element_to_row_local(element_id);
-      const bool is_particle = mask & (new_elem != -1);
+      const bool is_particle = mask && (new_elem != -1);
       const bool is_moving = is_particle & (new_elem != element_id);
       if (is_moving && mask) {
         const lid_t new_row = element_to_row_local(new_elem);

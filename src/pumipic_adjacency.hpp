@@ -576,7 +576,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   // ptcl_done[i] = 1 : particle i has hit a boundary or reached its destination
   o::Write<o::LO> ptcl_done(psCapacity);//, 1, "ptcl_done");
   // store the next parent for each particle
-  o::Write<o::LO> elem_ids_next(psCapacity);//,-1);
+  o::Write<o::LO> elem_ids_next(psCapacity, -1);
   bool set_ids = false;
   if (elem_ids.size() == 0) {
     elem_ids = o::Write<o::LO>(psCapacity);

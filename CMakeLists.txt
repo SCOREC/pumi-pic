@@ -74,8 +74,8 @@ set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
 set(KOKKOS_ENABLED true)
 
-if(KOKKOS_VERSION VERSION_GREATER_EQUAL 4.0.01)
-    message(FATAL_ERROR "Kokkos version >= 4.0.01 required")
+if(Kokkos_VERSION VERSION_LESS 4.0.01)
+    message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
 endif()
 
 set(debug_flag)
@@ -90,6 +90,11 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${debug_flag} ${opt_flag}")
 message(STATUS "CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS}")
+
+if (PP_ENABLE_MEMCHECK)
+  find_program(VALGRIND "valgrind")
+  set(VALGRIND_ARGS "--suppressions=${CMAKE_SOURCE_DIR}/valgrind.supp" "--leak-check=yes" "--error-exitcode=1")
+endif()
 
 # testing helper function
 function(mpi_test TESTNAME PROCS EXE)

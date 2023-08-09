@@ -54,6 +54,9 @@
     auto subview = Subview<ViewType<ViewT> >::subview(view, offset, size);
     Kokkos::fence();
 #ifdef PS_GPU_AWARE_MPI
+    get_map()[req] = [=]() {
+      (void)subview;
+    };
     return MPI_Isend(subview.data(), subview.size(),
                      MpiType<BT<ViewType<ViewT> > >::mpitype(), dest,
                      tag, comm, req);

@@ -66,8 +66,10 @@ int migrateSendRight(const char* name, PS* structure) {
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
   auto sendBack = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    new_element(p) = e;
-    new_process(p) = rnks(p);
+    if (mask) {
+      new_element(p) = e;
+      new_process(p) = rnks(p);
+    }
   };
   ps::parallel_for(structure, sendBack, "sendBack");
   structure->migrate(new_element, new_process, dist);

@@ -141,15 +141,15 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
   //Do not call these functions:
   int chooseChunkHeight(int maxC, kkLidView ptcls_per_elem);
-  void sigmaSort(PairView& ptcl_pairs, lid_t num_elems,
+  void sigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems,
                  kkLidView ptcls_per_elem, lid_t sigma);
-  void constructChunks(PairView ptcls, lid_t& nchunks,
+  void constructChunks(kkLidView ptcls, kkLidView index, lid_t& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element,
                        kkLidView& element_row);
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths,
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(Kokkos::View<bool*> mask, PairView ptcls, kkLidView chunk_widths,
+  void setupParticleMask(Kokkos::View<bool*> mask, kkLidView ptcls, kkLidView chunk_widths,
                          kkLidView& chunk_starts);
   void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
                    MTVs particle_info);
@@ -242,12 +242,13 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   if(!comm_rank)
     fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
-  PairView ptcls;
-  sigmaSort(ptcls, num_elems,ptcls_per_elem, sigma);
+  kkLidView ptcls;
+  kkLidView index;
+  sigmaSort(ptcls, index, num_elems,ptcls_per_elem, sigma);
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
-  constructChunks(ptcls, num_chunks, chunk_widths, row_to_element, element_to_row);
+  constructChunks(ptcls, index, num_chunks, chunk_widths, row_to_element, element_to_row);
   num_rows = num_chunks * C_;
 
   if (element_gids.size() > 0) {

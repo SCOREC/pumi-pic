@@ -16,7 +16,8 @@ namespace pumipic {
   }
 
   template<class DataTypes, typename MemSpace>
-    void SellCSigma<DataTypes, MemSpace>::constructChunks(PairView ptcls,
+    void SellCSigma<DataTypes, MemSpace>::constructChunks(kkLidView ptcls,
+                                                          kkLidView index,
                                                           lid_t& nchunks,
                                                           kkLidView& chunk_widths,
                                                           kkLidView& row_element,
@@ -30,10 +31,10 @@ namespace pumipic {
 			    nchunks * C_);
     kkLidView empty("empty_elems", 1);
     Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
-        const lid_t element = ptcls(i).second;
+        const lid_t element = index(i);
         row_element(i) = element;
         element_row(element) = i;
-        Kokkos::atomic_fetch_add(&empty[0], ptcls(i).first == 0);
+        Kokkos::atomic_fetch_add(&empty[0], ptcls(i) == 0);
       });
     Kokkos::parallel_for(Kokkos::RangePolicy<>(num_elems, nchunks * C_),
                          KOKKOS_LAMBDA(const lid_t& i) {
@@ -51,7 +52,7 @@ namespace pumipic {
         const lid_t row_num = chunk_id * C_local + thread.team_rank();
         lid_t width = 0;
         if (row_num < num_elems_local) {
-          width = ptcls(row_num).first;
+          width = ptcls(row_num);
         }
         thread.team_reduce(Kokkos::Max<lid_t,MemSpace>(width));
         chunk_widths[chunk_id] = width;
@@ -152,7 +153,7 @@ namespace pumipic {
   }
   template<class DataTypes, typename MemSpace>
   void SellCSigma<DataTypes, MemSpace>::setupParticleMask(Kokkos::View<bool*> mask,
-                                                          PairView ptcls,
+                                                          kkLidView ptcls,
                                                           kkLidView chunk_widths,
                                                           kkLidView& chunk_starts) {
     //Get start of each chunk
@@ -189,7 +190,7 @@ namespace pumipic {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(thread, rowLen), [=] (lid_t& p) {
               const lid_t particle_id = start+(p*team_size);
               if (element_id < ne)
-                mask(particle_id) = p < ptcls(row).first;
+                mask(particle_id) = p < ptcls(row);
 	      else
 		mask(particle_id) = false;
             });

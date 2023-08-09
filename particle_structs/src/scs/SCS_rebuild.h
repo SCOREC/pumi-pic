@@ -201,8 +201,9 @@ namespace pumipic {
     C_ = new_C;
     //Perform sorting
     Kokkos::Profiling::pushRegion("Sorting");
-    PairView ptcls;
-    sigmaSort(ptcls,num_elems,new_particles_per_elem, sigma);
+    kkLidView ptcls;
+    kkLidView index;
+    sigmaSort(ptcls,index,num_elems,new_particles_per_elem, sigma);
     Kokkos::Profiling::popRegion();
 
     // Number of chunks without vertical slicing
@@ -210,7 +211,7 @@ namespace pumipic {
     lid_t new_nchunks;
     kkLidView new_row_to_element;
     kkLidView new_element_to_row;
-    constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
+    constructChunks(ptcls, index, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
 
     lid_t new_num_slices;
     lid_t new_capacity;

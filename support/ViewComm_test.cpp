@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   Kokkos::initialize(argc, argv);
   MPI_Init(&argc, &argv);
 
-  pumipic::checkCudaAwareMPI();
+  pumipic::checkGPUAwareMPI();
 
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
@@ -45,10 +45,8 @@ int main(int argc, char* argv[]) {
   //Test Host Functions
   fails += runTests<Kokkos::HostSpace>();
 
-  //Test Cuda Functions
-#ifdef PP_USE_CUDA
-  fails += runTests<Kokkos::CudaSpace>();
-#endif
+  //Test GPU Functions
+  fails += runTests<DeviceSpace>();
 
   MPI_Finalize();
   Kokkos::finalize();

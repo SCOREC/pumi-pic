@@ -10,7 +10,7 @@ namespace pumipic {
 
   //Adapted from https://www.open-mpi.org/faq/?category=runcuda
   bool checkCudaAwareMPI() {
-    printf("Compile time check:\n");
+    printf("Compile time check: ");
 #if defined(MPIX_CUDA_AWARE_SUPPORT) && MPIX_CUDA_AWARE_SUPPORT
     printf("This MPI library has CUDA-aware support.\n", MPIX_CUDA_AWARE_SUPPORT);
     return true;
@@ -21,7 +21,7 @@ namespace pumipic {
     printf("This MPI library cannot determine if there is CUDA-aware support.\n");
 #endif /* MPIX_CUDA_AWARE_SUPPORT */
 
-    printf("Run time check:\n");
+    printf("Run time check: ");
 #if defined(MPIX_CUDA_AWARE_SUPPORT)
     if (1 == MPIX_Query_cuda_support()) {
       printf("This MPI library has CUDA-aware support.\n");
@@ -34,4 +34,19 @@ namespace pumipic {
     return false;
   }
 
+  bool checkPSGPUAwareMPI()
+  {
+#ifdef PS_GPU_AWARE_MPI
+    printf("GPU aware MPI has been enabled.\n");
+    return true;
+#else
+    printf("GPU aware MPI is disabled.\n");
+    return false;
+#endif
+  }
+
+  bool checkGPUAwareMPI()
+  {
+    return checkCudaAwareMPI() || checkPSGPUAwareMPI();
+  }
 }

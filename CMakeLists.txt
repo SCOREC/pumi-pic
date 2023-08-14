@@ -74,6 +74,10 @@ set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
 set(KOKKOS_ENABLED true)
 
+if(Kokkos_VERSION VERSION_LESS 4.0.01)
+    message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
+endif()
+
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")
@@ -96,7 +100,7 @@ endif()
 function(mpi_test TESTNAME PROCS EXE)
   add_test(
     NAME ${TESTNAME}
-    COMMAND ${MPIRUN} ${MPIRUN_PROCFLAG} ${PROCS} ${VALGRIND} ${VALGRIND_ARGS} ${EXE} ${ARGN}
+    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${PROCS} ${VALGRIND} ${VALGRIND_ARGS} ${EXE} ${ARGN}
   )
 endfunction(mpi_test)
 

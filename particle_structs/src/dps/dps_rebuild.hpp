@@ -27,8 +27,7 @@ namespace pumipic {
     const auto num_new_ptcls = new_particle_elements.size();
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree_d("elmDegree", num_elems);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto active = Cabana::slice<DPS_DT::size-1>(*aosoa_);
     auto parentElms_cpy = parentElms_;
 
     // first loop to count removed particles and move/remove them (move)
@@ -59,7 +58,7 @@ namespace pumipic {
       lid_t new_capacity = new_num_soa*soa_len;
       AoSoA_t* newAosoa = makeAoSoA(new_capacity, new_num_soa);
 
-      auto newActive = Cabana::slice<activeSliceIdx>(*newAosoa);
+      auto newActive = Cabana::slice<DPS_DT::size-1>(*newAosoa);
       auto setInactive = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) { 
         newActive.access(soa,tuple) = false; // fill new active mask with false
       };
@@ -90,7 +89,7 @@ namespace pumipic {
       num_soa_ = new_num_soa;
       capacity_ = new_capacity;
       parentElms_ = new_parentElms;
-      active = Cabana::slice<activeSliceIdx>(*aosoa_);
+      active = Cabana::slice<DPS_DT::size-1>(*aosoa_);
     }
 
     num_ptcls = num_ptcls-num_removed+num_new_ptcls;

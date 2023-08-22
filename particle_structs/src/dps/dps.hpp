@@ -107,9 +107,48 @@ namespace pumipic {
     // particle data
     AoSoA_t* aosoa_;
 
+    //Private construct function
+    void construct(kkLidView ptcls_per_elem,
+                  kkGidView element_gids,
+                  kkLidView particle_elements,
+                  MTVs particle_info);
+
     //Private constructor for copy()
     DPS() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
+
+  template<class DataTypes, typename MemSpace>
+  void DPS<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
+                                           kkGidView element_gids,
+                                           kkLidView particle_elements,
+                                           MTVs particle_info) {
+    Kokkos::Profiling::pushRegion("dps_construction");
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building DPS\n");
+
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    // set active mask
+    setNewActive(num_ptcls);
+    // get global ids
+    if (element_gids.size() > 0)
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    // populate AoSoA with input data if given
+    if (particle_elements.size() > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
+    }
+    else
+      setParentElms(ptcls_per_elem, parentElms_);
+
+    Kokkos::Profiling::popRegion();       
+  }
 
   /**
    * Constructor
@@ -142,29 +181,7 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
-
-    // calculate num_soa_ from number of particles + extra padding
-    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    // set active mask
-    setNewActive(num_ptcls);
-    // get global ids
-    if (element_gids.size() > 0)
-      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    // populate AoSoA with input data if given
-    if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
-      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
-    }
-    else
-      setParentElms(particles_per_element, parentElms_);
+    construct(particles_per_element, element_gids, particle_elements, particle_info);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -177,32 +194,8 @@ namespace pumipic {
     num_rows = num_elems;
     num_ptcls = input.np;
     extra_padding = input.extra_padding;
-
     assert(num_elems == input.ppe.size());
-
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
-
-    // calculate num_soa_ from number of particles + extra padding
-    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    // set active mask
-    setNewActive(num_ptcls);
-    // get global ids
-    if (input.e_gids.size() > 0)
-      createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
-    // populate AoSoA with input data if given
-    if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
-      fillAoSoA(input.particle_elms, input.p_info, parentElms_); // fill aosoa with data
-    }
-    else
-      setParentElms(input.ppe, parentElms_);
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
   }
 
   template <class DataTypes, typename MemSpace>

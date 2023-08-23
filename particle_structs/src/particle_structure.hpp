@@ -94,6 +94,7 @@ namespace pumipic {
                          kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
+    virtual void printFormat(const char* prefix = "") const = 0;
   protected:
     //String to identify the particle structure
     std::string name;

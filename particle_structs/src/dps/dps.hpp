@@ -296,8 +296,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
 
     kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("mask"), capacity_);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask_slice = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask_slice = Cabana::slice<DPS_DT::size-1>(*aosoa_);
     Kokkos::parallel_for("copy_mask", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         mask(ptcl_id) = mask_slice(ptcl_id);

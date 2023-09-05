@@ -4,13 +4,12 @@
 source /etc/profile.d/modules.sh
 source /etc/profile
 
-export root=/lore/cwsmith/nightlyBuilds/pumipic
+export root=/lore/castia5/nightlyBuilds/pumipic
 
-module use /opt/scorec/spack/dev/lmod/linux-rhel7-x86_64/Core
-module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core
-module load gcc/7.4.0-c5aaloy cuda/11.4
-module load mpich/3.3.1-bfezl2l
-module load cmake
+module unuse /opt/scorec/spack/lmod/linux-rhel7-x86_64/Core 
+module use /opt/scorec/spack/v0154_2/lmod/linux-rhel7-x86_64/Core 
+module load gcc/10.1.0 mpich
+module load cuda/11.4 cmake
 
 function getname() {
   name=$1
@@ -20,13 +19,12 @@ function getname() {
 export engpar=$root/`getname engpar`/install # This is where engpar will be (or is) installed
 export kk=$root/`getname kokkos`/install   # This is where kokkos will be (or is) installed
 export oh=$root/`getname omegah`/install  # This is where omega_h will be (or is) installed
-export oh1050=$root/`getname omegah1050`/install
 export pumipic=$root/`getname pumipic`/install # This is where PumiPIC will be (or is) installed
 export CMAKE_PREFIX_PATH=$engpar:$kk:$oh:$pumipic:$CMAKE_PREFIX_PATH
 export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
-[ ! -d kokkos ] && git clone -b 3.4.01 git@github.com:kokkos/kokkos.git
+[ ! -d kokkos ] && git clone -b 4.0.01 git@github.com:kokkos/kokkos.git
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
@@ -40,7 +38,7 @@ cmake -S kokkos -B ${kk%%install} \
 cmake --build ${kk%%install} --target install -j 24
 
 cd $root
-[ ! -d EnGPar] && git clone git@github.com:SCOREC/EnGPar.git
+[ ! -d EnGPar ] && git clone git@github.com:SCOREC/EnGPar.git
 cd EnGPar && git pull && cd -
 [ -d $engpar ] && rm -rf ${engpar%%install}
 cmake -S EnGPar -B ${engpar%%install} \
@@ -71,26 +69,10 @@ cmake -S omega_h -B ${oh%%install} \
   -DKokkos_PREFIX=$kk/lib64/cmake
 cmake --build ${oh%%install} --target install -j8
 
-cd omega_h && git checkout scorec-v10.5.0 && cd -
-[ -d $oh1050 ] && rm -rf ${oh1050%%install}
-cmake -S omega_h -B ${oh1050%%install} \
-  -DCMAKE_CXX_COMPILER=mpicxx \
-  -DCMAKE_C_COMPILER=mpicc \
-  -DCMAKE_BUILD_TYPE=debug \
-  -DCMAKE_INSTALL_PREFIX=$oh1050 \
-  -DBUILD_SHARED_LIBS=OFF \
-  -DOmega_h_USE_Kokkos=ON \
-  -DOmega_h_USE_CUDA=on \
-  -DOmega_h_CUDA_ARCH=75 \
-  -DOmega_h_USE_MPI=on  \
-  -DBUILD_TESTING=on  \
-  -DKokkos_PREFIX=$kk/lib64/cmake
-cmake --build ${oh1050%%install} --target install -j8
-
 set +e
 set +x
 
-d=/lore/cwsmith/nightlyBuilds/pumipic
+d=/lore/castia5/nightlyBuilds/pumipic
 cd $d
 #remove old compilation
 [ -d build_pumipic ] && rm -rf build_pumipic/

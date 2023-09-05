@@ -2,42 +2,15 @@
 #include "read_particles.hpp"
 #include <cmath>
 #include "team_policy.hpp"
+#include "ppMemUsage.hpp"
 
 int comm_rank, comm_size;
 
-#ifdef PP_USE_CUDA
-typedef Kokkos::CudaSpace DeviceSpace;
-#else
-typedef Kokkos::HostSpace DeviceSpace;
-#endif
 void finalize() {
   Kokkos::finalize();
   MPI_Finalize();
 }
 
-#ifdef PP_USE_CUDA
-//Copied and edited from: https://forums.developer.nvidia.com/t/best-way-to-report-memory-consumption-in-cuda/21042
-double get_mem_usage() {
-  //Barrier+fence to ensure readings are accurate when sharing GPUs in parallel.
-  MPI_Barrier(MPI_COMM_WORLD);
-  Kokkos::fence();
-  size_t free_byte, total_byte;
-  auto cuda_status = cudaMemGetInfo( &free_byte, &total_byte );
-  if ( cudaSuccess != cuda_status ){
-    fprintf(stderr, "Error: cudaMemGetInfo fails, %s \n",
-            cudaGetErrorString(cuda_status));
-    exit(1);
-  }
-  double free_db = (double)free_byte;
-  double total_db = (double)total_byte;
-  double used_db = total_db - free_db;
-  return used_db/1024/1024/1024;
-}
-#else
-double get_mem_usage() {
-  return 0;
-}
-#endif
 //Structure adding functions
 PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe, kkGidView element_gids,
                        kkLidView particle_elements, PS::MTVs particle_info, std::string& name);
@@ -80,17 +53,10 @@ int main(int argc, char* argv[]) {
     finalize();
     return 0;
   }
-  bool check_memory = false;
-#ifdef PP_USE_CUDA
-  //Only check GPU memory with CUDA; TODO add memory functions for other devices?
-  check_memory = true;
-#endif
-  printf("CHECK: %d\n", check_memory);
   char filename[256];
   sprintf(filename, "%s_%d.ptl", argv[1], comm_rank);
   //Local count of fails
   int fails = 0;
-  double initial_memory = get_mem_usage();
   {
 
     //General structure parameters
@@ -105,7 +71,6 @@ int main(int argc, char* argv[]) {
     int num = 0;
     //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
-      double mem_i = get_mem_usage();
       std::string name;
       PS* structure = buildNextStructure(num++, num_elems, num_ptcls, ppe, element_gids,
                                          particle_elements, particle_info, name);
@@ -116,44 +81,19 @@ int main(int argc, char* argv[]) {
       if (!structure)
         break;
       //Run all tests on the structure
-      double mem_s = get_mem_usage();
       fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
       fails += testParticleExistence(name.c_str(), structure, num_ptcls);
       fails += setValues(name.c_str(), structure);
       fails += pseudoPush(name.c_str(), structure);
       fails += testMetrics(name.c_str(), structure);
-      double mem_pr = get_mem_usage();
-      if (check_memory && fabs(mem_pr - mem_s) > .00001) {
-        fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name, mem_pr - mem_s);
-        ++fails;
-      }
-      //Memory changes are expected in rebuild/migration (the structure check at the end will ensure no memory leaks)
       fails += testRebuild(name.c_str(), structure);
       fails += testMigration(name.c_str(), structure);
-      double mem_pb = get_mem_usage();
       fails += testCopy(name.c_str(), structure);
       fails += testSegmentComp(name.c_str(), structure);
-      double mem_pd = get_mem_usage();
-      if (check_memory && fabs(mem_pd - mem_pb) > .00001) {
-        fprintf(stderr, "[ERROR] Structure %s memory usage changed in later tests [%f]\n", name, mem_pd - mem_pb);
-        ++fails;
-      }
       fails += migrateToEmptyAndRefill(name.c_str(), structure);
       delete structure;
-      double mem_f = get_mem_usage();
-      if (check_memory && fabs(mem_f - mem_i) > .00001) {
-        ++fails;
-        fprintf(stderr, "[ERROR] Memory usage changed during structure %s"
-                "| Initial: %f GB | Final: %f GB | Diff: %f GB\n", name.c_str(),
-                mem_i, mem_f, mem_f - mem_i);
-      }
     }
     ps::destroyViews<Types>(particle_info);
-  }
-  double final_memory = get_mem_usage();
-  if (check_memory && fabs(final_memory - initial_memory) > .00001) {
-    ++fails;
-    fprintf(stderr, "[ERROR] Memory usage changed | Initial: %f GB | Final: %f GB | Diff: %f GB\n", initial_memory, final_memory, final_memory - initial_memory);
   }
   //Finalize and print failures
   int total_fails = 0;
@@ -224,7 +164,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
     return NULL;
   }
   catch(...) {
-    fprintf(stderr, "[ERROR] Construction of %s failed on rank %d\n", error_message, comm_rank);
+    fprintf(stderr, "[ERROR] Construction of %s failed on rank %d\n", error_message.c_str(), comm_rank);
     name = "FAIL\n";
     return NULL;
   }
@@ -269,7 +209,7 @@ int testMetrics(const char* name, PS* structure) {
 }
 
 int testCopy(const char* name, PS* structure) {
-  #ifndef PP_USE_CUDA
+  #ifndef PP_USE_GPU
     return 0;
   #endif
 
@@ -372,20 +312,24 @@ int testSegmentComp(const char* name, PS* structure) {
 
   auto dbls = structure->get<1>();
   auto setComponents = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    auto dbl_seg = dbls.getComponents(p);
-    for (int i = 0; i < 3; ++i)
-      dbl_seg(i) = e * (i + 1);
+    if (mask) {
+      auto dbl_seg = dbls.getComponents(p);
+      for (int i = 0; i < 3; ++i)
+        dbl_seg(i) = e * (i + 1);
+    }
   };
   pumipic::parallel_for(structure, setComponents, "Set components");
 
   const double TOL = .00001;
   auto checkComponents = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    auto comps = dbls.getComponents(p);
-    for (int i = 0; i < 3; ++i) {
-      if (abs(comps[i] - e * (i + 1)) > TOL) {
-        printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
-               p, i, comps[i], e * (i + 1));
-        Kokkos::atomic_add(&(failures[0]), 1);
+    if (mask) {
+      auto comps = dbls.getComponents(p);
+      for (int i = 0; i < 3; ++i) {
+        if (abs(comps[i] - e * (i + 1)) > TOL) {
+          printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
+                  p, i, comps[i], e * (i + 1));
+          Kokkos::atomic_add(&(failures[0]), 1);
+        }
       }
     }
   };

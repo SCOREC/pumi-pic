@@ -1,0 +1,6 @@
+{
+    ignore_mpi_init_errors
+    Memcheck:Leak
+    ...
+    fun:PMPI_Init
+}

@@ -216,17 +216,10 @@ namespace pumipic {
       return;
 
     // move function pointer to GPU (if needed)
-    FunctionType* fn_d;
-    #ifdef PP_USE_CUDA
-        cudaMalloc(&fn_d, sizeof(FunctionType));
-        cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-    #else
-        fn_d = &fn;
-    #endif
+    FunctionType* fn_d = gpuMemcpy(fn);
     kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    const auto mask = Cabana::slice<activeSliceIdx>(*aosoa_); // get active mask
+    const auto mask = Cabana::slice<DPS_DT::size-1>(*aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
@@ -234,15 +227,15 @@ namespace pumipic {
         const lid_t elm = parentElms_cpy(particle_id); // calculate element
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, s);
-#ifdef PP_USE_CUDA
-    cudaFree(fn_d);
+#ifdef PP_USE_GPU
+    gpuFree(fn_d);
 #endif
 
   }
 
   template<class DataTypes, typename MemSpace>
   template <class MSpace>
-  DPS<DataTypes, MemSpace>::Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
+  typename DPS<DataTypes, MemSpace>::template Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
       fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
@@ -273,8 +266,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   void DPS<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask = Cabana::slice<DPS_DT::size-1>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
     Kokkos::parallel_for("count_padding", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -369,7 +361,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
     template<std::size_t N>
-    using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+    using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;

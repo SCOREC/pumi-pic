@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
   int elem_strat = atoi(argv[3]);
   int ptcl_strat = atoi(argv[4]);
 
-  #ifndef PP_USE_CUDA
+  #ifndef PP_USE_GPU
   num_ptcls = std::min(num_ptcls, 100000);
   #endif
 

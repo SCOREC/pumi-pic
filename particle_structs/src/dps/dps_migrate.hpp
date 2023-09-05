@@ -53,8 +53,7 @@ namespace pumipic {
     int num_recv_ranks = dist.isWorld() ? 1 : comm_size - 1;
     MPI_Request* count_recv_requests = new MPI_Request[num_recv_ranks];
     if (dist.isWorld())
-      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1,
-                        dist.mpi_comm(), count_recv_requests);
+      PS_Comm_Ialltoall(num_send_particles, 1, num_recv_particles, 1, dist.mpi_comm(), count_recv_requests);
     else {
       int request_index = 0;
       for (int i = 0; i < comm_size; ++i) {
@@ -68,12 +67,15 @@ namespace pumipic {
         }
       }
     }
+
+    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
+    delete [] count_recv_requests;
     
     // Gather sending particle data
     // Perform an ex-sum on num_send_particles & num_recv_particles
     kkLidView offset_send_particles("offset_send_particles", comm_size+1);
     kkLidView offset_send_particles_temp(Kokkos::ViewAllocateWithoutInitializing("offset_send_particles_temp"), comm_size + 1);
-    exclusive_scan(num_send_particles, offset_send_particles);
+    exclusive_scan(num_send_particles, offset_send_particles, execution_space());
     Kokkos::deep_copy(offset_send_particles_temp, offset_send_particles);
     kkLidHostMirror offset_send_particles_host = deviceToHost(offset_send_particles);
 
@@ -101,9 +103,6 @@ namespace pumipic {
     CopyParticlesToSendFromAoSoA<DPS<DataTypes, MemSpace>, DataTypes>(this, send_particle, *aosoa_,
                                                                     new_process, send_index);
     
-    // Wait until all counts are received
-    PS_Comm_Waitall<device_type>(num_recv_ranks, count_recv_requests, MPI_STATUSES_IGNORE);
-    delete [] count_recv_requests;
 
     // Count the number of processes being sent to and recv from
     lid_t num_sending_to = 0, num_receiving_from = 0;
@@ -134,7 +133,7 @@ namespace pumipic {
     
     // Offset the recv particles
     kkLidView offset_recv_particles("offset_recv_particles", comm_size+1);
-    exclusive_scan(num_recv_particles, offset_recv_particles);
+    exclusive_scan(num_recv_particles, offset_recv_particles, execution_space());
     kkLidHostMirror offset_recv_particles_host = deviceToHost(offset_recv_particles);
     int np_recv = offset_recv_particles_host(comm_size);
     

@@ -9,6 +9,7 @@ namespace pumipic {
     for (int i = 0; i < 4; ++i) {
       num_cores[i] = 0;
       num_bounds[i] = 0;
+      num_entites[i] = 0;
       num_boundaries[i] = 0;
     }
   }

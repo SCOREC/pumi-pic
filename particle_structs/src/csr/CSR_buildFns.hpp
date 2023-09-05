@@ -67,7 +67,7 @@ namespace pumipic {
     // see pumi-pic/support/SupportKK.h for the exclusive_scan helper function
     offsets = kkLidView(Kokkos::ViewAllocateWithoutInitializing("offsets"), num_elems+1);
     Kokkos::resize(ptcls_per_elem, ptcls_per_elem.size()+1);
-    exclusive_scan(ptcls_per_elem, offsets);
+    exclusive_scan(ptcls_per_elem, offsets, execution_space());
 
     // get global ids
     if (element_gids.size() > 0) {

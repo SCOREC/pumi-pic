@@ -4,6 +4,7 @@
 #include "SupportKK.h"
 #include <unordered_map>
 #include <mpi.h>
+#include "ppMemUsage.hpp"
 namespace pumipic {
   /* Routines to be abstracted
      MPI_Allgather/NCCL
@@ -15,7 +16,7 @@ namespace pumipic {
 #if false //These function headers are for documentation purposes only
   /*! \file View Communications
     \brief Abstractions over various MPI routines for views located on either
-    the host or device and abstract support for CUDA aware MPI.
+    the host or device and abstract support for GPU aware MPI.
 
     \note Views can be on either the host or device, but must be in the same memory
     space for matching send/recv calls
@@ -317,12 +318,12 @@ namespace pumipic {
   using Irecv_Map=std::unordered_map<MPI_Request*, std::function<void()> >;
   Irecv_Map& get_map();
 
-  // Function to print out compile/runtime checks of OpenMPI cuda aware support
-  bool checkCudaAwareMPI();
+  // Function to print out compile/runtime checks of OpenMPI GPU aware support
+  bool checkGPUAwareMPI();
 
 #include "ViewComm_host.hpp"
 
-#include "ViewComm_cuda.hpp"
+#include "ViewComm_gpu.hpp"
 
 
 }

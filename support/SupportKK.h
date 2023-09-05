@@ -1,57 +1,21 @@
 #pragma once
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_StdAlgorithms.hpp>
 #include "ppView.h"
 #include "ppMacros.h"
-#ifdef PP_USE_CUDA
-#include <thrust/scan.h>
-#include <thrust/execution_policy.h>
-#endif
 namespace pumipic {
 
-  /* template <typename ExecSpace> struct ThrustSpace; */
-  /* template <> struct ThrustSpace<Kokkos::HostSpace> { */
-  /*   static constexpr thrust::detail::host_t space=thrust::host; */
-  /* }; */
-  /* template <> struct ThrustSpace<Kokkos::CudaSpace> { */
-  /*   static constexpr thrust::detail::device_t space=thrust::device; */
-  /* }; */
   /* Wrapper around performing inclusive/exclusive scans.  For an exclusive scan
      over an array of length N, the 'entries' and 'result' array need to be length N+1.
-     Note: These exist because kokkos scans on Summit/Aimos fail on occassion,
-             however thrust scans work
-
-     The wrapper works for both Kokkos views and pumipic views on the device only
    */
-  template <typename ViewT>
-  void exclusive_scan(ViewT entries, ViewT result) {
-#ifdef PP_USE_CUDA
-    thrust::exclusive_scan(thrust::device /*ThrustSpace<ViewT::memory_space>::space */,
-                           entries.data(), entries.data() + entries.size(), result.data(), 0);
-#else
-    auto exclusive_sum = KOKKOS_LAMBDA(const int index, typename ViewT::value_type& cur, const bool final) {
-      if (final) {
-        result(index) = cur;
-      }
-      cur += entries(index);
-    };
-    Kokkos::parallel_scan("exclusive_scan", entries.size(), exclusive_sum);
-#endif
+  template <typename ViewT, typename Space>
+  void exclusive_scan(ViewT entries, ViewT result, Space space) {
+    Kokkos::Experimental::exclusive_scan(space, entries, result, 0);
   }
-  template <typename ViewT>
-  void inclusive_scan(ViewT entries, ViewT result) {
-#ifdef PP_USE_CUDA
-    thrust::inclusive_scan(thrust::device /*ThrustSpace<ViewT::memory_space>::space */,
-                           entries.data(), entries.data() + entries.size(), result.data(), 0);
-#else
-    auto inclusive_sum = KOKKOS_LAMBDA(const int index, typename ViewT::value_type& cur, const bool final) {
-      cur += entries(index);
-      if (final) {
-        result(index) = cur;
-      }
-    };
-    Kokkos::parallel_scan("inclusive_scan", entries.size(), inclusive_sum);
-#endif
+  template <typename ViewT, typename Space>
+  void inclusive_scan(ViewT entries, ViewT result, Space space) {
+    Kokkos::Experimental::inclusive_scan(space, entries, result);
   }
   /* Taken from https://stackoverflow.com/questions/31762958/check-if-class-is-a-template-specialization
      Checks if type is a specialization of a class template

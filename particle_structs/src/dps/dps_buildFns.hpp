@@ -28,8 +28,7 @@ namespace pumipic {
   template<class DataTypes, typename MemSpace>
   void DPS<DataTypes, MemSpace>::setNewActive(const lid_t num_particles) {
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto active = Cabana::slice<DPS_DT::size-1>(*aosoa_);
 
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,

@@ -14,10 +14,6 @@
 #include "SCSPair.h"
 #include "scs_input.hpp"
 #include <particle_structs.hpp>
-#ifdef PP_USE_CUDA
-#include <thrust/sort.h>
-#include <thrust/device_ptr.h>
-#endif
 #include <ppTiming.hpp>
 #include <sstream>
 
@@ -41,9 +37,9 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
-#ifdef PP_USE_CUDA
+#ifdef PP_USE_GPU
   template <std::size_t N>
-  using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+  using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 #else
   template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
 template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
@@ -134,10 +130,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
     };
     ps::parallel_for(scs, lamb, name);
   */
-  template <typename FunctionType, class U = MemSpace>
-  typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
-  template <typename FunctionType, class U = MemSpace>
-  typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type parallel_for(FunctionType& fn, std::string s="");
+  template <typename FunctionType>
+  void parallel_for(FunctionType& fn, std::string s="");
 
   //Prints the format of the SCS labeled by prefix
   void printFormat(const char* prefix = "") const;
@@ -147,15 +141,15 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 
   //Do not call these functions:
   int chooseChunkHeight(int maxC, kkLidView ptcls_per_elem);
-  void sigmaSort(PairView& ptcl_pairs, lid_t num_elems,
+  void sigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems,
                  kkLidView ptcls_per_elem, lid_t sigma);
-  void constructChunks(PairView ptcls, lid_t& nchunks,
+  void constructChunks(kkLidView ptcls, kkLidView index, lid_t& nchunks,
                        kkLidView& chunk_widths, kkLidView& row_element,
                        kkLidView& element_row);
   void createGlobalMapping(kkGidView elmGid, kkGidView& elm2Gid, GID_Mapping& elmGid2Lid);
   void constructOffsets(lid_t nChunks, lid_t& nSlices, kkLidView chunk_widths,
                         kkLidView& offs, kkLidView& s2e, lid_t& capacity);
-  void setupParticleMask(Kokkos::View<bool*> mask, PairView ptcls, kkLidView chunk_widths,
+  void setupParticleMask(Kokkos::View<bool*> mask, kkLidView ptcls, kkLidView chunk_widths,
                          kkLidView& chunk_starts);
   void initSCSData(kkLidView chunk_widths, kkLidView particle_elements,
                    MTVs particle_info);
@@ -248,12 +242,13 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   if(!comm_rank)
     fprintf(stderr, "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
-  PairView ptcls;
-  sigmaSort(ptcls, num_elems,ptcls_per_elem, sigma);
+  kkLidView ptcls;
+  kkLidView index;
+  sigmaSort(ptcls, index, num_elems,ptcls_per_elem, sigma);
 
   // Number of chunks without vertical slicing
   kkLidView chunk_widths;
-  constructChunks(ptcls, num_chunks, chunk_widths, row_to_element, element_to_row);
+  constructChunks(ptcls, index, num_chunks, chunk_widths, row_to_element, element_to_row);
   num_rows = num_chunks * C_;
 
   if (element_gids.size() > 0) {
@@ -336,7 +331,7 @@ typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_
 
 template<class DataTypes, typename MemSpace>
 template <class MSpace>
-SellCSigma<DataTypes, MemSpace>::Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
+typename SellCSigma<DataTypes, MemSpace>::template Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
   if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
     fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
     exit(EXIT_FAILURE);
@@ -525,18 +520,11 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
 }
 
 template <class DataTypes, typename MemSpace>
-template <typename FunctionType, typename U>
-typename std::enable_if<!std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type
-SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
+template <typename FunctionType>
+void SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
   if (nPtcls() == 0)
     return;
-  FunctionType* fn_d;
-#ifdef PP_USE_CUDA
-  cudaMalloc(&fn_d, sizeof(FunctionType));
-  cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-#else
-  fn_d = &fn;
-#endif
+  FunctionType* fn_d = gpuMemcpy(fn);
   const lid_t league_size = num_slices;
   const lid_t team_size = C_;
   const PolicyType policy(league_size, team_size);
@@ -560,30 +548,9 @@ SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name
       });
     });
   });
-#ifdef PP_USE_CUDA
-  cudaFree(fn_d);
+#ifdef PP_USE_GPU
+  gpuFree(fn_d);
 #endif
-}
-
-template <class DataTypes, typename MemSpace>
-template <typename FunctionType, typename U>
-typename std::enable_if<std::is_same<typename U::execution_space, Kokkos::Serial>::value>::type
-SellCSigma<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
-  if (nPtcls() == 0)
-    return;
-  for (int slice = 0; slice < num_slices; ++slice) {
-    const lid_t rowLen = (offsets(slice+1)-offsets(slice))/C_;
-    for (int slice_row = 0; slice_row < C_; ++slice_row) {
-      const lid_t row = slice_to_chunk(slice) * C_ + slice_row;
-      const lid_t element_id = row_to_element(row);
-      const lid_t start = offsets(slice) + slice_row;
-      for (int ptcl = 0; ptcl < rowLen; ++ptcl) {
-        const lid_t particle_id = start + ptcl*C_;
-        const lid_t mask = particle_mask[particle_id];
-        fn(element_id, particle_id, mask);
-      }
-    }
-  }
 }
 
 } // end namespace pumipic

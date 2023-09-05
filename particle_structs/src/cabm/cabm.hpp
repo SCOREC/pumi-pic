@@ -76,9 +76,13 @@ namespace pumipic {
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
-    kkLidView buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
+    typename ParticleStructure<DataTypes, MemSpace>::kkLidView
+    buildOffset(const kkLidView particles_per_element, const lid_t num_ptcls, const double padding, lid_t &padding_start);
     AoSoA_t* makeAoSoA(const lid_t capacity, const lid_t num_soa);
-    kkLidView getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+
+    typename ParticleStructure<DataTypes, MemSpace>::kkLidView
+    getParentElms(const lid_t num_elements, const lid_t num_soa, const kkLidView offsets);
+
     void setActive(const kkLidView particles_per_element);
     void createGlobalMapping(const kkGidView element_gids, kkGidView& lid_to_gid, GID_Mapping& gid_to_lid);
     void fillAoSoA(const kkLidView particle_elements, const MTVs particle_info);
@@ -242,17 +246,10 @@ namespace pumipic {
       return;
 
     // move function pointer to GPU (if needed)
-    FunctionType* fn_d;
-    #ifdef PP_USE_CUDA
-        cudaMalloc(&fn_d, sizeof(FunctionType));
-        cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-    #else
-        fn_d = &fn;
-    #endif
+    FunctionType* fn_d = gpuMemcpy(fn);
     kkLidView parentElms_cpy = parentElms_;
     const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    const auto mask = Cabana::slice<activeSliceIdx>(*aosoa_); // get active mask
+    const auto mask = Cabana::slice<CM_DT::size-1>(*aosoa_); // get active mask
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy,
       KOKKOS_LAMBDA( const lid_t soa, const lid_t ptcl ) {
@@ -260,8 +257,8 @@ namespace pumipic {
         const lid_t particle_id = soa*soa_len + ptcl; // calculate overall index
         (*fn_d)(elm, particle_id, mask.access(soa,ptcl));
       }, name);
-#ifdef PP_USE_CUDA
-    cudaFree(fn_d);
+#ifdef PP_USE_GPU
+    gpuFree(fn_d);
 #endif
 
   }
@@ -269,8 +266,7 @@ namespace pumipic {
   template <class DataTypes, typename MemSpace>
   void CabM<DataTypes, MemSpace>::printMetrics() const {
     // Sum number of empty cells
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask = Cabana::slice<CM_DT::size-1>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
     Kokkos::parallel_for("count_padding", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
@@ -319,8 +315,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
 
     kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("offsets_host"), capacity_);
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto mask_slice = Cabana::slice<activeSliceIdx>(*aosoa_);
+    auto mask_slice = Cabana::slice<CM_DT::size-1>(*aosoa_);
     Kokkos::parallel_for("copy_mask", capacity_,
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         mask(ptcl_id) = mask_slice(ptcl_id);
@@ -376,7 +371,7 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   template <class MSpace>
-  CabM<DataTypes, MemSpace>::Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
+  typename CabM<DataTypes, MemSpace>::template Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
       fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
@@ -436,7 +431,7 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
     template<std::size_t N>
-    using Slice = typename ParticleStructure<DataTypes, MemSpace>::Slice<N>;
+    using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 
     using host_space = Kokkos::HostSpace;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;

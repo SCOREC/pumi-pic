@@ -78,7 +78,7 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
         if(std::abs(bcc[i]- v[i]) > 1e-10) {
           if(debug)
             printf("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
-              " calculated_bc=(%0.6f, %0.6f, %0.6f, %0.6f): bc=%0.6f != v=%.6f \n",
+              " calculated_bc=(%d, %d, %d, %d): bc=%d != v=%.6f \n",
               p[0], p[1], p[2], bcc[0], bcc[1], bcc[2], bcc[3], bcc[i], v[i]);
           return false;
         }

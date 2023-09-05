@@ -13,8 +13,8 @@ namespace pumipic {
       const lid_t new_elem = new_element(particle_id);
 
       const lid_t row = element_to_row_local(element_id);
-      const bool is_particle = mask & new_elem != -1;
-      const bool is_moving = is_particle & new_elem != element_id;
+      const bool is_particle = mask && (new_elem != -1);
+      const bool is_moving = is_particle & (new_elem != element_id);
       if (is_moving && mask) {
         const lid_t new_row = element_to_row_local(new_elem);
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_row(new_row)));
@@ -46,7 +46,7 @@ namespace pumipic {
     //Offset moving particles
     kkLidView offset_new_particles("offset_new_particles", numRows() + 1);
     kkLidView counting_offset_index(Kokkos::ViewAllocateWithoutInitializing("counting_offset_index"), numRows() + 1);
-    exclusive_scan(new_particles_per_row, offset_new_particles);
+    exclusive_scan(new_particles_per_row, offset_new_particles, execution_space());
     Kokkos::deep_copy(counting_offset_index, offset_new_particles);
 
     int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
@@ -201,8 +201,9 @@ namespace pumipic {
     C_ = new_C;
     //Perform sorting
     Kokkos::Profiling::pushRegion("Sorting");
-    PairView ptcls;
-    sigmaSort(ptcls,num_elems,new_particles_per_elem, sigma);
+    kkLidView ptcls;
+    kkLidView index;
+    sigmaSort(ptcls,index,num_elems,new_particles_per_elem, sigma);
     Kokkos::Profiling::popRegion();
 
     // Number of chunks without vertical slicing
@@ -210,7 +211,7 @@ namespace pumipic {
     lid_t new_nchunks;
     kkLidView new_row_to_element;
     kkLidView new_element_to_row;
-    constructChunks(ptcls, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
+    constructChunks(ptcls, index, new_nchunks, chunk_widths, new_row_to_element, new_element_to_row);
 
     lid_t new_num_slices;
     lid_t new_capacity;

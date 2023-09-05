@@ -183,13 +183,7 @@ namespace pumipic {
   void CSR<DataTypes, MemSpace>::parallel_for(FunctionType& fn, std::string name) {
     if (nPtcls() == 0)
       return;
-    FunctionType* fn_d;
-#ifdef PP_USE_CUDA
-    cudaMalloc(&fn_d, sizeof(FunctionType));
-    cudaMemcpy(fn_d,&fn, sizeof(FunctionType), cudaMemcpyHostToDevice);
-#else
-    fn_d = &fn;
-#endif
+    FunctionType* fn_d = gpuMemcpy(fn);
     const lid_t league_size = num_elems;
     const lid_t team_size = policy.team_size();
     const PolicyType policy(league_size, team_size);
@@ -209,8 +203,8 @@ namespace pumipic {
           (*fn_d)(elm, particle_id, mask);
         });
     });
-#ifdef PP_USE_CUDA
-    cudaFree(fn_d);
+#ifdef PP_USE_GPU
+    gpuFree(fn_d);
 #endif
   }
 
@@ -269,7 +263,7 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   template <class MSpace>
-  CSR<DataTypes, MemSpace>::Mirror<MSpace>* CSR<DataTypes, MemSpace>::copy() {
+  typename CSR<DataTypes, MemSpace>::template Mirror<MSpace>* CSR<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
       fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);

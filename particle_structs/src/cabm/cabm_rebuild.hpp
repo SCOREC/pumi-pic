@@ -40,7 +40,7 @@ namespace pumipic {
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
         else // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
-      }
+        }
     };
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);
     Cabana::simd_parallel_for(simd_policy, atomic, "atomic");
@@ -65,16 +65,17 @@ namespace pumipic {
     AoSoA_t* newAosoa;
     lid_t newCapacity;
     if (newNumSoa > num_soa_) { // if need extra space, update
-      swap = false;
-      newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
-      newNumSoa = getLastValue(newOffset_d);
-      newCapacity = newNumSoa*soa_len;
-      delete aosoa_swap;
-      newAosoa = makeAoSoA(newCapacity, newNumSoa);
+    swap = false;
+    newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
+    newNumSoa = getLastValue(newOffset_d);
+    newCapacity = newNumSoa*soa_len;
+    if (use_swap) delete aosoa_swap;
+    newAosoa = makeAoSoA(newCapacity, newNumSoa);
     } else { // if we don't need extra space
-      swap = true;
-      newCapacity = capacity_;
-      newAosoa = aosoa_swap;
+    swap = true;
+    newCapacity = capacity_;
+    if (use_swap) newAosoa = aosoa_swap;
+    else newAosoa = makeAoSoA(newCapacity, newNumSoa);
     }
 
     RecordTime(name + " move/destroy setup", setup_timer.seconds());
@@ -84,33 +85,34 @@ namespace pumipic {
     AoSoA_t aosoa_copy = *aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
     AoSoA_t newAosoa_copy = *newAosoa;
     auto copyPtcls = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
-        const lid_t destParent = new_element(soa*soa_len + tuple);
-        if (active.access(soa,tuple) && destParent != -1) {
-          // Compute the destSoa based on the destParent and an array of
-          //   counters for each destParent tracking which particle is the next
-          //   free position. Use atomic fetch and incriment with the
-          //   'elmPtclCounter_d' array.
-          const lid_t occupiedTuples = Kokkos::atomic_fetch_add(&elmPtclCounter_d(destParent), 1);
-          // use newOffset_d to figure out which soa is the first for destParent
-          const lid_t firstSoa = newOffset_d(destParent);
-          const lid_t destSoa = firstSoa + occupiedTuples/soa_len;
-          const lid_t destTuple = occupiedTuples%soa_len;
-          Cabana::Impl::tupleCopy(
-            newAosoa_copy.access(destSoa), destTuple, // dest
-            aosoa_copy.access(soa), tuple); // src
-        }
+    const lid_t destParent = new_element(soa*soa_len + tuple);
+    if (active.access(soa,tuple) && destParent != -1) {
+    // Compute the destSoa based on the destParent and an array of
+    //   counters for each destParent tracking which particle is the next
+    //   free position. Use atomic fetch and incriment with the
+    //   'elmPtclCounter_d' array.
+    const lid_t occupiedTuples = Kokkos::atomic_fetch_add(&elmPtclCounter_d(destParent), 1);
+    // use newOffset_d to figure out which soa is the first for destParent
+    const lid_t firstSoa = newOffset_d(destParent);
+    const lid_t destSoa = firstSoa + occupiedTuples/soa_len;
+    const lid_t destTuple = occupiedTuples%soa_len;
+    Cabana::Impl::tupleCopy(
+    newAosoa_copy.access(destSoa), destTuple, // dest
+    aosoa_copy.access(soa), tuple); // src
+    }
       };
     Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
 
     // swap the old aosoa and use the new one in the CabanaM object
     if (swap) {
-      auto temp = aosoa_;
-      aosoa_ = newAosoa;
-      aosoa_swap = temp;
+    auto temp = aosoa_;
+    aosoa_ = newAosoa;
+    if (use_swap) aosoa_swap = temp;
+    else delete temp;
     } else { // destroy old aosoas and make new ones
-      delete aosoa_;
-      aosoa_ = newAosoa;
-      aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
+    delete aosoa_;
+    aosoa_ = newAosoa;
+    if (use_swap) aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
     }
     // update member variables (note that these are set before particle addition)
     num_soa_ = newNumSoa;
@@ -125,18 +127,18 @@ namespace pumipic {
 
     // add new particles
     if (num_new_ptcls > 0 && new_particles != NULL) {
-      kkLidView offsets_cpy = offsets; // copy of offsets (necessary, Kokkos doesn't like member variables)
-      // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
-      kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), num_new_ptcls);
-      kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), num_new_ptcls);
-      Kokkos::parallel_for("soa_and_ptcl", num_new_ptcls,
-        KOKKOS_LAMBDA(const lid_t ptcl) {
-          soa_indices(ptcl) = offsets_cpy(new_particle_elements(ptcl))
-            + (particle_indices(ptcl)/soa_len);
-          soa_ptcl_indices(ptcl) = particle_indices(ptcl)%soa_len;
-        });
-      CopyMTVsToAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(*aosoa_, new_particles,
-        soa_indices, soa_ptcl_indices); // copy data over
+    kkLidView offsets_cpy = offsets; // copy of offsets (necessary, Kokkos doesn't like member variables)
+    // calculate SoA and ptcl in SoA indices for next CopyMTVsToAoSoA
+    kkLidView soa_indices(Kokkos::ViewAllocateWithoutInitializing("soa_indices"), num_new_ptcls);
+    kkLidView soa_ptcl_indices(Kokkos::ViewAllocateWithoutInitializing("soa_ptcl_indices"), num_new_ptcls);
+    Kokkos::parallel_for("soa_and_ptcl", num_new_ptcls,
+    KOKKOS_LAMBDA(const lid_t ptcl) {
+    soa_indices(ptcl) = offsets_cpy(new_particle_elements(ptcl))
+    + (particle_indices(ptcl)/soa_len);
+    soa_ptcl_indices(ptcl) = particle_indices(ptcl)%soa_len;
+    });
+    CopyMTVsToAoSoA<CabM<DataTypes, MemSpace>, DataTypes>(*aosoa_, new_particles,
+    soa_indices, soa_ptcl_indices); // copy data over
     }
 
     RecordTime(name + " add particles", add_timer.seconds());

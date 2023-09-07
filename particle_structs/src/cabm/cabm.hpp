@@ -118,9 +118,50 @@ namespace pumipic {
     // extra AoSoA copy for swapping (same size as aosoa_)
     AoSoA_t* aosoa_swap;
 
+    //Private construct function
+    void construct(kkLidView ptcls_per_elem,
+                  kkGidView element_gids,
+                  kkLidView particle_elements,
+                  MTVs particle_info);
+
     //Private constructor for copy()
     CabM() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
+
+  template<class DataTypes, typename MemSpace>
+  void CabM<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
+                                           kkGidView element_gids,
+                                           kkLidView particle_elements,
+                                           MTVs particle_info) {
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building CabM\n");
+
+    use_swap = false;
+    // build view of offsets for SoA indices within particle elements
+    offsets = buildOffset(ptcls_per_elem, num_ptcls, extra_padding, padding_start);
+    // set num_soa_ from the last entry of offsets
+    num_soa_ = getLastValue(offsets);
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA and copy for swapping
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    if (use_swap) aosoa_swap = makeAoSoA(capacity_, num_soa_);
+    // get array of parents element indices for particles
+    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+    // set active mask
+    setActive(ptcls_per_elem);
+    // get global ids
+    if (element_gids.size() > 0) {
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    }
+    // populate AoSoA with input data if given
+    if (particle_elements.size() > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
+      fillAoSoA(particle_elements, particle_info); // initialize data
+    }
+  }
 
   /**
    * Constructor
@@ -153,34 +194,7 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building CabM\n");
-
-    use_swap = false;
-    // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(particles_per_element, num_ptcls, extra_padding, padding_start);
-    // set num_soa_ from the last entry of offsets
-    num_soa_ = getLastValue(offsets);
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA and copy for swapping
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    if (use_swap) aosoa_swap = makeAoSoA(capacity_, num_soa_);
-    // get array of parents element indices for particles
-    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-    // set active mask
-    setActive(particles_per_element);
-    // get global ids
-    if (element_gids.size() > 0) {
-      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    }
-    // populate AoSoA with input data if given
-    if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-      fillAoSoA(particle_elements, particle_info); // initialize data
-    }
+    construct(particles_per_element, element_gids, particle_elements, particle_info);
   }
 
   template<class DataTypes, typename MemSpace>
@@ -195,34 +209,7 @@ namespace pumipic {
     extra_padding = input.extra_padding;
 
     assert(num_elems == input.ppe.size());
-
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building CabM for %s\n", name.c_str());
-    
-    use_swap = false;
-    // build view of offsets for SoA indices within particle elements
-    offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
-    // set num_soa_ from the last entry of offsets
-    num_soa_ = getLastValue(offsets);
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA and copy for swapping
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    if (use_swap) aosoa_swap = makeAoSoA(capacity_, num_soa_);
-    // get array of parents element indices for particles
-    parentElms_ = getParentElms(num_elems, num_soa_, offsets);
-    // set active mask
-    setActive(input.ppe);
-    // get global ids
-    if (input.e_gids.size() > 0)
-      createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
-    // populate AoSoA with input data if given
-    if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing CabM data\n");
-      fillAoSoA(input.particle_elms, input.p_info); // initialize data
-    }
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -392,13 +379,16 @@ namespace pumipic {
     mirror_copy->num_soa_ = num_soa_;
     mirror_copy->padding_start = padding_start;
     mirror_copy->extra_padding = extra_padding;
+    mirror_copy->use_swap = use_swap;
 
     //copy AoSoA
     mirror_copy->aosoa_ = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_->label()).append("_mirror"), aosoa_->size());
     Cabana::deep_copy(*(mirror_copy->aosoa_), *aosoa_);
     //Create the swap space
-    mirror_copy->aosoa_swap = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_swap->label()).append("_mirror"), aosoa_swap->size());
-    Cabana::deep_copy(*(mirror_copy->aosoa_swap), *aosoa_swap);
+    if (use_swap) {
+      mirror_copy->aosoa_swap = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_swap->label()).append("_mirror"), aosoa_swap->size());
+      Cabana::deep_copy(*(mirror_copy->aosoa_swap), *aosoa_swap);
+    }
 
     //Deep copy each view
     mirror_copy->parentElms_ = typename Mirror<MSpace>::kkLidView("mirror parentElms_",

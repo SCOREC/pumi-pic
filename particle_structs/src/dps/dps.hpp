@@ -107,9 +107,48 @@ namespace pumipic {
     // particle data
     AoSoA_t* aosoa_;
 
+    //Private construct function
+    void construct(kkLidView ptcls_per_elem,
+                  kkGidView element_gids,
+                  kkLidView particle_elements,
+                  MTVs particle_info);
+
     //Private constructor for copy()
     DPS() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
   };
+
+  template<class DataTypes, typename MemSpace>
+  void DPS<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
+                                           kkGidView element_gids,
+                                           kkLidView particle_elements,
+                                           MTVs particle_info) {
+    Kokkos::Profiling::pushRegion("dps_construction");
+    int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    if(!comm_rank)
+      fprintf(stderr, "building DPS\n");
+
+    // calculate num_soa_ from number of particles + extra padding
+    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
+    // calculate capacity_ from num_soa_ and max size of an SoA
+    capacity_ = num_soa_*AoSoA_t::vector_length;
+    // initialize appropriately-sized AoSoA
+    aosoa_ = makeAoSoA(capacity_, num_soa_);
+    // set active mask
+    setNewActive(num_ptcls);
+    // get global ids
+    if (element_gids.size() > 0)
+      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
+    // populate AoSoA with input data if given
+    if (particle_elements.size() > 0 && particle_info != NULL) {
+      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
+    }
+    else
+      setParentElms(ptcls_per_elem, parentElms_);
+
+    Kokkos::Profiling::popRegion();       
+  }
 
   /**
    * Constructor
@@ -142,29 +181,7 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
-
-    // calculate num_soa_ from number of particles + extra padding
-    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    // set active mask
-    setNewActive(num_ptcls);
-    // get global ids
-    if (element_gids.size() > 0)
-      createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
-    // populate AoSoA with input data if given
-    if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
-      fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
-    }
-    else
-      setParentElms(particles_per_element, parentElms_);
+    construct(particles_per_element, element_gids, particle_elements, particle_info);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -177,32 +194,8 @@ namespace pumipic {
     num_rows = num_elems;
     num_ptcls = input.np;
     extra_padding = input.extra_padding;
-
     assert(num_elems == input.ppe.size());
-
-    int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
-
-    // calculate num_soa_ from number of particles + extra padding
-    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
-    // calculate capacity_ from num_soa_ and max size of an SoA
-    capacity_ = num_soa_*AoSoA_t::vector_length;
-    // initialize appropriately-sized AoSoA
-    aosoa_ = makeAoSoA(capacity_, num_soa_);
-    // set active mask
-    setNewActive(num_ptcls);
-    // get global ids
-    if (input.e_gids.size() > 0)
-      createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
-    // populate AoSoA with input data if given
-    if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
-      fillAoSoA(input.particle_elms, input.p_info, parentElms_); // fill aosoa with data
-    }
-    else
-      setParentElms(input.ppe, parentElms_);
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -298,7 +291,47 @@ namespace pumipic {
 
   template <class DataTypes, typename MemSpace>
   void DPS<DataTypes, MemSpace>::printFormat(const char* prefix) const {
-    fprintf(stderr, "[WARNING] printFormat not yet implemented!\n");
+    kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
+    kkLidHostMirror parents_host = deviceToHost(parentElms_);
+    const auto soa_len = AoSoA_t::vector_length;
+
+    kkLidView mask(Kokkos::ViewAllocateWithoutInitializing("mask"), capacity_);
+    auto mask_slice = Cabana::slice<DPS_DT::size-1>(*aosoa_);
+    Kokkos::parallel_for("copy_mask", capacity_,
+      KOKKOS_LAMBDA(const lid_t ptcl_id) {
+        mask(ptcl_id) = mask_slice(ptcl_id);
+      });
+    kkLidHostMirror mask_host = deviceToHost(mask);
+
+    std::stringstream ss;
+    char buffer[1000];
+    char* ptr = buffer;
+    int num_chars;
+
+    num_chars = sprintf(ptr, "%s\n", prefix);
+    num_chars += sprintf(ptr+num_chars,"Particle Structures DPS\n");
+    num_chars += sprintf(ptr+num_chars,"Number of Elements: %d.\nNumber of SoA: %d.\nNumber of Particles: %d.", num_elems, num_soa_, num_ptcls);
+
+    num_chars += sprintf(ptr+num_chars, "\n  Elements");
+    for (int e = 0; e < num_elems; e++){
+      num_chars += sprintf(ptr+num_chars, " %2d(%2d)", e, element_to_gid_host(e));
+    }
+
+    lid_t last_soa = -1;
+    for (int i = 0; i < capacity_; i++) {
+      lid_t soa = i / soa_len;
+      if (last_soa == soa) {
+        num_chars += sprintf(ptr+num_chars," %d", mask_host(i));
+      }
+      else {
+        num_chars += sprintf(ptr+num_chars,"\n  SOA %d | %d", soa, mask_host(i));
+      }
+      last_soa = soa;
+    }
+    buffer[num_chars] = '\0';
+    ss << buffer;
+    ss << "\n";
+    std::cout << ss.str();
   }
 
 }

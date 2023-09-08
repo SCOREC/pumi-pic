@@ -122,7 +122,8 @@ namespace pumipic {
     void construct(kkLidView ptcls_per_elem,
                   kkGidView element_gids,
                   kkLidView particle_elements,
-                  MTVs particle_info);
+                  MTVs particle_info,
+                  bool use_swap_structure = false);
 
     //Private constructor for copy()
     CabM() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
@@ -132,13 +133,14 @@ namespace pumipic {
   void CabM<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
                                            kkGidView element_gids,
                                            kkLidView particle_elements,
-                                           MTVs particle_info) {
+                                           MTVs particle_info,
+                                           bool use_swap_structure) {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if(!comm_rank)
       fprintf(stderr, "building CabM\n");
 
-    use_swap = false;
+    use_swap = use_swap_structure;
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(ptcls_per_elem, num_ptcls, extra_padding, padding_start);
     // set num_soa_ from the last entry of offsets
@@ -209,7 +211,7 @@ namespace pumipic {
     extra_padding = input.extra_padding;
 
     assert(num_elems == input.ppe.size());
-    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info, input.use_swap);
   }
 
   template <class DataTypes, typename MemSpace>

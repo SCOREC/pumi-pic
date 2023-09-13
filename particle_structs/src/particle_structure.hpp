@@ -35,7 +35,7 @@ namespace pumipic {
     template <std::size_t N> using DataType =
       typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef MemberTypeViews MTVs;
-    template <std::size_t N> using MTV = MemberTypeView<DataType<N>, device_type>;
+    template <std::size_t N> using MTV = MemberTypeView<DataType<N>, memory_space>;
 #ifdef PP_ENABLE_CAB
     //Cabana Values for defining generic slice
     //Some defintions are taken from cabana/Cabana_AoSoA.hpp
@@ -50,7 +50,7 @@ namespace pumipic {
     using PS_DT=PS_DTBool<Types>;
     using soa_type = Cabana::SoA<PS_DT, vector_length>;
     template <std::size_t N> using Slice =
-      Segment<DataType<N>, device_type, Cabana::DefaultAccessMemory, vector_length,
+      Segment<DataType<N>, memory_space, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
 #else
     template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;

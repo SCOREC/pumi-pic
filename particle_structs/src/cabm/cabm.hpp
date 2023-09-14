@@ -61,8 +61,6 @@ namespace pumipic {
     template <std::size_t N>
     Slice<N> get() { return Slice<N>(Cabana::slice<N, AoSoA_t>(*aosoa_, "get<>()")); }
 
-    void soaSort(kkLidView new_element);
-
     void migrate(kkLidView new_element, kkLidView new_process,
                  Distributor<MemSpace> dist = Distributor<MemSpace>(),
                  kkLidView new_particle_elements = kkLidView(),

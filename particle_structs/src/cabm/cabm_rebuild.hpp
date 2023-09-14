@@ -2,24 +2,6 @@
 #include <ppTiming.hpp>
 
 namespace pumipic {
-
-  template <class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::soaSort(kkLidView new_element) {
-    const auto soa_len = AoSoA_t::vector_length;
-    const auto activeSliceIdx = aosoa_->number_of_members-1;
-    auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
-    kkLidView order("order", capacity());
-    auto testSort = KOKKOS_LAMBDA(const int i) {
-      lid_t soa = i / soa_len;
-      if (!active(i) || new_element(i) == -1) order(i) = (soa*2)+1; //Moves to end of soa
-      else order(i) = new_element(i)*2; //Makes space for deleted particles
-    };
-    Kokkos::parallel_for("testSort", capacity(), testSort);
-
-    auto sort_data = Cabana::sortByKey( order );
-    Cabana::permute( sort_data, *aosoa_ );
-  }
-
   /**
    * Fully rebuild the AoSoA with these new parent SoAs and particles
    *     by copying into a new AoSoA and overwriting the old one.
@@ -73,14 +55,29 @@ namespace pumipic {
         particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
       });
 
-    // RecordTime(name + " count active particles", overall_timer.seconds());
-    // Kokkos::Timer setup_timer; // timer for aosoa setup
+    RecordTime(name + " count active particles", overall_timer.seconds());
+    Kokkos::Timer setup_timer; // timer for aosoa setup
 
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
 
-    if (newNumSoa <= num_soa_) soaSort(new_element); //TODO: add flag to use soaSort
+    if (newNumSoa <= num_soa_) {//TODO: add flag to use soaSort
+      kkLidView order("order", capacity());
+      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const int i) {
+        lid_t soa = i / soa_len;
+        lid_t elm = parentElms_(soa);
+        // printf("INDEX %d NEW_ELEM %d SOA %d ELEM %d\n", i, new_element(i), soa, elm);
+        if (!active(i) || new_element(i) == -1) order(i) = (elm*2)+1; //Moves to end of soa
+        else order(i) = new_element(i)*2; //Makes space for deleted particles
+      });
+      Cabana::permute( Cabana::sortByKey( order ), *aosoa_ );
+
+      offsets = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);;
+      num_ptcls = num_ptcls-num_removed+num_new_ptcls;
+      parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+      setActive(elmDegree_d);
+    }
     else {
       bool swap;
       AoSoA_t* newAosoa;
@@ -99,8 +96,8 @@ namespace pumipic {
         else newAosoa = makeAoSoA(newCapacity, newNumSoa);
       }
 
-      // RecordTime(name + " move/destroy setup", setup_timer.seconds());
-      // Kokkos::Timer existing_timer; // timer for moving/deleting particles
+      RecordTime(name + " move/destroy setup", setup_timer.seconds());
+      Kokkos::Timer existing_timer; // timer for moving/deleting particles
 
       kkLidView elmPtclCounter_d("elmPtclCounter_device", num_elems);
       AoSoA_t aosoa_copy = *aosoa_; // copy of member variable aosoa_ (necessary, Kokkos doesn't like member variables)
@@ -139,15 +136,14 @@ namespace pumipic {
       num_soa_ = newNumSoa;
       capacity_ = newCapacity;
       offsets = newOffset_d;
+      num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+      setActive(elmDegree_d);
 
-      // RecordTime(name + " move/destroy existing particles", existing_timer.seconds());
-      // Kokkos::Timer add_timer; // timer for adding particles
+      RecordTime(name + " move/destroy existing particles", existing_timer.seconds());
     }
 
-    num_ptcls = num_ptcls-num_removed+num_new_ptcls;
-    setActive(elmDegree_d);
-
+    Kokkos::Timer add_timer; // timer for adding particles
     // add new particles
     if (num_new_ptcls > 0 && new_particles != NULL) {
       kkLidView offsets_cpy = offsets; // copy of offsets (necessary, Kokkos doesn't like member variables)
@@ -164,9 +160,9 @@ namespace pumipic {
         soa_indices, soa_ptcl_indices); // copy data over
     }
 
-    // RecordTime(name + " add particles", add_timer.seconds());
-    // RecordTime(name + " rebuild", overall_timer.seconds(), btime);
-    // Kokkos::Profiling::popRegion();
+    RecordTime(name + " add particles", add_timer.seconds());
+    RecordTime(name + " rebuild", overall_timer.seconds(), btime);
+    Kokkos::Profiling::popRegion();
   }
 
 }

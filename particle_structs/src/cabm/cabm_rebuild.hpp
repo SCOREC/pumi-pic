@@ -27,6 +27,7 @@ namespace pumipic {
     const auto num_new_ptcls = new_particle_elements.size();
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree_d("elmDegree", num_elems);
+    kkLidView elmAdded("elmAdded", num_elems);
     const auto activeSliceIdx = aosoa_->number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
 
@@ -53,6 +54,7 @@ namespace pumipic {
         lid_t parent = new_particle_elements(ptcl);
         assert(parent > -1); // new particles should have a destination element
         particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
+        Kokkos::atomic_fetch_add(&elmAdded(parent),1);
       });
 
     RecordTime(name + " count active particles", overall_timer.seconds());
@@ -61,7 +63,7 @@ namespace pumipic {
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
-    printFormat("");
+    // printFormat("");
     if (newNumSoa <= num_soa_) {//TODO: add flag to use soaSort
       offsets = newOffset_d;
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
@@ -69,13 +71,13 @@ namespace pumipic {
 
       kkLidView order("order", capacity());
       kkLidView notActiveCounter("notActiveCounter", 1);
-      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const int i) {
+      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const lid_t i) {
         lid_t soa = -1;
         if (!active(i) || new_element(i) == -1) {
           lid_t notActiveIndex = Kokkos::atomic_fetch_add(&notActiveCounter(0), 1);
           for (soa = 0; soa < num_soa_; soa++) {
             lid_t elm = parentElms_(soa);
-            lid_t numActive = elmDegree_d(elm);
+            lid_t numActive = elmDegree_d(elm) - elmAdded(elm);
             lid_t numNotActive = soa_len - numActive;
 
             if (notActiveIndex < numNotActive || soa == num_soa_-1) {
@@ -176,7 +178,7 @@ namespace pumipic {
     RecordTime(name + " add particles", add_timer.seconds());
     RecordTime(name + " rebuild", overall_timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
-    printFormat("");
+    // printFormat("");
   }
 
 }

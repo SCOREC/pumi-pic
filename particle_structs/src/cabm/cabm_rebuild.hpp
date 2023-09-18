@@ -61,21 +61,34 @@ namespace pumipic {
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
-
+    printFormat("");
     if (newNumSoa <= num_soa_) {//TODO: add flag to use soaSort
-      kkLidView order("order", capacity());
-      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const int i) {
-        lid_t soa = i / soa_len;
-        lid_t elm = parentElms_(soa);
-        // printf("INDEX %d NEW_ELEM %d SOA %d ELEM %d\n", i, new_element(i), soa, elm);
-        if (!active(i) || new_element(i) == -1) order(i) = (elm*2)+1; //Moves to end of soa
-        else order(i) = new_element(i)*2; //Makes space for deleted particles
-      });
-      Cabana::permute( Cabana::sortByKey( order ), *aosoa_ );
-
-      offsets = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);;
+      offsets = newOffset_d;
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);
+
+      kkLidView order("order", capacity());
+      kkLidView notActiveCounter("notActiveCounter", 1);
+      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const int i) {
+        lid_t soa = -1;
+        if (!active(i) || new_element(i) == -1) {
+          lid_t notActiveIndex = Kokkos::atomic_fetch_add(&notActiveCounter(0), 1);
+          for (soa = 0; soa < num_soa_; soa++) {
+            lid_t elm = parentElms_(soa);
+            lid_t numActive = elmDegree_d(elm);
+            lid_t numNotActive = soa_len - numActive;
+
+            if (notActiveIndex < numNotActive || soa == num_soa_-1) {
+              order(i) = (elm*2)+1; //Moves to end of soa
+              break;
+            }
+            else notActiveIndex -= numNotActive;
+          }
+        }
+        else order(i) = new_element(i)*2; //Makes space for deleted particles
+        // printf("INDEX %d ORDER %d SOA %d NEW_ELEM %d\n", i, order(i), soa, new_element(i));
+      });
+      Cabana::permute( Cabana::sortByKey( order ), *aosoa_ );
       setActive(elmDegree_d);
     }
     else {
@@ -163,6 +176,7 @@ namespace pumipic {
     RecordTime(name + " add particles", add_timer.seconds());
     RecordTime(name + " rebuild", overall_timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
+    printFormat("");
   }
 
 }

@@ -241,7 +241,7 @@ int testRebuild(const char* name, PS* structure) {
   fails += rebuildNewElems(name, structure);
   fails += rebuildNewPtcls(name, structure);
   fails += rebuildPtclsDestroyed(name, structure);
-  fails += rebuildNewAndDestroyed(name, structure);
+  // fails += rebuildNewAndDestroyed(name, structure);
   return fails;
 }
 

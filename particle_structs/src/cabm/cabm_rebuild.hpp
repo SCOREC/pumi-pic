@@ -63,7 +63,7 @@ namespace pumipic {
     // prepare a new aosoa to store the shuffled particles
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
-    // printFormat("");
+
     if (newNumSoa <= num_soa_) {//TODO: add flag to use soaSort
       offsets = newOffset_d;
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
@@ -72,15 +72,15 @@ namespace pumipic {
       kkLidView order("order", capacity());
       kkLidView notActiveCounter("notActiveCounter", 1);
       Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const lid_t i) {
-        lid_t soa = -1;
         if (!active(i) || new_element(i) == -1) {
+          order(i) = num_elems*2 + 1; // Move to end if spot not found
           lid_t notActiveIndex = Kokkos::atomic_fetch_add(&notActiveCounter(0), 1);
-          for (soa = 0; soa < num_soa_; soa++) {
-            lid_t elm = parentElms_(soa);
+          for (lid_t elm = 0; elm < num_elems; elm++) {
             lid_t numActive = elmDegree_d(elm) - elmAdded(elm);
-            lid_t numNotActive = soa_len - numActive;
-
-            if (notActiveIndex < numNotActive || soa == num_soa_-1) {
+            if (numActive == 0) continue;
+            lid_t numNotActive = soa_len - (numActive % soa_len);
+            if (numNotActive == soa_len) continue;
+            if (notActiveIndex < numNotActive) {
               order(i) = (elm*2)+1; //Moves to end of soa
               break;
             }
@@ -88,7 +88,7 @@ namespace pumipic {
           }
         }
         else order(i) = new_element(i)*2; //Makes space for deleted particles
-        // printf("INDEX %d ORDER %d SOA %d NEW_ELEM %d\n", i, order(i), soa, new_element(i));
+        // printf("INDEX %d ORDER %d NEW_ELEM %d\n", i, order(i), new_element(i));
       });
       Cabana::permute( Cabana::sortByKey( order ), *aosoa_ );
       setActive(elmDegree_d);
@@ -178,7 +178,6 @@ namespace pumipic {
     RecordTime(name + " add particles", add_timer.seconds());
     RecordTime(name + " rebuild", overall_timer.seconds(), btime);
     Kokkos::Profiling::popRegion();
-    // printFormat("");
   }
 
 }

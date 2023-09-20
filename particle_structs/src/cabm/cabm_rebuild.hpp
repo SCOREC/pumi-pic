@@ -69,11 +69,13 @@ namespace pumipic {
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);
 
-      kkLidView order("order", capacity());
+      kkLidView newIndex("newIndex", capacity());
       kkLidView notActiveCounter("notActiveCounter", 1);
       Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const lid_t i) {
-        if (!active(i) || new_element(i) == -1) {
-          order(i) = num_elems*2 + 1; // Move to end if spot not found
+        if (active(i) && new_element(i) > -1)
+          newIndex(i) = new_element(i)*2; //Makes space for deleted particles
+        else {
+          newIndex(i) = num_elems*2 + 1; // Move to end if spot not found
           lid_t notActiveIndex = Kokkos::atomic_fetch_add(&notActiveCounter(0), 1);
           for (lid_t elm = 0; elm < num_elems; elm++) {
             lid_t numActive = elmDegree_d(elm) - elmAdded(elm);
@@ -81,16 +83,15 @@ namespace pumipic {
             lid_t numNotActive = soa_len - (numActive % soa_len);
             if (numNotActive == soa_len) continue;
             if (notActiveIndex < numNotActive) {
-              order(i) = (elm*2)+1; //Moves to end of soa
+              newIndex(i) = (elm*2)+1; //Moves to end of soa
               break;
             }
             else notActiveIndex -= numNotActive;
           }
         }
-        else order(i) = new_element(i)*2; //Makes space for deleted particles
-        // printf("INDEX %d ORDER %d NEW_ELEM %d\n", i, order(i), new_element(i));
+        // printf("INDEX %d NEWINDEX %d NEW_ELEM %d\n", i, newIndex(i), new_element(i));
       });
-      Cabana::permute( Cabana::sortByKey( order ), *aosoa_ );
+      Cabana::permute( Cabana::binByKey( newIndex, num_elems*2 + 1 ), *aosoa_ );
       setActive(elmDegree_d);
     }
     else {

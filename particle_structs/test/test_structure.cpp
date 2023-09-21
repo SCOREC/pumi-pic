@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
     PS::MTVs particle_info;
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
-    int num = 3;
+    int num = 0;
     //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
       double mem_i = get_mem_usage();
@@ -117,11 +117,11 @@ int main(int argc, char* argv[]) {
         break;
       //Run all tests on the structure
       double mem_s = get_mem_usage();
-      // fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
-      // fails += testParticleExistence(name.c_str(), structure, num_ptcls);
-      // fails += setValues(name.c_str(), structure);
-      // fails += pseudoPush(name.c_str(), structure);
-      // fails += testMetrics(name.c_str(), structure);
+      fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
+      fails += testParticleExistence(name.c_str(), structure, num_ptcls);
+      fails += setValues(name.c_str(), structure);
+      fails += pseudoPush(name.c_str(), structure);
+      fails += testMetrics(name.c_str(), structure);
       double mem_pr = get_mem_usage();
       if (check_memory && fabs(mem_pr - mem_s) > .00001) {
         fprintf(stderr, "[ERROR] Structure %s memory usage changed in setup routines [%f]\n", name, mem_pr - mem_s);
@@ -129,16 +129,16 @@ int main(int argc, char* argv[]) {
       }
       //Memory changes are expected in rebuild/migration (the structure check at the end will ensure no memory leaks)
       fails += testRebuild(name.c_str(), structure);
-      // fails += testMigration(name.c_str(), structure);
+      fails += testMigration(name.c_str(), structure);
       double mem_pb = get_mem_usage();
-      // fails += testCopy(name.c_str(), structure);
-      // fails += testSegmentComp(name.c_str(), structure);
+      fails += testCopy(name.c_str(), structure);
+      fails += testSegmentComp(name.c_str(), structure);
       double mem_pd = get_mem_usage();
       if (check_memory && fabs(mem_pd - mem_pb) > .00001) {
         fprintf(stderr, "[ERROR] Structure %s memory usage changed in later tests [%f]\n", name, mem_pd - mem_pb);
         ++fails;
       }
-      // fails += migrateToEmptyAndRefill(name.c_str(), structure);
+      fails += migrateToEmptyAndRefill(name.c_str(), structure);
       delete structure;
       double mem_f = get_mem_usage();
       if (check_memory && fabs(mem_f - mem_i) > .00001) {
@@ -147,7 +147,6 @@ int main(int argc, char* argv[]) {
                 "| Initial: %f GB | Final: %f GB | Diff: %f GB\n", name.c_str(),
                 mem_i, mem_f, mem_f - mem_i);
       }
-      break;
     }
     ps::destroyViews<Types>(particle_info);
   }

@@ -70,8 +70,8 @@ namespace pumipic {
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);
 
-      // Picks index for inactive particles
-      kkLidView notActiveIndexes("notActiveIndexes", capacity());
+      // picks index for inactive particles
+      kkLidView notActiveIndexes(Kokkos::ViewAllocateWithoutInitializing("notActiveIndexes"), capacity());
       Kokkos::parallel_for("setNotActive", capacity(), KOKKOS_LAMBDA(const lid_t i) {
         lid_t soa = i / soa_len;
         lid_t elm = parentElms_(soa);
@@ -85,7 +85,8 @@ namespace pumipic {
       });
       Kokkos::sort(notActiveIndexes);
 
-      kkLidView newIndex("newIndex", capacity());
+      // selects new index for each particle
+      kkLidView newIndex(Kokkos::ViewAllocateWithoutInitializing("newIndex"), capacity());
       kkLidView notActiveCounter("notActiveCounter", 1);
       Kokkos::parallel_for("setIndex", capacity(), KOKKOS_LAMBDA(const lid_t i) {
         if (active(i) && new_element(i) > -1)

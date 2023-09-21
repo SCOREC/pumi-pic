@@ -27,7 +27,7 @@ namespace pumipic {
     const auto num_new_ptcls = new_particle_elements.size();
     const auto soa_len = AoSoA_t::vector_length;
     kkLidView elmDegree_d("elmDegree", num_elems);
-    kkLidView elmAdded("elmAdded", num_elems);
+    kkLidView elmActive("elmActive", num_elems);
     const auto activeSliceIdx = aosoa_->number_of_members-1;
     auto active = Cabana::slice<activeSliceIdx>(*aosoa_);
 
@@ -37,8 +37,10 @@ namespace pumipic {
     auto atomic = KOKKOS_LAMBDA(const lid_t& soa, const lid_t& tuple) {
       if (active.access(soa,tuple)) {
         lid_t parent = new_element(soa*soa_len + tuple);
-        if (parent > -1) // count particles to be kept
+        if (parent > -1) { // count particles to be kept
           Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
+          Kokkos::atomic_increment<lid_t>(&elmActive(parent));
+        }
         else // count particles to be deleted
           Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
       }
@@ -54,7 +56,6 @@ namespace pumipic {
         lid_t parent = new_particle_elements(ptcl);
         assert(parent > -1); // new particles should have a destination element
         particle_indices(ptcl) = Kokkos::atomic_fetch_add(&elmDegree_d(parent),1);
-        Kokkos::atomic_fetch_add(&elmAdded(parent),1);
       });
 
     RecordTime(name + " count active particles", overall_timer.seconds());
@@ -69,27 +70,30 @@ namespace pumipic {
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);
 
+      // Picks index for inactive particles
+      kkLidView notActiveIndexes("notActiveIndexes", capacity());
+      Kokkos::parallel_for("setNotActive", capacity(), KOKKOS_LAMBDA(const lid_t i) {
+        lid_t soa = i / soa_len;
+        lid_t elm = parentElms_(soa);
+        lid_t numActive = elmActive(elm);
+        lid_t numNotActive = soa_len - (numActive % soa_len);
+        if (numNotActive == soa_len) numNotActive = 0;
+        lid_t tuple = i % soa_len;
+        if (numActive > 0 && tuple < numNotActive && soa == newOffset_d(elm)) //Finds inactive ptcls
+          notActiveIndexes(i) = elm*2 + 1; // Move to end of element
+        else notActiveIndexes(i) = num_elems*2 + 1; // Move to end of structure
+      });
+      Kokkos::sort(notActiveIndexes);
+
       kkLidView newIndex("newIndex", capacity());
       kkLidView notActiveCounter("notActiveCounter", 1);
-      Kokkos::parallel_for("testSort", capacity(), KOKKOS_LAMBDA(const lid_t i) {
+      Kokkos::parallel_for("setIndex", capacity(), KOKKOS_LAMBDA(const lid_t i) {
         if (active(i) && new_element(i) > -1)
           newIndex(i) = new_element(i)*2; //Makes space for deleted particles
         else {
-          newIndex(i) = num_elems*2 + 1; // Move to end if spot not found
           lid_t notActiveIndex = Kokkos::atomic_fetch_add(&notActiveCounter(0), 1);
-          for (lid_t elm = 0; elm < num_elems; elm++) {
-            lid_t numActive = elmDegree_d(elm) - elmAdded(elm);
-            if (numActive == 0) continue;
-            lid_t numNotActive = soa_len - (numActive % soa_len);
-            if (numNotActive == soa_len) continue;
-            if (notActiveIndex < numNotActive) {
-              newIndex(i) = (elm*2)+1; //Moves to end of soa
-              break;
-            }
-            else notActiveIndex -= numNotActive;
-          }
+          newIndex(i) = notActiveIndexes(notActiveIndex);
         }
-        // printf("INDEX %d NEWINDEX %d NEW_ELEM %d\n", i, newIndex(i), new_element(i));
       });
       Cabana::permute( Cabana::binByKey( newIndex, num_elems*2 + 1 ), *aosoa_ );
       setActive(elmDegree_d);

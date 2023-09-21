@@ -53,7 +53,7 @@ namespace pumipic {
       Segment<DataType<N>, memory_space, Cabana::DefaultAccessMemory, vector_length,
               sizeof(soa_type)/ sizeof(member_value_type<N>)>;
 #else
-    template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
+    template <std::size_t N> using Slice = Segment<DataType<N>, memory_space>;
 #endif
 
     ParticleStructure();

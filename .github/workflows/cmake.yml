@@ -28,6 +28,9 @@ jobs:
       
     steps:
 
+    - name: Update packages
+      run: sudo apt-get update
+
     - name: Install mpi
       run: sudo apt-get install -yq mpich libmpich-dev
 

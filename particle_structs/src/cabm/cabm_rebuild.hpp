@@ -65,7 +65,7 @@ namespace pumipic {
     kkLidView newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, -1, padding_start); // -1 signifies to fill to num_soa
     lid_t newNumSoa = getLastValue(newOffset_d);
 
-    if (newNumSoa <= num_soa_) {//TODO: add flag to use soaSort
+    if (rebuild_type == SORT && newNumSoa <= num_soa_) {
       offsets = newOffset_d;
       num_ptcls = num_ptcls-num_removed+num_new_ptcls;
       parentElms_ = getParentElms(num_elems, num_soa_, offsets);

@@ -2,6 +2,8 @@
 #include <particle_structs.hpp>
 namespace pumipic {
 
+  enum RebuildType { SWAPKEEP, SWAPDELETE, SORT };
+
   template <class DataTypes, typename MemSpace>
   class CabM;
 
@@ -14,7 +16,7 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<typename MemSpace::execution_space> PolicyType;
     CabM_Input(PolicyType& p, lid_t num_elements,
               lid_t num_particles, kkLidView particles_per_elements, kkGidView element_gids,
-              bool use_swap_ = false, kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
+              RebuildType rebuild_type_ = SWAPKEEP, kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
 
     //Extra padding at the end of the structure to allow growth [default = 0.05 (5%)]
     double extra_padding;
@@ -30,15 +32,15 @@ namespace pumipic {
     kkGidView e_gids;
     kkLidView particle_elms;
     MTVs p_info;
-    bool use_swap;
+    RebuildType rebuild_type;
   };
 
   template <class DataTypes, typename MemSpace>
   CabM_Input<DataTypes, MemSpace>::CabM_Input(PolicyType& p, lid_t ne_,
                                             lid_t np_, kkLidView ppe_, kkGidView eg,
-                                            bool use_swap_, kkLidView pes, MTVs info) :
+                                            RebuildType rebuild_type_, kkLidView pes, MTVs info) :
     policy(p), ne(ne_), np(np_), ppe(ppe_), e_gids(eg),
-    use_swap(use_swap_), particle_elms(pes), p_info(info) {
+    rebuild_type(rebuild_type_), particle_elms(pes), p_info(info) {
     extra_padding = 0.05;
     name = "ptcls";
   }

@@ -108,12 +108,12 @@ namespace pumipic {
         newOffset_d = buildOffset(elmDegree_d, num_ptcls-num_removed+num_new_ptcls, extra_padding, padding_start);
         newNumSoa = getLastValue(newOffset_d);
         newCapacity = newNumSoa*soa_len;
-        if (use_swap) delete aosoa_swap;
+        if (rebuild_type == SWAPKEEP) delete aosoa_swap;
         newAosoa = makeAoSoA(newCapacity, newNumSoa);
       } else { // if we don't need extra space
         swap = true;
         newCapacity = capacity_;
-        if (use_swap) newAosoa = aosoa_swap;
+        if (rebuild_type == SWAPKEEP) newAosoa = aosoa_swap;
         else newAosoa = makeAoSoA(newCapacity, newNumSoa);
       }
 
@@ -146,12 +146,12 @@ namespace pumipic {
       if (swap) {
         auto temp = aosoa_;
         aosoa_ = newAosoa;
-        if (use_swap) aosoa_swap = temp;
+        if (rebuild_type == SWAPKEEP) aosoa_swap = temp;
         else delete temp;
       } else { // destroy old aosoas and make new ones
         delete aosoa_;
         aosoa_ = newAosoa;
-        if (use_swap) aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
+        if (rebuild_type == SWAPKEEP) aosoa_swap = makeAoSoA(newCapacity, newNumSoa);
       }
       // update member variables (note that these are set before particle addition)
       num_soa_ = newNumSoa;

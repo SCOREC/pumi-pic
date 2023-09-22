@@ -111,8 +111,8 @@ namespace pumipic {
     kkLidView offsets; 
     // parent elements for each SoA
     kkLidView parentElms_;
-    // True: use aosoa_swap when rebuiling
-    bool use_swap;
+    // which algorithm to use for rebuild
+    RebuildType rebuild_type;
     // particle data
     AoSoA_t* aosoa_;
     // extra AoSoA copy for swapping (same size as aosoa_)
@@ -123,7 +123,7 @@ namespace pumipic {
                   kkGidView element_gids,
                   kkLidView particle_elements,
                   MTVs particle_info,
-                  bool use_swap_structure = false);
+                  RebuildType rebuild_type = SWAPKEEP);
 
     //Private constructor for copy()
     CabM() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
@@ -134,13 +134,13 @@ namespace pumipic {
                                            kkGidView element_gids,
                                            kkLidView particle_elements,
                                            MTVs particle_info,
-                                           bool use_swap_structure) {
+                                           RebuildType rebuild_type_) {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if(!comm_rank)
       fprintf(stderr, "building CabM\n");
 
-    use_swap = use_swap_structure;
+    rebuild_type = rebuild_type_;
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(ptcls_per_elem, num_ptcls, extra_padding, padding_start);
     // set num_soa_ from the last entry of offsets
@@ -149,7 +149,7 @@ namespace pumipic {
     capacity_ = num_soa_*AoSoA_t::vector_length;
     // initialize appropriately-sized AoSoA and copy for swapping
     aosoa_ = makeAoSoA(capacity_, num_soa_);
-    if (use_swap) aosoa_swap = makeAoSoA(capacity_, num_soa_);
+    if (rebuild_type == SWAPKEEP) aosoa_swap = makeAoSoA(capacity_, num_soa_);
     // get array of parents element indices for particles
     parentElms_ = getParentElms(num_elems, num_soa_, offsets);
     // set active mask
@@ -211,13 +211,13 @@ namespace pumipic {
     extra_padding = input.extra_padding;
 
     assert(num_elems == input.ppe.size());
-    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info, input.use_swap);
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info, input.rebuild_type);
   }
 
   template <class DataTypes, typename MemSpace>
   CabM<DataTypes, MemSpace>::~CabM() {
     delete aosoa_;
-    if (use_swap) delete aosoa_swap;
+    if (rebuild_type == SWAPKEEP) delete aosoa_swap;
   }
 
   /**
@@ -381,13 +381,13 @@ namespace pumipic {
     mirror_copy->num_soa_ = num_soa_;
     mirror_copy->padding_start = padding_start;
     mirror_copy->extra_padding = extra_padding;
-    mirror_copy->use_swap = use_swap;
+    mirror_copy->rebuild_type = rebuild_type;
 
     //copy AoSoA
     mirror_copy->aosoa_ = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_->label()).append("_mirror"), aosoa_->size());
     Cabana::deep_copy(*(mirror_copy->aosoa_), *aosoa_);
     //Create the swap space
-    if (use_swap) {
+    if (rebuild_type == SWAPKEEP) {
       mirror_copy->aosoa_swap = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(aosoa_swap->label()).append("_mirror"), aosoa_swap->size());
       Cabana::deep_copy(*(mirror_copy->aosoa_swap), *aosoa_swap);
     }

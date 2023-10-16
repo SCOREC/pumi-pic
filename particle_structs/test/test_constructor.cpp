@@ -42,7 +42,7 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
       Kokkos::atomic_increment<lid_t>(&(count(0)));
   };
   ps::parallel_for(structure, checkExistence, "check particle existence");
-  lid_t c = ps::getLastValue<lid_t>(count);
+  lid_t c = ps::getLastValue(count);
   if (c != num_ptcls) {
     fprintf(stderr, "[ERROR] Test %s: Number of particles found in parallel_for "
             "does not match the number of particles on rank %d "

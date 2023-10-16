@@ -43,7 +43,7 @@ namespace pumipic {
                            Kokkos::atomic_fetch_add(&empty[0], 1);
                          });
 
-    num_empty_elements = getLastValue<lid_t>(empty);
+    num_empty_elements = getLastValue(empty);
     const PolicyType policy(nchunks, C_);
     lid_t C_local = C_;
     lid_t num_elems_local = num_elems;
@@ -128,7 +128,7 @@ namespace pumipic {
     kkLidView offset_nslices("offset_nslices",nChunks+1);
     exclusive_scan(slices_per_chunk, offset_nslices, execution_space());
 
-    nSlices = getLastValue<lid_t>(offset_nslices);
+    nSlices = getLastValue(offset_nslices);
     offs = kkLidView("SCS offset", nSlices + 1);
     s2c = kkLidView(Kokkos::ViewAllocateWithoutInitializing("slice to chunk"), nSlices);
     kkLidView slice_size(Kokkos::ViewAllocateWithoutInitializing("slice_size"), 
@@ -149,7 +149,7 @@ namespace pumipic {
     });
 
     exclusive_scan(slice_size, offs, execution_space());
-    cap = getLastValue<lid_t>(offs);
+    cap = getLastValue(offs);
   }
   template<class DataTypes, typename MemSpace>
   void SellCSigma<DataTypes, MemSpace>::setupParticleMask(Kokkos::View<bool*> mask,

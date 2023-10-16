@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
       }
     };
     scs->parallel_for(check);
-    f = particle_structs::getLastValue<particle_structs::lid_t>(fail);
+    f = particle_structs::getLastValue(fail);
     delete scs;
     delete [] ptcls_per_elem;
     delete [] ids;

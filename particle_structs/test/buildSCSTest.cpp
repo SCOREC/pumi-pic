@@ -67,7 +67,7 @@ bool defaultTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView e
     }
   };
   Kokkos::parallel_for(ne, check);
-  int f = particle_structs::getLastValue<particle_structs::lid_t>(fail);
+  int f = particle_structs::getLastValue(fail);
   delete scs;
   return f == 0;
 }
@@ -95,7 +95,7 @@ bool noSortTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
     }
   };
   Kokkos::parallel_for(ne, check);
-  int f = particle_structs::getLastValue<particle_structs::lid_t>(fail);
+  int f = particle_structs::getLastValue(fail);
   delete scs;
   return f == 0;
 }
@@ -123,7 +123,7 @@ bool largeCTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
     }
   };
   Kokkos::parallel_for(ne, check);
-  int f = particle_structs::getLastValue<particle_structs::lid_t>(fail);
+  int f = particle_structs::getLastValue(fail);
   delete scs;
   return f == 0;
 }

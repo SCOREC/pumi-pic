@@ -284,7 +284,7 @@ namespace pumipic {
       }
     }
 
-    lid_t num_padded = getLastValue<lid_t>(padded_cells);
+    lid_t num_padded = getLastValue(padded_cells);
 
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);

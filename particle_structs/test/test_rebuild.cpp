@@ -46,7 +46,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
     }
   };
   ps::parallel_for(structure, checkSameElement, "checkSameElement");
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   failed = kkLidView("failed", 1);
   auto checkElementSums = KOKKOS_LAMBDA(const int i) {
@@ -59,7 +59,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
     }
   };
   Kokkos::parallel_for("checkElementSums", structure->nElems(), checkElementSums);
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   return fails;
 }
@@ -110,7 +110,7 @@ int rebuildNewElems(const char* name, PS* structure) {
     }
   };
   ps::parallel_for(structure, checkElement, "checkElement");
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   auto checkElementSums = KOKKOS_LAMBDA(const int i) {
     const lid_t old_sum = element_sums(i);
@@ -122,7 +122,7 @@ int rebuildNewElems(const char* name, PS* structure) {
     }
   };
   Kokkos::parallel_for("checkElementSums", structure->nElems(), checkElementSums);
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   return fails;
 }
@@ -194,7 +194,7 @@ int rebuildNewPtcls(const char* name, PS* structure) {
     }
   };
 
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   ps::destroyViews<Types>(new_particles);
   return fails;
@@ -251,7 +251,7 @@ int rebuildPtclsDestroyed(const char* name, PS* structure) {
   };
   ps::parallel_for(structure, checkElement, "checkElement");
 
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   return fails;
 }
@@ -334,7 +334,7 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
   };
   ps::parallel_for(structure, checkElement, "checkElement");
 
-  fails += ps::getLastValue<lid_t>(failed);
+  fails += ps::getLastValue(failed);
 
   ps::destroyViews<Types>(new_particles);
   return fails;

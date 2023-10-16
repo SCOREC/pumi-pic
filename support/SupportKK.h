@@ -98,17 +98,6 @@ namespace pumipic {
     deep_copy(view, hv);
   }
 
-
-  template <typename T, typename Device>
-  typename std::remove_const<T>::type getLastValue(Kokkos::View<T*, Device> view) {
-    const int size = view.size();
-    if (size == 0)
-      return 0;
-    typename std::remove_const<T>::type lastVal;
-    Kokkos::deep_copy(lastVal,Kokkos::subview(view,size-1));
-    return lastVal;
-  }
-
   template <typename ViewT>
   typename ViewT::value_type getLastValue(ViewT view) {
     const int size = view.size();

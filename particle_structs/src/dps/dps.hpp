@@ -272,7 +272,7 @@ namespace pumipic {
       KOKKOS_LAMBDA(const lid_t ptcl_id) {
         Kokkos::atomic_fetch_add(&padded_cells(0), !mask(ptcl_id));
       });
-    lid_t num_padded = getLastValue<lid_t>(padded_cells);
+    lid_t num_padded = getLastValue(padded_cells);
 
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);

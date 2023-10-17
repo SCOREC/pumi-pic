@@ -78,6 +78,10 @@ if(Kokkos_VERSION VERSION_LESS 4.0.01)
     message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
 endif()
 
+if(Omega_h_VERSION VERSION_LESS 10.8.0)
+    message(FATAL_ERROR "Omega_h version >= 10.8.0 required.")
+endif()
+
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")

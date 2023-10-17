@@ -1,8 +1,6 @@
 name: build-test
 on: 
   push:
-  pull_request:
-    types: [opened, reopened]
   schedule:
     - cron: '12 14 * * 3'
 
@@ -51,6 +49,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: kokkos/kokkos
+        ref: 4.1.00
         path: kokkos
 
     - name: Kokkos Create Directory
@@ -121,6 +120,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: SCOREC/omega_h
+        ref: scorec-v10.8.0
         path: omega_h
 
     - name: Omega_h Create Directory
@@ -159,6 +159,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: ECP-copa/cabana
+        ref: 0.6.0
         path: cabana
 
     - name: Cabana Create Directory

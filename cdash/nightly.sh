@@ -25,7 +25,7 @@ export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
 [ ! -d kokkos ] && git clone git@github.com:kokkos/kokkos.git
-cd kokkos && git checkout 4.1.00 && git pull && git -
+cd kokkos && git checkout 4.1.00 && git pull && cd -
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \

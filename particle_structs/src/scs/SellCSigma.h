@@ -491,8 +491,8 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
       Kokkos::atomic_fetch_add(&padded_slices[0], np > 0);
   });
 
-  lid_t num_padded = getLastValue<lid_t>(padded_cells);
-  lid_t num_padded_slices = getLastValue<lid_t>(padded_slices);
+  lid_t num_padded = getLastValue(padded_cells);
+  lid_t num_padded_slices = getLastValue(padded_slices);
 
   int comm_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);

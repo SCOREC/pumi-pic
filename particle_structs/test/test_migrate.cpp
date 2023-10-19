@@ -52,7 +52,7 @@ int migrateSendRight(const char* name, PS* structure) {
   };
   if (comm_size > 1)
     ps::parallel_for(structure, checkPostMigrate, "checkPostMigrate");
-  fails += ps::getLastValue<lid_t>(failures);
+  fails += ps::getLastValue(failures);
 
   printf("migrateSendRight (Reverse) %s, rank %d\n", name, comm_rank);
 
@@ -88,7 +88,7 @@ int migrateSendRight(const char* name, PS* structure) {
   };
   ps::parallel_for(structure, checkPostBackMigrate, "checkPostBackMigrate");
 
-  fails += ps::getLastValue<lid_t>(failures);
+  fails += ps::getLastValue(failures);
   if (num_ptcls != structure->nPtcls()) {
     printf("[ERROR] Test %s: Structure does not have all of the particles it started with on rank %d\n", name, comm_rank);
     ++fails;
@@ -262,6 +262,6 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
   };
   structure->rebuild(new_element);
 
-  fails += pumipic::getLastValue<lid_t>(failures);
+  fails += pumipic::getLastValue(failures);
   return fails;
 }

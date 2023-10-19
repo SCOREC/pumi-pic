@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
   };
   Omega_h::parallel_for(10, lamb, "test_array");
-  fails += pumipic::getLastValue<int>(f);
+  fails += pumipic::getLastValue(f);
 
 
   if (fails == 0)

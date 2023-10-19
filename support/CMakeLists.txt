@@ -36,7 +36,7 @@ $<INSTALL_INTERFACE:include>)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
 target_link_libraries(support PUBLIC MPI::MPI_CXX)
 if(ENABLE_CABANA)
-  target_link_libraries(support PUBLIC Cabana::cabanacore)
+  target_link_libraries(support PUBLIC Cabana::Core)
 endif()
 
 cmake_policy(SET CMP0057 NEW)

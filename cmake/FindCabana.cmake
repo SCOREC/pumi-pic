@@ -11,7 +11,7 @@ endif()
 
 find_path(Cabana_INCLUDE_DIR Cabana_Core.hpp PATHS "${Cabana_INSTALL_DIR}/include")
 
-find_library(Cabana_LIBRARY cabanacore PATHS "${Cabana_INSTALL_DIR}/lib64")
+find_library(Cabana_LIBRARY Core PATHS "${Cabana_INSTALL_DIR}/lib64")
 
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set Cabana_FOUND to TRUE

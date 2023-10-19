@@ -38,7 +38,7 @@ namespace pumipic {
           fail(0) = 1;
       });
 
-    if (getLastValue<lid_t>(fail)) {
+    if (getLastValue(fail)) {
       //Reshuffle fails
       return false;
     }
@@ -49,7 +49,7 @@ namespace pumipic {
     exclusive_scan(new_particles_per_row, offset_new_particles, execution_space());
     Kokkos::deep_copy(counting_offset_index, offset_new_particles);
 
-    int num_moving_ptcls = getLastValue<lid_t>(offset_new_particles);
+    int num_moving_ptcls = getLastValue(offset_new_particles);
     if (num_moving_ptcls == 0) {
       Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
           sum += static_cast<lid_t>(particle_mask_local(i));

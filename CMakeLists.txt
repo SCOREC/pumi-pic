@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(pumipic VERSION 1.0.0 LANGUAGES CXX)
+project(pumipic VERSION 2.0.0 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 
@@ -76,6 +76,10 @@ set(KOKKOS_ENABLED true)
 
 if(Kokkos_VERSION VERSION_LESS 4.0.01)
     message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
+endif()
+
+if(Omega_h_VERSION VERSION_LESS 10.8.0)
+    message(FATAL_ERROR "Omega_h version >= 10.8.0 required.")
 endif()
 
 set(debug_flag)

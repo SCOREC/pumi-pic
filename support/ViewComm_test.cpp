@@ -131,7 +131,7 @@ int sendRecvTest(const char* name, int msg_size) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   //Closing
-  fails += pumipic::getLastValue<int>(device_fails);
+  fails += pumipic::getLastValue(device_fails);
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;
@@ -292,7 +292,7 @@ int iSendRecvWaitTest(const char* name, int msg_size) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   //Closing
-  fails += pumipic::getLastValue<int>(device_fails);
+  fails += pumipic::getLastValue(device_fails);
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;
@@ -418,7 +418,7 @@ int iSendRecvWaitAllTest(const char* name) {
 
   MPI_Barrier(MPI_COMM_WORLD);
   //Closing
-  fails += pumipic::getLastValue<int>(device_fails);
+  fails += pumipic::getLastValue(device_fails);
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;
@@ -492,7 +492,7 @@ int reduceTest(const char* name) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   //Closing
-  fails += pumipic::getLastValue<int>(device_fails);
+  fails += pumipic::getLastValue(device_fails);
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;
@@ -566,7 +566,7 @@ int allReduceTest(const char* name) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   //Closing
-  fails += pumipic::getLastValue<int>(device_fails);
+  fails += pumipic::getLastValue(device_fails);
   int final_fail;
   MPI_Allreduce(&fails, &final_fail, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return final_fail > 0;

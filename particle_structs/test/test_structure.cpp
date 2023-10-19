@@ -287,7 +287,7 @@ int testCopy(const char* name, PS* structure) {
     }
   };
   ps::parallel_for(structure, testTypes, "testTypes on original structure");
-  if (ps::getLastValue<lid_t>(failure)) {
+  if (ps::getLastValue(failure)) {
     fprintf(stderr, "[ERROR] Test %s: Parallel for on original structure had failures\n",
             name);
     ++fails;
@@ -295,7 +295,7 @@ int testCopy(const char* name, PS* structure) {
 
   Kokkos::parallel_for(1, KOKKOS_LAMBDA(const int& i) {failure(i) = 0;});
   ps::parallel_for(device_structure, testTypes, "testTypes on copy of structure");
-  if (ps::getLastValue<lid_t>(failure)) {
+  if (ps::getLastValue(failure)) {
     fprintf(stderr, "[ERROR] Test %s: Parallel for on device structure had failures\n",
             name);
     ++fails;
@@ -334,7 +334,7 @@ int testSegmentComp(const char* name, PS* structure) {
     }
   };
   pumipic::parallel_for(structure, checkComponents, "Check components");
-  fails += pumipic::getLastValue<lid_t>(failures);
+  fails += pumipic::getLastValue(failures);
 
   return fails;
 }

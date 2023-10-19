@@ -24,7 +24,8 @@ export CMAKE_PREFIX_PATH=$engpar:$kk:$oh:$pumipic:$CMAKE_PREFIX_PATH
 export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
-[ ! -d kokkos ] && git clone -b 4.0.01 git@github.com:kokkos/kokkos.git
+[ ! -d kokkos ] && git clone git@github.com:kokkos/kokkos.git
+cd kokkos && git checkout 4.1.00 && git pull && git -
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
@@ -53,7 +54,7 @@ cmake --build ${engpar%%install} --target install -j8
 
 cd $root
 [ ! -d omega_h ] && git clone git@github.com:SCOREC/omega_h.git
-cd omega_h && git checkout master && git pull && cd -
+cd omega_h && git checkout scorec-v10.8.0 && git pull && cd -
 [ -d $oh ] && rm -rf ${oh%%install}
 cmake -S omega_h -B ${oh%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \

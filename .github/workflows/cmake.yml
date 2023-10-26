@@ -155,11 +155,9 @@ jobs:
         path: ${{ runner.temp }}/build-cabana
         
     - name: Cabana Checkout repo
-      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
       uses: actions/checkout@v3
       with:
         repository: ECP-copa/cabana
-        ref: 0.6.0
         path: cabana
 
     - name: Cabana Create Directory

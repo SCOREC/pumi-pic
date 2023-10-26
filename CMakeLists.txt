@@ -82,6 +82,10 @@ if(Omega_h_VERSION VERSION_LESS 10.8.0)
     message(FATAL_ERROR "Omega_h version >= 10.8.0 required.")
 endif()
 
+if(Cabana_VERSION VERSION_LESS 0.6.0)
+    message(FATAL_ERROR "Omega_h version >= 0.6.0 required.")
+endif()
+
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")

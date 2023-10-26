@@ -83,7 +83,7 @@ if(Omega_h_VERSION VERSION_LESS 10.8.0)
 endif()
 
 if(Cabana_VERSION VERSION_LESS 0.6.0)
-    message(FATAL_ERROR "Omega_h version >= 0.6.0 required.")
+    message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
 endif()
 
 set(debug_flag)

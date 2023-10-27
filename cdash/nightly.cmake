@@ -104,7 +104,7 @@ macro(setup_repo repo_name repo_url)
 endmacro(setup_repo)
 
 set(OMEGAH_MASTER_INSTALL
-  "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install/lib/cmake/Omega_h")
+  "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install")
 SET(CONFIGURE_MASTER_OMEGAH_MASTER
   "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"

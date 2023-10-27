@@ -25,7 +25,7 @@ export MPICH_CXX=$root/kokkos/bin/nvcc_wrapper
 
 cd $root
 [ ! -d kokkos ] && git clone git@github.com:kokkos/kokkos.git
-cd kokkos && git checkout 4.1.00 && git pull && cd -
+cd kokkos && git checkout 4.1.00 && cd -
 [ -d $kk ] && rm -rf ${kk%%install}
 cmake -S kokkos -B ${kk%%install} \
   -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
@@ -54,7 +54,7 @@ cmake --build ${engpar%%install} --target install -j8
 
 cd $root
 [ ! -d omega_h ] && git clone git@github.com:SCOREC/omega_h.git
-cd omega_h && git checkout scorec-v10.8.0 && git pull && cd -
+cd omega_h && git checkout scorec-v10.8.0 && cd -
 [ -d $oh ] && rm -rf ${oh%%install}
 cmake -S omega_h -B ${oh%%install} \
   -DCMAKE_CXX_COMPILER=mpicxx \

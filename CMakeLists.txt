@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(pumipic VERSION 2.0.0 LANGUAGES CXX)
+project(pumipic VERSION 2.0.1 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 
@@ -68,6 +68,9 @@ if(ENABLE_CABANA)
   bob_public_dep(Cabana)
   # }
   add_definitions(-DPP_ENABLE_CAB)
+  if(Cabana_VERSION VERSION_LESS 0.6.0)
+    message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
+  endif()
 endif()
 
 set(pumipic_USE_Kokkos_DEFAULT ON)
@@ -80,10 +83,6 @@ endif()
 
 if(Omega_h_VERSION VERSION_LESS 10.8.0)
     message(FATAL_ERROR "Omega_h version >= 10.8.0 required.")
-endif()
-
-if(Cabana_VERSION VERSION_LESS 0.6.0)
-    message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
 endif()
 
 set(debug_flag)

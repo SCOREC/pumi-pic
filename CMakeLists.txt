@@ -62,15 +62,15 @@ bob_public_dep(EnGPar)
 
 option(ENABLE_CABANA "Build with Cabana" OFF)
 if(ENABLE_CABANA)
-  if(Cabana_VERSION VERSION_LESS 0.6.0)
-    message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
-  endif()
   # bob package creation { no idea if this will work
   set(pumipic_USE_Cabana_DEFAULT ON)
   set(Cabana_PREFIX ${Cabana_PREFIX})
   bob_public_dep(Cabana)
   # }
   add_definitions(-DPP_ENABLE_CAB)
+  if(Cabana_VERSION VERSION_LESS 0.6.0 OR Cabana_VERSION STREQUAL "1.0-dev")
+    message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
+  endif()
 endif()
 
 set(pumipic_USE_Kokkos_DEFAULT ON)

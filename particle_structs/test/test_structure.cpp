@@ -117,7 +117,7 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       //Build SCS with C = 32, sigma = ne, V = 1024
       error_message = "SCS (C=32, sigma=ne, V=1024)";
       lid_t maxC = 32;
-      lid_t sigma = num_elems;
+      lid_t sigma = INT_MAX;
       lid_t V = 1024;
       Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(4, maxC);
       name = "scs_C32_SMAX_V1024";

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(pumipic VERSION 2.0.1 LANGUAGES CXX)
+project(pumipic VERSION 2.0.2 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 
@@ -68,7 +68,7 @@ if(ENABLE_CABANA)
   bob_public_dep(Cabana)
   # }
   add_definitions(-DPP_ENABLE_CAB)
-  if(Cabana_VERSION VERSION_LESS 0.6.0)
+  if(Cabana_VERSION VERSION_LESS 0.6.0 OR Cabana_VERSION STREQUAL "1.0-dev")
     message(FATAL_ERROR "Cabana version >= 0.6.0 required.")
   endif()
 endif()

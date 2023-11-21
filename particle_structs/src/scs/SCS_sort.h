@@ -15,6 +15,7 @@ namespace pumipic {
         index(i) = i;
       });
 
+      sigma = std::min(sigma, std::max(num_elems, 1));
       lid_t n_sigma = num_elems/sigma;
       Kokkos::parallel_for( PolicyType(n_sigma, 1), KOKKOS_LAMBDA(const TeamMem& t){
         lid_t start = t.league_rank() * sigma;

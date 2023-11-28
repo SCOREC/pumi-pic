@@ -284,10 +284,10 @@ void setInitialPtclCoords(p::Mesh& picparts, PS* ptcls, bool output) {
   //set particle positions and parent element ids
   auto x_ps_d = ptcls->get<0>();
   auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
-    auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
-    auto center = average(cell_nodes2coords);
     if(mask > 0) {
+      auto cell_nodes2nodes = o::gather_verts<4>(cells2nodes, o::LO(e));
+      auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
+      auto center = average(cell_nodes2coords);
       if (output)
         printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
       for(int i=0; i<3; i++)

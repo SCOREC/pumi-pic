@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
     int num = 0;
-    std::vector<PS*> structures;
+    std::vector<PS*> structures; //checks if structures are independant
     //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
       std::string name;

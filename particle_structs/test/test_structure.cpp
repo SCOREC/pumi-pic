@@ -69,11 +69,13 @@ int main(int argc, char* argv[]) {
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
     int num = 0;
+    std::vector<PS*> structures; //checks if structures are independant
     //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
       std::string name;
       PS* structure = buildNextStructure(num++, num_elems, num_ptcls, ppe, element_gids,
                                          particle_elements, particle_info, name);
+      structures.push_back(structure);
       //Check if construction of structure failed
       if (name == "FAIL")
         ++fails;
@@ -91,8 +93,9 @@ int main(int argc, char* argv[]) {
       fails += testCopy(name.c_str(), structure);
       fails += testSegmentComp(name.c_str(), structure);
       fails += migrateToEmptyAndRefill(name.c_str(), structure);
-      delete structure;
     }
+    for (int i=0; i < structures.size(); i++)
+      delete structures[i];
     ps::destroyViews<Types>(particle_info);
   }
   //Finalize and print failures
@@ -156,6 +159,22 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
       //DPS
       error_message = "DPS";
       name = "dps";
+      Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
+      return new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
+                                          element_gids, particle_elements, particle_info);
+    }
+    else if (num == 5) {
+      //DPS
+      error_message = "DPS Host";
+      name = "dps host";
+      Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
+      return new ps::DPS<Types, Kokkos::HostSpace>(policy, num_elems, num_ptcls, ppe,
+                                          element_gids, particle_elements, particle_info);
+    }
+    else if (num == 6) {
+      //DPS
+      error_message = "DPS 2";
+      name = "dps 2";
       Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
       return new ps::DPS<Types, MemSpace>(policy, num_elems, num_ptcls, ppe,
                                           element_gids, particle_elements, particle_info);

@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
     readParticles(filename, num_elems, num_ptcls, ppe, element_gids,
                   particle_elements, particle_info);
     int num = 0;
-    std::vector<PS*> structures; //checks if structures are independant
+    std::vector<void*> structures; //checks if structures are independant
     //Loops through each structure available in buildNextStructure(...) and execute tests on the structures
     while(true) {
       std::string name;
@@ -164,6 +164,14 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
                                           element_gids, particle_elements, particle_info);
     }
     else if (num == 5) {
+      //DPS
+      error_message = "DPS Host";
+      name = "dps host";
+      Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
+      return new ps::DPS<Types, Kokkos::HostSpace>(policy, num_elems, num_ptcls, ppe,
+                                          element_gids, particle_elements, particle_info);
+    }
+    else if (num == 6) {
       //DPS
       error_message = "DPS 2";
       name = "dps 2";

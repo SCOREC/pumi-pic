@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <Kokkos_Core.hpp>
+
 namespace {
   int verbosity = 0;
   int enable_timing = 0;

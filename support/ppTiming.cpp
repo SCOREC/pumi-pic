@@ -127,20 +127,20 @@ namespace pumipic {
     if (x== 0)
       return 1;
     else
-      return trunc(log10(x)) + 1;
+      return trunc(Kokkos::log10(x)) + 1;
   }
   void determineLengths(int& name_length, int& tt_length, int& cc_length,
                         int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       if (time_per_op[index].str.size() > name_length)
         name_length = time_per_op[index].str.size();
-      int len = log10(time_per_op[index].time) + 8;
+      int len = Kokkos::log10(time_per_op[index].time) + 8;
       if (len > tt_length)
         tt_length = len;
-      len = log10(time_per_op[index].count) + 1;
+      len = Kokkos::log10(time_per_op[index].count) + 1;
       if (len > cc_length)
         cc_length = len;
-      len = log10(time_per_op[index].time / time_per_op[index].count) + 8;
+      len = Kokkos::log10(time_per_op[index].time / time_per_op[index].count) + 8;
       if (len > at_length)
         len = at_length;
     }

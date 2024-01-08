@@ -1,4 +1,3 @@
-#include <cmath>
 #include <cstdio>
 #include "pseudoXGCmTypes.hpp"
 #include "pumipic_profiling.hpp"

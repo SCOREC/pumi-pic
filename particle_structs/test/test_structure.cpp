@@ -1,6 +1,5 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
-#include <cmath>
 #include "team_policy.hpp"
 #include "ppMemUsage.hpp"
 

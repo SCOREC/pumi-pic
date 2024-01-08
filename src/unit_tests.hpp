@@ -2,7 +2,6 @@
 #define PUMIPIC_UNIT_TESTS_HPP
 
 #include <iostream>
-#include <cmath>
 #include <utility>
 #include <exception>
 #include <typeinfo>

@@ -2,7 +2,6 @@
 #include <chrono>
 #include <stdio.h>
 #include <random>
-#include <math.h>
 #include <cstdlib>
 namespace {
 

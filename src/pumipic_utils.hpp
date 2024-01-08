@@ -1,7 +1,6 @@
 #ifndef PUMIPIC_UTILS_HPP
 #define PUMIPIC_UTILS_HPP
 #include <iostream>
-#include <cmath>
 #include <utility>
 #include <string>
 #include "Omega_h_for.hpp"

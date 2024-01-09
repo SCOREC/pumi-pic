@@ -54,7 +54,7 @@ namespace pumipic {
 
     // if capacity reached, allocate new structure and copy into
     if ( num_ptcls-num_removed+num_new_ptcls > capacity_ ) {
-      lid_t new_num_soa = ceil(ceil(double(num_ptcls-num_removed+num_new_ptcls)/soa_len)*(1+extra_padding));
+      lid_t new_num_soa = Kokkos::ceil(Kokkos::ceil(double(num_ptcls-num_removed+num_new_ptcls)/soa_len)*(1+extra_padding));
       lid_t new_capacity = new_num_soa*soa_len;
       AoSoA_t* newAosoa = makeAoSoA(new_capacity, new_num_soa);
 

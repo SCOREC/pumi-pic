@@ -115,8 +115,8 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
     const o::Real radius = gr*(ring_id+1)/gnr;
     const o::Real deg = gt + (((o::Real)point_id)/gppr * 360);
     const o::Real rad = deg * torad;
-    ring_points[id*2] = coords[vert_id*2] + radius * cos(rad);
-    ring_points[id*2+1] = coords[vert_id*2+1] + radius * sin(rad);
+    ring_points[id*2] = coords[vert_id*2] + radius * Kokkos::cos(rad);
+    ring_points[id*2+1] = coords[vert_id*2+1] + radius * Kokkos::sin(rad);
   };
   o::parallel_for(num_points, generateRingPoints, "generateRingPoints");
 

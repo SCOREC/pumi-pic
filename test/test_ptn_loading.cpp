@@ -93,8 +93,8 @@ int testGlobalTag(Omega_h::Mesh& mesh, pumipic::Mesh& picparts) {
       const auto new_coords = Omega_h::gather_vectors<3,2>(coords_new, verts_new);
       auto center_new = average(new_coords);
 
-      if (fabs(center_old[0] - center_new[0]) > TOL ||
-          fabs(center_old[1] - center_new[1]) > TOL) {
+      if (Kokkos::fabs(center_old[0] - center_new[0]) > TOL ||
+          Kokkos::fabs(center_old[1] - center_new[1]) > TOL) {
         printf("Centroids of same global ids do not match [%ld]\n", global);
         fails[0] = 1;
       }
@@ -115,9 +115,9 @@ int testGlobalTag(Omega_h::Mesh& mesh, pumipic::Mesh& picparts) {
       const auto new_coords = Omega_h::gather_vectors<4,3>(coords_new, verts_new);
       auto center_new = average(new_coords);
 
-      if (fabs(center_old[0] - center_new[0]) > TOL ||
-          fabs(center_old[1] - center_new[1]) > TOL ||
-          fabs(center_old[2] - center_new[2]) > TOL) {
+      if (Kokkos::fabs(center_old[0] - center_new[0]) > TOL ||
+          Kokkos::fabs(center_old[1] - center_new[1]) > TOL ||
+          Kokkos::fabs(center_old[2] - center_new[2]) > TOL) {
         printf("Centroids of same global ids do not match [%ld]", global);
         fails[0] = 1;
 

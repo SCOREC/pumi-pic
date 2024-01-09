@@ -20,7 +20,7 @@ namespace pumipic {
     const auto soa_len = AoSoA_t::vector_length;
     offsets_h(0) = 0;
     for ( lid_t i=0; i<particles_per_element.size(); i++ ) {
-      const lid_t SoA_count = ceil( double(particles_per_element_h(i))/soa_len );
+      const lid_t SoA_count = Kokkos::ceil( double(particles_per_element_h(i))/soa_len );
       offsets_h(i+1) = SoA_count + offsets_h(i);
     }
     padding_start = offsets_h(offsets_h.size()-1);
@@ -31,7 +31,7 @@ namespace pumipic {
         offsets_h(offsets_h.size()-1) += remaining_soa;
     }
     else // add extra padding
-      offsets_h(offsets_h.size()-1) += ceil( (num_ptcls*padding)/soa_len );
+      offsets_h(offsets_h.size()-1) += Kokkos::ceil( (num_ptcls*padding)/soa_len );
 
     kkLidView offsets_d(Kokkos::ViewAllocateWithoutInitializing("offsets_device"), offsets_h.size());
     hostToDevice(offsets_d, offsets_h.data());

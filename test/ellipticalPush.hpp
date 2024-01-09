@@ -24,8 +24,8 @@ namespace ellipticalPush {
         const auto w = x_nm1(pid,0);
         const auto z = x_nm1(pid,1);
         const auto v = Kokkos::sqrt(Kokkos::pow(w-h_d,2) + Kokkos::pow(z-k_d,2));
-        const auto phi = atan2(d_d*(z-k_d),w-h_d);
-        const auto b = (z - k_d)/sin(phi);
+        const auto phi = Kokkos::atan2(d_d*(z-k_d),w-h_d);
+        const auto b = (z - k_d)/Kokkos::sin(phi);
         ptcl_phi(pid) = phi;
         ptcl_b(pid) = b;
       }

@@ -129,7 +129,7 @@ namespace pumipic {
     if (x== 0)
       return 1;
     else
-      return trunc(Kokkos::log10(x)) + 1;
+      return Kokkos::trunc(Kokkos::log10(x)) + 1;
   }
   void determineLengths(int& name_length, int& tt_length, int& cc_length,
                         int& at_length) {
@@ -298,7 +298,7 @@ namespace pumipic {
             MPI_Reduce(&zero, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
             time_rank.val = 0;
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
-            time_rank.val = pow(10,10);
+            time_rank.val = Kokkos::pow(10,10);
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
             time_rank.val = 0;
             MPI_Reduce(&(time_rank.val), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);

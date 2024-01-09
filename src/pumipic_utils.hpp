@@ -172,15 +172,15 @@ OMEGA_H_DEVICE bool compare_vector_directions(const Omega_h::Vector<3> &va,
 OMEGA_H_DEVICE o::Real angle_between(const o::Vector<3> v1, 
   const o::Vector<3> v2) {
   o::Real cos = o::inner_product(v1, v2)/ (o::norm(v1) * o::norm(v2));
-  return acos(cos);
+  return Kokkos::acos(cos);
 }
 
 OMEGA_H_DEVICE void cartesian_to_spherical(const o::Real &x, const o::Real &y, 
   const o::Real &z, o::Real &r, o::Real &theta, o::Real &phi) {
-  r = sqrt(x*x + y*y + z*z);
+  r = Kokkos::sqrt(x*x + y*y + z*z);
   OMEGA_H_CHECK(!(almost_equal(x,0) || almost_equal(r,0)));
-  theta = atan(y/x);
-  phi = acos(z/r);
+  theta = Kokkos::atan(y/x);
+  phi = Kokkos::acos(z/r);
 }
 
 OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data, 
@@ -198,12 +198,12 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
   auto dim1 = pos[0];
   auto z = pos[2]; 
   if(cylSymm) {
-      dim1 = sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+      dim1 = Kokkos::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
   }
 
   OMEGA_H_CHECK(dx >0 && dz>0);
-  o::LO i = floor((dim1 - gridx0)/dx);
-  o::LO j = floor((z - gridz0)/dz);
+  o::LO i = Kokkos::floor((dim1 - gridx0)/dx);
+  o::LO j = Kokkos::floor((z - gridz0)/dz);
   
   if (i < 0) i=0;
   if (j < 0) j=0;
@@ -266,7 +266,7 @@ OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
     return data[comp];
   auto x = x0; 
   if(cylSymm)
-    x = sqrt(x*x + y*y);
+    x = Kokkos::sqrt(x*x + y*y);
   o::Real fxz = 0;
   if (i >=nx-1 && j>=nz-1) {
     fxz = data[(nx-1+(nz-1)*nx)*nComp+comp];
@@ -304,10 +304,10 @@ OMEGA_H_DEVICE o::Real interpolate2d_field(const o::Reals& data, const o::Real g
   auto x = pos[0];
   auto z = pos[2]; 
   if(cylSymm)
-    x = sqrt(x*x+pos[1]*pos[1]);
+    x = Kokkos::sqrt(x*x+pos[1]*pos[1]);
   OMEGA_H_CHECK(dx >0 && dz>0);
-  o::LO i = floor((x - gridx0)/dx);
-  o::LO j = floor((z - gridz0)/dz);
+  o::LO i = Kokkos::floor((x - gridx0)/dx);
+  o::LO j = Kokkos::floor((z - gridz0)/dz);
   if (i < 0) i=0;
   if (j < 0) j=0;
   auto gridXi = gridx0 + i * dx;
@@ -342,12 +342,12 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
     return data[comp];
   auto x = pos[0];
   auto z = pos[2]; 
-  x = (cylSymm) ? sqrt(x*x+pos[1]*pos[1]) : x;
+  x = (cylSymm) ? Kokkos::sqrt(x*x+pos[1]*pos[1]) : x;
   auto dx = gridx[1] - gridx[0]; /*(gridx[nx-1] - gridx[0])/nx*/ 
   auto dz = gridz[1] - gridz[0]; /*(gridz[nz-1] - gridz[0])/nz*/ 
   OMEGA_H_CHECK(dx >0 && dz>0);
-  o::LO i = floor((x - gridx[0])/dx);
-  o::LO j = floor((z - gridz[0])/dz);
+  o::LO i = Kokkos::floor((x - gridx[0])/dx);
+  o::LO j = Kokkos::floor((z - gridz[0])/dz);
   i = (i < 0) ? 0 : i;
   j = (j < 0) ? 0 : j;
   //off limit values not used in calculation
@@ -388,9 +388,9 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     o::Real dy = gridy[1] - gridy[0];
     o::Real dz = gridz[1] - gridz[0];
     OMEGA_H_CHECK(!(o::are_close(dx, 0) || o::are_close(dy, 0) || o::are_close(dz, 0)));
-    int i = floor((x - gridx[0])/dx);
-    int j = floor((y - gridy[0])/dy);
-    int k = floor((z - gridz[0])/dz);
+    int i = Kokkos::floor((x - gridx[0])/dx);
+    int j = Kokkos::floor((y - gridy[0])/dy);
+    int k = Kokkos::floor((z - gridz[0])/dz);
     i = (i < 0) ? 0 : ((i >= nx-1) ? (nx-2) : i);
     j = (j < 0 || ny <= 1) ? 0 : ((j >= ny-1) ? (ny-2) : j);
     k = (k < 0 || nz <= 1) ? 0 : ((k >= nz-1) ? (nz-2) : k);
@@ -428,11 +428,11 @@ void interp2dVector_wgrid (const o::Reals& data3, const o::Reals& gridx,
   if(debug)
     printf("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
   if(gridx.size() > 1 && gridz.size() > 1 && cylSymm) {
-    o::Real theta = atan2(pos[1], pos[0]);
+    o::Real theta = Kokkos::atan2(pos[1], pos[0]);
     auto field0 = field[0];
     auto field1 = field[1]; 
-    field[0] = cos(theta)*field0 - sin(theta)*field1;
-    field[1] = sin(theta)*field0 + cos(theta)*field1;
+    field[0] = Kokkos::cos(theta)*field0 - Kokkos::sin(theta)*field1;
+    field[1] = Kokkos::sin(theta)*field0 + Kokkos::cos(theta)*field1;
   }
 }
 
@@ -447,11 +447,11 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
     printf("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
 
   if(cylSymm) {
-    o::Real theta = atan2(pos[1], pos[0]);
+    o::Real theta = Kokkos::atan2(pos[1], pos[0]);
     auto field0 = field[0];
     auto field1 = field[1]; 
-    field[0] = cos(theta)*field0 - sin(theta)*field1;
-    field[1] = sin(theta)*field0 + cos(theta)*field1;
+    field[0] = Kokkos::cos(theta)*field0 - Kokkos::sin(theta)*field1;
+    field[1] = Kokkos::sin(theta)*field0 + Kokkos::cos(theta)*field1;
   }
 }
 

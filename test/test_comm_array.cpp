@@ -164,7 +164,7 @@ bool sumEntities(pumipic::Mesh& picparts, int dim) {
   Omega_h::Write<Omega_h::LO> fail(1, 0);
   auto checkVtx = OMEGA_H_LAMBDA(Omega_h::LO vtx_id) {
     for (int i = 0; i < 3; ++i) 
-      if (fabs(contribution_comm[vtx_id*3+i] - 1.0) > .00001)
+      if (Kokkos::fabs(contribution_comm[vtx_id*3+i] - 1.0) > .00001)
         fail[0] = 1;
   };
   Omega_h::parallel_for(picparts.mesh()->nents(0), checkVtx);

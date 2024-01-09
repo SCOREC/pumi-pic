@@ -101,7 +101,7 @@ void gaussian_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>
   for (int i = 0; i < np; ++i) {
     int elem;
     do {
-      elem = round(distribution(generator));
+      elem = Kokkos::round(distribution(generator));
       if (elem >= 0 && elem < ne) {
         ptcls_per_elem[elem]++;
         ids[elem].push_back(index++);
@@ -158,7 +158,7 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
   float lambda = param; //rate parameter for exp func
 
   int seed = 0; //fixed seed for consistent testing
-  double freq_max = log(1.0/ne)*-1; //max value out of the log to scale with
+  double freq_max = Kokkos::log(1.0/ne)*-1; //max value out of the log to scale with
 
   Kokkos::Random_XorShift64_Pool<Kokkos::DefaultExecutionSpace> pool(seed);
   Kokkos::parallel_for(np, KOKKOS_LAMBDA(const int index) {
@@ -173,8 +173,8 @@ void exponential_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
     if(uni_elem == ne - 1) exp_elem = 0;
     else{
       double percent_elem = ((double)uni_elem)/ne;
-      double temp = -1/lambda * log(1 - percent_elem)/freq_max;
-      double temp_next = -1/lambda*log(1-percent_elem-1.0/ne)/freq_max;
+      double temp = -1/lambda * Kokkos::log(1 - percent_elem)/freq_max;
+      double temp_next = -1/lambda*Kokkos::log(1-percent_elem-1.0/ne)/freq_max;
       exp_elem_start = temp*ne;
       exp_elem_end = temp_next*ne;
 
@@ -206,7 +206,7 @@ void gitrm_distribution(int ne, int np, int* ptcls_per_elem, std::vector<int>* i
   int cutoff = 2*ne/5;
   double percent = 0.85;
 
-  int ptcls_first = ceil(np*percent);
+  int ptcls_first = Kokkos::ceil(np*percent);
   int ptcls_second = np - ptcls_first;
 
   for (int i = 0; i < ne; i++) {
@@ -239,7 +239,7 @@ void gitrm_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
   int cutoff = 2*ne/5;
   double percent = 0.85;
 
-  int ptcls_first = ceil(np*percent);
+  int ptcls_first = Kokkos::ceil(np*percent);
   int ptcls_second = np - ptcls_first;
 
   int seed = std::chrono::system_clock::now().time_since_epoch().count();

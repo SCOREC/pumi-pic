@@ -35,9 +35,9 @@ OMEGA_H_DEVICE o::Vector<3> makeVector3FromArray(const o::Real (&arr)[3]) {
 //NOTE: uses absolute magnitude, unlike relative magnitude in o::are_close()
 OMEGA_H_DEVICE bool almost_equal(o::Real a, o::Real b, o::Real tol = EPSILON,
  o::Real floor = EPSILON) {
-  if(std::abs(a) <= floor && std::abs(b) <= floor)
+  if(Kokkos::abs(a) <= floor && Kokkos::abs(b) <= floor)
     return true;
-  return std::abs(a - b) < tol;
+  return Kokkos::abs(a - b) < tol;
 }
 
 //uses absolute magnitude

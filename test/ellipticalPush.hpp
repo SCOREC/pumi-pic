@@ -23,7 +23,7 @@ namespace ellipticalPush {
       if(mask) {
         const auto w = x_nm1(pid,0);
         const auto z = x_nm1(pid,1);
-        const auto v = std::sqrt(std::pow(w-h_d,2) + std::pow(z-k_d,2));
+        const auto v = Kokkos::sqrt(Kokkos::pow(w-h_d,2) + Kokkos::pow(z-k_d,2));
         const auto phi = atan2(d_d*(z-k_d),w-h_d);
         const auto b = (z - k_d)/sin(phi);
         ptcl_phi(pid) = phi;
@@ -57,8 +57,8 @@ namespace ellipticalPush {
         const auto b = ptcl_b(pid);
         const auto a = b*d_d;
         const auto rad = phi+degP*M_PI/180.0;
-        const auto x = a*std::cos(rad)+h_d;
-        const auto y = b*std::sin(rad)+k_d;
+        const auto x = a*Kokkos::cos(rad)+h_d;
+        const auto y = b*Kokkos::sin(rad)+k_d;
         x_nm0(pid,0) = x;
         x_nm0(pid,1) = y;
         ptcl_phi(pid) = rad;

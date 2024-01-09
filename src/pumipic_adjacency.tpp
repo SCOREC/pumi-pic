@@ -391,7 +391,7 @@ namespace pumipic {
         if (elmArea[elm] < area)
           area = elmArea[elm];
       }, Kokkos::Min<o::Real>(min_area));
-    o::Real tol = std::max(1e-15 / min_area, 1e-8);
+    o::Real tol = Kokkos::max(1e-15 / min_area, 1e-8);
     printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }

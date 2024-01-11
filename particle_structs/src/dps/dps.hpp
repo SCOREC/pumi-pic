@@ -129,7 +129,7 @@ namespace pumipic {
       fprintf(stderr, "building DPS\n");
 
     // calculate num_soa_ from number of particles + extra padding
-    num_soa_ = ceil(ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
+    num_soa_ = Kokkos::ceil(Kokkos::ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
     // calculate capacity_ from num_soa_ and max size of an SoA
     capacity_ = num_soa_*AoSoA_t::vector_length;
     // initialize appropriately-sized AoSoA

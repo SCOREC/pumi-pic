@@ -113,9 +113,9 @@ int pseudoPush(const char* name, PS* structure) {
       dbls(p, 0) += 10;
       dbls(p, 1) += 10;
       dbls(p, 2) += 10;
-      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
-      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
-      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / std::sqrt(p_fp) / std::sqrt(e_fp) + parentElmData(e);
+      dbls(p, 0) = dbls(p,0) * dbls(p,0) * dbls(p,0) / Kokkos::sqrt(p_fp) / Kokkos::sqrt(e_fp) + parentElmData(e);
+      dbls(p, 1) = dbls(p,1) * dbls(p,1) * dbls(p,1) / Kokkos::sqrt(p_fp) / Kokkos::sqrt(e_fp) + parentElmData(e);
+      dbls(p, 2) = dbls(p,2) * dbls(p,2) * dbls(p,2) / Kokkos::sqrt(p_fp) / Kokkos::sqrt(e_fp) + parentElmData(e);
       nums(p) = local_rank;
       bools(p) = true;
     }

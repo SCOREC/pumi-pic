@@ -2,7 +2,6 @@
 #define PUMIPIC_PUSH_HPP_INCLUDED
 
 #include <iostream>
-#include <cmath>
 #include <utility>
 
 #include "Omega_h_adj.hpp"

@@ -170,7 +170,7 @@ OMEGA_H_DEVICE bool find_barycentric_tri_simple(
   auto norm = Omega_h::normalize(cross);
   Omega_h::Real area = o::inner_product(norm, cross);
 
-  if(std::abs(area) < 1e-20) { //TODO
+  if(Kokkos::abs(area) < 1e-20) { //TODO
     printf("area is too small \n");
     return 0;
   }

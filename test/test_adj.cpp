@@ -115,8 +115,8 @@ void init2DInternal(o::Mesh mesh, PS* ptcls) {
       p::barycentric_tri(elmArea[e], vtxCoords, ptclOrigin, faceBcc);
       assert(p::all_positive(faceBcc, 1e-8));
       if (!p::all_positive(faceBcc, 1e-8)) printf("FAILURE\n");
-      motion(pid, 0) = cos(r3);
-      motion(pid, 1) = sin(r3);
+      motion(pid, 0) = Kokkos::cos(r3);
+      motion(pid, 1) = Kokkos::sin(r3);
       motion(pid, 2) = 0;
       pids(pid) = pid;
     }
@@ -496,8 +496,8 @@ void init3DInternal(o::Mesh mesh, PS* ptcls) {
       }
       const o::Real theta = rand_nums[5*pid + 3];
       const o::Real z = rand_nums[5*pid + 4];
-      motion(pid, 0) = sqrt(1 - z*z) * cos(theta);
-      motion(pid, 1) = sqrt(1 - z*z) * sin(theta);
+      motion(pid, 0) = Kokkos::sqrt(1 - z*z) * Kokkos::cos(theta);
+      motion(pid, 1) = Kokkos::sqrt(1 - z*z) * Kokkos::sin(theta);
       motion(pid, 2) = z;
       pids(pid) = pid;
     }
@@ -542,8 +542,8 @@ void init_edges(o::Mesh mesh, PS* ptcls) {
 
 o::Real get_push_distance(o::Mesh mesh) {
   if (mesh.dim() == 2)
-    return determine_distance<2>(mesh) / (3*sqrt(mesh.nelems()));
-  return determine_distance<3>(mesh) / (3*pow(mesh.nelems(), 1.0/3));
+    return determine_distance<2>(mesh) / (3*Kokkos::sqrt(mesh.nelems()));
+  return determine_distance<3>(mesh) / (3*Kokkos::pow(mesh.nelems(), 1.0/3));
 }
 
 //Push particles
@@ -619,7 +619,7 @@ OMEGA_H_INLINE bool check_point_on_edge(const o::Few<o::Vector<2>, 2> verts, con
   const o::Vector<2> edge = verts[1] - verts[0];
   const o::Real cross = o::cross(path, edge);
 
-  return fabs(cross) <= tol &&
+  return Kokkos::fabs(cross) <= tol &&
     point[0] >= Kokkos::min(verts[0][0], verts[1][0]) - tol &&
     point[1] >= Kokkos::min(verts[0][1], verts[1][1]) - tol &&
     point[0] <= Kokkos::max(verts[0][0], verts[1][0]) + tol &&
@@ -717,7 +717,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
       const o::Vector<DIM> dir = o::normalize(tgt - orig);
       const o::Vector<DIM> dir2 = o::normalize(xpoint - orig);
       for (int i = 0; i < DIM; ++i) {
-        if (fabs(dir[i] - dir2[i]) > tol && dir[i] > tol && dir2[i] > tol) {
+        if (Kokkos::fabs(dir[i] - dir2[i]) > tol && dir[i] > tol && dir2[i] > tol) {
           Kokkos::atomic_add(&(failures[0]), 1);
           printf("[ERROR] Intersection point is not along the particle path\n"
                  "  dir: %.15f %.15f %.15f\n  dir2 %.15f %.15f %.15f\n", dir[0], dir[1], dir[2], dir2[0], dir2[1], dir2[2]);

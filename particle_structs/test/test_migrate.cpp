@@ -61,7 +61,7 @@ int migrateSendRight(const char* name, PS* structure) {
   neighbors[0] = comm_rank;
   neighbors[1] = (comm_rank - 1 + comm_size) % comm_size;
   neighbors[2] = (comm_rank + 1) % comm_size;
-  ps::Distributor<typename PS::memory_space> dist(std::min(comm_size, 3), neighbors);
+  ps::Distributor<typename PS::memory_space> dist(Kokkos::min(comm_size, 3), neighbors);
 
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
@@ -135,7 +135,7 @@ int migrateSendToOne(const char* name, PS* structure) {
             name, nPtcls, expected_np_0);
     fails++;
   }
-  else if (comm_rank != 0 && nPtcls != ceil(np*95.0/100)) {
+  else if (comm_rank != 0 && nPtcls != Kokkos::ceil(np*95.0/100)) {
     fprintf(stderr, "[ERROR] %s Rank %d has incorrect number of particles (%d != %d)\n",
             name, comm_rank, nPtcls, np*95/100);
     fails++;
@@ -147,7 +147,7 @@ int migrateSendToOne(const char* name, PS* structure) {
     if (mask) {
       int rank = int_slice(ptcl_id);
       double val = double_slice(ptcl_id, 0);
-      if (fabs(rank*5 - val) > .0005) {
+      if (Kokkos::fabs(rank*5 - val) > .0005) {
         printf("[ERROR] %d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
         failures(0) = 1;
       }

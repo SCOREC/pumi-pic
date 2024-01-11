@@ -2,7 +2,6 @@
 #define PUMIPIC_UNIT_TESTS_HPP
 
 #include <iostream>
-#include <cmath>
 #include <utility>
 #include <exception>
 #include <typeinfo>
@@ -75,7 +74,7 @@ bool test_barycentric_tet(const Omega_h::Matrix<3, 4> &M,
   o::HostRead<o::LO> bcc(bcc_w);
     if(pos == -1) {
       for(int i=0; i<4; ++i) {
-        if(std::abs(bcc[i]- v[i]) > 1e-10) {
+        if(Kokkos::abs(bcc[i]- v[i]) > 1e-10) {
           if(debug)
             printf("Barycentric test failed: p=(%0.6f, %0.6f, %0.6f);"
               " calculated_bc=(%d, %d, %d, %d): bc=%d != v=%.6f \n",

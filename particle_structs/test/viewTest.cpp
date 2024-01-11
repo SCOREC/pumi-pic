@@ -84,7 +84,7 @@ int parallelReduce() {
       for (int j = 0; j < 3; ++j)
         sum += dblView(i,j);
     }, tot);
-  if (fabs(tot - 20) > .0001) {
+  if (Kokkos::fabs(tot - 20) > .0001) {
     fprintf(stderr, "[ERROR] Reduction over dblView does not give proper result"
             "[(view) %f != %d (actual)]\n", tot, 20);
     ++fails;

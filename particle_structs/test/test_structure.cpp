@@ -1,6 +1,5 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
-#include <cmath>
 #include "team_policy.hpp"
 #include "ppMemUsage.hpp"
 
@@ -297,7 +296,7 @@ int testCopy(const char* name, PS* structure) {
         failure(0) = 1;
       }
       for (int i = 0; i < 3; ++i)
-        if (fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
+        if (Kokkos::fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
           printf("[ERROR] Particle's dbl %d does not match for particle %d"
                  "[(old) %.4f != %.4f (copy)] on rank %d\n", i, pid, dbls1(pid,i),
                  dbls2(pid,i), local_rank);
@@ -344,7 +343,7 @@ int testSegmentComp(const char* name, PS* structure) {
     if (mask) {
       auto comps = dbls.getComponents(p);
       for (int i = 0; i < 3; ++i) {
-        if (abs(comps[i] - e * (i + 1)) > TOL) {
+        if (Kokkos::abs(comps[i] - e * (i + 1)) > TOL) {
           printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
                   p, i, comps[i], e * (i + 1));
           Kokkos::atomic_add(&(failures[0]), 1);

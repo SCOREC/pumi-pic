@@ -5,7 +5,8 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
-#include <cmath> // trunc, log10
+#include <Kokkos_Core.hpp>
+
 namespace {
   int verbosity = 0;
   int enable_timing = 0;
@@ -128,20 +129,20 @@ namespace pumipic {
     if (x== 0)
       return 1;
     else
-      return trunc(log10(x)) + 1;
+      return Kokkos::trunc(Kokkos::log10(x)) + 1;
   }
   void determineLengths(int& name_length, int& tt_length, int& cc_length,
                         int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       if (time_per_op[index].str.size() > name_length)
         name_length = time_per_op[index].str.size();
-      int len = log10(time_per_op[index].time) + 8;
+      int len = Kokkos::log10(time_per_op[index].time) + 8;
       if (len > tt_length)
         tt_length = len;
-      len = log10(time_per_op[index].count) + 1;
+      len = Kokkos::log10(time_per_op[index].count) + 1;
       if (len > cc_length)
         cc_length = len;
-      len = log10(time_per_op[index].time / time_per_op[index].count) + 8;
+      len = Kokkos::log10(time_per_op[index].time / time_per_op[index].count) + 8;
       if (len > at_length)
         len = at_length;
     }
@@ -297,7 +298,7 @@ namespace pumipic {
             MPI_Reduce(&zero, NULL, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
             time_rank.val = 0;
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MAXLOC, 0, MPI_COMM_WORLD);
-            time_rank.val = pow(10,10);
+            time_rank.val = Kokkos::pow(10,10);
             MPI_Reduce(&time_rank, NULL, 1, MPI_DOUBLE_INT, MPI_MINLOC, 0, MPI_COMM_WORLD);
             time_rank.val = 0;
             MPI_Reduce(&(time_rank.val), NULL, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);

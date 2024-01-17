@@ -53,4 +53,23 @@ namespace pumipic {
     throw 1;
     return NULL;
   }
+
+  typedef MemberTypes<int> IntType;
+  template <typename FunctionType, typename DataTypes, typename MemSpace>
+  void getCSRpid(ParticleStructure<DataTypes, MemSpace>* ps) {
+    typedef typename ParticleStructure<DataTypes, MemSpace>::kkLidView kkLidView;
+    kkLidView pids("pids", ps->nPtcls());
+    kkLidView ppe("ppe", ps->nElems());
+    kkLidView eGid("gid", ps->nElems());
+    auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+      if (mask) {
+        pids(p) = p;
+        Kokkos::atomic_add(&ppe(e), 1);
+        eGid(e) = p;
+      }
+    };
+    parallel_for(ps, setPIDs, "setPIDs");
+    auto policy = Kokkos::TeamPolicy<typename MemSpace::execution_space>(5, 5);
+    auto result = new CSR<IntType, MemSpace>(policy, ps->nElems(), ps->nPtcls(), ppe, eGid);
+  }
 }

@@ -33,7 +33,8 @@ int testCounts(const char* name, PSType structure, lid_t num_elems, lid_t num_pt
   return fails;
 }
 
-int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
+template <typename PSType>
+int testParticleExistence(const char* name, PSType structure, lid_t num_ptcls) {
   printf("testParticleExistence %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
@@ -54,13 +55,14 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
   return fails;
 }
 
-int setValues(const char* name, PS* structure) {
+template <typename PSType>
+int setValues(const char* name, PSType structure) {
   printf("setValues %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
-  auto dbls = structure->get<1>();
-  auto bools = structure->get<2>();
-  auto nums = structure->get<3>();
+  auto dbls = structure->template get<1>();
+  auto bools = structure->template get<2>();
+  auto nums = structure->template get<3>();
   int local_rank = comm_rank;
   auto setValues = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
@@ -87,7 +89,8 @@ int setValues(const char* name, PS* structure) {
   return fails;
 }
 
-int pseudoPush(const char* name, PS* structure) {
+template <typename PSType>
+int pseudoPush(const char* name, PSType structure) {
   printf("pseudoPush %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
@@ -102,9 +105,9 @@ int pseudoPush(const char* name, PS* structure) {
   });
   //pumipic::printView(parentElmData);
 
-  auto dbls = structure->get<1>();
-  auto bools = structure->get<2>();
-  auto nums = structure->get<3>();
+  auto dbls = structure->template get<1>();
+  auto bools = structure->template get<2>();
+  auto nums = structure->template get<3>();
   int local_rank = comm_rank;
   auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     //printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);

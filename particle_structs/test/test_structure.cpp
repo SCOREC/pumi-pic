@@ -18,9 +18,12 @@ int testHost(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
 //Simple tests of constructors
 template <typename PSType>
 int testCounts(const char* name, PSType structure, lid_t num_elems, lid_t num_ptcls);
-int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
-int setValues(const char* name, PS* structure);
-int pseudoPush(const char* name, PS* structure);
+template <typename PSType>
+int testParticleExistence(const char* name, PSType structure, lid_t num_ptcls);
+template <typename PSType>
+int setValues(const char* name, PSType structure);
+template <typename PSType>
+int pseudoPush(const char* name, PSType structure);
 
 //Functionality tests
 int testRebuild(const char* name, PS* structure);
@@ -229,11 +232,10 @@ int testHost(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) 
   PS::Mirror<Kokkos::HostSpace>* host_structure = ps::copy<Kokkos::HostSpace>(structure);
 
   fails += testCounts(name, host_structure, num_elems, num_ptcls);
-  // fails += testParticleExistence(name, host_structure, num_ptcls);
-  // fails += setValues(name, host_structure);
-  // fails += pseudoPush(name, host_structure);
+  fails += testParticleExistence(name, host_structure, num_ptcls);
+  fails += setValues(name, host_structure);
+  fails += pseudoPush(name, host_structure);
   // fails += testMetrics(name, host_structure);
-  // fails += testHost(name, host_structure);
   // fails += testRebuild(name, host_structure);
   // fails += testMigration(name, host_structure);
   // fails += testCopy(name, host_structure);

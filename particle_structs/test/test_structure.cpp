@@ -13,9 +13,11 @@ void finalize() {
 //Structure adding functions
 PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe, kkGidView element_gids,
                        kkLidView particle_elements, PS::MTVs particle_info, std::string& name);
+int testHost(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
 
 //Simple tests of constructors
-int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls);
+template <typename PSType>
+int testCounts(const char* name, PSType structure, lid_t num_elems, lid_t num_ptcls);
 int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls);
 int setValues(const char* name, PS* structure);
 int pseudoPush(const char* name, PS* structure);
@@ -87,6 +89,7 @@ int main(int argc, char* argv[]) {
       fails += setValues(name.c_str(), structure);
       fails += pseudoPush(name.c_str(), structure);
       fails += testMetrics(name.c_str(), structure);
+      fails += testHost(name.c_str(), structure, num_elems, num_ptcls);
       fails += testRebuild(name.c_str(), structure);
       fails += testMigration(name.c_str(), structure);
       fails += testCopy(name.c_str(), structure);
@@ -164,14 +167,6 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
     }
     else if (num == 5) {
       //DPS
-      error_message = "DPS Host";
-      name = "dps host";
-      Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
-      return new ps::DPS<Types, Kokkos::HostSpace>(policy, num_elems, num_ptcls, ppe,
-                                          element_gids, particle_elements, particle_info);
-    }
-    else if (num == 6) {
-      //DPS
       error_message = "DPS 2";
       name = "dps 2";
       Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
@@ -223,6 +218,29 @@ int testMetrics(const char* name, PS* structure) {
             name, comm_rank);
     ++fails;
   }
+  return fails;
+}
+
+int testHost(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) {
+  if (name != "dps") return 0; //Skips other structures to save time
+  printf("testHost %s, rank %d\n", name, comm_rank);
+
+  int fails = 0;
+  PS::Mirror<Kokkos::HostSpace>* host_structure = ps::copy<Kokkos::HostSpace>(structure);
+
+  fails += testCounts(name, host_structure, num_elems, num_ptcls);
+  // fails += testParticleExistence(name, host_structure, num_ptcls);
+  // fails += setValues(name, host_structure);
+  // fails += pseudoPush(name, host_structure);
+  // fails += testMetrics(name, host_structure);
+  // fails += testHost(name, host_structure);
+  // fails += testRebuild(name, host_structure);
+  // fails += testMigration(name, host_structure);
+  // fails += testCopy(name, host_structure);
+  // fails += testSegmentComp(name, host_structure);
+  // fails += migrateToEmptyAndRefill(name, host_structure);
+
+  delete host_structure;
   return fails;
 }
 

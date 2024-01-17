@@ -1,7 +1,8 @@
 #include <particle_structs.hpp>
 #include "read_particles.hpp"
 
-int testCounts(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) {
+template <typename PSType>
+int testCounts(const char* name, PSType structure, lid_t num_elems, lid_t num_ptcls) {
   printf("testCounts %s\n", name);
 
   int fails = 0;

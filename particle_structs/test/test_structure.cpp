@@ -37,9 +37,12 @@ int testMigration(const char* name, PS* structure);
 int migrateSendRight(const char* name, PS* structure);
 int migrateSendToOne(const char* name, PS* structure);
 
-int testMetrics(const char* name, PS* structure);
-int testCopy(const char* name, PS* structure);
-int testSegmentComp(const char* name, PS* structure);
+template <typename PSType>
+int testMetrics(const char* name, PSType structure);
+template <typename PSType>
+int testCopy(const char* name, PSType structure);
+template <typename PSType>
+int testSegmentComp(const char* name, PSType structure);
 
 //Edge Case tests
 int migrateToEmptyAndRefill(const char* name, PS* structure);
@@ -209,7 +212,8 @@ int testMigration(const char* name, PS* structure) {
   return fails;
 }
 
-int testMetrics(const char* name, PS* structure) {
+template <typename PSType>
+int testMetrics(const char* name, PSType structure) {
   printf("testMetrics %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
@@ -235,18 +239,19 @@ int testHost(const char* name, PS* structure, lid_t num_elems, lid_t num_ptcls) 
   fails += testParticleExistence(name, host_structure, num_ptcls);
   fails += setValues(name, host_structure);
   fails += pseudoPush(name, host_structure);
-  // fails += testMetrics(name, host_structure);
+  fails += testMetrics(name, host_structure);
   // fails += testRebuild(name, host_structure);
   // fails += testMigration(name, host_structure);
-  // fails += testCopy(name, host_structure);
-  // fails += testSegmentComp(name, host_structure);
+  fails += testCopy(name, host_structure);
+  fails += testSegmentComp(name, host_structure);
   // fails += migrateToEmptyAndRefill(name, host_structure);
 
   delete host_structure;
   return fails;
 }
 
-int testCopy(const char* name, PS* structure) {
+template <typename PSType>
+int testCopy(const char* name, PSType structure) {
   #ifndef PP_USE_GPU
     return 0;
   #endif
@@ -300,9 +305,9 @@ int testCopy(const char* name, PS* structure) {
     ++fails;
   }
   //Compare original and new particle structure on the device
-  auto ids1 = structure->get<0>();
+  auto ids1 = structure->template get<0>();
   auto ids2 = device_structure->get<0>();
-  auto dbls1 = structure->get<1>();
+  auto dbls1 = structure->template get<1>();
   auto dbls2 = device_structure->get<1>();
   double EPSILON = .00001;
   kkLidView failure("failure", 1);
@@ -342,13 +347,14 @@ int testCopy(const char* name, PS* structure) {
   return fails;
 }
 
-int testSegmentComp(const char* name, PS* structure) {
+template <typename PSType>
+int testSegmentComp(const char* name, PSType structure) {
   printf("testSegmentComp %s, rank %d\n", name, comm_rank);
 
   int fails = 0;
   kkLidView failures("fails", 1);
 
-  auto dbls = structure->get<1>();
+  auto dbls = structure->template get<1>();
   auto setComponents = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       auto dbl_seg = dbls.getComponents(p);

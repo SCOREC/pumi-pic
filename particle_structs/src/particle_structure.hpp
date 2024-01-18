@@ -14,6 +14,8 @@ namespace pumipic {
   class CabM;
   template <class DataTypes, typename Space>
   class DPS;
+  template <class DataTypes, typename Space>
+  class CSR;
 
   template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {
@@ -94,7 +96,7 @@ namespace pumipic {
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
     virtual void printFormat(const char* prefix = "") const = 0;
-    void getCSRpid();
+    CSR<MemberTypes<int>, Space> getCSRpid();
   protected:
     //String to identify the particle structure
     std::string name;

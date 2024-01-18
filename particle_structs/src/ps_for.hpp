@@ -54,15 +54,19 @@ namespace pumipic {
     return NULL;
   }
 
+  //This function returns a csr data type where the first view contains pids
   typedef MemberTypes<int> IntType;
-  template <typename FunctionType, typename DataTypes, typename MemSpace>
+  template <typename DataTypes, typename MemSpace>
   void getCSRpid(ParticleStructure<DataTypes, MemSpace>* ps) {
     typedef typename ParticleStructure<DataTypes, MemSpace>::kkLidView kkLidView;
-    kkLidView pids("pids", ps->nPtcls());
+    auto ptcl_info = ps::createMemberViews<IntType>(ps->nPtcls());
+    auto pids = ps::getMemberView<IntType, 0>(ptcl_info);
+    kkLidView ptcl_elems("ptcl_elems", ps->nPtcls());
     kkLidView ppe("ppe", ps->nElems());
     kkLidView eGid("gid", ps->nElems());
     auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
+        ptcl_elems(p) = e;
         pids(p) = p;
         Kokkos::atomic_add(&ppe(e), 1);
         eGid(e) = p;
@@ -70,6 +74,7 @@ namespace pumipic {
     };
     parallel_for(ps, setPIDs, "setPIDs");
     auto policy = Kokkos::TeamPolicy<typename MemSpace::execution_space>(5, 5);
-    auto result = new CSR<IntType, MemSpace>(policy, ps->nElems(), ps->nPtcls(), ppe, eGid);
+    auto result = new CSR<IntType, MemSpace>(policy, ps->nElems(), ps->nPtcls(), ppe, eGid, ptcl_elems, ptcl_info);
+    delete result;
   }
 }

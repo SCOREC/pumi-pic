@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
   //Create an array with initial values of 0
   Omega_h::Write<Omega_h::LO> comm_array = picparts.createCommArray(dim, 3, 0);
 
-  Omega_h::Read<Omega_h::LO> owners = picparts.entOwners(3);
+  Omega_h::Read<Omega_h::LO> owners = picparts.entOwners(dim);
   auto setMyElmsToOne = OMEGA_H_LAMBDA(Omega_h::LO elm_id) {
     for (int i = 0; i < 3; ++i)
       comm_array[elm_id*3 + i] = (owners[elm_id] == rank);

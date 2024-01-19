@@ -25,6 +25,11 @@ mpi_test(print_partition_pisces_4 4
 mpi_test(ptn_loading_pisces 4
   ./ptn_loading ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn 1 3)
 
+mpi_test(print_partition_2d_box_4 4
+  ./print_partition ${TEST_DATA_DIR}/2d_box/2d_box.msh testing_2d_box)
+mpi_test(ptn_loading_2d_box_4 4
+  ./ptn_loading ${TEST_DATA_DIR}/2d_box/2d_box.msh testing_2d_box_4.ptn 1 3)
+
 mpi_test(full_mesh_pisces 4
   ./full_mesh ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
 
@@ -33,6 +38,9 @@ mpi_test(input_construct_cube 4
 
 mpi_test(comm_array_pisces 4
   ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn)
+
+mpi_test(comm_array_2d_box 4
+  ./comm_array ${TEST_DATA_DIR}/2d_box/2d_box.msh testing_2d_box_4.ptn)
 
 mpi_test(file_rw_cube_4 4
   ./file_rw

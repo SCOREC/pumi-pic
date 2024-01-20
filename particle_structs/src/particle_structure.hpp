@@ -96,7 +96,7 @@ namespace pumipic {
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
     virtual void printFormat(const char* prefix = "") const = 0;
-    CSR<MemberTypes<int>, Space> getCSRpid();
+    void getPIDs();
   protected:
     //String to identify the particle structure
     std::string name;

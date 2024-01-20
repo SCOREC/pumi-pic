@@ -56,22 +56,17 @@ namespace pumipic {
 
   //This function returns a csr data type where the first view contains pids
   template <typename DataTypes, typename MemSpace>
-  CSR<MemberTypes<int>, MemSpace> ParticleStructure<DataTypes, MemSpace>::getCSRpid() {
-    auto ptcl_info = ps::createMemberViews<MemberTypes<int>>(num_ptcls);
-    auto pids = ps::getMemberView<MemberTypes<int>, 0>(ptcl_info);
-    kkLidView ptcl_elems("ptcl_elems", num_ptcls);
+  void ParticleStructure<DataTypes, MemSpace>::getPIDs() {
+    kkLidView pids("pids", num_ptcls);
     kkLidView ppe("ppe", num_elems);
-    kkLidView eGid("gid", num_elems);
+    kkLidView offsets("offsets", num_elems+1);
     auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         pids(p) = p;
-        eGid(e) = p;
-        ptcl_elems(p) = e;
-        Kokkos::atomic_add(&ppe(e), 1);
+        Kokkos::atomic_increment(&ppe(e));
       }
     };
     parallel_for(this, setPIDs, "setPIDs");
-    auto policy = Kokkos::TeamPolicy<typename MemSpace::execution_space>(5, 5);
-    return new CSR<MemberTypes<int>, MemSpace>(policy, num_elems, num_ptcls, ppe, eGid, ptcl_elems, ptcl_info);
+    exclusive_scan(ppe, offsets, execution_space());
   }
 }

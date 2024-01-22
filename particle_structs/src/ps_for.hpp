@@ -54,12 +54,13 @@ namespace pumipic {
     return NULL;
   }
 
-  //This function returns a csr data type where the first view contains pids
+  //This function initializes and populates the pids and offsets arrays
   template <typename DataTypes, typename MemSpace>
-  void ParticleStructure<DataTypes, MemSpace>::getPIDs() {
-    kkLidView pids("pids", num_ptcls);
-    kkLidView ppe("ppe", num_elems);
-    kkLidView offsets("offsets", num_elems+1);
+  template <typename ViewT>
+  void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT pids, ViewT offsets) {
+    pids("pids", num_ptcls);
+    ViewT ppe("ppe", num_elems);
+    offsets("offsets", num_elems+1);
     auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         pids(p) = p;

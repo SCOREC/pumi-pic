@@ -96,7 +96,9 @@ namespace pumipic {
                          MTVs new_particle_info = NULL) = 0;
     virtual void printMetrics() const = 0;
     virtual void printFormat(const char* prefix = "") const = 0;
-    void getPIDs();
+
+    template <typename ViewT>
+    void getPIDs(ViewT pids, ViewT offsets);
   protected:
     //String to identify the particle structure
     std::string name;

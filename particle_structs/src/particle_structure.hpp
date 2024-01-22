@@ -14,8 +14,6 @@ namespace pumipic {
   class CabM;
   template <class DataTypes, typename Space>
   class DPS;
-  template <class DataTypes, typename Space>
-  class CSR;
 
   template <class DataTypes, typename Space = DefaultMemSpace>
   class ParticleStructure {
@@ -87,6 +85,7 @@ namespace pumipic {
       MTV<N>* view = static_cast<MTV<N>*>(ptcl_data[N]);
       return Slice<N>(*view);
     }
+
 
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;

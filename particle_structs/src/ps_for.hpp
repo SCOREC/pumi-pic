@@ -57,10 +57,10 @@ namespace pumipic {
   //This function initializes and populates the pids and offsets arrays
   template <typename DataTypes, typename MemSpace>
   template <typename ViewT>
-  void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT pids, ViewT offsets) {
-    pids("pids", num_ptcls);
-    ViewT ppe("ppe", num_elems);
-    offsets("offsets", num_elems+1);
+  void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT& pids, ViewT& offsets) {
+    pids = ViewT("pids", capacity_);
+    offsets = ViewT("offsets", num_elems+1);
+    ViewT ppe("ppe", num_elems+1);
     auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         pids(p) = p;

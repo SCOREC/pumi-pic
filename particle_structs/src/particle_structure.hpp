@@ -98,7 +98,7 @@ namespace pumipic {
     virtual void printFormat(const char* prefix = "") const = 0;
 
     template <typename ViewT>
-    void getPIDs(ViewT pids, ViewT offsets);
+    void getPIDs(ViewT& pids, ViewT& offsets);
   protected:
     //String to identify the particle structure
     std::string name;

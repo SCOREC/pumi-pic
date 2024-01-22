@@ -35,6 +35,7 @@ int migrateSendToOne(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
 int testSegmentComp(const char* name, PS* structure);
+int testPIDs(const char* name, PS* structure);
 
 //Edge Case tests
 int migrateToEmptyAndRefill(const char* name, PS* structure);
@@ -85,6 +86,7 @@ int main(int argc, char* argv[]) {
       fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
       fails += testParticleExistence(name.c_str(), structure, num_ptcls);
       fails += setValues(name.c_str(), structure);
+      fails += testPIDs(name.c_str(), structure);
       fails += pseudoPush(name.c_str(), structure);
       fails += testMetrics(name.c_str(), structure);
       fails += testRebuild(name.c_str(), structure);
@@ -346,6 +348,27 @@ int testSegmentComp(const char* name, PS* structure) {
   pumipic::parallel_for(structure, checkComponents, "Check components");
   fails += pumipic::getLastValue(failures);
 
+  return fails;
+}
+
+int testPIDs(const char* name, PS* structure) {
+  printf("testPIDs %s, rank %d\n", name, comm_rank);
+  kkLidView pids;
+  kkLidView offsets;
+  int fails = 0;
+  structure->getPIDs(pids, offsets);
+
+  kkLidView failures("fails", 1);
+  auto checkPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    if (mask) {
+      if (pids(p) != p) {
+        printf("[ERROR] PID is wrong at ptcl %d\n", p);
+        Kokkos::atomic_add(&(failures[0]), 1);
+      }
+    }
+  };
+  pumipic::parallel_for(structure, checkPIDs, "checkPIDs");
+  fails += pumipic::getLastValue(failures);
   return fails;
 }
 

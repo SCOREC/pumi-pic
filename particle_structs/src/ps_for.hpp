@@ -58,16 +58,24 @@ namespace pumipic {
   template <typename DataTypes, typename MemSpace>
   template <typename ViewT>
   void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT& pids, ViewT& offsets) {
-    pids = ViewT("pids", capacity_);
     offsets = ViewT("offsets", num_elems+1);
     ViewT ppe("ppe", num_elems+1);
-    auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    auto setPPE = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
-        pids(p) = p;
         Kokkos::atomic_increment(&ppe(e));
       }
     };
-    parallel_for(this, setPIDs, "setPIDs");
+    parallel_for(this, setPPE, "setPPE");
     exclusive_scan(ppe, offsets, execution_space());
+    
+    pids = ViewT("pids", getLastValue(offsets));
+    ViewT currIndex("currIndex", num_elems);
+    auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+      if (mask) {
+        auto index = Kokkos::atomic_fetch_add(&currIndex(e), 1);
+        pids(offsets(e)+index) = p;
+      }
+    };
+    parallel_for(this, setPIDs, "setPIDs");
   }
 }

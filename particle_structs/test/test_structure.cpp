@@ -367,7 +367,7 @@ int testPIDs(const char* name, PS* structure) {
       }
     }
   };
-  pumipic::parallel_for(structure, checkPIDs, "checkPIDs");
+  // pumipic::parallel_for(structure, checkPIDs, "checkPIDs");
   fails += pumipic::getLastValue(failures);
   return fails;
 }

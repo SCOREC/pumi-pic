@@ -54,7 +54,12 @@ namespace pumipic {
     return NULL;
   }
 
-  //This function initializes and populates the pids and offsets arrays
+  /** This function initializes and populates the pids and offsets arrays
+   * @param[out] pids Returns a new array of PIDs sorted by elements
+   * @param[out] offsets Returns a new array of where
+   *                       each index is an element
+   *                       each value is the starting index in the pids array for that element
+  */
   template <typename DataTypes, typename MemSpace>
   template <typename ViewT>
   void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT& pids, ViewT& offsets) {

@@ -358,16 +358,18 @@ int testPIDs(const char* name, PS* structure) {
   int fails = 0;
   structure->getPIDs(pids, offsets);
 
-  kkLidView failures("fails", 1);
-  auto checkPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    if (mask) {
-      if (pids(p) != p) {
-        printf("[ERROR] PID is wrong at ptcl %d\n", p);
-        Kokkos::atomic_add(&(failures[0]), 1);
-      }
-    }
+  kkLidView failures("failures", 1);
+  kkLidView unsortedElems("unsortedElems", structure->capacity());
+  auto setUnsortedElems = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    if (mask) unsortedElems(p) = e;
   };
-  // pumipic::parallel_for(structure, checkPIDs, "checkPIDs");
+  pumipic::parallel_for(structure, setUnsortedElems, "setUnsortedElems");
+
+  Kokkos::parallel_for(pids.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    lid_t pid = pids(i);
+    lid_t oldElem = unsortedElems(pid);
+    assert(i >= offsets(oldElem));
+  });
   fails += pumipic::getLastValue(failures);
   return fails;
 }

@@ -368,7 +368,8 @@ int testPIDs(const char* name, PS* structure) {
   Kokkos::parallel_for(pids.size(), KOKKOS_LAMBDA(const lid_t& i) {
     lid_t pid = pids(i);
     lid_t oldElem = unsortedElems(pid);
-    assert(i >= offsets(oldElem));
+    if (i < offsets(oldElem) || i >= offsets(oldElem+1))
+      Kokkos::atomic_add(&(failures[0]), 1);
   });
   fails += pumipic::getLastValue(failures);
   return fails;

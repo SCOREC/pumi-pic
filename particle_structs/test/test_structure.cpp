@@ -35,6 +35,7 @@ int migrateSendToOne(const char* name, PS* structure);
 int testMetrics(const char* name, PS* structure);
 int testCopy(const char* name, PS* structure);
 int testSegmentComp(const char* name, PS* structure);
+int testPIDs(const char* name, PS* structure);
 
 //Edge Case tests
 int migrateToEmptyAndRefill(const char* name, PS* structure);
@@ -85,6 +86,7 @@ int main(int argc, char* argv[]) {
       fails += testCounts(name.c_str(), structure, num_elems, num_ptcls);
       fails += testParticleExistence(name.c_str(), structure, num_ptcls);
       fails += setValues(name.c_str(), structure);
+      fails += testPIDs(name.c_str(), structure);
       fails += pseudoPush(name.c_str(), structure);
       fails += testMetrics(name.c_str(), structure);
       fails += testRebuild(name.c_str(), structure);
@@ -163,14 +165,6 @@ PS* buildNextStructure(int num, lid_t num_elems, lid_t num_ptcls, kkLidView ppe,
                                           element_gids, particle_elements, particle_info);
     }
     else if (num == 5) {
-      //DPS
-      error_message = "DPS Host";
-      name = "dps host";
-      Kokkos::TeamPolicy<Kokkos::DefaultHostExecutionSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
-      return new ps::DPS<Types, Kokkos::HostSpace>(policy, num_elems, num_ptcls, ppe,
-                                          element_gids, particle_elements, particle_info);
-    }
-    else if (num == 6) {
       //DPS
       error_message = "DPS 2";
       name = "dps 2";
@@ -354,6 +348,30 @@ int testSegmentComp(const char* name, PS* structure) {
   pumipic::parallel_for(structure, checkComponents, "Check components");
   fails += pumipic::getLastValue(failures);
 
+  return fails;
+}
+
+int testPIDs(const char* name, PS* structure) {
+  printf("testPIDs %s, rank %d\n", name, comm_rank);
+  kkLidView pids;
+  kkLidView offsets;
+  int fails = 0;
+  structure->getPIDs(pids, offsets);
+
+  kkLidView failures("failures", 1);
+  kkLidView unsortedElems("unsortedElems", structure->capacity());
+  auto setUnsortedElems = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    if (mask) unsortedElems(p) = e;
+  };
+  pumipic::parallel_for(structure, setUnsortedElems, "setUnsortedElems");
+
+  Kokkos::parallel_for(pids.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    lid_t pid = pids(i);
+    lid_t oldElem = unsortedElems(pid);
+    if (i < offsets(oldElem) || i >= offsets(oldElem+1))
+      Kokkos::atomic_add(&(failures[0]), 1);
+  });
+  fails += pumipic::getLastValue(failures);
   return fails;
 }
 

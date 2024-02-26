@@ -1,13 +1,20 @@
 #!/bin/bash
 
-cd ~/barn/pumipic_CabM/pumi-pic/performance_tests/
+runDir=$PWD
+binDir=/global/homes/c/cwsmith/projects/pumipicPerformanceTesting/crayWrappers/build-pumipic-perlmutter-cuda/performance_tests
 
-./test_smallE_largeP.sh &> smallE_largeP_$SLURM_JOB_ID.txt
-cd ~/barn/pumipic_CabM/pumi-pic/performance_tests/
-python output_convert.py smallE_largeP_$SLURM_JOB_ID.txt smallE_largeP_rebuild.dat smallE_largeP_push.dat smallE_largeP_migrate.dat
-echo "test_smallE_largeP DONE"
+function runTest() {
+  ptclsPerElm=$1
+  elms=$2
+  tname=${elms}E_${ptclsPerElm}P
+  ./test_particleToElmRatio.sh $binDir $ptclsPerElm $elms &> ${tname}_$SLURM_JOB_ID.txt
+  cd $runDir
+  python output_convert.py ${tname}_$SLURM_JOB_ID.txt ${tname}_rebuild.dat ${tname}_push.dat ${tname}_migrate.dat
+  echo "test_${tname} DONE"
+}
 
-./test_largeE_smallP.sh &> largeE_smallP_$SLURM_JOB_ID.txt
-cd ~/barn/pumipic_CabM/pumi-pic/performance_tests/
-python output_convert.py largeE_smallP_$SLURM_JOB_ID.txt largeE_smallP_rebuild.dat largeE_smallP_push.dat largeE_smallP_migrate.dat
-echo "test_largeE_smallP DONE"
+runTest 10000 small
+runTest 10000 large
+runTest 1000  large
+runTest 10    large
+runTest 5     large

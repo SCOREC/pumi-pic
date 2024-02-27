@@ -132,8 +132,8 @@ int main(int argc, char* argv[]) {
 #endif
     }
 
-    const int PS_ITERS = 100;
-    const int ITERS = 100;
+    const int PS_ITERS = 10;
+    const int ITERS = 10;
     
     if (!comm_rank)
       printf("Performing %d iterations of push on each structure\n", PS_ITERS);

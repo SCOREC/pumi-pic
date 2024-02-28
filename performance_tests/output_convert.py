@@ -10,6 +10,7 @@ import sys
 n = len(sys.argv)
 assert( n >= 4 )
 
+exeName="ps_combo"
 inputfile = sys.argv[1]
 rebuildfile = sys.argv[2]
 pushfile = sys.argv[3]
@@ -29,9 +30,26 @@ elms = 0
 rebuild = open(rebuildfile, "w")
 push = open(pushfile, "w")
 if (n >= 5): migrate = open(migratefile, "w")
+
+# write header
+structures = {0:"SCS",
+              1:"CSR",
+              2:"CabM",
+              3:"DPS"}
+distributions = {0:"Evenly",
+                 1: "Uniform",
+                 2: "Gaussian",
+                 3: "Exponential",
+                 4: "GITRm Approximation"}
+stmt="{0} {1} {2} {3}\n".format("structure", "elements", "distribution", "average time (s)")
+for output in [rebuild, push, migrate]:
+  output.write("structures: {}\n".format(structures))
+  output.write("distributions: {}\n".format(distributions))
+  output.write(stmt)
+
 for line in lines:
     # command line
-    if "./" in line:
+    if exeName in line:
         line = line.strip().split()
         elm = line[1]
         distribution = line[3]

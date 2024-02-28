@@ -1,7 +1,7 @@
 #!/bin/bash
 
 runDir=$PWD
-binDir=/global/homes/c/cwsmith/projects/pumipicPerformanceTesting/crayWrappers/build-pumipic-perlmutter-cuda/performance_tests
+binDir=/path/to/pumipic/build/performance_tests
 
 function runTest() {
   ptclsPerElm=$1

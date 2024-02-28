@@ -10,8 +10,8 @@ ptclsPerElm=$2
 elms=$3
 [[ "$elms" != "large" && "$elms" != "small" ]] && echo "elms must be \"large\" or \"small\"" && exit 1
 
-large="10000 15000 20000 25000 30000 35000 40000 45000 50000 55000"
-small="1000 1500 2000 2500 3000 3500 4000 4500 5000 5500"
+large="10000 20000 30000 40000 50000"
+small="1000 2000 3000 4000 5000"
 elmRange=$large
 [[ "$elms" == "small" ]] && elmRange=$small
 

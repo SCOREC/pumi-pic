@@ -3,14 +3,26 @@ clear
 
 % Excluded: CSR Migrate, Even Distribution
 
-YTick = [0.01,0.1,0.5,1,5,10,100]; 
-YTickLabel = {'0.01','0.1x','0.5x','1x','5x','10x','100x'};
-LineWidth = 1.5;
+YTick = [0.01,0.1,0.5,1,5,10,100,1000];
+YTickLabel = {'0.01','0.1x','0.5x','1x','5x','10x','100x', '1000x'};
+LineWidth = 2;
+
+
+name = "largeE_5P_";
+outname = strcat(name,'plots.png');
 
 %% Data Reading
-fileID_rebuild = fopen('data/largeE_smallP_rebuild.dat');
-fileID_push = fopen('data/largeE_smallP_push.dat');
-fileID_migrate = fopen('data/largeE_smallP_migrate.dat');
+fileID_rebuild = fopen(strcat(name,'rebuild.dat'));
+fileID_push = fopen(strcat(name,'push.dat'));
+fileID_migrate = fopen(strcat(name,'migrate.dat'));
+
+
+% remove header
+for i = 1:3
+    line = fgetl(fileID_rebuild);
+    line = fgetl(fileID_push);
+    line = fgetl(fileID_migrate);
+end
 
 % struct, element_number, distribution, average_time
 rebuild_data = fscanf(fileID_rebuild, "%d %d %d %f", [4 Inf])';
@@ -123,10 +135,11 @@ f = figure;
 f.Position(3:4) = [1100,350];
 t = tiledlayout(1,3, 'TileSpacing', 'Compact', 'Padding', 'Compact');
 title(t, 'Particle Structure Speedup', 'FontWeight', 'bold')
-xlabel(t, {'Number Particles (Thousands)','Number Elements'}, 'FontWeight', 'bold')
+xlabel(t, {'Number Particles (Ten Thousands)','Number Elements'}, 'FontWeight', 'bold')
 ylabel(t, {'Average Structure Speedup','(SCS Time/Structure Time)'}, 'FontWeight', 'bold')
 
 % Even (excluded)
+
 
 % Uniform
 ax2 = nexttile;
@@ -202,8 +215,7 @@ lg.Location = 'northeastoutside';
 
 % align axes
 limits = [lim2; lim3; lim4];
-%limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
-limits = [ min(limits(:,1)), 55000, min(limits(:,3)), max(limits(:,4)) ];
+limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)) ];
 axis([ax2 ax3 ax4], limits )
 
-saveas(f,'largeE_smallP.png')
+saveas(f,outname)

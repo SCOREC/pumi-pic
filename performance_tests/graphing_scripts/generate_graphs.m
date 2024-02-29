@@ -1,5 +1,24 @@
-% MATLAB file for graph generation
-clear
+
+
+function err = generate_graphs(name)
+% GENERATE_GRAPHS  plot the timings of push, migrate and rebuild
+%                  for each particle structure and distribution
+%   err = GENERATE_GRAPHS(name) plots the results for the given
+%                               input file to <name>_plot.png
+%
+
+err=1;
+
+rebuildInputFile = strcat(name,'_rebuild.dat');
+pushInputFile = strcat(name,'_push.dat');
+migrateInputFile = strcat(name,'_migrate.dat');
+inputFiles = {rebuildInputFile pushInputFile migrateInputFile};
+
+for filename = inputFiles
+    if not(isfile(filename{1}))
+        error('file %s does not exist', filename{1})
+    end
+end
 
 % Excluded: CSR Migrate, Even Distribution
 
@@ -7,30 +26,30 @@ YTick = [0.01,0.1,0.5,1,5,10,100,1000];
 YTickLabel = {'0.01','0.1x','0.5x','1x','5x','10x','100x', '1000x'};
 LineWidth = 2;
 
-
-name = "largeE_5P_";
 outname = strcat(name,'plots.png');
 
 %% Data Reading
-fileID_rebuild = fopen(strcat(name,'rebuild.dat'));
-fileID_push = fopen(strcat(name,'push.dat'));
-fileID_migrate = fopen(strcat(name,'migrate.dat'));
-
-
-% remove header
-for i = 1:3
-    line = fgetl(fileID_rebuild);
-    line = fgetl(fileID_push);
-    line = fgetl(fileID_migrate);
+nFiles = size(inputFiles,2)
+inputFileIds = cell(1, size(inputFiles,2));
+for i = 1:size(inputFiles,2)
+  inputFileIds{i} = fopen(inputFiles{i});
 end
 
+% remove header
+for fileId = inputFileIds
+    for i = 1:3
+        fgetl(fileId{1});
+    end
+end
+
+fileID_rebuild = inputFileIds{1};
+fileID_push = inputFileIds{2};
+fileID_migrate = inputFileIds{3};
+
 % struct, element_number, distribution, average_time
-rebuild_data = fscanf(fileID_rebuild, "%d %d %d %f", [4 Inf])';
-fclose(fileID_rebuild);
-push_data = fscanf(fileID_push, "%d %d %d %f", [4 Inf])';
-fclose(fileID_push);
-migrate_data = fscanf(fileID_migrate, "%d %d %d %f", [4 Inf])';
-fclose(fileID_migrate);
+rebuild_data = readFileDataAndClose(inputFileIds{1});
+push_data = readFileDataAndClose(inputFileIds{2});
+migrate_data = readFileDataAndClose(inputFileIds{3});
 
 %% Data Filtering
 
@@ -208,9 +227,9 @@ title({'Exponential Distribution'})
 lim4 = axis;
 
 lg = legend(nexttile(3), {'CabM pseudo-push'; 'CabM rebuild'; 'CabM migrate'; ...
-                          'CSR pseudo-push'; 'CSR rebuild'; 'CSR migrate'; ...
-                          'DPS pseudo-push'; 'DPS rebuild'; 'DPS migrate'; ...
-                          'SCS (reference)'}, 'FontWeight', 'bold');
+    'CSR pseudo-push'; 'CSR rebuild'; 'CSR migrate'; ...
+    'DPS pseudo-push'; 'DPS rebuild'; 'DPS migrate'; ...
+    'SCS (reference)'}, 'FontWeight', 'bold');
 lg.Location = 'northeastoutside';
 
 % align axes
@@ -219,3 +238,11 @@ limits = [ min(limits(:,1)), max(limits(:,2)), min(limits(:,3)), max(limits(:,4)
 axis([ax2 ax3 ax4], limits )
 
 saveas(f,outname)
+err = 0;
+end
+
+function data = readFileDataAndClose(fileId)
+data = fscanf(fileId, "%d %d %d %f", [4 Inf])';
+fclose(fileId);
+return
+end

@@ -1,5 +1,3 @@
-
-
 function err = generate_graphs(name)
 % GENERATE_GRAPHS  plot the timings of push, migrate and rebuild
 %                  for each particle structure and distribution
@@ -29,11 +27,30 @@ LineWidth = 2;
 outname = strcat(name,'plots.png');
 
 %% Data Reading
-nFiles = size(inputFiles,2)
-inputFileIds = cell(1, size(inputFiles,2));
-for i = 1:size(inputFiles,2)
+nFiles = size(inputFiles,2);
+inputFileIds = cell(1, nFiles);
+for i = 1:nFiles
   inputFileIds{i} = fopen(inputFiles{i});
 end
+
+% todo read these from the header
+% functions - this is selecting array indices
+REBUILD=1;
+PUSH=2;
+MIGRATE=3;
+NUMFUNC=3;
+% structures - selecting array values
+SCS=0;
+CSR=1;
+CABM=2;
+DPS=3;
+NUMSTRUCT=4;
+% distributions - selecting array values
+EVEN=0;
+UNIFORM=1;
+GAUSS=2;
+EXPONENTIAL=3;
+NUMDIST=4;
 
 % remove header
 for fileId = inputFileIds
@@ -42,53 +59,43 @@ for fileId = inputFileIds
     end
 end
 
-fileID_rebuild = inputFileIds{1};
-fileID_push = inputFileIds{2};
-fileID_migrate = inputFileIds{3};
-
 % struct, element_number, distribution, average_time
 rebuild_data = readFileDataAndClose(inputFileIds{1});
 push_data = readFileDataAndClose(inputFileIds{2});
 migrate_data = readFileDataAndClose(inputFileIds{3});
 
+
 %% Data Filtering
 
 % find length of graphs
-scs_length = length(unique(rebuild_data( rebuild_data(:,1) == 0, 2 )));
-csr_length = length(unique(rebuild_data( rebuild_data(:,1) == 1, 2 )));
-cabm_length = length(unique(rebuild_data( rebuild_data(:,1) == 2, 2 )));
-dps_length = length(unique(rebuild_data( rebuild_data(:,1) == 3, 2 )));
-if ( max( [scs_length, csr_length, cabm_length] ) == scs_length )
-    elms = unique(rebuild_data( rebuild_data(:,1) == 0, 2 ));
-elseif ( max( [scs_length, csr_length, cabm_length] ) == csr_length )
-    elms = unique(rebuild_data( rebuild_data(:,1) == 1, 2 ));
-elseif ( max( [scs_length, csr_length, cabm_length] ) == dps_length )
-    elms = unique(rebuild_data( rebuild_data(:,1) == 2, 2 ));
-else
-    elms = unique(rebuild_data( rebuild_data(:,1) == 3, 2 ));
-end
+structLen = getStructureLengths(rebuild_data);
+elms = getElms(rebuild_data, structLen);
+
+allData = {rebuild_data push_data migrate_data};
+mat = getMatrix(allData,NUMFUNC,NUMSTRUCT,NUMDIST,length(elms));
 
 % pull distributions and times
-scs_rebuild = rebuild_data( rebuild_data(:,1) == 0,[3,4] );
-csr_rebuild = rebuild_data( rebuild_data(:,1) == 1, [3,4] );
-cabm_rebuild = rebuild_data( rebuild_data(:,1) == 2, [3,4] );
-dps_rebuild = rebuild_data( rebuild_data(:,1) == 3, [3,4] );
-scs_push = push_data( push_data(:,1) == 0, [3,4] );
-csr_push = push_data( push_data(:,1) == 1, [3,4] );
-cabm_push = push_data( push_data(:,1) == 2, [3,4] );
-dps_push = push_data( push_data(:,1) == 3, [3,4] );
-scs_migrate = migrate_data( migrate_data(:,1) == 0, [3,4] );
-csr_migrate = migrate_data( migrate_data(:,1) == 1, [3,4] );
-cabm_migrate = migrate_data( migrate_data(:,1) == 2, [3,4] );
-dps_migrate = migrate_data( migrate_data(:,1) == 3, [3,4] );
+scs_rebuild = getFunctionTimeForStructure(rebuild_data,SCS);
+csr_rebuild = getFunctionTimeForStructure(rebuild_data,CSR);
+cabm_rebuild = getFunctionTimeForStructure(rebuild_data,CABM);
+dps_rebuild = getFunctionTimeForStructure(rebuild_data,DPS);
+scs_push = getFunctionTimeForStructure(push_data,SCS);
+csr_push = getFunctionTimeForStructure(push_data,CSR);
+cabm_push = getFunctionTimeForStructure(push_data,CABM);
+dps_push = getFunctionTimeForStructure(push_data,DPS);
+scs_migrate = getFunctionTimeForStructure(migrate_data,SCS);
+csr_migrate = getFunctionTimeForStructure(migrate_data,CSR);
+cabm_migrate = getFunctionTimeForStructure(migrate_data,CABM);
+dps_migrate = getFunctionTimeForStructure(migrate_data,DPS);
 
 % Separate data by distribution, {0,1,2,3} = {Evenly,Uniform,Gaussian,Exponential}
 
 % SCS Rebuild
 %scs_rebuild_even = scs_rebuild( scs_rebuild(:,1) == 0, 2);
-scs_rebuild_uni = scs_rebuild( scs_rebuild(:,1) == 1, 2);
-scs_rebuild_gauss = scs_rebuild( scs_rebuild(:,1) == 2, 2);
-scs_rebuild_exp = scs_rebuild( scs_rebuild(:,1) == 3, 2);
+
+scs_rebuild_uni = getTime(allData, REBUILD, SCS, UNIFORM)
+scs_rebuild_gauss = getTime(rebuild_data, SCS, GAUSS);
+scs_rebuild_exp = getTime(rebuild_data, SCS, EXPONENTIAL);
 % CSR Rebuild
 %csr_rebuild_even = csr_rebuild( csr_rebuild(:,1) == 0, 2);
 csr_rebuild_uni = csr_rebuild( csr_rebuild(:,1) == 1, 2);
@@ -159,6 +166,9 @@ ylabel(t, {'Average Structure Speedup','(SCS Time/Structure Time)'}, 'FontWeight
 
 % Even (excluded)
 
+cabm_length = structLen(CABM);
+csr_length = structLen(CSR);
+dps_length = structLen(DPS);
 
 % Uniform
 ax2 = nexttile;
@@ -241,8 +251,60 @@ saveas(f,outname)
 err = 0;
 end
 
+
+
 function data = readFileDataAndClose(fileId)
 data = fscanf(fileId, "%d %d %d %f", [4 Inf])';
 fclose(fileId);
 return
 end
+
+function structLen = getStructureLengths(data)
+structLen = zeros(1,3);
+for i = 0:3
+    structLen(i+1) = length(unique(data( data(:,1) == i, 2 )));
+end
+end
+
+function elms = getElms(data, structLen)
+maxLen = max(structLen);
+if ( maxLen == structLen(1) )
+    elms = unique(data( data(:,1) == 0, 2 ));
+elseif ( maxLen == structLen(2) )
+    elms = unique(data( data(:,1) == 1, 2 ));
+elseif ( maxLen == structLen(3) )
+    elms = unique(data( data(:,1) == 2, 2 ));
+else
+    elms = unique(data( data(:,1) == 3, 2 ));
+end
+end
+
+
+function time = getFunctionTimeForStructure(data, structure)
+time = data( data(:,1) == structure, [3,4]);
+end
+
+function time = getTime(data, structure, distribution)
+time = data( data(:,1) == structure & data(:,3) == distribution, 4);
+end
+
+function time = getTime2(allData, func, structure, distribution)
+data = allData{func};
+time = data( data(:,1) == structure & data(:,3) == distribution, 4);
+end
+
+% TODO create the matrix and use this in the plotting functions instead of 
+%      individual arrays
+function mat = getMatrix(allData,NUMFUNC,NUMSTRUCT,NUMDIST,MAXELMS)
+mat = zeros(NUMFUNC,NUMSTRUCT,NUMDIST,MAXELMS);
+for func = 1:NUMFUNC
+    for struct = 1:NUMSTRUCT
+        for dist = 1:NUMDIST
+            time = getTime2(allData, func, struct, dist);
+            time2 = reshape(time, [1,1,1,MAXELMS])
+            mat(func,struct,dist,:) = time2; % FIXME
+        end
+    end
+end
+end
+

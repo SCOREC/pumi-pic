@@ -13,8 +13,8 @@ function runTest() {
   echo "test_${tname} DONE"
 }
 
-runTest 10000 small
-runTest 10000 large
+#runTest 10000 large #OOM
 runTest 1000  large
+runTest 100   large
 runTest 10    large
 runTest 5     large

@@ -5,8 +5,6 @@ function err = generate_graphs(name)
 %                               input file to <name>_plot.png
 %
 
-err=1;
-
 rebuildInputFile = strcat(name,'_rebuild.dat');
 pushInputFile = strcat(name,'_push.dat');
 migrateInputFile = strcat(name,'_migrate.dat');
@@ -46,7 +44,7 @@ CABM=2;
 DPS=3;
 NUMSTRUCT=4;
 % distributions - selecting array values
-EVEN=0;
+%EVEN=0; % not used in current tests
 UNIFORM=1;
 GAUSS=2;
 EXPONENTIAL=3;
@@ -196,29 +194,18 @@ else
 end
 end
 
-
-function time = getFunctionTimeForStructure(data, structure)
-time = data( data(:,1) == structure, [3,4]);
-end
-
-function time = getTime(data, structure, distribution)
-time = data( data(:,1) == structure & data(:,3) == distribution, 4);
-end
-
-function time = getTime2(allData, func, structure, distribution)
+function time = getTime(allData, func, structure, distribution)
 data = allData{func};
 time = data( data(:,1) == structure & data(:,3) == distribution, 4);
 end
 
-% TODO create the matrix and use this in the plotting functions instead of 
-%      individual arrays
 function mat = getMatrix(allData,NUMFUNC,NUMSTRUCT,NUMDIST,MAXELMS)
 mat = zeros(NUMFUNC,NUMSTRUCT,NUMDIST,MAXELMS);
 for func = 1:NUMFUNC
     for struct = 0:NUMSTRUCT-1
         structIdx = struct+1;
         for dist = 1:NUMDIST-1 %skipping EVEN, zero based indexing -> don't include end
-            time = getTime2(allData, func, struct, dist);
+            time = getTime(allData, func, struct, dist);
             assert( isempty(time) == false );
             for elm = 1:MAXELMS
                 mat(func,structIdx,dist,elm) = time(elm);

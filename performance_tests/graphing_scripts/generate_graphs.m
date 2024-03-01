@@ -24,7 +24,7 @@ YTick = [0.01,0.1,0.5,1,5,10,100,1000];
 YTickLabel = {'0.01','0.1x','0.5x','1x','5x','10x','100x', '1000x'};
 LineWidth = 2;
 
-outname = strcat(name,'plots.png');
+outname = strcat(name,'_plots.png');
 
 %% Data Reading
 nFiles = size(inputFiles,2);

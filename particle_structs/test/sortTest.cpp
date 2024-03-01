@@ -35,6 +35,12 @@ void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
   });
 }
 
+struct ReverseComparator {
+  KOKKOS_FUNCTION constexpr bool operator()(const lid_t& a, const lid_t& b) const {
+      return a > b; //a precedes b if a is larger
+  }
+};
+
 void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
   ptcls = kkLidView("ptcls", num_elems);
   index = kkLidView("index", num_elems);
@@ -45,13 +51,14 @@ void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
 
   sigma = Kokkos::min(sigma, Kokkos::max(num_elems, 1));
   lid_t n_sigma = num_elems/sigma;
+  ReverseComparator comp;
   Kokkos::parallel_for( PolicyType(n_sigma, 1), KOKKOS_LAMBDA(const TeamMem& t){
     lid_t start = t.league_rank() * sigma;
     lid_t end = (t.league_rank() == n_sigma-1) ? num_elems : start + sigma;
     auto range = Kokkos::make_pair(start, end);
     auto ptcl_subview = Kokkos::subview(ptcls, range);
     auto index_subview = Kokkos::subview(index, range);
-    Kokkos::Experimental::sort_by_key_thread(t, ptcl_subview, index_subview);
+    Kokkos::Experimental::sort_by_key_thread(t, ptcl_subview, index_subview, comp);
   });
 }
 
@@ -67,7 +74,9 @@ void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
   kokkosSigmaSort(kokkosSorted, kokkosIndex, arr.size(), arr, sigma);
 
   Kokkos::parallel_for( arr.size(), KOKKOS_LAMBDA(const lid_t& i) {
-    // if(thrustSorted(i) != kokkosSorted(i)) printf("NOT EQUAL\n");
+    // printf("INDEX %d, THRUST %d, KOKKOS %d\n", i, thrustSorted(i), kokkosSorted(i));
+
+    if (thrustSorted(i) != kokkosSorted(i)) printf("NOT EQUAL\n");
   });
   // printf("%s sort time: %.6f\n", name, t.seconds());
 }
@@ -77,7 +86,7 @@ int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
   MPI_Init(&argc, &argv);
   int n = atoi(argv[1]);
-  
+  n = 100;
   printf("Sorting views of size %d\n", n);
   {
     Kokkos::View<int*> sorted_arr("sorted",n);

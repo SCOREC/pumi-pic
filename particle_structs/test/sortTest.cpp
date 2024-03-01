@@ -4,13 +4,43 @@
 #include <Kokkos_Sort.hpp>
 #include <mpi.h>
 
-void performSorting(Kokkos::View<int*> arr, const char* name) {
+using lid_t = int;
+using kkLidView = Kokkos::View<int*>;
+using MemSpace = Kokkos::DefaultExecutionSpace::memory_space;
+
+void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
+  //Make temporary copy of the particle counts for sorting
+  ptcls = kkLidView("ptcls", num_elems);
+  index = kkLidView("index", num_elems);
+  lid_t i;
+  Kokkos::View<lid_t*, typename MemSpace::device_type> elem_ids(Kokkos::ViewAllocateWithoutInitializing("elem_ids"), num_elems);
+  Kokkos::View<lid_t*, typename MemSpace::device_type> temp_ppe(Kokkos::ViewAllocateWithoutInitializing("temp_ppe"), num_elems);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+    temp_ppe(i) = -ptcls_per_elem(i);
+    elem_ids(i) = i;
+  });
+  thrust::device_ptr<lid_t> ptcls_t(temp_ppe.data());
+  thrust::device_ptr<lid_t> elem_ids_t(elem_ids.data());
+  for (i = 0; i < num_elems - sigma; i+=sigma) {
+    thrust::sort_by_key(thrust::device, ptcls_t + i, ptcls_t + i + sigma, elem_ids_t + i);
+  }
+  thrust::sort_by_key(thrust::device, ptcls_t + i, ptcls_t + num_elems, elem_ids_t + i);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+    ptcls(i) = -temp_ppe(i);
+    index(i) = elem_ids(i);
+  });
+}
+
+void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
   Kokkos::View<int*> copy("arr_copy", arr.size());
   Kokkos::parallel_for("copy_array", arr.size(), KOKKOS_LAMBDA(const int i) {
       copy[i] = arr[i];
   });
   Kokkos::Timer t;
-  Kokkos::sort(arr, 0, arr.size());
+
+  kkLidView sorted;
+  kkLidView index;
+  thrustSigmaSort(sorted, index, arr.size(), arr, sigma);
   Kokkos::fence();
   printf("%s sort time: %.6f\n", name, t.seconds());
 }
@@ -58,10 +88,11 @@ int main(int argc, char** argv) {
       two_buckets_arr(i) = i < 10;
     });
 
-    performSorting(sorted_arr, "Sorted");
-    performSorting(backwards_arr, "Backwards");
-    performSorting(jumbled_arr, "Jumbled");
-    performSorting(two_buckets_arr, "Two Buckets");
+    int sigma = 100;
+    performSorting(sorted_arr, sigma, "Sorted");
+    performSorting(backwards_arr, sigma, "Backwards");
+    performSorting(jumbled_arr, sigma, "Jumbled");
+    performSorting(two_buckets_arr, sigma, "Two Buckets");
 
     Kokkos::parallel_for("set_arrays", n, KOKKOS_LAMBDA(const int i) {
       sorted_arr(i) = i;
@@ -70,7 +101,6 @@ int main(int argc, char** argv) {
       two_buckets_arr(i) = i < 10;
     });
 
-    int sigma = 100;
     printf("Sigma: %d\n", sigma);
     sigmaSort(sorted_arr, sigma, "Sigma Sorted");
     sigmaSort(backwards_arr, sigma, "Sigma Backwards");

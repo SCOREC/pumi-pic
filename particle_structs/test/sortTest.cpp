@@ -8,6 +8,10 @@ using lid_t = int;
 using kkLidView = Kokkos::View<int*>;
 using MemSpace = Kokkos::DefaultExecutionSpace::memory_space;
 
+using ExecSpace = Kokkos::DefaultExecutionSpace;
+using PolicyType = Kokkos::TeamPolicy<ExecSpace>;
+using TeamMem = typename PolicyType::member_type;
+
 void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
   //Make temporary copy of the particle counts for sorting
   ptcls = kkLidView("ptcls", num_elems);
@@ -31,41 +35,41 @@ void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
   });
 }
 
-void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
-  Kokkos::View<int*> copy("arr_copy", arr.size());
-  Kokkos::parallel_for("copy_array", arr.size(), KOKKOS_LAMBDA(const int i) {
-      copy[i] = arr[i];
-  });
-  Kokkos::Timer t;
-
-  kkLidView sorted;
-  kkLidView index;
-  thrustSigmaSort(sorted, index, arr.size(), arr, sigma);
-  Kokkos::fence();
-  printf("%s sort time: %.6f\n", name, t.seconds());
-}
-
-void sigmaSort(Kokkos::View<int*> arr, int sigma, const char* name){
-  Kokkos::Timer t;
-  using ExecSpace = Kokkos::DefaultExecutionSpace;
-  using TeamPol = Kokkos::TeamPolicy<ExecSpace>;
-  using TeamMem = typename TeamPol::member_type;
-  Kokkos::View<int*> index("index", arr.size());
-  Kokkos::parallel_for(arr.size(), KOKKOS_LAMBDA(const int& i) {
+void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
+  ptcls = kkLidView("ptcls", num_elems);
+  index = kkLidView("index", num_elems);
+  Kokkos::parallel_for(num_elems, KOKKOS_LAMBDA(const lid_t& i) {
+    ptcls(i) = ptcls_per_elem(i);
     index(i) = i;
   });
 
-  int n_sigma = arr.size()/sigma;
-  Kokkos::parallel_for( TeamPol(n_sigma, 1), KOKKOS_LAMBDA(const TeamMem& t){
-    int start = t.league_rank() * sigma;
-    int end = (t.league_rank() == n_sigma-1) ? arr.size() : start + sigma;
+  sigma = Kokkos::min(sigma, Kokkos::max(num_elems, 1));
+  lid_t n_sigma = num_elems/sigma;
+  Kokkos::parallel_for( PolicyType(n_sigma, 1), KOKKOS_LAMBDA(const TeamMem& t){
+    lid_t start = t.league_rank() * sigma;
+    lid_t end = (t.league_rank() == n_sigma-1) ? num_elems : start + sigma;
     auto range = Kokkos::make_pair(start, end);
-    auto ptcl_subview = Kokkos::subview(arr, range);
+    auto ptcl_subview = Kokkos::subview(ptcls, range);
     auto index_subview = Kokkos::subview(index, range);
     Kokkos::Experimental::sort_by_key_thread(t, ptcl_subview, index_subview);
   });
+}
+
+void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
+  Kokkos::Timer t;
+  kkLidView thrustSorted;
+  kkLidView thrustIndex;
+  thrustSigmaSort(thrustSorted, thrustIndex, arr.size(), arr, sigma);
   Kokkos::fence();
-  printf("%s sort time: %.6f\n", name, t.seconds());
+
+  kkLidView kokkosSorted;
+  kkLidView kokkosIndex;
+  kokkosSigmaSort(kokkosSorted, kokkosIndex, arr.size(), arr, sigma);
+
+  Kokkos::parallel_for( arr.size(), KOKKOS_LAMBDA(const lid_t& i) {
+    // if(thrustSorted(i) != kokkosSorted(i)) printf("NOT EQUAL\n");
+  });
+  // printf("%s sort time: %.6f\n", name, t.seconds());
 }
 
 int main(int argc, char** argv) {
@@ -94,18 +98,7 @@ int main(int argc, char** argv) {
     performSorting(jumbled_arr, sigma, "Jumbled");
     performSorting(two_buckets_arr, sigma, "Two Buckets");
 
-    Kokkos::parallel_for("set_arrays", n, KOKKOS_LAMBDA(const int i) {
-      sorted_arr(i) = i;
-      backwards_arr(i) = n-i;
-      jumbled_arr(i) = i*i % n;
-      two_buckets_arr(i) = i < 10;
-    });
-
     printf("Sigma: %d\n", sigma);
-    sigmaSort(sorted_arr, sigma, "Sigma Sorted");
-    sigmaSort(backwards_arr, sigma, "Sigma Backwards");
-    sigmaSort(jumbled_arr, sigma, "Sigma Jumbled");
-    sigmaSort(two_buckets_arr, sigma, "Sigma Two Buckets");
   }
 
   Kokkos::finalize();

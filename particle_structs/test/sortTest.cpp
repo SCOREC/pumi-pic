@@ -52,7 +52,8 @@ void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
   sigma = Kokkos::min(sigma, Kokkos::max(num_elems, 1));
   lid_t n_sigma = num_elems/sigma;
   ReverseComparator comp;
-  Kokkos::parallel_for( PolicyType(n_sigma, Kokkos::AUTO()), KOKKOS_LAMBDA(const TeamMem& t){
+  int vectorLen = PolicyType::vector_length_max();
+  Kokkos::parallel_for( PolicyType(n_sigma, Kokkos::AUTO(), vectorLen), KOKKOS_LAMBDA(const TeamMem& t){
     lid_t start = t.league_rank() * sigma;
     lid_t end = (t.league_rank() == n_sigma-1) ? num_elems : start + sigma;
     auto range = Kokkos::make_pair(start, end);
@@ -87,7 +88,7 @@ int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
   MPI_Init(&argc, &argv);
   int n = atoi(argv[1]);
-  n = 100000;
+  n = 1000000;
   printf("Sorting views of size %d\n", n);
   {
     Kokkos::View<int*> sorted_arr("sorted",n);
@@ -102,7 +103,7 @@ int main(int argc, char** argv) {
       two_buckets_arr(i) = i < 10;
     });
 
-    int sigma = 100000;
+    int sigma = 1000000;
     performSorting(sorted_arr, sigma, "Sorted");
     performSorting(backwards_arr, sigma, "Backwards");
     performSorting(jumbled_arr, sigma, "Jumbled");

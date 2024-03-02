@@ -5,6 +5,7 @@
 #           python output_convert.py input_filename rebuild_output_filename push_output_filename migrate_output_filename
 
 import sys
+import re
 
 # Formatting output from testing for usage in MATLAB
 n = len(sys.argv)
@@ -14,22 +15,25 @@ exeName="ps_combo"
 inputfile = sys.argv[1]
 rebuildfile = sys.argv[2]
 pushfile = sys.argv[3]
-if (n >= 5): migratefile = sys.argv[4]
+migratefile = None
+if n >= 5: migratefile = sys.argv[4]
 
 file = open(inputfile, "r")
 lines = file.readlines()
 file.close()
 
-edit_lines = ["Sell-32-ne rebuild", "Sell-32-ne pseudo-push", "Sell-32-ne particle migration",
-              "CSR rebuild", "CSR pseudo-push", "CSR particle migration",
+edit_lines = ["CSR rebuild", "CSR pseudo-push", "CSR particle migration",
               "CabM rebuild", "CabM pseudo-push", "CabM particle migration",
               "DPS rebuild", "DPS pseudo-push", "DPS particle migration" ]
+
+scs_pattern = re.compile(r'Sell-[0-9]+-ne [\brebuild\b | \bpseudo-push\b | \bparticle migration\b]')
 
 elms = 0
 
 rebuild = open(rebuildfile, "w")
 push = open(pushfile, "w")
-if (n >= 5): migrate = open(migratefile, "w")
+migrate = None
+if n >= 5: migrate = open(migratefile, "w")
 
 # write header
 structures = {0:"SCS",
@@ -43,34 +47,40 @@ distributions = {0:"Evenly",
                  4: "GITRm Approximation"}
 stmt="{0} {1} {2} {3}\n".format("structure", "elements", "distribution", "average time (s)")
 for output in [rebuild, push, migrate]:
-  output.write("structures: {}\n".format(structures))
-  output.write("distributions: {}\n".format(distributions))
-  output.write(stmt)
+    if output is not None:
+        output.write("structures: {}\n".format(structures))
+        output.write("distributions: {}\n".format(distributions))
+        output.write(stmt)
 
 for line in lines:
     # command line
     if exeName in line:
-        line = line.strip().split()
-        elm = line[1]
-        distribution = line[3]
-        structure = line[4]
+        tokens = line.strip().split()
+        elm = tokens[1]
+        distribution = tokens[3]
+        structure = tokens[4]
     # timing
-    for check in edit_lines:
-        if check in line:
-            line = line.split()
-            function = line[1]
-            if "particle" in function:
-                function = function + line[2]
-                average = line[5]
-            else:
-                average = line[4]
 
-            if "rebuild" in function:
-                rebuild.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
-            elif "pseudo-push" in function:
-                push.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
-            elif "migration" in function and (n >= 5):
-                migrate.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
+    foundStructure = (scs_pattern.match(line) is not None)
+    if not foundStructure:
+        for check in edit_lines:
+            if check in line:
+                foundStructure = True
+    if foundStructure:
+        line = line.split()
+        function = line[1]
+        if "particle" in function:
+            function = function + line[2]
+            average = line[5]
+        else:
+            average = line[4]
+
+        if "rebuild" in function:
+            rebuild.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
+        elif "pseudo-push" in function:
+            push.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
+        elif "migration" in function and (n >= 5):
+            migrate.write( "{0} {1} {2} {3}\n".format(structure, elm, distribution, average) )
 
 rebuild.close()
 push.close()

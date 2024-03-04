@@ -12,6 +12,7 @@ using ExecSpace = Kokkos::DefaultExecutionSpace;
 using PolicyType = Kokkos::TeamPolicy<ExecSpace>;
 using TeamMem = typename PolicyType::member_type;
 
+#ifdef PP_USE_CUDA
 void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
   //Make temporary copy of the particle counts for sorting
   ptcls = kkLidView("ptcls", num_elems);
@@ -34,6 +35,7 @@ void thrustSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
     index(i) = elem_ids(i);
   });
 }
+#endif
 
 void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidView ptcls_per_elem, lid_t sigma) {
   ptcls = kkLidView(Kokkos::ViewAllocateWithoutInitializing("ptcls"), num_elems);
@@ -59,22 +61,24 @@ void kokkosSigmaSort(kkLidView& ptcls, kkLidView& index, lid_t num_elems, kkLidV
 
 void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
   Kokkos::Timer t;
+  kkLidView kokkosSorted;
+  kkLidView kokkosIndex;
+  kokkosSigmaSort(kokkosSorted, kokkosIndex, arr.size(), arr, sigma);
+  Kokkos::fence();
+  printf("Kokkos %s sort time: %.6f\n", name, t.seconds());
+  t.reset();
+
+  #ifdef PP_USE_CUDA
   kkLidView thrustSorted;
   kkLidView thrustIndex;
   thrustSigmaSort(thrustSorted, thrustIndex, arr.size(), arr, sigma);
   Kokkos::fence();
   printf("Thrust %s sort time: %.6f\n", name, t.seconds());
-  t.reset();
-
-  kkLidView kokkosSorted;
-  kkLidView kokkosIndex;
-  kokkosSigmaSort(kokkosSorted, kokkosIndex, arr.size(), arr, sigma);
+  #endif
 
   Kokkos::parallel_for( arr.size(), KOKKOS_LAMBDA(const lid_t& i) {
     assert(thrustSorted(i) == kokkosSorted(i));
   });
-  Kokkos::fence();
-  printf("Kokkos %s sort time: %.6f\n", name, t.seconds());
 }
 
 int main(int argc, char** argv) {
@@ -82,7 +86,6 @@ int main(int argc, char** argv) {
   Kokkos::initialize(argc,argv);
   MPI_Init(&argc, &argv);
   int n = atoi(argv[1]);
-  n = 1000000;
   printf("Sorting views of size %d\n", n);
   {
     Kokkos::View<int*> sorted_arr("sorted",n);
@@ -97,7 +100,7 @@ int main(int argc, char** argv) {
       two_buckets_arr(i) = i < 10;
     });
 
-    int sigma = 1000000;
+    int sigma = INT_MAX;
     performSorting(sorted_arr, sigma, "Sorted");
     performSorting(backwards_arr, sigma, "Backwards");
     performSorting(jumbled_arr, sigma, "Jumbled");

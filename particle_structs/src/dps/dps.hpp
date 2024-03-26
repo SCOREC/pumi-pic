@@ -5,6 +5,7 @@
 #include "psMemberTypeCabana.h"
 #include "dps_input.hpp"
 #include <sstream>
+#include <iostream>
 
 namespace pumipic {
 

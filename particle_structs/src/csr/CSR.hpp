@@ -4,6 +4,7 @@
 #include <ppTiming.hpp>
 #include <sstream>
 #include <CSR_input.hpp>
+#include <iostream>
 
 namespace ps = particle_structs;
 

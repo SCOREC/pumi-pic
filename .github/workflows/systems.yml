@@ -43,8 +43,8 @@ jobs:
         GLOBUS_ID: ${{ secrets.GLOBUS_COMPUTE_ID }}
         GLOBUS_SECRET: ${{ secrets.GLOBUS_COMPUTE_SECRET }}
       run: |
-        export FUNCX_SDK_CLIENT_ID="$GLOBUS_ID"
-        export FUNCX_SDK_CLIENT_SECRET="$GLOBUS_SECRET"
+        export GLOBUS_COMPUTE_CLIENT_ID="$GLOBUS_ID"
+        export GLOBUS_COMPUTE_CLIENT_SECRET="$GLOBUS_SECRET"
         if [ ${{matrix.machine}} == Perlmutter ]; then TARGET_ENDPOINT=0dd4499a-8d76-4977-bae9-841e4bb2f616; fi
         if [ ${{matrix.machine}} == Frontier ]; then TARGET_ENDPOINT=d625c6cf-de7a-4228-ac44-56247a642fe0; fi
         python test_on_system.py ${{ github.sha }} $TARGET_ENDPOINT

@@ -1,0 +1,68 @@
+name: Systems
+on:
+  push:
+  schedule:
+    # Sunday 1:30 AM
+    - cron: '30 1 * * 0' 
+
+concurrency:
+  group: systems-pumi-pic
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        machine: ["Perlmutter"]
+
+    steps:
+
+    - name: checkout pumi-pic
+      uses: actions/checkout@v4
+      with:
+        path: pumi-pic
+
+    - name: setup python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: install packing
+      run: sudo apt install python3-packaging
+
+    - name: install globus
+      run: |
+          python -m ensurepip --upgrade --user
+          python -m pip install globus-compute-endpoint
+
+    - name: use globus
+      working-directory: pumi-pic/.github/workflows
+      env:
+        GLOBUS_ID: ${{ secrets.GLOBUS_COMPUTE_ID }}
+        GLOBUS_SECRET: ${{ secrets.GLOBUS_COMPUTE_SECRET }}
+      run: |
+        export FUNCX_SDK_CLIENT_ID="$GLOBUS_ID"
+        export FUNCX_SDK_CLIENT_SECRET="$GLOBUS_SECRET"
+        if [ ${{matrix.machine}} == Perlmutter ]; then TARGET_ENDPOINT=0dd4499a-8d76-4977-bae9-841e4bb2f616; fi
+        if [ ${{matrix.machine}} == Frontier ]; then TARGET_ENDPOINT=d625c6cf-de7a-4228-ac44-56247a642fe0; fi
+        python test_on_system.py ${{ github.sha }} $TARGET_ENDPOINT
+
+    - name: print build log
+      working-directory: pumi-pic/.github/workflows
+      run: cat pumi-pic-test-result/Build.log
+
+    - name: print test summary
+      working-directory: pumi-pic/.github/workflows
+      run: cat pumi-pic-test-result/TestSummary.log
+
+    - name: print test log
+      working-directory: pumi-pic/.github/workflows
+      run: cat pumi-pic-test-result/LastTest.log
+
+    - name: check failed test
+      working-directory: pumi-pic/.github/workflows
+      run: if grep "Failed" pumi-pic-test-result/TestSummary.log; then return 1; fi
+
+    

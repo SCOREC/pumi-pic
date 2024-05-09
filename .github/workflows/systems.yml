@@ -1,8 +1,8 @@
 name: Systems
 on:
   schedule:
-    # Sunday 1:30 AM
-    - cron: '30 1 * * 0' 
+    # Sunday 4:30 UTC or 00:30 EDT
+    - cron: '30 4 * * 0' 
 
 concurrency:
   group: systems-pumi-pic
@@ -46,22 +46,18 @@ jobs:
         export GLOBUS_COMPUTE_CLIENT_SECRET="$GLOBUS_SECRET"
         if [ ${{matrix.machine}} == Perlmutter ]; then TARGET_ENDPOINT=0dd4499a-8d76-4977-bae9-841e4bb2f616; fi
         if [ ${{matrix.machine}} == Frontier ]; then TARGET_ENDPOINT=d625c6cf-de7a-4228-ac44-56247a642fe0; fi
-        python test_on_system.py ${{ github.sha }} $TARGET_ENDPOINT
+        python test_on_system.py ${{ github.event.repository.name }} ${{ github.sha }} $TARGET_ENDPOINT
 
     - name: print build log
       working-directory: pumi-pic/.github/workflows
       run: cat pumi-pic-test-result/Build.log
 
-    - name: print test summary
-      working-directory: pumi-pic/.github/workflows
-      run: cat pumi-pic-test-result/TestSummary.log
-
     - name: print test log
       working-directory: pumi-pic/.github/workflows
-      run: cat pumi-pic-test-result/LastTest.log
+      run: cat pumi-pic-test-result/Test.log
 
     - name: check failed test
       working-directory: pumi-pic/.github/workflows
-      run: if grep "Failed" pumi-pic-test-result/TestSummary.log; then return 1; fi
+      run: if grep "Failed" pumi-pic-test-result/Test.log; then return 1; fi
 
     

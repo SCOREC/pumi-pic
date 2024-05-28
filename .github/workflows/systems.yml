@@ -1,8 +1,8 @@
 name: Systems
 on:
   schedule:
-    # Sunday 4:30 UTC or 00:30 EDT
-    - cron: '30 4 * * 0' 
+    # Monday 4:30 UTC or 00:30 EDT
+    - cron: '30 4 * * 1' 
 
 concurrency:
   group: systems-pumi-pic
@@ -50,14 +50,14 @@ jobs:
 
     - name: print build log
       working-directory: pumi-pic/.github/workflows
-      run: cat pumi-pic-test-result/Build.log
+      run: cat pumi-pic-result/Build.log
 
     - name: print test log
       working-directory: pumi-pic/.github/workflows
-      run: cat pumi-pic-test-result/Test.log
+      run: cat pumi-pic-result/Test.log
 
     - name: check failed test
       working-directory: pumi-pic/.github/workflows
-      run: if grep "Failed" pumi-pic-test-result/Test.log; then return 1; fi
+      run: if grep "Failed" pumi-pic-result/Test.log; then return 1; fi
 
     

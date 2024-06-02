@@ -74,11 +74,11 @@ void performSorting(Kokkos::View<int*> arr, int sigma, const char* name) {
   thrustSigmaSort(thrustSorted, thrustIndex, arr.size(), arr, sigma);
   Kokkos::fence();
   printf("Thrust %s sort time: %.6f\n", name, t.seconds());
-  #endif
 
   Kokkos::parallel_for( arr.size(), KOKKOS_LAMBDA(const lid_t& i) {
     assert(thrustSorted(i) == kokkosSorted(i));
   });
+  #endif
 }
 
 int main(int argc, char** argv) {

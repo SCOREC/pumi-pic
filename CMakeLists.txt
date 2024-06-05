@@ -62,6 +62,7 @@ bob_public_dep(EnGPar)
 
 option(ENABLE_CABANA "Build with Cabana" OFF)
 if(ENABLE_CABANA)
+  enable_language(C)
   # bob package creation { no idea if this will work
   set(pumipic_USE_Cabana_DEFAULT ON)
   set(Cabana_PREFIX ${Cabana_PREFIX})

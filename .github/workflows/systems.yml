@@ -1,8 +1,8 @@
 name: Systems
 on:
   schedule:
-    # Monday 4:30 UTC or 00:30 EDT
-    - cron: '30 4 * * 1' 
+    # Monday 5:35 UTC or 01:35 EDT
+    - cron: '35 5 * * 1' 
 
 concurrency:
   group: systems-pumi-pic

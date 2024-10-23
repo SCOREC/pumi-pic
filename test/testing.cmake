@@ -1,3 +1,8 @@
+# unit tests
+mpi_test(test_find_exit_face 1
+  ./test_find_exit_face
+  ${TEST_DATA_DIR}/square2d4elem.msh)
+
 #simple tests
 mpi_test(barycentric_3 1 ./barycentric test1)
 

@@ -272,7 +272,7 @@ namespace pumipic {
                 continue;
               const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
               const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
-              const o::LO flip = isFaceFlipped(ei, ev2v, faceVerts);
+              const o::LO flip = !isFaceFlipped(ei, ev2v, faceVerts);
               const bool success = line_edge_2d(edge, orig, dest, xpts, tol, flip);
               if (success) {
                 lastExit[ptcl] = edge_id;

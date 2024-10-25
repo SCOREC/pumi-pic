@@ -25,8 +25,8 @@ e0  |                 *   4(0,0)        |  e5
     * Two rays are cast from the point x->o and y->o.
     * The expected exit faces are 7 and 2 respectively
 
-    x(2.520540, -3.193840) y(-3.03604, -3.193840)
-    o(-0.294799, 3.072990)
+    * x(-2.5, -3.0) -> o(0.0, 3.0)
+    * y(2.5, -3.0) -> o(0.0, 3.0)
 
     TODO It fails for the x->o ray and returns edge 2 instead of 7
 */
@@ -60,6 +60,10 @@ typedef MemberTypes<Vector3d, Vector3d, int> Particle;
 typedef ps::ParticleStructure<Particle> PS;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 
+OMEGA_H_DEVICE bool is_close(o::Real a, o::Real b, o::Real tol) {
+  return (Kokkos::abs(a - b) < tol);
+}
+
 OMEGA_H_DEVICE bool all_positive(const o::Vector<3>& a, Omega_h::Real tol = EPSILON) {
   auto isPos = 1;
   for (o::LO i = 0; i < a.size(); ++i) {
@@ -92,7 +96,7 @@ bool is_inside(o::Mesh &mesh, o::LO elem_id, const o::Vector<2> point) {
 }
 
 void print_2D_mesh_edges(o::Mesh &mesh) {
-  printf("------------------ Mesh Info ------------------\n");
+  printf("---------- Mesh Info -----------\n");
   const auto edge2node = mesh.ask_down(o::EDGE, o::VERT).ab2b;
   const auto coords = mesh.coords();
   // print edge nodes and their coordinates given an edge id
@@ -108,8 +112,6 @@ void print_2D_mesh_edges(o::Mesh &mesh) {
     printf("\n");
   };
   o::parallel_for(mesh.nedges(), print_edge_nodes);
-  // add a barrier to make sure all the prints are done
-  printf("------------------ Mesh Info ------------------\n");
 }
 
 bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool useBcc) {
@@ -170,49 +172,47 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   };
   ps::parallel_for(ptcls, setIDs);
 
-  // const o::Vector<3> start_point {0.0, 2.0, -3.0};
-  // const o::Vector<3> end_point {0.0, -4.0, -3.0};
-  const o::Vector<2> start_point{2.52054, -3.19384};
-  const o::Vector<2> start_point2{-3.03604, -3.193840};
-  const o::Vector<2> end_point{-0.294799, 3.07299};
-  if (!is_inside(mesh, 1, start_point)) {
-    printf("Error: Start point is not inside the expected element.\n");
+  // const o::Vector<3> x {0.0, 2.0, -3.0};
+  // const o::Vector<3> o {0.0, -4.0, -3.0};
+  const o::Vector<2> x{2.5, -3.0};
+  const o::Vector<2> y{-2.5, -3.0};
+  const o::Vector<2> o{0.0, 3.0};
+  if (!is_inside(mesh, 1, x)) {
+    printf("Error: x is not inside the expected element.\n");
     exit(1);
   }
-  if (!is_inside(mesh, 1, start_point2)) {
-    printf("Error: Start point 1 is not inside the expected element.\n");
+  if (!is_inside(mesh, 1, y)) {
+    printf("Error: y is not inside the expected element.\n");
     exit(1);
   }
-  if (is_inside(mesh, 1, end_point)) {
-    printf("Error: End point is incorrectly inside the expected element.\n");
+  if (is_inside(mesh, 1, o)) {
+    printf("Error: o is incorrectly inside the expected element.\n");
     exit(1);
   }
 
-  printf("Start point y: %f %f\n", start_point[0],
-         start_point[1]);
-  printf("Start point x: %f %f\n", start_point2[0],
-         start_point2[1]);
-  printf("End point: %f %f\n", end_point[0], end_point[1]);
+  printf("Start point x: %f %f\n", x[0], x[1]);
+  printf("Start point y: %f %f\n", y[0], y[1]);
+  printf("End point   o: %f %f\n", o[0], o[1]);
 
   auto set_initial_and_final_position =
       PS_LAMBDA(const int &e, const int &pid, const int &mask) {
     // see test calculation notebook
     if (pid == 0) {
-      particle_init_position(pid, 0) = start_point[0];
-      particle_init_position(pid, 1) = start_point[1];
+      particle_init_position(pid, 0) = x[0];
+      particle_init_position(pid, 1) = x[1];
       particle_init_position(pid, 2) = 0.0;
 
-      particle_final_position(pid, 0) = end_point[0];
-      particle_final_position(pid, 1) = end_point[1];
+      particle_final_position(pid, 0) = o[0];
+      particle_final_position(pid, 1) = o[1];
       particle_final_position(pid, 2) = 0.0;
     }
     if (pid == 1) {
-      particle_init_position(pid, 0) = start_point2[0];
-      particle_init_position(pid, 1) = start_point2[1];
+      particle_init_position(pid, 0) = y[0];
+      particle_init_position(pid, 1) = y[1];
       particle_init_position(pid, 2) = 0.0;
 
-      particle_final_position(pid, 0) = end_point[0];
-      particle_final_position(pid, 1) = end_point[1];
+      particle_final_position(pid, 0) = o[0];
+      particle_final_position(pid, 1) = o[1];
       particle_final_position(pid, 2) = 0.0;
     }
   };
@@ -220,9 +220,8 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   ps::parallel_for(ptcls, set_initial_and_final_position,
                    "set_initial_and_final_position");
 
-  // search for intersection
   const auto psCapacity = ptcls->capacity();
-  o::Write<o::Real> xpoints_d(3 * psCapacity, 0.0, "intersection points");
+  o::Write<o::Real> xpoints_d(2 * psCapacity, 0.0, "intersection points");
   o::Write<o::LO> xface_id(psCapacity, -1, "intersection faces");
 
   const auto elmArea = measure_elements_real(&mesh);
@@ -231,28 +230,64 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
       o::Write<o::Real>(2 * psCapacity, 0.0, "intersection points");
   o::Write<o::LO> lastExit(psCapacity, -1, "search_last_exit");
   o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
-
-  o::Write<o::LO> elem_ids_2d(psCapacity, 1, "elem_ids for find_exit_face");
+  o::Write<o::LO> elem_ids(psCapacity, 1, "elem_ids for find_exit_face");
 
   p::find_exit_face(*p_mesh, ptcls, particle_init_position,
-                    particle_final_position, elem_ids_2d, ptcl_done, elmArea,
+                    particle_final_position, elem_ids, ptcl_done, elmArea,
                     useBcc, lastExit, inter_points, tol);
 
   auto lastExit_h = o::HostRead<o::LO>(lastExit);
-  bool passed_right = (lastExit_h[0] == 7);
-  bool passed_left = (lastExit_h[1] == 2);
+  auto inter_points_h = o::HostRead<o::Real>(inter_points);
+  bool passed_xo = (lastExit_h[0] == 7);
+  bool passed_yo = (lastExit_h[1] == 2);
 
-  if (!passed_right) {
-    printf("ERROR: Expected exit face: 7, got %d\n", lastExit_h[0]);
+  if (!useBcc) {
+    o::Vector<2> expected_xpoint_xo{2.142857, -2.142857};
+    o::Vector<2> expected_xpoint_yo{-2.142857, -2.142857};
+
+    if (!is_close(inter_points_h[0], expected_xpoint_xo[0], 1e-4) ||
+        !is_close(inter_points_h[1], expected_xpoint_xo[1], 1e-4)) {
+      printf("ERROR: Expected intersection point for x->o : %f %f, got %f %f\n",
+             expected_xpoint_xo[0], expected_xpoint_xo[1], inter_points_h[0],
+             inter_points_h[1]);
+      passed_xo = false;
+    }
+
+    if (!is_close(inter_points_h[2], expected_xpoint_yo[0], 1e-4) ||
+        !is_close(inter_points_h[3], expected_xpoint_yo[1], 1e-4)) {
+      printf("ERROR: Expected intersection point for y->o : %f %f, got %f %f\n",
+             expected_xpoint_yo[0], expected_xpoint_yo[1], inter_points_h[2],
+             inter_points_h[3]);
+      passed_yo = false;
+    }
+
+    // do search mesh operation
+    bool is_found = p::search_mesh<Particle>(*p_mesh, ptcls, particle_init_position,
+                                              particle_final_position, pid_d, elem_ids,
+                                              true, xface_id, xpoints_d);
+    auto xface_id_h = o::HostRead<o::LO>(xface_id);
+    auto xpoints_d_h = o::HostRead<o::Real>(xpoints_d);
+    auto elem_ids_h = o::HostRead<o::LO>(elem_ids);
+    is_found = is_found && elem_ids_h[0] == 2 && elem_ids_h[1] == 2;
+    printf("Search mesh operation %s\n", is_found ? "succeeded" : "failed");
+    if (!is_found) {
+      printf("ERROR: Expected both rays to reach element %d but reached %d and %d\n",
+             2, elem_ids_h[0], elem_ids_h[1]);
+      passed_xo = false;
+    }
   }
-  if (!passed_left) {
-    printf("ERROR: Expected exit face: 2, got %d\n", lastExit_h[1]);
+
+  if (!passed_xo) {
+    printf("ERROR: Expected exit face for x->o : 7, got %d\n", lastExit_h[0]);
+  }
+  if (!passed_yo) {
+    printf("ERROR: Expected exit face for y->o : 2, got %d\n", lastExit_h[1]);
   }
 
   // clean up
   delete ptcls;
 
-  return passed_right && passed_left;
+  return passed_xo && passed_yo;
 }
 
 int main(int argc, char **argv) {
@@ -263,14 +298,18 @@ int main(int argc, char **argv) {
   }
   std::string mesh_fname = argv[1];
 
+  printf("\n\n-------------------- With BCC -------------------\n");
+
   bool passed_bcc = test_2D_intersection(mesh_fname, &lib, true);
   if (!passed_bcc) {
-    printf("ERROR: Test failed with BCC. Run in verbose mode to view details.\n");
+    printf("ERROR: Test failed **with** BCC.\n");
   }
+
+  printf("\n\n-------------------- Without BCC -------------------\n");
 
   bool passed_woBcc = test_2D_intersection(mesh_fname, &lib, false);
   if (!passed_woBcc) {
-    printf("ERROR: Test failed without BCC. Run in verbose mode to view details.\n");
+    printf("ERROR: Test failed **without** BCC.\n");
   }
 
   if (passed_bcc && passed_woBcc) {

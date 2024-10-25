@@ -119,8 +119,8 @@ bool test_line_edge_2d(const std::string mesh_fname, o::Library *lib) {
     exit(1);
   }
 
-  printf("Start point y: %f %f\n", x[0], x[1]);
-  printf("Start point x: %f %f\n", y[0], y[1]);
+  printf("Start point x: %f %f\n", x[0], x[1]);
+  printf("Start point y: %f %f\n", y[0], y[1]);
   printf("End point: %f %f\n", o[0], o[1]);
 
   const auto &coords = mesh.coords();
@@ -141,6 +141,8 @@ bool test_line_edge_2d(const std::string mesh_fname, o::Library *lib) {
     }
     const auto edge_nodes = o::gather_verts<2>(edge2node, edge_id);
     const auto edge_coords = o::gather_vectors<2, 2>(coords, edge_nodes);
+    printf("Edge %d coords: %d(%f %f) %d(%f %f)\n", edge_id, edge_nodes[0], edge_coords[0][0],
+           edge_coords[0][1], edge_nodes[1], edge_coords[1][0], edge_coords[1][1]);
     if (ray_id == 0) {
       bool success =
           pumipic::line_edge_2d(edge_coords, x, o, xpoint, 1e-6, false);

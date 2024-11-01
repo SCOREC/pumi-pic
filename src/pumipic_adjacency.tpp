@@ -198,6 +198,52 @@ namespace pumipic {
     //Find min and set exit face
     return min_index(bcc, 4);
   }
+
+  bool is_ccw_oriented(Omega_h::Mesh& mesh) { // TODO: Remove this function when the readgmsh in Omega_h is fixed
+  OMEGA_H_CHECK_PRINTF(mesh.dim() == 2, "ERROR: Mesh is not 2D. Found Dim = %d\n", mesh.dim());
+  const auto& face2nodes = mesh.ask_down(Omega_h::FACE, Omega_h::VERT).ab2b;
+  const auto& coords = mesh.coords();
+
+  Omega_h::LO ccw;
+  Kokkos::Sum<Omega_h::LO> sum_reducer(ccw);
+  auto find_ccw_face = KOKKOS_LAMBDA(const Omega_h::LO face, Omega_h::LO& ccw) {
+    const auto faceVerts = Omega_h::gather_verts<3>(face2nodes, face);
+    const auto faceCoords = Omega_h::gather_vectors<3, 2>(coords, faceVerts);
+
+    /*
+     * It calculates the orientation based on sign of the cross product of
+     * vector AB and AC if the vertices are given as A, B, C.
+     *                   C (x3, y3)
+     *                   /\
+     *                  /  \
+     *                 /    \
+     *                /      \
+     *               ↗        \
+     *              /          \
+     *             /            \
+     *            /              \
+     *  A(x1,y1) /--------→-------\ B (x2, y2)
+     *
+     * Vector AB = (x2 - x1, y2 - y1)
+     * Vector AC = (x3 - x1, y3 - y1)
+     * Cross product = AB x AC
+     *               = - (y2 - y1) * (x3 - x1) + (x2 - x1) * (y3 - y1)
+     */
+
+    const Omega_h::LO local_ccw =
+        -(faceCoords[1][1] - faceCoords[0][1]) *
+                (faceCoords[2][0] - faceCoords[1][0]) +
+            (faceCoords[2][1] - faceCoords[1][1]) *
+                (faceCoords[1][0] - faceCoords[0][0]) >
+        0;
+    sum_reducer.join(ccw, local_ccw);
+  };
+  Kokkos::parallel_reduce("find_ccw", mesh.nfaces(), find_ccw_face, sum_reducer);
+  OMEGA_H_CHECK_PRINTF(ccw == mesh.nfaces() || ccw == 0,
+      "Expected 0 or %d but got ccw = %d\n", mesh.nfaces(), ccw);
+
+  return bool(ccw / mesh.nfaces());
+}
   
 
   template <class ParticleType, typename Segment3d>
@@ -211,6 +257,11 @@ namespace pumipic {
     const auto coords = mesh.coords();
     const auto elm2faces = mesh.ask_down(dim, dim-1);
     const auto elmDown = elm2faces.ab2b;
+
+    bool ccw=true; 
+    if (dim == 2) { // TODO: Remove this check when the readgmsh in Omega_h is fixed
+      ccw = is_ccw_oriented(mesh);
+    }
 
     if (useBcc) {
       if (dim == 2) {
@@ -272,11 +323,13 @@ namespace pumipic {
                 continue;
               const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
               const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
-              const o::LO flip = !isFaceFlipped(ei, ev2v, faceVerts);
+              o::LO node_flip = isFaceFlipped(ei, ev2v, faceVerts);
+              const o::LO flip = (ccw) ? node_flip : !node_flip;
               const bool success = line_edge_2d(edge, orig, dest, xpts, tol, flip);
               if (success) {
                 lastExit[ptcl] = edge_id;
                 xPoints[2*ptcl] = xpts[0]; xPoints[2*ptcl+1] = xpts[1];
+                //printf("[fefInfo] Particle %d intersected with edge %d at (%f %f)\n", ptcl, edge_id, xpts[0], xpts[1]);
               }
             }
             ptcl_done[ptcl] = (lastExit[ptcl] == -1);

@@ -1,4 +1,5 @@
 #include "pumipic_adjacency.hpp"
+#include "pumipic_adjacency.tpp"
 #include "pumipic_kktypes.hpp"
 #include "pumipic_library.hpp"
 #include "pumipic_mesh.hpp"
@@ -175,6 +176,19 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   bool passed_xo = (lastExit_h[0] == expected_faces[0]);
   bool passed_yo = (lastExit_h[1] == expected_faces[1]);
 
+  p::set_new_element(*p_mesh, ptcls, elem_ids, ptcl_done, lastExit);
+  auto elem_ids_h = o::HostRead<o::LO>(elem_ids);
+  o::Few<o::LO, 2> expected_new_elem_ids {3, 1};
+  bool passed_xo_new_elem = (elem_ids_h[0] == expected_new_elem_ids[0]);
+  bool passed_yo_new_elem = (elem_ids_h[1] == expected_new_elem_ids[1]);
+
+  if (!passed_xo_new_elem || !passed_yo_new_elem) {
+    printf("ERROR: Expected new element for x->o : %d, got %d\n", expected_new_elem_ids[0], elem_ids_h[0]);
+    printf("ERROR: Expected new element for y->o : %d, got %d\n", expected_new_elem_ids[1], elem_ids_h[1]);
+  } else {
+    printf("x->o and y->o moved to the correct new element\n");
+  }
+
   if (!passed_xo) {
     printf("ERROR: Expected exit face for x->o : %d, got %d\n", expected_faces[0], lastExit_h[0]);
   } else {
@@ -219,7 +233,7 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   // clean up
   delete ptcls;
 
-  return passed_xo && passed_yo;
+  return passed_xo && passed_yo && passed_xo_new_elem && passed_yo_new_elem;
 }
 
 int main(int argc, char **argv) {

@@ -11,7 +11,7 @@ jobs:
     secrets: inherit
     with:
       machine: "perlmutter"
-  perlmutter-test:
+  frontier-test:
     uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
     secrets: inherit
     with:

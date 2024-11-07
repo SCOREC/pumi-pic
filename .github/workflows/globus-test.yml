@@ -15,4 +15,4 @@ jobs:
     uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
     secrets: inherit
     with:
-      machine: "frontier"
+      machine: "frontier" 

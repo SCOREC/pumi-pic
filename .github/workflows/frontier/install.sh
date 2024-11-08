@@ -3,7 +3,12 @@
 branch=$1
 
 cd /lustre/orion/phy122/scratch/castia5/globus-compute/pumi-pic-test
-source env.sh
+
+module load rocm
+module load craype-accel-amd-gfx90a
+module load cray-mpich
+export CRAYPE_LINK_TYPE=dynamic
+export MPICH_GPU_SUPPORT_ENABLED=1
 
 # # Kokkos
 # git clone -b 4.1.00 git@github.com:Kokkos/kokkos.git

@@ -7,11 +7,11 @@ on:
 
 jobs:
 
-  # perlmutter-test:
-  #   uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
-  #   secrets: inherit
-  #   with:
-  #     machine: "perlmutter"
+  perlmutter-test:
+    uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
+    secrets: inherit
+    with:
+      machine: "perlmutter"
 
   frontier-test:
     uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main

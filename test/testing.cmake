@@ -1,3 +1,24 @@
+# unit tests
+mpi_test(test_find_exit_face 1
+  ./test_find_exit_face
+  ${TEST_DATA_DIR}/square2d4elem.msh)
+
+mpi_test(test_find_exit_face_3D 1
+  ./test_find_exit_face_3D
+  ${TEST_DATA_DIR}/cube6tet.msh)
+
+mpi_test(test_line_edge_2d 1
+  ./test_line_edge_2d
+  ${TEST_DATA_DIR}/square2d4elem.msh)
+
+mpi_test(test_moller_trumbore_intersect 1
+  ./test_moller_trumbore_intersect
+  ${TEST_DATA_DIR}/cube6tet.msh)
+
+mpi_test(test_search_mesh3d 1
+  ./test_search_mesh3d
+  ${TEST_DATA_DIR}/cube6tet.msh)
+
 #simple tests
 mpi_test(barycentric_3 1 ./barycentric test1)
 

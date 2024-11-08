@@ -1,0 +1,19 @@
+name: Globus-Systems
+on:
+  schedule:
+    # Monday 5:35 UTC or 01:35 EDT
+    - cron: '35 5 * * 1'
+
+jobs:
+
+  perlmutter-test:
+    uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
+    secrets: inherit
+    with:
+      machine: "perlmutter"
+
+  frontier-test:
+    uses: SCOREC/github-actions/.github/workflows/globus-test.yml@main
+    secrets: inherit
+    with:
+      machine: "frontier" 

@@ -395,16 +395,25 @@ namespace pumipic {
     printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }
-  
-  template <class ParticleType, typename Segment3d, typename SegmentInt>
-  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+
+  template <class ParticleType, typename Segment3d, typename SegmentInt, typename Func>
+  bool particle_search(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
                    Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
                    o::Write<o::LO>& elem_ids,
                    bool requireIntersection,
                    o::Write<o::LO>& inter_faces,
                    o::Write<o::Real>& inter_points,
                    int looplimit,
-                   int debug) {
+                   bool debug,
+                   Func& func) {
+    static_assert(
+        std::is_invocable_r_v<
+            void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
+            o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &,
+            o::Write<o::Real> &, o::Write<o::LO> &, bool,
+            Segment3d, Segment3d>,
+        "Functional must accept <mesh> <ps> <elem_ids> <inter_faces> <lastExit> <inter_points> <ptcl_done> <requireIntersection> <x_ps_orig> <x_ps_tgt>\n");
+
     //Initialize timer
     const auto btime = pumipic_prebarrier();
     Kokkos::Profiling::pushRegion("pumipic_search_mesh");
@@ -489,12 +498,7 @@ namespace pumipic {
       //Find intersection face
       find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
       //Check if intersection face is exposed
-      check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, side_is_exposed,
-                               requireIntersection, inter_faces);
-      
-      //Move to next element
-      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
-
+      func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, requireIntersection, x_ps_orig, x_ps_tgt);
       //Check if all particles are found
       found = true;
       o::LOs ptcl_done_r(ptcl_done);
@@ -543,6 +547,43 @@ namespace pumipic {
     PrintAdditionalTimeInfo(buffer, 1);
     Kokkos::Profiling::popRegion();
     return found;
+  }
+
+  template <typename ParticleType, typename Segment3d>
+  struct NativeParticleHandlerAtElemBdry {
+    NativeParticleHandlerAtElemBdry () {}
+
+    void operator()(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                    o::Write<o::LO>& elem_ids, o::Write<o::LO>& inter_faces,
+                    o::Write<o::LO>& lastExit, o::Write<o::Real>& inter_points,
+                    o::Write<o::LO>& ptcl_done,
+                    bool requireIntersection,
+                    Segment3d x_ps_orig,
+                    Segment3d x_ps_tgt) const {
+      const auto side_is_exposed = mark_exposed_sides(&mesh);
+      // Check if intersection face is exposed
+      check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids,
+                               ptcl_done, lastExit, side_is_exposed,
+                               requireIntersection, inter_faces);
+
+      // Move to next element
+      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+    }
+  };
+
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                   Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
+                   o::Write<o::LO>& elem_ids,
+                   bool requireIntersection,
+                   o::Write<o::LO>& inter_faces,
+                   o::Write<o::Real>& inter_points,
+                   int looplimit,
+                   int debug) {
+    NativeParticleHandlerAtElemBdry<ParticleType, Segment3d> native_handler;
+
+    return particle_search(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
+                           inter_faces, inter_points, looplimit, debug, native_handler);
   }
 }
 #endif

@@ -1,6 +1,8 @@
 #ifndef PUMIPIC_ADJACENCY_NEW_HPP
 #define PUMIPIC_ADJACENCY_NEW_HPP
 
+#include <Omega_h_array.hpp>
+#include <Omega_h_defines.hpp>
 #include <iostream>
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
@@ -410,9 +412,9 @@ namespace pumipic {
         std::is_invocable_r_v<
             void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
             o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &,
-            o::Write<o::Real> &, o::Write<o::LO> &, bool,
+            o::Write<o::Real> &, o::Write<o::LO> &,
             Segment3d, Segment3d>,
-        "Functional must accept <mesh> <ps> <elem_ids> <inter_faces> <lastExit> <inter_points> <ptcl_done> <requireIntersection> <x_ps_orig> <x_ps_tgt>\n");
+        "Functional must accept <mesh> <ps> <elem_ids> <inter_faces> <lastExit> <inter_points> <ptcl_done> <x_ps_orig> <x_ps_tgt>\n");
 
     //Initialize timer
     const auto btime = pumipic_prebarrier();
@@ -498,7 +500,11 @@ namespace pumipic {
       //Find intersection face
       find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
       //Check if intersection face is exposed
-      func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, requireIntersection, x_ps_orig, x_ps_tgt);
+      func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
+      
+      // Move to next element
+      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+
       //Check if all particles are found
       found = true;
       o::LOs ptcl_done_r(ptcl_done);
@@ -550,25 +556,27 @@ namespace pumipic {
   }
 
   template <typename ParticleType, typename Segment3d>
-  struct NativeParticleHandlerAtElemBdry {
-    NativeParticleHandlerAtElemBdry () {}
+  struct RemoveParticleOnGeometricModelExit {
+    RemoveParticleOnGeometricModelExit(o::Mesh &mesh, bool requireIntersection)
+        : requireIntersection_(requireIntersection) {
+      side_is_exposed_ = mark_exposed_sides(&mesh);
+    }
 
     void operator()(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
                     o::Write<o::LO>& elem_ids, o::Write<o::LO>& inter_faces,
                     o::Write<o::LO>& lastExit, o::Write<o::Real>& inter_points,
                     o::Write<o::LO>& ptcl_done,
-                    bool requireIntersection,
                     Segment3d x_ps_orig,
                     Segment3d x_ps_tgt) const {
-      const auto side_is_exposed = mark_exposed_sides(&mesh);
       // Check if intersection face is exposed
       check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids,
-                               ptcl_done, lastExit, side_is_exposed,
-                               requireIntersection, inter_faces);
-
-      // Move to next element
-      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+                               ptcl_done, lastExit, side_is_exposed_,
+                               requireIntersection_, inter_faces);
     }
+
+    private:
+    bool requireIntersection_;
+    o::Bytes side_is_exposed_;
   };
 
   template <class ParticleType, typename Segment3d, typename SegmentInt>
@@ -580,7 +588,7 @@ namespace pumipic {
                    o::Write<o::Real>& inter_points,
                    int looplimit,
                    int debug) {
-    NativeParticleHandlerAtElemBdry<ParticleType, Segment3d> native_handler;
+    RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
 
     return particle_search(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
                            inter_faces, inter_points, looplimit, debug, native_handler);

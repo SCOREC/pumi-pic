@@ -281,7 +281,7 @@ namespace {
     Omega_h::Write<Omega_h::LO> selfcount(1,0,"selfcount");
     int max_cids = class_owners.size();
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(m.comm()->get_impl(), &rank);
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       if (c_id < 0)

@@ -321,15 +321,15 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     o::Write<o::Real>& xpoints_d, // (out) particle-boundary intersection points
     o::Write<o::LO>& xface_d, // (out) face ids of boundary-intersecting points
     int looplimit=0, int debug=0) {
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh3d");
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_Init");
 
   Kokkos::Timer timer;
   const o::Real tol = 1.0e-20;
   int rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
+  MPI_Comm_size(mesh.comm()->get_impl(), &comm_size);
 
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_omegah");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -1018,13 +1018,13 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     int looplimit=0,  // (in) [optional] number of loops before giving up
                     bool debug = false) {
 
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
   Kokkos::Profiling::pushRegion("pumipic_search_mesh_2d");
   Kokkos::Timer timer;
 
   int rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
+  MPI_Comm_rank(mesh.comm()->get_impl(),&rank);
+  MPI_Comm_size(mesh.comm()->get_impl(),&comm_size);
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
   const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);

@@ -8,10 +8,10 @@ void pumipic_enable_prebarrier() {
   pumipic_prebarrier_enabled = true;
 }
 
-double pumipic_prebarrier() {
+double pumipic_prebarrier(MPI_Comm mpi_comm) {
   if(pumipic_prebarrier_enabled) {
     Kokkos::Timer timer;
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(mpi_comm);
     return timer.seconds();
   } else {
     return 0.0;

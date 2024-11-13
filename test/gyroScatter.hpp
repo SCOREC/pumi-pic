@@ -166,7 +166,7 @@ void createGyroRingMappings(o::Mesh* mesh, o::LOs& forward_map,
 }
 
 void gyroScatter(o::Mesh* mesh, PS* ptcls, o::LOs v2v, std::string scatterTagName) {
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(MPI_COMM_WORLD);
   Kokkos::Timer timer;
   Kokkos::Profiling::pushRegion("xgcm_gyroScatter");
   int rank, comm_size;
@@ -230,7 +230,7 @@ void gyroScatter(o::Mesh* mesh, PS* ptcls, o::LOs v2v, std::string scatterTagNam
 
 void gyroSync(p::Mesh& picparts, const std::string& fwdTagName,
               const std::string& bkwdTagName, const std::string& syncTagName) {
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(MPI_COMM_WORLD);
   Kokkos::Timer timer;
   Kokkos::Profiling::pushRegion("xgcm_gyroSync");
   int rank, comm_size;

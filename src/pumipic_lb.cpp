@@ -218,9 +218,9 @@ namespace pumipic {
       }
     }
     int comm_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    MPI_Comm_size(comm->get_impl(), &comm_size);
     max_sbar = start_num_sbar;
-    MPI_Bcast(&max_sbar, 1, MPI_INT, comm_size - 1, MPI_COMM_WORLD);
+    MPI_Bcast(&max_sbar, 1, MPI_INT, comm_size - 1, comm->get_impl());
 
     //Communicate local numbers to all buffers
 

@@ -76,7 +76,7 @@ namespace pumipic {
     const auto elm2verts = mesh.ask_elem_verts();
     const auto coords = mesh.coords();
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
     Omega_h::Write<o::LO> numNotInElem(1, 0, "search_numNotInElem");
     if (dim == 2) {
       auto checkParent = PS_LAMBDA(const int e, const int pid, const int mask) {
@@ -406,7 +406,7 @@ namespace pumipic {
                    int looplimit,
                    int debug) {
     //Initialize timer
-    const auto btime = pumipic_prebarrier();
+    const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
     Kokkos::Profiling::pushRegion("pumipic_search_mesh");
     Kokkos::Timer timer;
 
@@ -421,7 +421,7 @@ namespace pumipic {
     o::Real tol = compute_tolerance_from_area(elmArea);
     
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
     
     const auto dim = mesh.dim();
     const auto edges2faces = mesh.ask_up(dim-1, dim);

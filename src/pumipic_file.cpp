@@ -187,7 +187,7 @@ namespace pumipic {
     mesh->commptr = comm;
 
     int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_rank(comm->get_impl(), &world_rank);
     if (!world_rank) {
       char buffer[1024];
       char* ptr = buffer + sprintf(buffer, "PumiPIC Mesh read <v e f");

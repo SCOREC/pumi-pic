@@ -150,12 +150,14 @@ namespace pumipic {
   OMEGA_H_DEVICE bool moller_trumbore_line_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
                                                     const o::Vector<3>& orig, const o::Vector<3>& dest,
                                                     o::Vector<3>& xpoint, const o::Real tol, const o::LO flip,
-                                                    o::Real& dproj, o::Real& closeness) {
+                                                    o::Real& dproj, o::Real& closeness, bool is_line_seg=false) {
     const o::LO vtx1 = 2 - flip;
     const o::LO vtx2 = flip + 1;
     const o::Vector<3> edge1 = faceVerts[vtx1] - faceVerts[0];
     const o::Vector<3> edge2 = faceVerts[vtx2] - faceVerts[0];
-    const o::Vector<3> dir = o::normalize(dest - orig);
+    const o::Vector<3> displacement = dest-orig;
+    const o::Real seg_length = o::norm(displacement);
+    const o::Vector<3> dir = displacement/seg_length;
     const o::Vector<3> faceNorm = o::cross(edge2, edge1);
     const o::Vector<3> pvec = o::cross(dir, edge2);
     dproj = o::inner_product(dir, faceNorm);
@@ -169,7 +171,12 @@ namespace pumipic {
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     xpoint = orig + dir * t;
     closeness = Kokkos::max(Kokkos::max(Kokkos::min(Kokkos::fabs(u), Kokkos::fabs(1 - u)), Kokkos::min(Kokkos::fabs(v), Kokkos::fabs(1 - v))), Kokkos::min(Kokkos::fabs(u + v), Kokkos::fabs(1 - u - v)));
-    return  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
+    bool ray_intersects =  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
+
+    if (is_line_seg) {
+      return ray_intersects && t <= seg_length + tol;
+    }
+    return ray_intersects;
   }
 
   //Simple 2d line segment intersection routine

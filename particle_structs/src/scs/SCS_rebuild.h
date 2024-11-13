@@ -125,9 +125,6 @@ namespace pumipic {
                                                  MTVs new_particles) {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_rebuild");
-    int comm_rank, comm_size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
     Kokkos::Timer timer;
 

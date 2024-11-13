@@ -67,7 +67,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
              lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements, lid_t num_particles,
              kkLidView particles_per_element, kkGidView element_gids,
              kkLidView particle_elements = kkLidView(),
-             MTVs particle_info = NULL);
+             MTVs particle_info = NULL,
+             MPI_Comm mpi_comm = MPI_COMM_WORLD);
   SellCSigma(SCS_Input<DataTypes, MemSpace>&);
   ~SellCSigma();
 
@@ -137,7 +138,7 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   void printFormat(const char* prefix = "") const;
 
   //Prints metrics of the SCS
-  void printMetrics() const;
+  void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const;
 
   //Do not call these functions:
   int chooseChunkHeight(int maxC, kkLidView ptcls_per_elem);
@@ -217,7 +218,8 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   void construct(kkLidView ptcls_per_elem,
                  kkGidView element_gids,
                  kkLidView particle_elements,
-                 MTVs particle_info);
+                 MTVs particle_info,
+                 MPI_Comm mpi_comm);
   void destroy();
 
   SellCSigma(lid_t Cmax) : ParticleStructure<DataTypes, MemSpace>(), policy(PolicyType(1000,Cmax)) {};
@@ -228,13 +230,14 @@ template<class DataTypes, typename MemSpace>
 void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
                                                 kkGidView element_gids,
                                                 kkLidView particle_elements,
-                                                MTVs particle_info) {
+                                                MTVs particle_info,
+                                                MPI_Comm mpi_comm) {
   Kokkos::Profiling::pushRegion("scs_construction");
   tryShuffling = true;
   int comm_size;
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  MPI_Comm_size(mpi_comm, &comm_size);
   int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_rank(mpi_comm, &comm_rank);
 
   C_max = policy.team_size();
   C_ = chooseChunkHeight(C_max, ptcls_per_elem);
@@ -287,7 +290,8 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
                                             lid_t np, kkLidView ptcls_per_elem,
                                             kkGidView element_gids,
                                             kkLidView particle_elements,
-                                            MTVs particle_info) :
+                                            MTVs particle_info,
+                                            MPI_Comm mpi_comm) :
   ParticleStructure<DataTypes, MemSpace>(), policy(p), element_gid_to_lid(ne) {
   //Set variables
   sigma = sig;
@@ -299,7 +303,7 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(PolicyType& p, lid_t sig, lid_t v, l
   minimize_size = 0.8;
   always_realloc = false;
   pad_strat = PAD_EVENLY;
-  construct(ptcls_per_elem, element_gids, particle_elements, particle_info);
+  construct(ptcls_per_elem, element_gids, particle_elements, particle_info, mpi_comm);
 }
 
 template<class DataTypes, typename MemSpace>
@@ -315,7 +319,7 @@ SellCSigma<DataTypes, MemSpace>::SellCSigma(Input_T& input) :
   minimize_size = input.minimize_size;
   pad_strat = input.padding_strat;
   always_realloc = input.always_realloc;
-  construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
+  construct(input.ppe, input.e_gids, input.particle_elms, input.p_info, input.mpi_comm);
 }
 
 template <typename Space>
@@ -459,7 +463,7 @@ void SellCSigma<DataTypes,MemSpace>::printFormat(const char* prefix) const {
 }
 
 template <class DataTypes, typename MemSpace>
-void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
+void SellCSigma<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
 
   //Gather metrics
   kkLidView padded_cells("padded_cells", 1);
@@ -495,7 +499,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics() const {
   lid_t num_padded_slices = getLastValue(padded_slices);
 
   int comm_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+  MPI_Comm_rank(mpi_comm, &comm_rank);
 
   char buffer[1000];
   char* ptr = buffer;

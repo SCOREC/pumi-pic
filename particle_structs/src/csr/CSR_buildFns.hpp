@@ -53,11 +53,11 @@ namespace pumipic {
 
   template<class DataTypes, typename MemSpace>
   void CSR<DataTypes,MemSpace>::construct(kkLidView ptcls_per_elem, kkGidView element_gids,
-                                          kkLidView particle_elements, MTVs particle_info){
+                                          kkLidView particle_elements, MTVs particle_info, MPI_Comm mpi_comm){
     Kokkos::Profiling::pushRegion("csr_construction");
 
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
 
     if(!comm_rank)
       fprintf(stderr, "Building CSR\n");

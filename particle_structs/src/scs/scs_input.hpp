@@ -21,7 +21,7 @@ namespace pumipic {
     typedef Kokkos::TeamPolicy<typename MemSpace::execution_space> PolicyType;
     SCS_Input(PolicyType& p, lid_t sigma, lid_t vertical_chunk_size, lid_t num_elements,
               lid_t num_particles, kkLidView particles_per_elements, kkGidView element_gids,
-              kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL);
+              kkLidView particle_elements = kkLidView(), MTVs particle_info = NULL, MPI_Comm mpi_comm = MPI_COMM_WORLD);
 
     //True - reallocate memory every time, false only reallocate if needed
     bool always_realloc = false;
@@ -47,14 +47,15 @@ namespace pumipic {
     kkGidView e_gids;
     kkLidView particle_elms;
     MTVs p_info;
+    MPI_Comm mpi_comm;
   };
 
   template <class DataTypes, typename MemSpace>
   SCS_Input<DataTypes, MemSpace>::SCS_Input(PolicyType& p, lid_t sigma, lid_t V_, lid_t ne_,
                                             lid_t np_, kkLidView ppe_, kkGidView eg,
-                                            kkLidView pes, MTVs info) :
+                                            kkLidView pes, MTVs info, MPI_Comm comm) :
     policy(p), sig(sigma), V(V_), ne(ne_), np(np_), ppe(ppe_), e_gids(eg),
-    particle_elms(pes), p_info(info) {
+    particle_elms(pes), p_info(info), mpi_comm(comm) {
     shuffle_padding = 0.1;
     extra_padding = 0.05;
     padding_strat = PAD_EVENLY;

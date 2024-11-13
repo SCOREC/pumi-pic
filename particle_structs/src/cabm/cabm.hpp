@@ -43,7 +43,8 @@ namespace pumipic {
           kkLidView particles_per_element,
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
-          MTVs particle_info = NULL);
+          MTVs particle_info = NULL,
+          MPI_Comm mpi_comm = MPI_COMM_WORLD);
     CabM(CabM_Input<DataTypes, MemSpace>&);
     ~CabM();
 
@@ -72,7 +73,7 @@ namespace pumipic {
     template <typename FunctionType>
     void parallel_for(FunctionType& fn, std::string s="");
 
-    void printMetrics() const;
+    void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const;
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
@@ -145,7 +146,8 @@ namespace pumipic {
                                    kkLidView particles_per_element,
                                    kkGidView element_gids,
                                    kkLidView particle_elements, // optional
-                                   MTVs particle_info) :        // optional
+                                   MTVs particle_info, // optional
+                                   MPI_Comm mpi_comm) : // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
@@ -156,7 +158,7 @@ namespace pumipic {
     num_rows = num_elems;
     num_ptcls = num_particles;
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
     if(!comm_rank)
       fprintf(stderr, "building CabM\n");
 
@@ -198,7 +200,7 @@ namespace pumipic {
     assert(num_elems == input.ppe.size());
 
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(input.mpi_comm, &comm_rank);
     if(!comm_rank)
       fprintf(stderr, "building CabM for %s\n", name.c_str());
     
@@ -264,7 +266,7 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  void CabM<DataTypes, MemSpace>::printMetrics() const {
+  void CabM<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
     // Sum number of empty cells
     auto mask = Cabana::slice<CM_DT::size-1>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
@@ -287,7 +289,7 @@ namespace pumipic {
     lid_t num_padded = getLastValue(padded_cells);
 
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
     
     char buffer[1000];
     char* ptr = buffer;
@@ -469,7 +471,7 @@ namespace pumipic {
     template <typename FunctionType>
     void parallel_for(FunctionType& fn, std::string s="") {reportError();}
 
-    void printMetrics() const {reportError();}
+    void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const {reportError();}
     void printFormat(const char* prefix) const {reportError();}
 
     template <class MSpace>

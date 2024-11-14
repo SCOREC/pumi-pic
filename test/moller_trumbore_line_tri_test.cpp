@@ -89,8 +89,16 @@ bool moller_trumbore_line_segment_intersection_test(
       o::Real closeness;
       o::LO flip = pumipic::isFaceFlipped(i, face_nodes, tet_nodes);
 
-      bool success = success = pumipic::moller_trumbore_line_triangle(
-          face_coords, o, z, xpoint, tol, flip, dprodj, closeness, is_line_seg);
+      bool success;
+      o::Real t;
+      if (is_line_seg) {
+        success =
+            pumipic::line_segment_intersects_triangle(
+                face_coords, o, z, xpoint, tol, flip, dprodj, closeness, t);
+      } else {
+        success = pumipic::ray_intersects_triangle(
+            face_coords, o, z, xpoint, tol, flip, dprodj, closeness, t);
+      }
 
       xpoints[i * 3 + 0] = xpoint[0];
       xpoints[i * 3 + 1] = xpoint[1];
@@ -98,11 +106,11 @@ bool moller_trumbore_line_segment_intersection_test(
       face_intersected[i] = success;
 
       printf("INFO: ray o->z %s face %d(%d (%f %f %f),%d (%f %f %f),%d (%f %f %f)) at point (%f, %f, "
-             "%f) with dprodj %f and closeness %f\n", (success) ? "intersected" : "did not intersect",
+             "%f) with dprodj %f and closeness %f t %f\n", (success) ? "intersected" : "did not intersect",
              face_id, face_nodes[0], face_coords[0][0], face_coords[0][1], face_coords[0][2],
                 face_nodes[1], face_coords[1][0], face_coords[1][1], face_coords[1][2],
                 face_nodes[2], face_coords[2][0], face_coords[2][1], face_coords[2][2],
-                xpoint[0], xpoint[1], xpoint[2], dprodj, closeness);
+                xpoint[0], xpoint[1], xpoint[2], dprodj, closeness, t);
     } // for faces
   };
   o::parallel_for(1, get_intersections, "get_intersections_run");

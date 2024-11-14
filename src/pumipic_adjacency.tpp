@@ -1,6 +1,7 @@
 #ifndef PUMIPIC_ADJACENCY_NEW_HPP
 #define PUMIPIC_ADJACENCY_NEW_HPP
 
+#include <Omega_h_macros.h>
 #include <iostream>
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
@@ -142,15 +143,15 @@ namespace pumipic {
     return numNotInElem_h[0];
   }
 
-  //Moller Trumbore line triangle intersection method
+  // Uses Moller Trumbore line triangle intersection method
   /*
     Möller and Trumbore, « Fast, Minimum Storage Ray-Triangle Intersection », Journal of Graphics Tools, vol. 2,‎ 1997, p. 21–28
     https://cadxfem.org/inf/Fast%20MinimumStorage%20RayTriangle%20Intersection.pdf
    */
-  OMEGA_H_DEVICE bool moller_trumbore_line_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
+  OMEGA_H_DEVICE bool ray_intersects_triangle(const o::Few<o::Vector<3>, 3>& faceVerts,
                                                     const o::Vector<3>& orig, const o::Vector<3>& dest,
                                                     o::Vector<3>& xpoint, const o::Real tol, const o::LO flip,
-                                                    o::Real& dproj, o::Real& closeness, bool is_line_seg=false) {
+                                                    o::Real& dproj, o::Real& closeness, o::Real& intersection_parametric_coord) {
     const o::LO vtx1 = 2 - flip;
     const o::LO vtx2 = flip + 1;
     const o::Vector<3> edge1 = faceVerts[vtx1] - faceVerts[0];
@@ -169,14 +170,33 @@ namespace pumipic {
     const o::Real v = invdet * o::inner_product(dir, qvec);
     //t is the distance the intersection point is along the particle path
     const o::Real t = invdet * o::inner_product(edge2, qvec);
+    intersection_parametric_coord = t/seg_length;
     xpoint = orig + dir * t;
     closeness = Kokkos::max(Kokkos::max(Kokkos::min(Kokkos::fabs(u), Kokkos::fabs(1 - u)), Kokkos::min(Kokkos::fabs(v), Kokkos::fabs(1 - v))), Kokkos::min(Kokkos::fabs(u + v), Kokkos::fabs(1 - u - v)));
-    bool ray_intersects =  (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
+    return (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
+  }
 
-    if (is_line_seg) {
-      return ray_intersects && t <= seg_length + tol;
-    }
-    return ray_intersects;
+  [[deprecated("[Deprecated] Consider using ray_intersects_triangle or "
+               "line_segment_intersects_triangle instead.")]]
+  OMEGA_H_DEVICE bool moller_trumbore_line_triangle(
+      const o::Few<o::Vector<3>, 3> &faceVerts, const o::Vector<3> &orig,
+      const o::Vector<3> &dest, o::Vector<3> &xpoint, const o::Real tol,
+      const o::LO flip, o::Real &dproj, o::Real &closeness) {
+    o::Real intersection_parametric_coord;
+    return ray_intersects_triangle(faceVerts, orig, dest, xpoint, tol, flip,
+                                   dproj, closeness,
+                                   intersection_parametric_coord);
+  }
+
+  OMEGA_H_DEVICE bool line_segment_intersects_triangle(
+      const o::Few<o::Vector<3>, 3> &faceVerts, const o::Vector<3> &orig,
+      const o::Vector<3> &dest, o::Vector<3> &xpoint, const o::Real tol,
+      const o::LO flip, o::Real &dproj, o::Real &closeness,
+      o::Real &intersection_parametric_coord) {
+    bool ray_intersects =
+        ray_intersects_triangle(faceVerts, orig, dest, xpoint, tol, flip, dproj,
+                                closeness, intersection_parametric_coord);
+    return ray_intersects && intersection_parametric_coord <= 1 + tol;
   }
 
   //Simple 2d line segment intersection routine

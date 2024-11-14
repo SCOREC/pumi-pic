@@ -24,6 +24,12 @@ set(SOURCES
   pumipic_profiling.cpp
   pumipic_file.cpp
 )
+
+configure_file(
+  pumipic_version.hpp.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/pumipic_version.hpp
+)
+
 add_library(pumipic-core ${SOURCES})
 target_include_directories(pumipic-core INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

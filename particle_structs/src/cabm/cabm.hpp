@@ -306,7 +306,7 @@ namespace pumipic {
     ptr += sprintf(ptr, "Empty Elements <Tot %%> %d %.3f%%\n", num_empty_elements,
                    num_empty_elements * 100.0 / num_elems);
 
-    printf("%s\n", buffer);
+    pPrintInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>

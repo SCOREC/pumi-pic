@@ -226,7 +226,7 @@ namespace pumipic {
     ptr += sprintf(ptr, "Number of Elements %d, Number of Particles %d, Capacity %d\n",
                    num_elems, num_ptcls, capacity_);
     
-    printf("%s\n", buffer);
+    pPrintInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>

@@ -95,7 +95,7 @@ namespace pumipic {
     bufferMethod = bufferMethod_;
     if (bufferMethod == NONE) {
       if (!mesh.comm()->rank())
-        printf("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
+        pPrintInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
       bufferMethod=MINIMUM;
     }
     safeMethod = safeMethod_;
@@ -121,7 +121,7 @@ namespace pumipic {
       comm = c;
     if (bufferMethod == NONE) {
       if (!comm->rank())
-        printf("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
+        pPrintInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
       bufferMethod=MINIMUM;
     }
     safeMethod = safeMethod_;
@@ -153,7 +153,7 @@ namespace pumipic {
   void Input::printInfo() {
     std::string bname = getMethodString(bufferMethod);
     std::string sname = getMethodString(safeMethod);
-    printf("pumipic buffer method %s\n", bname.c_str());
-    printf("pumipic safe method %s\n", sname.c_str());
+    pPrintInfo("pumipic buffer method %s\n", bname.c_str());
+    pPrintInfo("pumipic safe method %s\n", sname.c_str());
   }
 }

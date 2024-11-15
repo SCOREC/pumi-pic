@@ -8,4 +8,9 @@ namespace pumipic {
   void pPrintError(const char* fmt, const Args&... args) {
     spdlog::error(fmt, args...);
   }
+
+  template<typename... Args>
+  void pPrintInfo(const char* fmt, const Args&... args) {
+    spdlog::info(fmt, args...);
+  }
 } 

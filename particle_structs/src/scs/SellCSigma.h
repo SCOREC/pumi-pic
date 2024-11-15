@@ -520,7 +520,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
   ptr += sprintf(ptr, "Empty Rows <Tot %%> %d %.3f\n", num_empty_elements,
                  num_empty_elements * 100.0 / numRows());
 
-  printf("%s\n",buffer);
+  pPrintInfo("%s\n",buffer);
 }
 
 template <class DataTypes, typename MemSpace>

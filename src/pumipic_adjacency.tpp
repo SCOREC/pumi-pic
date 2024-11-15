@@ -392,7 +392,7 @@ namespace pumipic {
           area = elmArea[elm];
       }, Kokkos::Min<o::Real>(min_area));
     o::Real tol = Kokkos::max(1e-15 / min_area, 1e-8);
-    printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
+    pPrintInfo("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }
   
@@ -507,10 +507,10 @@ namespace pumipic {
       // Kokkos::parallel_reduce(ptcl_done.size(), OMEGA_H_LAMBDA(const o::LO ptcl, o::LO& count) {
       //     count += (ptcl_done[ptcl] == 0);
       //     if (loops > 10000 && ptcl_done[ptcl] == 0)
-      //       printf("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
+      //       pPrintInfo("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
       //   }, nr);
       // if (loops % 10 == 0)
-      //   printf("Loop %d: %d remaining\n", loops, nr);
+      //   pPrintInfo("Loop %d: %d remaining\n", loops, nr);
       //Check iteration count
       if(looplimit && loops >= looplimit) {
         Omega_h::Write<o::LO> numNotFound(1,0);

@@ -291,7 +291,7 @@ namespace pumipic {
     // Padded Cells
     ptr += sprintf(ptr, "Padded Cells <Tot %%> %d %.3f%%\n", num_padded,
                    num_padded * 100.0 / capacity_);
-    printf("%s\n", buffer);
+    pPrintInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>

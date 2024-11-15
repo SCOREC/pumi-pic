@@ -484,7 +484,7 @@ namespace pumipic {
     agi::gid_t global_edges = weightGraph->numGlobalEdges();
     agi::gid_t global_pins = weightGraph->numGlobalPins();
     if (!comm_rank) {
-      printf("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n",
+      pPrintInfo("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n",
              global_vtx,  global_edges, global_pins);
     }
   }

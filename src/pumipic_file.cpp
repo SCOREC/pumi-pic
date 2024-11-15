@@ -198,7 +198,7 @@ namespace pumipic {
       if (mesh->dim() == 3)
         ptr += sprintf(ptr, " %ld", mesh->num_entites[3]);
       ptr += sprintf(ptr, ")");
-      printf("%s\n", buffer);
+      pPrintInfo("%s\n", buffer);
     }
 
     //Create load balancer after reading in the mesh

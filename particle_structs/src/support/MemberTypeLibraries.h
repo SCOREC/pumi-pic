@@ -156,7 +156,7 @@ namespace pumipic {
       Kokkos::parallel_for(ps_indices.size(), KOKKOS_LAMBDA(const int& i) {
         const int index = ps_indices(i);
         if (index >= size || index < 0) {
-          printf("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
+          pPrintInfo("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
 	  hasFailed(0) = 1;
         }
         CopyViewToView<T,Device>(dst, index, src, i);

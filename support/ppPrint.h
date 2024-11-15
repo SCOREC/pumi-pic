@@ -2,6 +2,7 @@
 
 #ifdef SPDLOG_ENABLED
   #include "spdlog/spdlog.h"
+  #include <spdlog/fmt/bundled/printf.h>
 #endif
 
 #include <Kokkos_Core.hpp>
@@ -15,7 +16,7 @@ namespace pumipic {
   template<typename... Args>
   void pPrintError(const char* fmt, const Args&... args) {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED)
-      spdlog::error(fmt, args...);
+      spdlog::error("{}", fmt::sprintf(fmt, args...));
     #elif defined(PP_PRINT_ENABLED)
       fprintf(stderr, fmt, args...);
     #endif
@@ -25,7 +26,7 @@ namespace pumipic {
   __host__ __device__
   void pPrintInfo(const char* fmt, const Args&... args) {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
-      spdlog::info(fmt, args...);
+      spdlog::info("{}", fmt::sprintf(fmt, args...));
     #elif defined(PP_PRINT_ENABLED)
       Kokkos::printf(fmt, args...);
     #endif

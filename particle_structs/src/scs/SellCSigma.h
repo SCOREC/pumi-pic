@@ -243,7 +243,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   C_ = chooseChunkHeight(C_max, ptcls_per_elem);
 
   if(!comm_rank)
-    pPrintError( "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
+    pPrintInfo( "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   kkLidView ptcls;
   kkLidView index;

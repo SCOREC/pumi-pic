@@ -130,7 +130,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(mpi_comm, &comm_rank);
     if(!comm_rank)
-      pPrintError( "building DPS\n");
+      pPrintInfo( "building DPS\n");
 
     // calculate num_soa_ from number of particles + extra padding
     num_soa_ = Kokkos::ceil(Kokkos::ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
@@ -145,7 +145,7 @@ namespace pumipic {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) pPrintError( "initializing DPS data\n");
+      if(!comm_rank) pPrintInfo( "initializing DPS data\n");
       fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
     else

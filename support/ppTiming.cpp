@@ -82,7 +82,7 @@ namespace pumipic {
           if (prebarrierTime >= PREBARRIER_TOL) {
             ptr += sprintf(ptr, " pre-brarrier (seconds) %f", prebarrierTime);
           }
-          pPrintError( "%s\n", buffer);
+          pPrintInfo( "%s\n", buffer);
         }
       }
     }
@@ -90,7 +90,7 @@ namespace pumipic {
 
   void PrintAdditionalTimeInfo(char* str, int v) {
     if (isTiming() && verbosity >= v) {
-      pPrintError( "%s\n", str);
+      pPrintInfo( "%s\n", str);
     }
   }
 
@@ -183,7 +183,7 @@ namespace pumipic {
             buffer <<"  Total Prebarrier=" << time_per_op[index].prebarrier;
           buffer <<'\n';
         }
-        pPrintError( "%s\n", buffer.str().c_str());
+        pPrintInfo( "%s\n", buffer.str().c_str());
       }
     }
   }
@@ -268,7 +268,7 @@ namespace pumipic {
         int size = 1;
         MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(end, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
-        pPrintError( "%s\n", buffer.str().c_str());
+        pPrintInfo( "%s\n", buffer.str().c_str());
 
       }
       else if (comm_rank) {

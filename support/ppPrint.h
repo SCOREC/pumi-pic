@@ -19,18 +19,22 @@ namespace pumipic {
   template<typename... Args>
   void pPrintError(const char* fmt, const Args&... args) {
     #ifdef SPDLOG_ENABLED
-      if (ppCurrPrintOption == enable) spdlog::error(fmt, args...);
+      if (ppCurrPrintOption == enable) 
+        spdlog::error(fmt, args...);
     #else
-      if (ppCurrPrintOption == enable) fprintf(stderr, fmt, args...);
+      if (ppCurrPrintOption == enable) 
+        fprintf(stderr, fmt, args...);
     #endif
   }
 
   template<typename... Args>
   void pPrintInfo(const char* fmt, const Args&... args) {
     #ifdef SPDLOG_ENABLED
-      if (ppCurrPrintOption == enable) spdlog::info(fmt, args...);
+      if (ppCurrPrintOption == enable) 
+        spdlog::info(fmt, args...);
     #else
-      if (ppCurrPrintOption == enable) Kokkos::printf(fmt, args...);
+      if (ppCurrPrintOption == enable) 
+        Kokkos::printf(fmt, args...);
     #endif
   }
 

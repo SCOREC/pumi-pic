@@ -321,7 +321,7 @@ namespace pumipic {
             ptr += sprintf(ptr," %d", *pitr);
           }
           ptr += sprintf(ptr, "]\n");
-          fprintf(stderr, "%s", error);
+          pPrintError( "%s", error);
         }
       }
     }

@@ -1,6 +1,7 @@
 #include "pumipic_input.hpp"
 #include <fstream>
 #include <stdexcept>
+#include "ppPrint.h"
 
 namespace {
   std::string getMethodString(pumipic::Input::Method m) {
@@ -36,7 +37,7 @@ namespace pumipic {
       while (dot >=0 && partition_filename[dot] != '.')
         --dot;
       if (dot < 0) {
-        fprintf(stderr, "[ERROR] Filename provided has no extension (%s)", partition_filename);
+        pPrintError( "[ERROR] Filename provided has no extension (%s)", partition_filename);
         throw std::runtime_error("Filename has no extension");
       }
       char* extension = partition_filename + dot + 1;
@@ -45,7 +46,7 @@ namespace pumipic {
         std::ifstream in_str(partition_filename);
         if (!in_str) {
           if (!comm_rank)
-            fprintf(stderr,"Cannot open file %s\n", partition_filename);
+            pPrintError("Cannot open file %s\n", partition_filename);
           throw std::runtime_error("Cannot open file");
         }
         int own;
@@ -61,7 +62,7 @@ namespace pumipic {
           std::ifstream in_str(partition_filename);
           if (!in_str) {
             if (!comm_rank)
-              fprintf(stderr,"Cannot open file %s\n", partition_filename);
+              pPrintError("Cannot open file %s\n", partition_filename);
             throw std::runtime_error("Cannot open file");
           }
           int size;
@@ -87,7 +88,7 @@ namespace pumipic {
 
       }
       else {
-        fprintf(stderr, "[ERROR] Only .ptn and .cpn partitions are supported");
+        pPrintError( "[ERROR] Only .ptn and .cpn partitions are supported");
         throw std::runtime_error("Invalid partition file extension");
       }
     }

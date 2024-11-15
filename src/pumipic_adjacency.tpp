@@ -136,7 +136,7 @@ namespace pumipic {
     }
     Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
     if (numNotInElem_h[0] > 0) {
-      fprintf(stderr, "[WARNING] Rank %d: %d particles are not located in their "
+      pPrintError( "[WARNING] Rank %d: %d particles are not located in their "
               "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
     }
     return numNotInElem_h[0];
@@ -531,7 +531,7 @@ namespace pumipic {
         };
         ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
         Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-        fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
+        pPrintError( "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
                 "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
         break;
       }

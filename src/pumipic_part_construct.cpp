@@ -58,7 +58,7 @@ namespace pumipic {
     int comm_size = comm->size();
     if (ghost_layers < safe_layers) {
       if (!rank)
-        fprintf(stderr, "Ghost layers must be >= safe layers");
+        pPrintError( "Ghost layers must be >= safe layers");
       throw 1;
     }
     is_full_mesh = false;
@@ -230,7 +230,7 @@ namespace pumipic {
       picpart->add_coords(new_coords);
       Omega_h::finalize_classification(picpart);
       if(!picpart->nelems()) {
-        fprintf(stderr,"%s: empty part on rank %d\n", __func__, rank);
+        pPrintError("%s: empty part on rank %d\n", __func__, rank);
       }
       assert(picpart->nelems());
 
@@ -295,7 +295,7 @@ namespace {
     Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
     Omega_h::HostWrite<Omega_h::LO> selfcount_h(selfcount);
     if(!selfcount_h[0]) {
-      fprintf(stderr, "%s rank %d with no owned elements detected\n", __func__, self);
+      pumipic::pPrintError( "%s rank %d with no owned elements detected\n", __func__, self);
     }
     assert(selfcount_h[0]);
   }

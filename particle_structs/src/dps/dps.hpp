@@ -130,7 +130,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(mpi_comm, &comm_rank);
     if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
+      pPrintError( "building DPS\n");
 
     // calculate num_soa_ from number of particles + extra padding
     num_soa_ = Kokkos::ceil(Kokkos::ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
@@ -145,7 +145,7 @@ namespace pumipic {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      if(!comm_rank) pPrintError( "initializing DPS data\n");
       fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
     else
@@ -242,7 +242,7 @@ namespace pumipic {
   template <class MSpace>
   typename DPS<DataTypes, MemSpace>::template Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
+      pPrintError( "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new DPS<DataTypes, MSpace>();
@@ -410,7 +410,7 @@ namespace pumipic {
     Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
-    void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "
+    void reportError() const {pPrintError( "[ERROR] pumi-pic was built "
                                       "without Cabana so the DPS structure "
                                       "can not be used\n");}
   };

@@ -543,12 +543,12 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
         }
       };
       parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
-      fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      pPrintError( "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   } //while
   Kokkos::Profiling::popRegion(); //whole
-  //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  //pPrintError( "loop-time seconds %f\n", timer.seconds()); 
   pumipic::RecordTime("Search Mesh 3d", timer.seconds(), btime);
   return found;   
 }
@@ -600,7 +600,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   int loops = 0;
   while(!found) {
     if(debug) {
-      fprintf(stderr, "------------ %d ------------\n", loops);
+      pPrintError( "------------ %d ------------\n", loops);
     }
     //pid is same for a particle between iterations in this while loop
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -755,13 +755,13 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
 
     if(looplimit && loops > looplimit) {
       //if (debug)
-        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+        pPrintError( "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   } //while
   
   if(debug)
-    fprintf(stderr, "\t: loops %d\n", loops);
+    pPrintError( "\t: loops %d\n", loops);
   Kokkos::Profiling::popRegion();
   return found;
 }
@@ -1139,7 +1139,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       };
       ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
       Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
+      pPrintError( "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
               "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0],
               ptcls->getName().c_str());
       break;

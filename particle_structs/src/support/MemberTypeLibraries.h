@@ -9,6 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include <mpi.h>
 #include <cstdlib>
+#include "ppPrint.h"
 
 namespace pumipic {
 
@@ -162,7 +163,7 @@ namespace pumipic {
       });
       auto hasFailed_h = deviceToHost(hasFailed);
       if( hasFailed_h(0) ) {
-	fprintf(stderr, "[ERROR] index out of range in view-to-view copy\n");
+	pPrintError( "[ERROR] index out of range in view-to-view copy\n");
 	exit(EXIT_FAILURE);
       }
       CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);

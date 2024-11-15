@@ -145,7 +145,7 @@ namespace pumipic {
     });
     auto hasInactivePtcls_h = deviceToHost(hasInactivePtcls);
     if( hasInactivePtcls_h(0) ) {
-      fprintf(stderr, "[ERROR] there are new particles being added that are marked"
+      pPrintError( "[ERROR] there are new particles being added that are marked"
                       "as inactive (element id set to -1)\n");
       exit(EXIT_FAILURE);
     }

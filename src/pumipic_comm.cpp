@@ -4,6 +4,7 @@
 #include <Omega_h_array_ops.hpp>
 #include <mpi.h>
 #include <Omega_h_comm.hpp>
+#include "ppPrint.h"
 
 using Omega_h::MpiTraits;
 
@@ -224,7 +225,7 @@ namespace pumipic {
     int ne = nents(edim);
     int nvals = length / ne;
     if (ne*nvals != length) {
-      fprintf(stderr, "Comm array size does not match the expected size for dimension %d\n",edim);
+      pPrintError( "Comm array size does not match the expected size for dimension %d\n",edim);
       return;
     }
     if (commptr->size() == 1)

@@ -1,7 +1,11 @@
 #pragma once
 
+#define PUMIPIC_VERSION_MAJOR @CMAKE_PROJECT_VERSION_MAJOR@
+#define PUMIPIC_VERSION_MINOR @CMAKE_PROJECT_VERSION_MINOR@
+#define PUMIPIC_VERSION_PATCH @CMAKE_PROJECT_VERSION_PATCH@
+
 namespace pumipic {
   const char* pumipic_version() {
-    return "@CMAKE_VERSION@";
+    return "@CMAKE_PROJECT_VERSION@";
   }
 }

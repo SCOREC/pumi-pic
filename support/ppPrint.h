@@ -6,6 +6,7 @@
 #endif
 
 #include <Kokkos_Core.hpp>
+#include "ppMacros.h"
 
 namespace pumipic {
 
@@ -23,7 +24,7 @@ namespace pumipic {
   }
 
   template<typename... Args>
-  __host__ __device__
+  PP_INLINE
   void pPrintInfo(const char* fmt, const Args&... args) {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
       spdlog::info("{}", fmt::sprintf(fmt, args...));

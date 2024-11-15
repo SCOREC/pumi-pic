@@ -35,179 +35,86 @@ jobs:
     - name: Install Valgrind
       run: sudo apt-get install -yq valgrind
 
-    # Build Kokkos
+    - uses: actions/checkout@v4
 
-    - name: Cache Kokkos Build
-      uses: actions/cache@v3
-      id: build-kokkos
+    - name: build kokkos
+      uses: ./.github/actions/install-repo
       with:
-        key: build-kokkos
-        path: ${{ runner.temp }}/build-kokkos
-        
-    - name: Kokkos Checkout repo
-      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
-      uses: actions/checkout@v3
+        repo-name: 'kokkos'
+        repo-path: 'kokkos/kokkos'
+        repo-ref: '4.2.00'
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+                  -DKokkos_ENABLE_SERIAL=ON
+                  -DKokkos_ENABLE_OPENMP=off
+                  -DKokkos_ENABLE_CUDA=off
+                  -DKokkos_ENABLE_CUDA_LAMBDA=off
+                  -DKokkos_ENABLE_DEBUG=on'
+
+    - name: build Engpar
+      uses: ./.github/actions/install-repo
       with:
-        repository: kokkos/kokkos
-        ref: 4.1.00
-        path: kokkos
+        repo-name: 'Engpar'
+        repo-path: 'SCOREC/EnGPar'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_C_COMPILER=mpicc
+                  -DCMAKE_CXX_COMPILER=mpicxx
+                  -DCMAKE_CXX_FLAGS="-std=c++11"
+                  -DENABLE_PARMETIS=OFF
+                  -DENABLE_PUMI=OFF
+                  -DIS_TESTING=OFF'
 
-    - name: Kokkos Create Directory
-      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
-      run: cmake -E make_directory ${{ runner.temp }}/build-kokkos
-
-    - name: Kokkos Configure CMake
-      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
-      run: cmake -S $GITHUB_WORKSPACE/kokkos -B ${{ runner.temp }}/build-kokkos
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-kokkos/install
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
-        -DKokkos_ENABLE_SERIAL=ON
-        -DKokkos_ENABLE_OPENMP=off
-        -DKokkos_ENABLE_CUDA=off
-        -DKokkos_ENABLE_CUDA_LAMBDA=off
-        -DKokkos_ENABLE_DEBUG=on
-    
-    - name: Kokkos Build
-      if: ${{ steps.build-kokkos.outputs.cache-hit != 'true' }}
-      run: cmake --build ${{ runner.temp }}/build-kokkos -j8 --target install
-
-    # Build EnGPar
-
-    - name: Cache Engpar Build
-      uses: actions/cache@v3
-      id: build-engpar
+    - name: build omega_h
+      uses: ./.github/actions/install-repo
       with:
-        key: build-engpar
-        path: ${{ runner.temp }}/build-engpar
-        
-    - name: EnGPar Checkout repo
-      if: ${{ steps.build-engpar.outputs.cache-hit != 'true' }}
-      uses: actions/checkout@v3
+        repo-name: 'omega_h'
+        repo-path: 'SCOREC/omega_h'
+        repo-ref: 'scorec-v10.8.0'
+        cache: true
+        options: '-DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
+                  -DBUILD_SHARED_LIBS=OFF
+                  -DOmega_h_USE_Kokkos=ON
+                  -DOmega_h_USE_CUDA=off
+                  -DOmega_h_USE_MPI=on
+                  -DCMAKE_BUILD_TYPE=Release
+                  -DBUILD_TESTING=on
+                  -DCMAKE_CXX_COMPILER=mpicxx
+                  -DCMAKE_C_COMPILER=mpicc'
+
+    - name: build cabana
+      uses: ./.github/actions/install-repo
       with:
-        repository: SCOREC/EnGPar
-        path: engpar
-
-    - name: EnGPar Create Directory
-      if: ${{ steps.build-engpar.outputs.cache-hit != 'true' }}
-      run: cmake -E make_directory ${{ runner.temp }}/build-engpar
-
-    - name: EnGPar Configure CMake
-      if: ${{ steps.build-engpar.outputs.cache-hit != 'true' }}
-      run: cmake -S $GITHUB_WORKSPACE/engpar -B ${{ runner.temp }}/build-engpar
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-engpar/install
-        -DCMAKE_C_COMPILER="mpicc"
-        -DCMAKE_CXX_COMPILER="mpicxx"
-        -DCMAKE_CXX_FLAGS="-std=c++11"
-        -DENABLE_PARMETIS=OFF
-        -DENABLE_PUMI=OFF
-        -DIS_TESTING=OFF
-    
-    - name: EnGPar Build
-      if: ${{ steps.build-engpar.outputs.cache-hit != 'true' }}
-      run: cmake --build ${{ runner.temp }}/build-engpar -j8 --target install
-
-    # Build Omega_h
-
-    - name: Cache Omega_h Build
-      uses: actions/cache@v3
-      id: build-omega_h
-      with:
-        key: build-omega_h
-        path: ${{ runner.temp }}/build-omega_h
-        
-    - name: Omega_h Checkout repo
-      if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
-      uses: actions/checkout@v3
-      with:
-        repository: SCOREC/omega_h
-        ref: scorec-v10.8.0
-        path: omega_h
-
-    - name: Omega_h Create Directory
-      if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
-      run: cmake -E make_directory ${{ runner.temp }}/build-omega_h
-
-    - name: Omega_h Configure CMake
-      if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
-      run: cmake -S $GITHUB_WORKSPACE/omega_h -B ${{ runner.temp }}/build-omega_h
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-omega_h/install
-        -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
-        -DBUILD_SHARED_LIBS=OFF
-        -DOmega_h_USE_Kokkos=ON
-        -DOmega_h_USE_CUDA=off
-        -DOmega_h_USE_MPI=on
-        -DCMAKE_BUILD_TYPE=Release
-        -DBUILD_TESTING=on
-        -DCMAKE_CXX_COMPILER="mpicxx"
-        -DCMAKE_C_COMPILER="mpicc"
-    
-    - name: Omega_h Build
-      if: ${{ steps.build-omega_h.outputs.cache-hit != 'true' }}
-      run: cmake --build ${{ runner.temp }}/build-omega_h -j8 --target install
-
-    # Build Cabana
-
-    - name: Cache Cabana Build
-      uses: actions/cache@v3
-      id: build-cabana
-      with:
-        key: build-cabana
-        path: ${{ runner.temp }}/build-cabana
-        
-    - name: Cabana Checkout repo
-      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
-      uses: actions/checkout@v3
-      with:
-        repository: ECP-copa/cabana
-        path: cabana
-
-    - name: Cabana Create Directory
-      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
-      run: cmake -E make_directory ${{ runner.temp }}/build-cabana
-
-    - name: Cabana Configure CMake
-      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
-      run: cmake -S $GITHUB_WORKSPACE/cabana -B ${{ runner.temp }}/build-cabana
-        -DCMAKE_BUILD_TYPE="Release"
-        -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
-        -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-cabana/install
-    
-    - name: Cabana Build
-      if: ${{ steps.build-cabana.outputs.cache-hit != 'true' }}
-      run: cmake --build ${{ runner.temp }}/build-cabana -j8 --target install
+        repo-name: 'cabana'
+        repo-path: 'ECP-copa/cabana'
+        repo-ref: '0.6.1'
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+                  -DCMAKE_BUILD_TYPE=Release
+                  -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
+                  -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
 
     # Build PUMI-PIC
-        
-    - name: PUMI-PIC Checkout repo
-      uses: actions/checkout@v3
+
+    - name: build pumi-pic
+      uses: ./.github/actions/install-repo
       with:
-        submodules: recursive
-        repository: SCOREC/pumi-pic
-        path: pumi-pic
-
-    - name: PUMI-PIC Create Directory
-      run: cmake -E make_directory ${{ runner.temp }}/build-pumi-pic
-
-    - name: PUMI-PIC Configure CMake
-      run: cmake -S $GITHUB_WORKSPACE/pumi-pic -B ${{ runner.temp }}/build-pumi-pic
-        -DCMAKE_CXX_COMPILER=mpicxx
-        -DIS_TESTING=ON
-        -DPS_IS_TESTING=ON
-        -DPP_ENABLE_MEMCHECK=${{matrix.memory_test}}
-        -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
-        -DTEST_DATA_DIR=$GITHUB_WORKSPACE/pumi-pic/pumipic-data
-        -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
-        -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
-        -DEnGPar_PREFIX=${{ runner.temp }}/build-engpar/install
-        -DCabana_PREFIX=${{ runner.temp }}/build-cabana/install
-        -DENABLE_CABANA=on
-        -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-pumi-pic/install
-        -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
-    
-    - name: PUMI-PIC Build
-      run: cmake --build ${{ runner.temp }}/build-pumi-pic -j8 --target install
+        repo-name: 'pumi-pic'
+        repo-path: 'SCOREC/pumi-pic'
+        repo-ref: ''
+        cache: false
+        options: '-DCMAKE_CXX_COMPILER=mpicxx
+                  -DIS_TESTING=ON
+                  -DPS_IS_TESTING=ON
+                  -DPP_ENABLE_MEMCHECK=${{ matrix.memory_test }}
+                  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+                  -DTEST_DATA_DIR=$GITHUB_WORKSPACE/pumi-pic/pumipic-data
+                  -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
+                  -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
+                  -DEnGPar_PREFIX=${{ runner.temp }}/build-Engpar/install
+                  -DCabana_PREFIX=${{ runner.temp }}/build-cabana/install
+                  -DENABLE_CABANA=on
+                  -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
 
     - name: PUMI-PIC Test
       if: ${{matrix.memory_test == 'OFF'}}

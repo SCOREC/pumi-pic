@@ -1,0 +1,44 @@
+name: Install-Repo
+
+inputs:
+  repo-name:
+    required: true
+  repo-path:
+    required: true
+  repo-ref:
+    required: true
+  options:
+    required: true
+  cache:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+  - name: Check Cache
+    if: ${{ inputs.cache == 'true'}}
+    uses: actions/cache@v3
+    id: check-cache
+    with:
+      key: build-${{ inputs.repo-name }}
+      path: ${{ runner.temp }}/build-${{ inputs.repo-name }}
+      
+  - name: Checkout Repo
+    uses: actions/checkout@v3
+    with:
+      repository: ${{inputs.repo-path }}
+      ref: ${{ inputs.repo-ref }}
+      path: ${{ inputs.repo-name }}
+
+  - name: Configure CMake
+    if: ${{ !steps.check-cache.outputs.cache-hit }}
+    shell: bash
+    run: cmake -S $GITHUB_WORKSPACE/${{ inputs.repo-name }} -B ${{ runner.temp }}/build-${{ inputs.repo-name }}
+      -DCMAKE_INSTALL_PREFIX=${{ runner.temp }}/build-${{ inputs.repo-name }}/install
+      ${{ inputs.options }}
+  
+  - name: Build Cmake
+    if: ${{ !steps.check-cache.outputs.cache-hit }}
+    shell: bash
+    run: cmake --build ${{ runner.temp }}/build-${{ inputs.repo-name }} -j8 --target install

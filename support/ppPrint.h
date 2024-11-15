@@ -8,21 +8,29 @@
 
 namespace pumipic {
 
+  enum ppPrintOption { enable, disable };
+
+  inline ppPrintOption ppCurrPrintOption = enable;
+
+  inline void pSetLog(const ppPrintOption option){
+    ppCurrPrintOption = option;
+  }
+
   template<typename... Args>
   void pPrintError(const char* fmt, const Args&... args) {
     #ifdef SPDLOG_ENABLED
-      spdlog::error(fmt, args...);
+      if (ppCurrPrintOption == enable) spdlog::error(fmt, args...);
     #else
-      fprintf(stderr, fmt, args...);
+      if (ppCurrPrintOption == enable) fprintf(stderr, fmt, args...);
     #endif
   }
 
   template<typename... Args>
   void pPrintInfo(const char* fmt, const Args&... args) {
     #ifdef SPDLOG_ENABLED
-      spdlog::info(fmt, args...);
+      if (ppCurrPrintOption == enable) spdlog::info(fmt, args...);
     #else
-      Kokkos::printf(fmt, args...);
+      if (ppCurrPrintOption == enable) Kokkos::printf(fmt, args...);
     #endif
   }
 

@@ -370,9 +370,11 @@ namespace pumipic {
         auto searchElm = elem_ids[pid];
         auto bridge = lastExit[pid];
         auto e2f_first = e2f_offsets[bridge];
-        auto e2f_last = e2f_offsets[bridge+1];
-        auto upFaces = e2f_last - e2f_first;
-        assert(upFaces==2);
+        #ifdef _DEBUG
+          auto e2f_last = e2f_offsets[bridge+1];
+          auto upFaces = e2f_last - e2f_first;
+          assert(upFaces==2);
+        #endif
         auto faceA = e2f_vals[e2f_first];
         auto faceB = e2f_vals[e2f_first+1];
         assert(faceA != faceB);

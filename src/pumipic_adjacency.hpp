@@ -1100,9 +1100,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto searchElm = elem_ids[pid];
         auto bridge = lastEdge[pid];
         auto e2f_first = e2f_offsets[bridge];
-        auto e2f_last = e2f_offsets[bridge+1];
-        auto upFaces = e2f_last - e2f_first;
-        assert(upFaces==2);
+        #ifdef _DEBUG
+          auto e2f_last = e2f_offsets[bridge+1];
+          auto upFaces = e2f_last - e2f_first;
+          assert(upFaces==2);
+        #endif
         auto faceA = e2f_vals[e2f_first];
         auto faceB = e2f_vals[e2f_first+1];
         assert(faceA != faceB);
@@ -1212,9 +1214,11 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
       const o::LO searchElm = elem_id;
       const o::LO bridge = lastEdge;
       const o::LO e2f_first = e2f_offsets[bridge];
-      const o::LO e2f_last = e2f_offsets[bridge+1];
-      const o::LO upFaces = e2f_last - e2f_first;
-      assert(upFaces == 2);
+      #ifdef _DEBUG
+        const o::LO e2f_last = e2f_offsets[bridge+1];
+        const o::LO upFaces = e2f_last - e2f_first;
+        assert(upFaces == 2);
+      #endif
       const o::LO faceA = e2f_vals[e2f_first];
       const o::LO faceB = e2f_vals[e2f_first+1];
       assert(faceA != faceB);

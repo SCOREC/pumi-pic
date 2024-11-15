@@ -35,8 +35,12 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 
-find_package(spdlog REQUIRED)
-target_link_libraries(support PUBLIC spdlog::spdlog)
+find_package(spdlog QUIET)
+if (spdlog_FOUND)
+  add_definitions(-DSPDLOG_ENABLED)
+  target_compile_definitions(support INTERFACE -DSPDLOG_ENABLED)
+  target_link_libraries(support PUBLIC spdlog::spdlog)
+endif()
 target_link_libraries(support PUBLIC Kokkos::kokkos)
 target_link_libraries(support PUBLIC MPI::MPI_CXX)
 if(ENABLE_CABANA)

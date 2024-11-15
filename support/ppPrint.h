@@ -29,7 +29,7 @@ namespace pumipic {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
       spdlog::info("{}", fmt::sprintf(fmt, args...));
     #elif defined(PP_PRINT_ENABLED)
-      Kokkos::printf(fmt, args...);
+      printf(fmt, args...);
     #endif
   }
 

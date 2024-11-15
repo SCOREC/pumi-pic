@@ -335,8 +335,9 @@ namespace pumipic {
               const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
               o::Real dproj;
               o::Real closeness;
-              const bool success = moller_trumbore_line_triangle(face, orig, dest, xpts,
-                                                                 tol, flip, dproj, closeness);
+              o::Real intersection_parametric_coord;
+              const bool success = ray_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
+                                                           closeness, intersection_parametric_coord);
               if (success) {
                 lastExit[ptcl] = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];

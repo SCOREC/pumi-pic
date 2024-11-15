@@ -10,6 +10,7 @@ set(HEADERS
   ppAssert.h
   ppTiming.hpp
   ppMemUsage.hpp
+  ppPrint.h
 )
 
 set(SOURCES
@@ -33,6 +34,9 @@ $<INSTALL_INTERFACE:include>)
 target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
+
+find_package(spdlog REQUIRED)
+target_link_libraries(support PUBLIC spdlog::spdlog)
 target_link_libraries(support PUBLIC Kokkos::kokkos)
 target_link_libraries(support PUBLIC MPI::MPI_CXX)
 if(ENABLE_CABANA)

@@ -35,6 +35,12 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 
+option(PP_PRINT_ENABLED ON)
+if(PP_PRINT_ENABLED)
+  add_definitions(-DPP_PRINT_ENABLED)
+  target_compile_definitions(support INTERFACE -DPP_PRINT_ENABLED)
+endif()
+
 find_package(spdlog QUIET)
 if (spdlog_FOUND)
   add_definitions(-DSPDLOG_ENABLED)

@@ -117,7 +117,7 @@ OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &mat,
   auto cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
   auto vol6 = o::inner_product(mat[vtx3]-mat[0], cross_ac_ab);
   if(debug) 
-    printf(" old:bccvals %g %g %g %g vol %g \n", vals[0]/6.0, vals[1]/6.0, 
+    pPrintInfo(" old:bccvals %g %g %g %g vol %g \n", vals[0]/6.0, vals[1]/6.0, 
       vals[2]/6.0, vals[3]/6.0,vol6/6.0);
 
   Omega_h::Real inv_vol = 0.0;
@@ -151,7 +151,7 @@ OMEGA_H_DEVICE bool barycentric_coords_tet(const o::LOs& mesh2verts,
   auto basis = Omega_h::simplex_basis<DIM, DIM>(tet);
   auto vol = Omega_h::tet_volume_from_basis(basis);
   if(debug)
-    printf(" bccvals %g %g %g %g vol %g \n", vals[0], vals[1], vals[2], vals[3],vol);
+    pPrintInfo(" bccvals %g %g %g %g vol %g \n", vals[0], vals[1], vals[2], vals[3],vol);
   if(vol < tol)
     return 0;
   bcc = 1.0/vol * vals;
@@ -171,7 +171,7 @@ OMEGA_H_DEVICE bool find_barycentric_tri_simple(
   Omega_h::Real area = o::inner_product(norm, cross);
 
   if(Kokkos::abs(area) < 1e-20) { //TODO
-    printf("area is too small \n");
+    pPrintInfo("area is too small \n");
     return 0;
   }
   Omega_h::Real fac = 1/(area*2.0);
@@ -243,14 +243,14 @@ OMEGA_H_DEVICE bool line_triangle_intx_simple (
   if(reverse) {
     normv = -1*normv;
     if(debug)
-      printf("LTintX Surface normal is flipped\n");
+      pPrintInfo("LTintX Surface normal is flipped\n");
   }
   auto snorm_unit = Omega_h::normalize(normv);
   Omega_h::Real dist2plane = o::inner_product(abc[0] - origin, snorm_unit);
   auto plane2dest = dest - abc[0];
   Omega_h::Real proj_end = o::inner_product(snorm_unit, plane2dest);
   if(debug)
-    printf("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
+    pPrintInfo("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
   // equal required if tol=0 is used
   if(dist2plane >= -tol && proj_end >= -tol) {
     dproj = o::inner_product(line, snorm_unit);
@@ -264,7 +264,7 @@ OMEGA_H_DEVICE bool line_triangle_intx_simple (
         bcc[1]<=1 && bcc[2] >=0 && bcc[2] <=1)
           found = true;
       if(debug)
-        printf("LTintX Found %d bcc+ %d par_t= %.10f dist2plane= %.10f "
+        pPrintInfo("LTintX Found %d bcc+ %d par_t= %.10f dist2plane= %.10f "
            "projline= %.10f proj_out_line %.10f X %.10f %.10f %.10f \n", found, res, 
            par_t, dist2plane, dproj, proj_end, xpoint[0], xpoint[1], xpoint[2]);
     }
@@ -371,7 +371,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       const auto orig = makeVector3(pid, x_ps_d);
       if(!isPointWithinElemTet(mesh2verts, coords, orig, e, tol)) {
         if(debug)
-          printf("Search1: ptcl %d not_in parent_element %d :pos %g %g %g \n", 
+          pPrintInfo("Search1: ptcl %d not_in parent_element %d :pos %g %g %g \n", 
             pid_d(pid), e, orig[0], orig[1], orig[2]);
         OMEGA_H_CHECK(false);
       }
@@ -447,7 +447,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
             xpoints_d[pid*3+i] = xpts[i];
           xface_d[pid] = face_ids[ind_exp];
           if(debug)
-            printf("Search: ptcl %d hit boundary %d  to-be stopped/reflected\n", 
+            pPrintInfo("Search: ptcl %d hit boundary %d  to-be stopped/reflected\n", 
               pid_d(pid), xface_d[pid]);
           elem_ids_next[pid] = -1;
           ptcl_done[pid] = 2;
@@ -503,7 +503,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
             xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
           xface_d[pid] = face_id;
           if(debug)
-            printf("Search: ptcl %d hit boundary tobe reflected/stopped\n", pid_d(pid));
+            pPrintInfo("Search: ptcl %d hit boundary tobe reflected/stopped\n", pid_d(pid));
           ptcl_done[pid] = 2;
         } else {
           elem_ids_next[pid] = dual_elems[face_id];
@@ -531,13 +531,13 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           auto ptcl = pid_d(pid);
           const auto dest = makeVector3(pid, xtgt_ps_d);
           const auto orig = makeVector3(pid, x_ps_d);
-          printf("rank %d : el %d next_elm %d ptcl %d  %.15e %.15e %.15e "
+          pPrintInfo("rank %d : el %d next_elm %d ptcl %d  %.15e %.15e %.15e "
             "=> %.15e %.15e %.15e \n", rank, e, elm, ptcl, orig[0], 
             orig[1], orig[2], dest[0], dest[1],dest[2]);
           if(debug)
             for(int il=0; il<nloops; ++il) {
               auto nn = pid*nloops*lsize+lsize*il;
-              printf(" pid %d  loop %d el_hist  : %d %d %d %d %d\n", pid, il, 
+              pPrintInfo(" pid %d  loop %d el_hist  : %d %d %d %d %d\n", pid, il, 
                el_hist[nn], el_hist[nn+1], el_hist[nn+2], el_hist[nn+3], el_hist[nn+4]);
             }
         }
@@ -588,7 +588,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         elem_ids[pid] = e;
       ptcl_done[pid] = (elem_ids[pid] == -1);
       if (debug)
-        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
+        pPrintInfo("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -611,7 +611,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
         if(debug)
-          printf("pid %d in element %d\n", pid, elmId);
+          pPrintInfo("pid %d in element %d\n", pid, elmId);
         auto dest = makeVector3(pid, xtgt_ps_d);
         auto orig = makeVector3(pid, x_ps_d);
         o::Vector<4> bcc;
@@ -619,7 +619,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, tol)) {
-            printf("Warning: Particle not in this element at loops=0"
+            pPrintInfo("Warning: Particle not in this element at loops=0"
               "\tpid %d elem %d\n", pid, elmId);
             OMEGA_H_CHECK(false);
           }
@@ -631,12 +631,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         // TODO tolerance
         if(all_positive(bcc, tol)) {
           if(debug)
-            printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
+            pPrintInfo("ptcl %d is in destination elm %d\n", ptcl, elmId);
           elem_ids_next[pid] = elmId;
           ptcl_done[pid] = 1;
         } else {
           if(debug)
-            printf("ptcl %d  elemId %d checking adj elms:\n", ptcl, elmId);
+            pPrintInfo("ptcl %d  elemId %d checking adj elms:\n", ptcl, elmId);
           auto dproj = o::zero_vector<4>();
           auto xpoints = o::zero_vector<12>();
           o::LO exposed_faces[4];
@@ -667,12 +667,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               xpoints[findex*3+i] = xpoint[i];
 
             if(debug) {
-              printf("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
+              pPrintInfo("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
               " findex %d\n", ptcl, elmId, face_id, flip, exposed, intersected, findex);
               for(int i=0; i<3; ++i)
-               printf("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
+               pPrintInfo("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
                 ptcl, i, face[i][0], face[i][1], face[i][2]);
-              printf("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
+              pPrintInfo("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
                 ptcl, orig[0], orig[1], orig[2], dest[0],dest[1],dest[2]);
             }
             if(intersected && exposed) {
@@ -682,14 +682,14 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               xface_d[pid] = face_id;
               elem_ids_next[pid] = -1;
               if(debug)
-                printf("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
+                pPrintInfo("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
                   "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               break;
             } else if(intersected && !exposed) {
               auto adj_elem  = dual_elems[dual_elem_id];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
-                printf("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
+                pPrintInfo("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
                       "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               }
               break;
@@ -699,7 +699,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
             // save next element based on the smallest BCC,
             if(!exposed) {
               if(debug)
-                printf("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
+                pPrintInfo("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
                 ptcl, elmId, face_id, findex);
               o::LO min_ind = min_index(bcc, 4);
               if(findex == min_ind) {
@@ -711,7 +711,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
           } //for iface
 
           if(!intersected) {
-            printf("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
+            pPrintInfo("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
             o::LO max_ind = max_index(dproj, 4);
             if(dproj[max_ind]>=0) {
               auto fid = xface_ids[max_ind];
@@ -724,12 +724,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               } else { //if(min_bcc_elem >= 0) {
                 elem_ids_next[pid] = dual_elems[fid]; //min_bcc_elem;
                 if(debug)
-                  printf("\t ptcl %d e %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
+                  pPrintInfo("\t ptcl %d e %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
                    elmId, elem_ids_next[pid], min_bcc_elem);
               }
             } else {
               // current elem, but bcc failed to detect it on face/corner
-              printf("WARNING: particle %d leaked from e %d \n", ptcl, elmId);
+              pPrintInfo("WARNING: particle %d leaked from e %d \n", ptcl, elmId);
               elem_ids_next[pid] = -1;
               ptcl_done[pid] = 1;
             }
@@ -780,8 +780,8 @@ OMEGA_H_DEVICE Omega_h::Real interpolateTetVtx(const Omega_h::LOs& mesh2verts,
     auto fd = d*dof + comp;
     val = val + bcc[fi]*fv4[fd][0];
     if(debug) {// preprocess
-      printf("bcc %.15f field %.15f val %.15f\n", bcc[fi], fv4[fd][0], val);
-      printf("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
+      pPrintInfo("bcc %.15f field %.15f val %.15f\n", bcc[fi], fv4[fd][0], val);
+      pPrintInfo("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
         bcc[fi], fv4[fd][0]);
     }
   }
@@ -1002,7 +1002,7 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle(
     return ptq;
   }
   if(debug)
-    printf("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
+    pPrintInfo("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
 
   return ptq;
 }
@@ -1129,7 +1129,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           const auto ptclDest = makeVector2(pid, xtgt_ps_d);
           const auto ptclOrigin = makeVector2(pid, x_ps_d);
           if (debug) {
-            printf("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
+            pPrintInfo("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
                    rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                    ptclDest[0], ptclDest[1]);
           }
@@ -1232,12 +1232,12 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
       elem_id = -1;
       //TODO: use preprocessor macro
       if (debug) {
-        printf("elm %d ptcl %d notFound %g %g to %g %g\n",
+        pPrintInfo("elm %d ptcl %d notFound %g %g to %g %g\n",
                searchElm, pid, ptclOrigin[0], ptclOrigin[1],
                ptclDest[0], ptclDest[1]);
       }
       elem_id = -1;
-      printf("ERROR: loop limit %d exceeded, particle %d is "
+      pPrintInfo("ERROR: loop limit %d exceeded, particle %d is "
               "not found; deleting them.\n", looplimit, pid);
       break;
     }

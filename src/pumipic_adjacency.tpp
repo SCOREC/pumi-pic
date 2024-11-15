@@ -92,11 +92,11 @@ namespace pumipic {
           barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
           if(!all_positive(faceBcc, tol)) {
             if (debug) {
-              printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
+              pPrintInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f bcc %.15f %.15f %.15f\n",
                      rank, pid, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
                      faceBcc[0], faceBcc[1], faceBcc[2]);
-              printf("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
+              pPrintInfo("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
                      elmCoords[1][0], elmCoords[1][1], elmCoords[2][0], elmCoords[2][1]);
             }
             Kokkos::atomic_add(&(numNotInElem[0]), 1);
@@ -120,7 +120,7 @@ namespace pumipic {
           barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
           if(!all_positive(bcc, tol)) {
             if (debug) {
-              printf("%d Particle not in element! ptcl %d: %d elem %d => %d "
+              pPrintInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f %.15f bcc %.15f %.15f %.15f %.15f\n",
                      rank, pid, ptcl, e, searchElm,
                      ptclOrigin[0], ptclOrigin[1], ptclOrigin[2],
@@ -521,7 +521,7 @@ namespace pumipic {
             const auto ptclDest = makeVector2(pid, x_ps_orig);
             const auto ptclOrigin = makeVector2(pid, x_ps_tgt);
             if (debug) {
-              printf("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+              pPrintInfo("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
                      rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                      ptclDest[0], ptclDest[1]);
             }

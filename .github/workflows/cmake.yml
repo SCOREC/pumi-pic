@@ -56,7 +56,7 @@ jobs:
       with:
         repo-name: 'omega_h'
         repo-path: 'SCOREC/omega_h'
-        repo-ref: 'scorec-v10.8.0'
+        repo-ref: ''
         cache: true
         options: '-DCMAKE_BUILD_TYPE=Release
                   -DBUILD_SHARED_LIBS=OFF

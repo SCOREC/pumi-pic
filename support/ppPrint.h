@@ -14,8 +14,8 @@ namespace pumipic {
     #define ACTIVE_GPU_EXECUTION
   #endif
 
-  template<typename... Args>
-  void pPrintError(const char* fmt, const Args&... args) {
+  template<typename STRING, typename... Args>
+  void pPrintError(const STRING fmt, const Args&... args) {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED)
       spdlog::error("{}", fmt::sprintf(fmt, args...));
     #elif defined(PP_PRINT_ENABLED)
@@ -23,14 +23,14 @@ namespace pumipic {
     #endif
   }
 
-  template<typename... Args>
+  template<typename STRING, typename... Args>
   PP_INLINE
-  void pPrintInfo(const char* fmt, const Args&... args) {
+  void pPrintInfo(const STRING fmt, const Args&... args) {
     #if defined(SPDLOG_ENABLED) && defined(PP_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
       spdlog::info("{}", fmt::sprintf(fmt, args...));
     #elif defined(PP_PRINT_ENABLED)
-      printf(fmt, args...);
+      Kokkos::printf(fmt, args...);
     #endif
   }
 
-} 
+}

@@ -51,6 +51,24 @@ jobs:
                   -DKokkos_ENABLE_CUDA_LAMBDA=off
                   -DKokkos_ENABLE_DEBUG=on'
 
+    - name: build omega_h
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'omega_h'
+        repo-path: 'SCOREC/omega_h'
+        repo-ref: 'scorec-v10.8.0'
+        cache: true
+        options: '-DCMAKE_BUILD_TYPE=Release
+                  -DBUILD_SHARED_LIBS=OFF
+                  -DOmega_h_USE_Kokkos=ON
+                  -DOmega_h_USE_CUDA=off
+                  -DOmega_h_USE_MPI=on
+                  -DMPIEXEC_EXECUTABLE=srun
+                  -DBUILD_TESTING=off
+                  -DCMAKE_C_COMPILER=mpicc
+                  -DCMAKE_CXX_COMPILER=mpicxx
+                  -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install/lib/cmake'
+
     - name: build Engpar
       uses: ./.github/actions/install-repo
       with:
@@ -65,23 +83,6 @@ jobs:
                   -DENABLE_PUMI=OFF
                   -DIS_TESTING=OFF'
 
-    - name: build omega_h
-      uses: ./.github/actions/install-repo
-      with:
-        repo-name: 'omega_h'
-        repo-path: 'SCOREC/omega_h'
-        repo-ref: 'scorec-v10.8.0'
-        cache: true
-        options: '-DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake
-                  -DBUILD_SHARED_LIBS=OFF
-                  -DOmega_h_USE_Kokkos=ON
-                  -DOmega_h_USE_CUDA=off
-                  -DOmega_h_USE_MPI=on
-                  -DCMAKE_BUILD_TYPE=Release
-                  -DBUILD_TESTING=on
-                  -DCMAKE_CXX_COMPILER=mpicxx
-                  -DCMAKE_C_COMPILER=mpicc'
-
     - name: build cabana
       uses: ./.github/actions/install-repo
       with:
@@ -93,8 +94,6 @@ jobs:
                   -DCMAKE_BUILD_TYPE=Release
                   -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
                   -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
-
-    # Build PUMI-PIC
 
     - name: build pumi-pic
       uses: ./.github/actions/install-repo

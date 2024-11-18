@@ -3,6 +3,7 @@
 
 #include <Omega_h_array.hpp>
 #include <Omega_h_defines.hpp>
+#include <Omega_h_macros.h>
 #include <iostream>
 #include "Omega_h_for.hpp"
 #include "Omega_h_adj.hpp"
@@ -398,8 +399,38 @@ namespace pumipic {
     return tol;
   }
 
+  /**
+  * @brief Particle tracing through mesh
+  *
+  * Starting at the initial position, the particles are traced through the mesh (both 2D and 3D)
+  * until they are all marked "done" by the particle handler "func" at element boundary or destination. 
+  * It gives back the parent element ids for the new positions of the particles,
+  * the exit face ids for the particles that leave the domain, and the last intersection point for 
+  * the particles.
+  *
+  * Note: Particle trajectories are considered as rays (not line segments).
+  *
+  *
+  * @tparam ParticleType Particle type
+  * @tparam Segment3d Segment type for particle position
+  * @tparam SegmentInt Segment type for particle ids
+  * @tparam Func Callable type object
+  * @param mesh Omega_h mesh to search on
+  * @param ptcls Particle structure
+  * @param x_ps_orig Particle starting position
+  * @param x_ps_tgt Particle target position
+  * @param pids Particle ids
+  * @param elem_ids Paricle parent element ids
+  * @param requireIntersection True if intersection is required
+  * @param inter_faces Exit faces for particles at domain boundary
+  * @param inter_points Stores intersection points for particles at each face
+  * @param looplimit Maximum number of iterations
+  * @param debug True if debug information is printed
+  * @param func Callable object to handle particles at element sides or destination
+  * @return True if all particles are found at destination or left domain
+  */
   template <class ParticleType, typename Segment3d, typename SegmentInt, typename Func>
-  bool particle_search(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+  bool trace_particle_through_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
                    Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
                    o::Write<o::LO>& elem_ids,
                    bool requireIntersection,
@@ -590,7 +621,7 @@ namespace pumipic {
                    int debug) {
     RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
 
-    return particle_search(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
+    return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
                            inter_faces, inter_points, looplimit, debug, native_handler);
   }
 }

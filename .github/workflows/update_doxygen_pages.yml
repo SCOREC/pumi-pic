@@ -24,6 +24,9 @@ jobs:
     - name: Run Doxygen
       run: doxygen
 
-    - name: Print
-      run: ls
+    - name: Update Github
+      run: |
+        git add html
+        git commit -m "Update page from action"
+        git push
 

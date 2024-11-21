@@ -1,0 +1,29 @@
+name: update_doxygen_pages.yml
+
+on:
+  push:
+
+jobs:
+  doxygen:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-add-repository universe
+        sudo apt-get update
+        sudo apt-get install doxygen
+
+    - name: Git Checkout
+      uses: actions/checkout@v4
+
+    - name: Checkout Page
+      run: git checkout -b gh-pages
+
+    - name: Run Doxygen
+      run: doxygen
+
+    - name: Print
+      run: ls
+

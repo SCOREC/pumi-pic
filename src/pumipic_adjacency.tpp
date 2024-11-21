@@ -1,6 +1,7 @@
 #ifndef PUMIPIC_ADJACENCY_NEW_HPP
 #define PUMIPIC_ADJACENCY_NEW_HPP
-
+#include <Omega_h_array.hpp>
+#include <Omega_h_defines.hpp>
 #include <Omega_h_macros.h>
 #include <iostream>
 #include "Omega_h_for.hpp"
@@ -423,16 +424,55 @@ namespace pumipic {
     printf("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }
-  
-  template <class ParticleType, typename Segment3d, typename SegmentInt>
-  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+
+  /**
+  * @brief Particle tracing through mesh
+  *
+  * Starting at the initial position, the particles are traced through the mesh (both 2D and 3D)
+  * until they are all marked "done" by the particle handler "func" at element boundary or destination. 
+  * It gives back the parent element ids for the new positions of the particles,
+  * the exit face ids for the particles that leave the domain, and the last intersection point for 
+  * the particles.
+  *
+  * Note: Particle trajectories are considered as rays (not line segments).
+  *
+  *
+  * @tparam ParticleType Particle type
+  * @tparam Segment3d Segment type for particle position
+  * @tparam SegmentInt Segment type for particle ids
+  * @tparam Func Callable type object
+  * @param mesh Omega_h mesh to search on
+  * @param ptcls Particle structure
+  * @param x_ps_orig Particle starting position
+  * @param x_ps_tgt Particle target position
+  * @param pids Particle ids
+  * @param elem_ids Paricle parent element ids
+  * @param requireIntersection True if intersection is required
+  * @param inter_faces Exit faces for particles at domain boundary
+  * @param inter_points Stores intersection points for particles at each face
+  * @param looplimit Maximum number of iterations
+  * @param debug True if debug information is printed
+  * @param func Callable object to handle particles at element sides or destination
+  * @return True if all particles are found at destination or left domain
+  */
+  template <class ParticleType, typename Segment3d, typename SegmentInt, typename Func>
+  bool trace_particle_through_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
                    Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
                    o::Write<o::LO>& elem_ids,
                    bool requireIntersection,
                    o::Write<o::LO>& inter_faces,
                    o::Write<o::Real>& inter_points,
                    int looplimit,
-                   int debug) {
+                   bool debug,
+                   Func& func) {
+    static_assert(
+        std::is_invocable_r_v<
+            void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
+            o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &,
+            o::Write<o::Real> &, o::Write<o::LO> &,
+            Segment3d, Segment3d>,
+        "Functional must accept <mesh> <ps> <elem_ids> <inter_faces> <lastExit> <inter_points> <ptcl_done> <x_ps_orig> <x_ps_tgt>\n");
+
     //Initialize timer
     const auto btime = pumipic_prebarrier();
     Kokkos::Profiling::pushRegion("pumipic_search_mesh");
@@ -517,10 +557,9 @@ namespace pumipic {
       //Find intersection face
       find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
       //Check if intersection face is exposed
-      check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, side_is_exposed,
-                               requireIntersection, inter_faces);
+      func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
       
-      //Move to next element
+      // Move to next element
       set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
 
       //Check if all particles are found
@@ -571,6 +610,45 @@ namespace pumipic {
     PrintAdditionalTimeInfo(buffer, 1);
     Kokkos::Profiling::popRegion();
     return found;
+  }
+
+  template <typename ParticleType, typename Segment3d>
+  struct RemoveParticleOnGeometricModelExit {
+    RemoveParticleOnGeometricModelExit(o::Mesh &mesh, bool requireIntersection)
+        : requireIntersection_(requireIntersection) {
+      side_is_exposed_ = mark_exposed_sides(&mesh);
+    }
+
+    void operator()(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                    o::Write<o::LO>& elem_ids, o::Write<o::LO>& inter_faces,
+                    o::Write<o::LO>& lastExit, o::Write<o::Real>& inter_points,
+                    o::Write<o::LO>& ptcl_done,
+                    Segment3d x_ps_orig,
+                    Segment3d x_ps_tgt) const {
+      // Check if intersection face is exposed
+      check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids,
+                               ptcl_done, lastExit, side_is_exposed_,
+                               requireIntersection_, inter_faces);
+    }
+
+    private:
+    bool requireIntersection_;
+    o::Bytes side_is_exposed_;
+  };
+
+  template <class ParticleType, typename Segment3d, typename SegmentInt>
+  bool search_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                   Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
+                   o::Write<o::LO>& elem_ids,
+                   bool requireIntersection,
+                   o::Write<o::LO>& inter_faces,
+                   o::Write<o::Real>& inter_points,
+                   int looplimit,
+                   int debug) {
+    RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
+
+    return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
+                           inter_faces, inter_points, looplimit, debug, native_handler);
   }
 }
 #endif

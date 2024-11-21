@@ -1,4 +1,4 @@
-name: update_doxygen_pages.yml
+name: Update Doxygen Page
 
 on:
   push:
@@ -36,14 +36,14 @@ jobs:
       run: |
         git checkout --orphan gh-pages
         git rm -rf .
-        ls ../original/html
+        cp -r ../original/html/. .
 
-    # - name: Update Github
-    #   working-directory: pages
-    #   run: |
-    #     git config user.name "GitHub Actions Bot"
-    #     git config user.email "<>"
-    #     git add .
-    #     git commit -m "Update page from action"
-    #     git push origin gh-pages:gh-pages
+    - name: Update Github
+      working-directory: pages
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "<>"
+        git add .
+        git commit -m "Update page from action"
+        git push origin gh-pages
 

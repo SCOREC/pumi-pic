@@ -4,10 +4,8 @@ on:
   push:
 
 jobs:
-  doxygen:
+  build-doxygen:
     runs-on: ubuntu-latest
-    permissions:
-       contents: write
 
     steps:
 
@@ -19,31 +17,24 @@ jobs:
 
     - name: Checkout Original
       uses: actions/checkout@v4
-      with:
-        path: original
 
     - name: Run Doxygen
-      working-directory: original
       run: doxygen
 
-    - name: Checkout Pages
-      uses: actions/checkout@v4
+    - name: Upload static files as artifact
+      id: deployment
+      uses: actions/upload-pages-artifact@v3
       with:
-        path: pages
+        path: html/
 
-    - name: Set up pages directory
-      working-directory: pages
-      run: |
-        git checkout --orphan gh-pages
-        git rm -rf .
-        cp -r ../original/html/. .
-
-    - name: Update Github
-      working-directory: pages
-      run: |
-        git config user.name "GitHub Actions Bot"
-        git config user.email "<>"
-        git add .
-        git commit -m "Update page from action"
-        git push -f origin gh-pages
+  deploy-doxygen:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-doxygen
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 

@@ -26,6 +26,8 @@ jobs:
 
     - name: Update Github
       run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "<>"
         git add html
         git commit -m "Update page from action"
         git push

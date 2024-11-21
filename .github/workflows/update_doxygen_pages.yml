@@ -19,7 +19,8 @@ jobs:
 
     - name: Git Checkout
       uses: actions/checkout@v4
-      path: original
+      with:
+        path: original
 
     - name: Run Doxygen
       working-directory: original
@@ -30,7 +31,7 @@ jobs:
       with:
         path: pages
 
-    - names: Set up pages directory
+    - name: Set up pages directory
       working-directory: pages
       run: |
         git checkout --orphan gh-pages

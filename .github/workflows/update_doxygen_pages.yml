@@ -22,12 +22,13 @@ jobs:
       path: original
 
     - name: Run Doxygen
-      working-direcory: original
+      working-directory: original
       run: doxygen
 
     - name: Git Checkout
       uses: actions/checkout@v4
-      path: pages
+      with:
+        path: pages
 
     - names: Set up pages directory
       working-directory: pages

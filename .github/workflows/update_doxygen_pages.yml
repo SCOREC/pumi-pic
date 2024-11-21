@@ -36,7 +36,7 @@ jobs:
       run: |
         git checkout --orphan gh-pages
         git rm -rf .
-        ls ../pages/html
+        ls ../original/html
 
     # - name: Update Github
     #   working-directory: pages

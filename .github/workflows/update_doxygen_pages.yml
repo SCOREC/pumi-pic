@@ -2,6 +2,8 @@ name: Update Doxygen Page
 
 on:
   push:
+    branches:
+        - master
 
 jobs:
   doxygen:

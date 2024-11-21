@@ -1,7 +1,7 @@
 name: Update Doxygen Page
 
 on:
-  workflow_dispatch:
+  push:
 
 jobs:
   build-doxygen:

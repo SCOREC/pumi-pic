@@ -19,18 +19,29 @@ jobs:
 
     - name: Git Checkout
       uses: actions/checkout@v4
-
-    - name: Checkout Page
-      run: git checkout -b gh-pages
+      path: original
 
     - name: Run Doxygen
+      working-direcory: original
       run: doxygen
 
+    - name: Git Checkout
+      uses: actions/checkout@v4
+      path: pages
+
+    - names: Set up pages directory
+      working-directory: pages
+      run: |
+        git checkout --orphan gh-pages
+        git rm -rf .
+        cp -r ../pages/. .
+
     - name: Update Github
+      working-directory: pages
       run: |
         git config user.name "GitHub Actions Bot"
         git config user.email "<>"
-        git add html
+        git add .
         git commit -m "Update page from action"
         git push origin gh-pages:gh-pages
 

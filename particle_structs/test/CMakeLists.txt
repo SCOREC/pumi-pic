@@ -6,6 +6,8 @@ function(make_test exename srcname)
   target_link_libraries(${exename} particleStructs)
 endfunction(make_test)
 
+make_test(smoke_test_particle smoke_test_particle.cpp)
+
 make_test(typeTest typeTest.cpp)
 
 make_test(sortTest sortTest.cpp)

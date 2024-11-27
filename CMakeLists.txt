@@ -78,8 +78,8 @@ set(pumipic_USE_Kokkos_DEFAULT ON)
 bob_public_dep(Kokkos)
 set(KOKKOS_ENABLED true)
 
-if(Kokkos_VERSION VERSION_LESS 4.2.00)
-    message(FATAL_ERROR "Kokkos version >= 4.2.00 required.")
+if(Kokkos_VERSION VERSION_LESS 4.0.01)
+    message(FATAL_ERROR "Kokkos version >= 4.0.01 required.")
 endif()
 
 if(Omega_h_VERSION VERSION_LESS 10.8.0)

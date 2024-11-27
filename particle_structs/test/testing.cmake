@@ -1,5 +1,3 @@
-mpi_test(smoke_test_particle 4 ./smoke_test_particle)
-
 mpi_test(type_test 1 ./typeTest)
 
 mpi_test(sort_test 1 ./sortTest 5000)

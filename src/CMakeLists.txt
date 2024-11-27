@@ -27,11 +27,12 @@ set(SOURCES
 
 configure_file(
   pumipic_version.hpp.in
-  ${CMAKE_CURRENT_SOURCE_DIR}/pumipic_version.hpp
+  pumipic_version.hpp
 )
 
 add_library(pumipic-core ${SOURCES})
 target_include_directories(pumipic-core INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )

@@ -25,7 +25,7 @@ namespace pumipic {
       dps->parallel_for(fn, s);
       return;
     }
-    printError( "[ERROR] Structure does not support parallel for used on kernel %s\n",
+    printError("Structure does not support parallel for used on kernel %s\n",
             s.c_str());
     throw 1;
   }
@@ -49,7 +49,7 @@ namespace pumipic {
       return dps->template copy<MSpace>();
     }
 
-    printError( "[ERROR] Structure does not support copy\n");
+    printError("Structure does not support copy\n");
     throw 1;
     return NULL;
   }

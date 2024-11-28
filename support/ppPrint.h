@@ -29,11 +29,11 @@ namespace pumipic {
   }
 
   template<typename... Args>
-  void printError(const char* fmt, const Args&... args) {
+  void printError(std::string fmt, const Args&... args) {
     #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED)
       spdlog::error("{}", fmt::sprintf(fmt, args...));
     #elif defined(PUMIPIC_PRINT_ENABLED)
-      fprintf(pp_stderr, fmt, args...);
+      fprintf(pp_stderr, ("[ERROR]"+fmt).c_str(), args...);
     #endif
   }
 

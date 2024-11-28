@@ -37,7 +37,7 @@ namespace pumipic {
 
   void SetTimingVerbosity(int v) {
     if (time_per_op.size() > 0) {
-      printError( "[ERROR] Cannot change timing verbosity after first call to RecordTime\n");
+      printError("Cannot change timing verbosity after first call to RecordTime\n");
       return;
     }
     verbosity = v;
@@ -45,14 +45,14 @@ namespace pumipic {
 
   void EnableTiming() {
     if (time_per_op.size() > 0) {
-      printError( "[ERROR] Cannot enable timing after first call to RecordTime\n");
+      printError("Cannot enable timing after first call to RecordTime\n");
       return;
     }
     enable_timing = 1;
   }
   void DisableTiming() {
     if (time_per_op.size() > 0) {
-      printError( "[ERROR] Cannot disable timing after first call to RecordTime\n");
+      printError("Cannot disable timing after first call to RecordTime\n");
       return;
     }
     enable_timing = -1;

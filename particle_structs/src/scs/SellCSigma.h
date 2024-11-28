@@ -337,7 +337,7 @@ template<class DataTypes, typename MemSpace>
 template <class MSpace>
 typename SellCSigma<DataTypes, MemSpace>::template Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
   if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-    printError( "[ERROR] Copy to same memory space not supported\n");
+    printError("Copy to same memory space not supported\n");
     exit(EXIT_FAILURE);
   }
   const auto cmax = maxChunk<MSpace>(C_max);

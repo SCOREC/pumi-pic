@@ -163,7 +163,7 @@ namespace pumipic {
       });
       auto hasFailed_h = deviceToHost(hasFailed);
       if( hasFailed_h(0) ) {
-	printError( "[ERROR] index out of range in view-to-view copy\n");
+	printError("index out of range in view-to-view copy\n");
 	exit(EXIT_FAILURE);
       }
       CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);

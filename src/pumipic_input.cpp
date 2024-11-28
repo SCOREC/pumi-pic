@@ -37,7 +37,7 @@ namespace pumipic {
       while (dot >=0 && partition_filename[dot] != '.')
         --dot;
       if (dot < 0) {
-        printError( "[ERROR] Filename provided has no extension (%s)", partition_filename);
+        printError("Filename provided has no extension (%s)", partition_filename);
         throw std::runtime_error("Filename has no extension");
       }
       char* extension = partition_filename + dot + 1;
@@ -88,7 +88,7 @@ namespace pumipic {
 
       }
       else {
-        printError( "[ERROR] Only .ptn and .cpn partitions are supported");
+        printError("Only .ptn and .cpn partitions are supported");
         throw std::runtime_error("Invalid partition file extension");
       }
     }

@@ -242,7 +242,7 @@ namespace pumipic {
   template <class MSpace>
   typename DPS<DataTypes, MemSpace>::template Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      printError( "[ERROR] Copy to same memory space not supported\n");
+      printError( "Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new DPS<DataTypes, MSpace>();
@@ -410,7 +410,7 @@ namespace pumipic {
     Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
-    void reportError() const {printError( "[ERROR] pumi-pic was built "
+    void reportError() const {printError( "pumi-pic was built "
                                       "without Cabana so the DPS structure "
                                       "can not be used\n");}
   };

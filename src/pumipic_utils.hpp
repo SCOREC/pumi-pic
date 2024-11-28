@@ -235,7 +235,7 @@ OMEGA_H_DEVICE o::Real interpolate2dField(const o::Reals& data,
      
   }
   if(debug)
-    pPrintInfo("interp2dField pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
+    printInfo("interp2dField pos: %g %g %g : dim1 %g nx %d nz %d gridx0 %g " 
       "gridz0 %g grid1 %g grid2 %g i %d j %d dx %g dz %g fxz %g \n",
       pos[0], pos[1], pos[2], dim1, nx, nz, gridx0, gridz0, gridXi, 
       gridXip1, i, j, dx, dz, fxz);
@@ -286,10 +286,10 @@ OMEGA_H_DEVICE o::Real interpolate2d(const o::Reals& data, const o::Real gridXi,
       (i+1+(j+1)*nx)*nComp + comp, gridXi, gridXip1, x, dx);
     fxz = interpolate2d_base(fx_z1, fx_z2, gridZj, gridZjp1, z, dz); 
     if(debug)
-      pPrintInfo("fx_z1 %.15f  fx_z2 %.15f \n", fx_z1, fx_z2);
+      printInfo("fx_z1 %.15f  fx_z2 %.15f \n", fx_z1, fx_z2);
   }
   if(debug)
-    pPrintInfo("int2d: pos %g %g %g dx,dz %g %g i,j %d %d nx,nz %d %d \n"
+    printInfo("int2d: pos %g %g %g dx,dz %g %g i,j %d %d nx,nz %d %d \n"
       " grids %.15f %.15f %.15f %.15f fxz %.15f\n\n", x,y,z, dx, dz, i, j, nx, nz, 
       gridXi, gridXip1, gridZj, gridZjp1, fxz);
   return fxz;
@@ -315,7 +315,7 @@ OMEGA_H_DEVICE o::Real interpolate2d_field(const o::Reals& data, const o::Real g
   auto gridZj = gridz0 + j * dz;
   auto gridZjp1 = gridz0 + (j+1) * dz; 
   if(debug)
-    pPrintInfo("2d_field: pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
+    printInfo("2d_field: pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
       x,pos[1],z, dx, dz, i, j, gridXi, gridXip1, gridZj, gridZjp1);
   return interpolate2d(data, gridXi, gridXip1, gridZj, gridZjp1, x, z, nx, 
     nz, i, j, dx, dz, 0, false, nComp, comp, debug);  
@@ -337,7 +337,7 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
   int nx = gridx.size();
   int nz = gridz.size();
   if(debug)
-    pPrintInfo("nx %d nz %d comp %d nComp %d \n", nx, nz, comp, nComp);
+    printInfo("nx %d nz %d comp %d nComp %d \n", nx, nz, comp, nComp);
   if(nx <=1 || nz <= 1)
     return data[comp];
   auto x = pos[0];
@@ -356,7 +356,7 @@ OMEGA_H_DEVICE o::Real interpolate2d_wgrid(const o::Reals& data,
   auto gridZj = (j>=nz) ? gridz[nz-1] : gridz[j]; /*gridz0 + j * dz */
   auto gridZjp1 = (j>=nz-1) ? gridz[nz-1] : gridz[j+1]; /*gridz0 + (j+1) * dz*/
   if(debug)
-    pPrintInfo("pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
+    printInfo("pos %g %g %g dx,z %g %g i,j %d %d grids %g %g %g %g\n", 
       x,pos[1],z, dx, dz, i, j, gridXi, gridXip1, gridZj, gridZjp1);
   return interpolate2d(data, gridXi, gridXip1, gridZj, gridZjp1, x, z, nx, 
     nz, i, j, dx, dz, 0, false, nComp, comp, debug);
@@ -382,7 +382,7 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     auto nz = gridz.size(); */
     bool debug = false;
     if(debug)
-      for(int i=0; i<5; ++i) pPrintInfo(" %d %.15e \n", i, gridz[i]);
+      for(int i=0; i<5; ++i) printInfo(" %d %.15e \n", i, gridz[i]);
     o::Real fxyz = 0;
     o::Real dx = gridx[1] - gridx[0];
     o::Real dy = gridy[1] - gridy[0];
@@ -406,16 +406,16 @@ OMEGA_H_DEVICE o::Real interpolate3d_field(const o::Real x, const o::Real y,
     auto fxz1 = interpolate2d_base(fxy_z0, fxy_z1, gridz[k], gridz[k+1], z, dz);
     fxyz = interpolate2d_base(fxz0, fxz1, gridy[j], gridy[j+1], y, dy);
     if(debug) {
-      pPrintInfo("fx_z0 %.15e fx_z1 %.15e \n", fx_z0, fx_z1);
-      pPrintInfo("fxy_z0 %.15e fxy_z1 %.15e fxz0 %.15e fxz1 %.15e fxyz %.15e\n",
+      printInfo("fx_z0 %.15e fx_z1 %.15e \n", fx_z0, fx_z1);
+      printInfo("fxy_z0 %.15e fxy_z1 %.15e fxz0 %.15e fxz1 %.15e fxyz %.15e\n",
         fxy_z0, fxy_z1, fxz0, fxz1, fxyz);
-      pPrintInfo("x %.15e y %.15e z %.15e i %d j %d k %d dx %.15e dy %.15e dz %.15e \n", 
+      printInfo("x %.15e y %.15e z %.15e i %d j %d k %d dx %.15e dy %.15e dz %.15e \n", 
         x, y, z, i, j, k, dx, dy, dz);
     }
     fxyz = (ny <= 1) ? fxz0: fxyz;
     fxyz = (nz <= 1) ? fx_z0: fxyz;
     if(debug)
-      pPrintInfo("fxy %.15e\n", fxyz);
+      printInfo("fxy %.15e\n", fxyz);
     return fxyz;
 }
 
@@ -426,7 +426,7 @@ void interp2dVector_wgrid (const o::Reals& data3, const o::Reals& gridx,
   for(int i=0; i<3; ++i)
     field[i] = interpolate2d_wgrid(data3, gridx, gridz, pos, cylSymm, 3, i, debug);
   if(debug)
-    pPrintInfo("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
+    printInfo("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
   if(gridx.size() > 1 && gridz.size() > 1 && cylSymm) {
     o::Real theta = Kokkos::atan2(pos[1], pos[0]);
     auto field0 = field[0];
@@ -444,7 +444,7 @@ OMEGA_H_DEVICE void interp2dVector (const o::Reals& data3, const o::Real gridx0,
     field[i] = interpolate2d_field(data3, gridx0, gridz0, dx, dz, nx, nz, 
      pos, cylSymm, 3, i, debug);
   if(debug)
-    pPrintInfo("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
+    printInfo("Field123 are %.15f %.15f %.15f \n", field[0],field[1],field[2]);
 
   if(cylSymm) {
     o::Real theta = Kokkos::atan2(pos[1], pos[0]);
@@ -525,7 +525,7 @@ OMEGA_H_DEVICE o::Vector<3> face_normal_of_tet(const o::LO fid, const o::LO elmI
     ++find;
   }
   if(findex <0 || findex >3) {
-    pPrintInfo("face_normal_of_tet:getFaceMap:: faceid not found fid %d elmId %d \n",
+    printInfo("face_normal_of_tet:getFaceMap:: faceid not found fid %d elmId %d \n",
         fid, elmId);
     OMEGA_H_CHECK(false);
   }

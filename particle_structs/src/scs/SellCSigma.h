@@ -243,7 +243,7 @@ void SellCSigma<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
   C_ = chooseChunkHeight(C_max, ptcls_per_elem);
 
   if(!comm_rank)
-    pPrintInfo( "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
+    printInfo( "Building SCS with C: %d sigma: %d V: %d\n",C_,sigma,V_);
   //Perform sorting
   kkLidView ptcls;
   kkLidView index;
@@ -337,7 +337,7 @@ template<class DataTypes, typename MemSpace>
 template <class MSpace>
 typename SellCSigma<DataTypes, MemSpace>::template Mirror<MSpace>* SellCSigma<DataTypes, MemSpace>::copy() {
   if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-    pPrintError( "[ERROR] Copy to same memory space not supported\n");
+    printError( "[ERROR] Copy to same memory space not supported\n");
     exit(EXIT_FAILURE);
   }
   const auto cmax = maxChunk<MSpace>(C_max);
@@ -520,7 +520,7 @@ void SellCSigma<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
   ptr += sprintf(ptr, "Empty Rows <Tot %%> %d %.3f\n", num_empty_elements,
                  num_empty_elements * 100.0 / numRows());
 
-  pPrintInfo("%s\n",buffer);
+  printInfo("%s\n",buffer);
 }
 
 template <class DataTypes, typename MemSpace>

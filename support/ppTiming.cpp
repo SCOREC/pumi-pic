@@ -37,7 +37,7 @@ namespace pumipic {
 
   void SetTimingVerbosity(int v) {
     if (time_per_op.size() > 0) {
-      pPrintError( "[ERROR] Cannot change timing verbosity after first call to RecordTime\n");
+      printError( "[ERROR] Cannot change timing verbosity after first call to RecordTime\n");
       return;
     }
     verbosity = v;
@@ -45,14 +45,14 @@ namespace pumipic {
 
   void EnableTiming() {
     if (time_per_op.size() > 0) {
-      pPrintError( "[ERROR] Cannot enable timing after first call to RecordTime\n");
+      printError( "[ERROR] Cannot enable timing after first call to RecordTime\n");
       return;
     }
     enable_timing = 1;
   }
   void DisableTiming() {
     if (time_per_op.size() > 0) {
-      pPrintError( "[ERROR] Cannot disable timing after first call to RecordTime\n");
+      printError( "[ERROR] Cannot disable timing after first call to RecordTime\n");
       return;
     }
     enable_timing = -1;
@@ -82,7 +82,7 @@ namespace pumipic {
           if (prebarrierTime >= PREBARRIER_TOL) {
             ptr += sprintf(ptr, " pre-brarrier (seconds) %f", prebarrierTime);
           }
-          pPrintInfo( "%s\n", buffer);
+          printInfo( "%s\n", buffer);
         }
       }
     }
@@ -90,7 +90,7 @@ namespace pumipic {
 
   void PrintAdditionalTimeInfo(char* str, int v) {
     if (isTiming() && verbosity >= v) {
-      pPrintInfo( "%s\n", str);
+      printInfo( "%s\n", str);
     }
   }
 
@@ -183,7 +183,7 @@ namespace pumipic {
             buffer <<"  Total Prebarrier=" << time_per_op[index].prebarrier;
           buffer <<'\n';
         }
-        pPrintInfo( "%s\n", buffer.str().c_str());
+        printInfo( "%s\n", buffer.str().c_str());
       }
     }
   }
@@ -268,7 +268,7 @@ namespace pumipic {
         int size = 1;
         MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(end, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
-        pPrintInfo( "%s\n", buffer.str().c_str());
+        printInfo( "%s\n", buffer.str().c_str());
 
       }
       else if (comm_rank) {

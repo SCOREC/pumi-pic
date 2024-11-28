@@ -160,7 +160,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(mpi_comm, &comm_rank);
     if(!comm_rank)
-      pPrintInfo( "building CabM\n");
+      printInfo( "building CabM\n");
 
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(particles_per_element, num_ptcls, extra_padding, padding_start);
@@ -181,7 +181,7 @@ namespace pumipic {
     }
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) pPrintInfo( "initializing CabM data\n");
+      if(!comm_rank) printInfo( "initializing CabM data\n");
       fillAoSoA(particle_elements, particle_info); // initialize data
     }
   }
@@ -202,7 +202,7 @@ namespace pumipic {
     int comm_rank;
     MPI_Comm_rank(input.mpi_comm, &comm_rank);
     if(!comm_rank)
-      pPrintInfo( "building CabM for %s\n", name.c_str());
+      printInfo( "building CabM for %s\n", name.c_str());
     
     // build view of offsets for SoA indices within particle elements
     offsets = buildOffset(input.ppe, num_ptcls, extra_padding, padding_start);
@@ -222,7 +222,7 @@ namespace pumipic {
       createGlobalMapping(input.e_gids, element_to_gid, element_gid_to_lid);
     // populate AoSoA with input data if given
     if (input.particle_elms.size() > 0 && input.p_info != NULL) {
-      if(!comm_rank) pPrintInfo( "initializing CabM data\n");
+      if(!comm_rank) printInfo( "initializing CabM data\n");
       fillAoSoA(input.particle_elms, input.p_info); // initialize data
     }
   }
@@ -306,7 +306,7 @@ namespace pumipic {
     ptr += sprintf(ptr, "Empty Elements <Tot %%> %d %.3f%%\n", num_empty_elements,
                    num_empty_elements * 100.0 / num_elems);
 
-    pPrintInfo("%s\n", buffer);
+    printInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -375,7 +375,7 @@ namespace pumipic {
   template <class MSpace>
   typename CabM<DataTypes, MemSpace>::template Mirror<MSpace>* CabM<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      pPrintError( "[ERROR] Copy to same memory space not supported\n");
+      printError( "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new CabM<DataTypes, MSpace>();
@@ -478,7 +478,7 @@ namespace pumipic {
     Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
-    void reportError() const {pPrintError( "[ERROR] pumi-pic was built "
+    void reportError() const {printError( "[ERROR] pumi-pic was built "
                                       "without Cabana so the CabM structure "
                                       "can not be used\n");}
   };

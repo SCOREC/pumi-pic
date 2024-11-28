@@ -37,7 +37,7 @@ namespace pumipic {
       while (dot >=0 && partition_filename[dot] != '.')
         --dot;
       if (dot < 0) {
-        pPrintError( "[ERROR] Filename provided has no extension (%s)", partition_filename);
+        printError( "[ERROR] Filename provided has no extension (%s)", partition_filename);
         throw std::runtime_error("Filename has no extension");
       }
       char* extension = partition_filename + dot + 1;
@@ -46,7 +46,7 @@ namespace pumipic {
         std::ifstream in_str(partition_filename);
         if (!in_str) {
           if (!comm_rank)
-            pPrintError("Cannot open file %s\n", partition_filename);
+            printError("Cannot open file %s\n", partition_filename);
           throw std::runtime_error("Cannot open file");
         }
         int own;
@@ -62,7 +62,7 @@ namespace pumipic {
           std::ifstream in_str(partition_filename);
           if (!in_str) {
             if (!comm_rank)
-              pPrintError("Cannot open file %s\n", partition_filename);
+              printError("Cannot open file %s\n", partition_filename);
             throw std::runtime_error("Cannot open file");
           }
           int size;
@@ -88,14 +88,14 @@ namespace pumipic {
 
       }
       else {
-        pPrintError( "[ERROR] Only .ptn and .cpn partitions are supported");
+        printError( "[ERROR] Only .ptn and .cpn partitions are supported");
         throw std::runtime_error("Invalid partition file extension");
       }
     }
     bufferMethod = bufferMethod_;
     if (bufferMethod == NONE) {
       if (!mesh.comm()->rank())
-        pPrintInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
+        printInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
       bufferMethod=MINIMUM;
     }
     safeMethod = safeMethod_;
@@ -121,7 +121,7 @@ namespace pumipic {
       comm = c;
     if (bufferMethod == NONE) {
       if (!comm->rank())
-        pPrintInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
+        printInfo("[WARNING] bufferMethod given as NONE, setting to MINIMUM\n");
       bufferMethod=MINIMUM;
     }
     safeMethod = safeMethod_;
@@ -153,7 +153,7 @@ namespace pumipic {
   void Input::printInfo() {
     std::string bname = getMethodString(bufferMethod);
     std::string sname = getMethodString(safeMethod);
-    pPrintInfo("pumipic buffer method %s\n", bname.c_str());
-    pPrintInfo("pumipic safe method %s\n", sname.c_str());
+    printInfo("pumipic buffer method %s\n", bname.c_str());
+    printInfo("pumipic safe method %s\n", sname.c_str());
   }
 }

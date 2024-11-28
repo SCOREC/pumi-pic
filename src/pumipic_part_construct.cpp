@@ -58,7 +58,7 @@ namespace pumipic {
     int comm_size = comm->size();
     if (ghost_layers < safe_layers) {
       if (!rank)
-        pPrintError( "Ghost layers must be >= safe layers");
+        printError( "Ghost layers must be >= safe layers");
       throw 1;
     }
     is_full_mesh = false;
@@ -230,7 +230,7 @@ namespace pumipic {
       picpart->add_coords(new_coords);
       Omega_h::finalize_classification(picpart);
       if(!picpart->nelems()) {
-        pPrintError("%s: empty part on rank %d\n", __func__, rank);
+        printError("%s: empty part on rank %d\n", __func__, rank);
       }
       assert(picpart->nelems());
 
@@ -285,9 +285,9 @@ namespace {
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       if (c_id < 0)
-        pumipic::pPrintInfo("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
+        pumipic::printInfo("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
       else if (c_id >= max_cids)
-        pumipic::pPrintInfo("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
+        pumipic::printInfo("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
       owns[id] = class_owners[c_id];
       const auto hasElm = (class_owners[c_id] == self);
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
@@ -295,7 +295,7 @@ namespace {
     Omega_h::parallel_for(m.nelems(), ownByClassification, "ownByClassification");
     Omega_h::HostWrite<Omega_h::LO> selfcount_h(selfcount);
     if(!selfcount_h[0]) {
-      pumipic::pPrintError( "%s rank %d with no owned elements detected\n", __func__, self);
+      pumipic::printError( "%s rank %d with no owned elements detected\n", __func__, self);
     }
     assert(selfcount_h[0]);
   }

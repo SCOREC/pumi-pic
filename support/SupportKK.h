@@ -234,7 +234,7 @@ namespace pumipic {
     //printf("view: %s\n", v.label().c_str());
     Kokkos::parallel_for("print_view", v.size(),
       KOKKOS_LAMBDA (const int& i) {
-        pPrintInfo("%d %d\n", i, v(i));
+        printInfo("%d %d\n", i, v(i));
       });
   }
 
@@ -244,7 +244,7 @@ namespace pumipic {
     //printf("view: %s\n", v.label().c_str());
     Kokkos::parallel_for("print_view", v.size(),
       KOKKOS_LAMBDA (const int& i) {
-        pPrintInfo("%d %f\n", i, v(i));
+        printInfo("%d %f\n", i, v(i));
       });
   }
 }

@@ -51,7 +51,7 @@ namespace pumipic {
     if (comm->rank() == 0) {
       if (!Omega_h::filesystem::exists(dir)) {
         if (!Omega_h::filesystem::create_directory(dir)) {
-          pPrintError( "[ERROR] Failed to create directory %s\n", dir);
+          printError( "[ERROR] Failed to create directory %s\n", dir);
           return;
         }
       }
@@ -70,7 +70,7 @@ namespace pumipic {
     //Write file for the pumipic mesh data
     std::ofstream out_str(ppm_file);
     if (!out_str) {
-      pPrintError( "[ERROR] Failed to open file %s\n", ppm_file);
+      printError( "[ERROR] Failed to open file %s\n", ppm_file);
       return;
     }
 #ifdef OMEGA_H_USE_ZLIB
@@ -122,7 +122,7 @@ namespace pumipic {
     sprintf(dir, "%s_%d.ppm", path, comm->size());
 
     if (!Omega_h::filesystem::exists(dir)) {
-      pPrintError( "[ERROR] Directory %s does not exist\n", dir);
+      printError( "[ERROR] Directory %s does not exist\n", dir);
       return;
     }
 
@@ -136,7 +136,7 @@ namespace pumipic {
 
     std::ifstream in_str(ppm_file);
     if (!in_str) {
-      pPrintError( "[ERROR] Cannot open file %s\n", ppm_file);
+      printError( "[ERROR] Cannot open file %s\n", ppm_file);
       return;
     }
 
@@ -198,7 +198,7 @@ namespace pumipic {
       if (mesh->dim() == 3)
         ptr += sprintf(ptr, " %ld", mesh->num_entites[3]);
       ptr += sprintf(ptr, ")");
-      pPrintInfo("%s\n", buffer);
+      printInfo("%s\n", buffer);
     }
 
     //Create load balancer after reading in the mesh

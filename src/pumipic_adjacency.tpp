@@ -92,11 +92,11 @@ namespace pumipic {
           barycentric_tri(elmArea[searchElm], elmCoords, ptclOrigin, faceBcc);
           if(!all_positive(faceBcc, tol)) {
             if (debug) {
-              pPrintInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
+              printInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f bcc %.15f %.15f %.15f\n",
                      rank, pid, ptcl, e, searchElm, ptclOrigin[0], ptclOrigin[1],
                      faceBcc[0], faceBcc[1], faceBcc[2]);
-              pPrintInfo("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
+              printInfo("Element <%f %f> <%f %f> <%f %f>\n", elmCoords[0][0], elmCoords[0][1],
                      elmCoords[1][0], elmCoords[1][1], elmCoords[2][0], elmCoords[2][1]);
             }
             Kokkos::atomic_add(&(numNotInElem[0]), 1);
@@ -120,7 +120,7 @@ namespace pumipic {
           barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
           if(!all_positive(bcc, tol)) {
             if (debug) {
-              pPrintInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
+              printInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
                      "orig %.15f %.15f %.15f bcc %.15f %.15f %.15f %.15f\n",
                      rank, pid, ptcl, e, searchElm,
                      ptclOrigin[0], ptclOrigin[1], ptclOrigin[2],
@@ -136,7 +136,7 @@ namespace pumipic {
     }
     Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
     if (numNotInElem_h[0] > 0) {
-      pPrintError( "[WARNING] Rank %d: %d particles are not located in their "
+      printError( "[WARNING] Rank %d: %d particles are not located in their "
               "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
     }
     return numNotInElem_h[0];
@@ -394,7 +394,7 @@ namespace pumipic {
           area = elmArea[elm];
       }, Kokkos::Min<o::Real>(min_area));
     o::Real tol = Kokkos::max(1e-15 / min_area, 1e-8);
-    pPrintInfo("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
+    printInfo("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }
   
@@ -509,10 +509,10 @@ namespace pumipic {
       // Kokkos::parallel_reduce(ptcl_done.size(), OMEGA_H_LAMBDA(const o::LO ptcl, o::LO& count) {
       //     count += (ptcl_done[ptcl] == 0);
       //     if (loops > 10000 && ptcl_done[ptcl] == 0)
-      //       pPrintInfo("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
+      //       printInfo("  Remains %d in %d\n", ptcl, elem_ids[ptcl]);
       //   }, nr);
       // if (loops % 10 == 0)
-      //   pPrintInfo("Loop %d: %d remaining\n", loops, nr);
+      //   printInfo("Loop %d: %d remaining\n", loops, nr);
       //Check iteration count
       if(looplimit && loops >= looplimit) {
         Omega_h::Write<o::LO> numNotFound(1,0);
@@ -523,7 +523,7 @@ namespace pumipic {
             const auto ptclDest = makeVector2(pid, x_ps_orig);
             const auto ptclOrigin = makeVector2(pid, x_ps_tgt);
             if (debug) {
-              pPrintInfo("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
+              printInfo("rank %d elm %d ptcl %d notFound %.15f %.15f to %.15f %.15f\n",
                      rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                      ptclDest[0], ptclDest[1]);
             }
@@ -533,7 +533,7 @@ namespace pumipic {
         };
         ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
         Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-        pPrintError( "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
+        printError( "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
                 "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
         break;
       }

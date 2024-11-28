@@ -60,7 +60,7 @@ namespace pumipic {
     MPI_Comm_rank(mpi_comm, &comm_rank);
 
     if(!comm_rank)
-      pPrintInfo( "Building CSR\n");
+      printInfo( "Building CSR\n");
 
     // SS1 allocate the offsets array and use an exclusive_scan (aka prefix sum)
     // to fill the entries of the offsets array.
@@ -85,7 +85,7 @@ namespace pumipic {
     // If particle info is provided then enter the information
     lid_t given_particles = particle_elements.size();
     if (given_particles > 0 && particle_info != NULL) {
-      if(!comm_rank) pPrintInfo( "initializing CSR data\n");
+      if(!comm_rank) printInfo( "initializing CSR data\n");
       initCsrData(particle_elements, particle_info);
     }
 

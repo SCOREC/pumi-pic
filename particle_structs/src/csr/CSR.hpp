@@ -226,7 +226,7 @@ namespace pumipic {
     ptr += sprintf(ptr, "Number of Elements %d, Number of Particles %d, Capacity %d\n",
                    num_elems, num_ptcls, capacity_);
     
-    pPrintInfo("%s\n", buffer);
+    printInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -269,7 +269,7 @@ namespace pumipic {
   template <class MSpace>
   typename CSR<DataTypes, MemSpace>::template Mirror<MSpace>* CSR<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      pPrintError( "[ERROR] Copy to same memory space not supported\n");
+      printError( "[ERROR] Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new CSR<DataTypes, MSpace>();

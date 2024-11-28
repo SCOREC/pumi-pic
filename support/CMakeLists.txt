@@ -35,12 +35,12 @@ target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
 
-if(PP_PRINT_ENABLED)
-  target_compile_definitions(support INTERFACE -DPP_PRINT_ENABLED)
+if(PUMIPIC_PRINT_ENABLED)
+  target_compile_definitions(support INTERFACE -DPUMIPIC_PRINT_ENABLED)
 endif()
 
 if (spdlog_FOUND)
-  target_compile_definitions(support INTERFACE -DSPDLOG_ENABLED)
+  target_compile_definitions(support INTERFACE -DPUMIPIC_SPDLOG_ENABLED)
   target_link_libraries(support PUBLIC spdlog::spdlog)
 endif()
 

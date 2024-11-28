@@ -392,7 +392,7 @@ private:
     if (comm_rank == 0) {
       float avg = tot_p / comm_size;
       float imb = max_p / avg;
-      pPrintInfo("Ptcl LB <max, min, avg, imb>: %d %d %.3f %.3f\n", max_p, min_p, avg, imb);
+      printInfo("Ptcl LB <max, min, avg, imb>: %d %d %.3f %.3f\n", max_p, min_p, avg, imb);
     }
 
   }

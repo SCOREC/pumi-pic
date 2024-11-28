@@ -225,7 +225,7 @@ namespace pumipic {
     int ne = nents(edim);
     int nvals = length / ne;
     if (ne*nvals != length) {
-      pPrintError( "Comm array size does not match the expected size for dimension %d\n",edim);
+      printError( "Comm array size does not match the expected size for dimension %d\n",edim);
       return;
     }
     if (commptr->size() == 1)

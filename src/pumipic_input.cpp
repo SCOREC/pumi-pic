@@ -150,7 +150,7 @@ namespace pumipic {
       return Input::INVALID;
   }
 
-  void Input::printInfo() {
+  void Input::printMethod() {
     std::string bname = getMethodString(bufferMethod);
     std::string sname = getMethodString(safeMethod);
     printInfo("pumipic buffer method %s\n", bname.c_str());

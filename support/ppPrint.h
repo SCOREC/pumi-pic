@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PUMIPIC_PRINT_H
+#define PUMIPIC_PRINT_H
 
 #ifdef PUMIPIC_SPDLOG_ENABLED
   #include "spdlog/spdlog.h"
@@ -47,3 +48,5 @@ namespace pumipic {
   }
 
 }
+
+#endif //PUMIPIC_PRINT_H

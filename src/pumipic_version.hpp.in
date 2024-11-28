@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PUMIPIC_VERSION_H
+#define PUMIPIC_VERSION_H
 
 #define PUMIPIC_VERSION_MAJOR @CMAKE_PROJECT_VERSION_MAJOR@
 #define PUMIPIC_VERSION_MINOR @CMAKE_PROJECT_VERSION_MINOR@
@@ -9,3 +10,5 @@ namespace pumipic {
     return "@CMAKE_PROJECT_VERSION@";
   }
 }
+
+#endif //PUMIPIC_VERSION_H

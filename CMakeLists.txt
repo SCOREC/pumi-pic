@@ -90,6 +90,9 @@ if(EnGPar_VERSION VERSION_LESS 1.1.0)
     message(FATAL_ERROR "EnGPar version >= 1.1.0 required.")
 endif()
 
+option(PP_PRINT_ENABLED "PUMIPIC print statements enabled" ON)
+find_package(spdlog QUIET)
+
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)
   set(debug_flag "-g")

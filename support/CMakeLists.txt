@@ -17,6 +17,7 @@ set(SOURCES
   ppTiming.cpp
   ppAssert.cpp
   ViewComm.cpp
+  ppPrint.cpp
 )
 
 add_library(support ${SOURCES})

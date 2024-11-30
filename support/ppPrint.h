@@ -15,25 +15,18 @@ namespace pumipic {
     #define ACTIVE_GPU_EXECUTION
   #endif
 
-  inline FILE* pp_stdout = stdout;
-  inline FILE* pp_stderr = stderr;
+  FILE* getStdout();
+  FILE* getStderr();
 
-  inline void setStdout(FILE* out) {
-    assert(out != NULL);
-    pp_stdout = out;
-  }
-
-  inline void setStderr(FILE* err) {
-    assert(err != NULL);
-    pp_stderr = err;
-  }
+  void setStdout(FILE* out);
+  void setStderr(FILE* err);
 
   template<typename... Args>
   void printError(std::string fmt, const Args&... args) {
     #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED)
       spdlog::error("{}", fmt::sprintf(fmt, args...));
     #elif defined(PUMIPIC_PRINT_ENABLED)
-      fprintf(pp_stderr, ("[ERROR]"+fmt).c_str(), args...);
+      fprintf(getStderr(), ("[ERROR]"+fmt).c_str(), args...);
     #endif
   }
 
@@ -43,7 +36,7 @@ namespace pumipic {
     #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
       spdlog::info("{}", fmt::sprintf(fmt, args...));
     #elif defined(PUMIPIC_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
-      fprintf(pp_stdout, fmt, args...);
+      fprintf(getStdout(), fmt, args...);
     #endif
   }
 

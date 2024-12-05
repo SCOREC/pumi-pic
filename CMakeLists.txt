@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(pumipic VERSION 2.1.3 LANGUAGES CXX)
+project(pumipic VERSION 2.1.4 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 
@@ -85,6 +85,13 @@ endif()
 if(Omega_h_VERSION VERSION_LESS 10.8.0)
     message(FATAL_ERROR "Omega_h version >= 10.8.0 required.")
 endif()
+
+if(EnGPar_VERSION VERSION_LESS 1.1.0)
+    message(FATAL_ERROR "EnGPar version >= 1.1.0 required.")
+endif()
+
+option(PUMIPIC_PRINT_ENABLED "PUMIPIC print statements enabled" ON)
+find_package(spdlog QUIET)
 
 set(debug_flag)
 if (PP_ENABLE_DEBUG_SYMBOLS)

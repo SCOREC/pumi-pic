@@ -4,6 +4,7 @@
 #include "pseudoXGCmTypes.hpp"
 #include "gyroScatter.hpp"
 #include <fstream>
+#include "pumipic_version.hpp"
 
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 
@@ -88,6 +89,7 @@ int main(int argc, char** argv) {
     std::cout << "Usage: " << argv[0] << " <mesh> " << "\n";
     exit(1);
   }
+  printf("VERSION: %s\n", pumipic::pumipic_version());
   auto full_mesh = readMesh(argv[1], lib);
   Omega_h::HostWrite<Omega_h::LO> host_owners(full_mesh.nelems());
   for (int i = 0; i < full_mesh.nelems(); ++i)

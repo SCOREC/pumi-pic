@@ -51,7 +51,7 @@ namespace pumipic {
     if (comm->rank() == 0) {
       if (!Omega_h::filesystem::exists(dir)) {
         if (!Omega_h::filesystem::create_directory(dir)) {
-          fprintf(stderr, "[ERROR] Failed to create directory %s\n", dir);
+          printError("Failed to create directory %s\n", dir);
           return;
         }
       }
@@ -70,7 +70,7 @@ namespace pumipic {
     //Write file for the pumipic mesh data
     std::ofstream out_str(ppm_file);
     if (!out_str) {
-      fprintf(stderr, "[ERROR] Failed to open file %s\n", ppm_file);
+      printError("Failed to open file %s\n", ppm_file);
       return;
     }
 #ifdef OMEGA_H_USE_ZLIB
@@ -122,7 +122,7 @@ namespace pumipic {
     sprintf(dir, "%s_%d.ppm", path, comm->size());
 
     if (!Omega_h::filesystem::exists(dir)) {
-      fprintf(stderr, "[ERROR] Directory %s does not exist\n", dir);
+      printError("Directory %s does not exist\n", dir);
       return;
     }
 
@@ -136,7 +136,7 @@ namespace pumipic {
 
     std::ifstream in_str(ppm_file);
     if (!in_str) {
-      fprintf(stderr, "[ERROR] Cannot open file %s\n", ppm_file);
+      printError("Cannot open file %s\n", ppm_file);
       return;
     }
 
@@ -187,7 +187,7 @@ namespace pumipic {
     mesh->commptr = comm;
 
     int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_rank(comm->get_impl(), &world_rank);
     if (!world_rank) {
       char buffer[1024];
       char* ptr = buffer + sprintf(buffer, "PumiPIC Mesh read <v e f");
@@ -198,7 +198,7 @@ namespace pumipic {
       if (mesh->dim() == 3)
         ptr += sprintf(ptr, " %ld", mesh->num_entites[3]);
       ptr += sprintf(ptr, ")");
-      printf("%s\n", buffer);
+      printInfo("%s\n", buffer);
     }
 
     //Create load balancer after reading in the mesh

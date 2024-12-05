@@ -9,6 +9,7 @@
 #include <Kokkos_Core.hpp>
 #include <mpi.h>
 #include <cstdlib>
+#include "ppPrint.h"
 
 namespace pumipic {
 
@@ -155,14 +156,14 @@ namespace pumipic {
       Kokkos::parallel_for(ps_indices.size(), KOKKOS_LAMBDA(const int& i) {
         const int index = ps_indices(i);
         if (index >= size || index < 0) {
-          printf("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
+          printInfo("[ERROR] copying view to view from %d to %d outside of [0-%d)\n", i, index, size);
 	  hasFailed(0) = 1;
         }
         CopyViewToView<T,Device>(dst, index, src, i);
       });
       auto hasFailed_h = deviceToHost(hasFailed);
       if( hasFailed_h(0) ) {
-	fprintf(stderr, "[ERROR] index out of range in view-to-view copy\n");
+	printError("index out of range in view-to-view copy\n");
 	exit(EXIT_FAILURE);
       }
       CopyViewsToViewsImpl<View, Types...>(dsts+1, srcs+1, ps_indices);

@@ -1,0 +1,49 @@
+name: Update Doxygen Page
+
+on:
+  push:
+    branches:
+        - master
+
+jobs:
+  doxygen:
+    runs-on: ubuntu-latest
+    permissions:
+       contents: write
+
+    steps:
+
+    - name: Install Doxygen
+      run: |
+        sudo apt-add-repository universe
+        sudo apt-get update
+        sudo apt-get install doxygen
+
+    - name: Checkout Original
+      uses: actions/checkout@v4
+      with:
+        path: original
+
+    - name: Run Doxygen
+      working-directory: original
+      run: doxygen
+
+    - name: Checkout Pages
+      uses: actions/checkout@v4
+      with:
+        path: pages
+
+    - name: Set up pages directory
+      working-directory: pages
+      run: |
+        git checkout --orphan gh-pages
+        git rm -rf .
+        cp -r ../original/html/. .
+    - name: Update Github
+      working-directory: pages
+      run: |
+        git config user.name "GitHub Actions Bot"
+        git config user.email "<>"
+        git add .
+        git commit -m "Update page from action"
+        git push -f origin gh-pages

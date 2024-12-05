@@ -125,9 +125,6 @@ namespace pumipic {
                                                  MTVs new_particles) {
     const auto btime = prebarrier();
     Kokkos::Profiling::pushRegion("scs_rebuild");
-    int comm_rank, comm_size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
     Kokkos::Timer timer;
 
@@ -148,7 +145,7 @@ namespace pumipic {
     });
     auto hasInactivePtcls_h = deviceToHost(hasInactivePtcls);
     if( hasInactivePtcls_h(0) ) {
-      fprintf(stderr, "[ERROR] there are new particles being added that are marked"
+      printError( "there are new particles being added that are marked"
                       "as inactive (element id set to -1)\n");
       exit(EXIT_FAILURE);
     }

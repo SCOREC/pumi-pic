@@ -34,7 +34,7 @@ namespace ellipticalPush {
   }
 
   void push(PS* ptcls, Omega_h::Mesh& m, const double deg, const int iter) {
-    const auto btime = pumipic_prebarrier();
+    const auto btime = pumipic_prebarrier(MPI_COMM_WORLD);
     Kokkos::Profiling::pushRegion("ellipticalPush");
     Kokkos::Timer timer;
     int rank, comm_size;

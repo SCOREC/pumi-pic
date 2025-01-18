@@ -1,3 +1,8 @@
+configure_file(
+  pumipic_version.hpp.in
+  pumipic_version.hpp
+)
+
 set(HEADERS
   pumipic_adjacency.hpp
   pumipic_adjacency.tpp
@@ -11,6 +16,7 @@ set(HEADERS
   pumipic_input.hpp
   pumipic_kktypes.hpp
   pumipic_profiling.hpp
+  ${CMAKE_CURRENT_BINARY_DIR}/pumipic_version.hpp
 )
 
 set(SOURCES
@@ -24,8 +30,10 @@ set(SOURCES
   pumipic_profiling.cpp
   pumipic_file.cpp
 )
+
 add_library(pumipic-core ${SOURCES})
 target_include_directories(pumipic-core INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
 )

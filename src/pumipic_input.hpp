@@ -52,7 +52,7 @@ namespace pumipic {
           Method bufferMethod, Method safeMethod,
           Omega_h::CommPtr comm = nullptr);
 
-    void printInfo();
+    void printMethod();
     static Method getMethod(std::string s);
 
     Ownership getRule() const {return ownership_rule;}

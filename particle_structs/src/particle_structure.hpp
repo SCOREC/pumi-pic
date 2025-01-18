@@ -93,7 +93,7 @@ namespace pumipic {
                          Distributor<Space> dist = Distributor<Space>(),
                          kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
-    virtual void printMetrics() const = 0;
+    virtual void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const = 0;
     virtual void printFormat(const char* prefix = "") const = 0;
 
     template <typename ViewT>

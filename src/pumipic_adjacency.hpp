@@ -117,7 +117,7 @@ OMEGA_H_DEVICE bool find_barycentric_tet( const Omega_h::Matrix<DIM, 4> &mat,
   auto cross_ac_ab = Omega_h::cross(abc[2]-abc[0], abc[1]-abc[0]);
   auto vol6 = o::inner_product(mat[vtx3]-mat[0], cross_ac_ab);
   if(debug) 
-    printf(" old:bccvals %g %g %g %g vol %g \n", vals[0]/6.0, vals[1]/6.0, 
+    printInfo(" old:bccvals %g %g %g %g vol %g \n", vals[0]/6.0, vals[1]/6.0, 
       vals[2]/6.0, vals[3]/6.0,vol6/6.0);
 
   Omega_h::Real inv_vol = 0.0;
@@ -151,7 +151,7 @@ OMEGA_H_DEVICE bool barycentric_coords_tet(const o::LOs& mesh2verts,
   auto basis = Omega_h::simplex_basis<DIM, DIM>(tet);
   auto vol = Omega_h::tet_volume_from_basis(basis);
   if(debug)
-    printf(" bccvals %g %g %g %g vol %g \n", vals[0], vals[1], vals[2], vals[3],vol);
+    printInfo(" bccvals %g %g %g %g vol %g \n", vals[0], vals[1], vals[2], vals[3],vol);
   if(vol < tol)
     return 0;
   bcc = 1.0/vol * vals;
@@ -171,7 +171,7 @@ OMEGA_H_DEVICE bool find_barycentric_tri_simple(
   Omega_h::Real area = o::inner_product(norm, cross);
 
   if(Kokkos::abs(area) < 1e-20) { //TODO
-    printf("area is too small \n");
+    printInfo("area is too small \n");
     return 0;
   }
   Omega_h::Real fac = 1/(area*2.0);
@@ -243,14 +243,14 @@ OMEGA_H_DEVICE bool line_triangle_intx_simple (
   if(reverse) {
     normv = -1*normv;
     if(debug)
-      printf("LTintX Surface normal is flipped\n");
+      printInfo("LTintX Surface normal is flipped\n");
   }
   auto snorm_unit = Omega_h::normalize(normv);
   Omega_h::Real dist2plane = o::inner_product(abc[0] - origin, snorm_unit);
   auto plane2dest = dest - abc[0];
   Omega_h::Real proj_end = o::inner_product(snorm_unit, plane2dest);
   if(debug)
-    printf("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
+    printInfo("LTintX dist2plane %.10f pro_end %.10f\n", dist2plane, proj_end);  
   // equal required if tol=0 is used
   if(dist2plane >= -tol && proj_end >= -tol) {
     dproj = o::inner_product(line, snorm_unit);
@@ -264,7 +264,7 @@ OMEGA_H_DEVICE bool line_triangle_intx_simple (
         bcc[1]<=1 && bcc[2] >=0 && bcc[2] <=1)
           found = true;
       if(debug)
-        printf("LTintX Found %d bcc+ %d par_t= %.10f dist2plane= %.10f "
+        printInfo("LTintX Found %d bcc+ %d par_t= %.10f dist2plane= %.10f "
            "projline= %.10f proj_out_line %.10f X %.10f %.10f %.10f \n", found, res, 
            par_t, dist2plane, dproj, proj_end, xpoint[0], xpoint[1], xpoint[2]);
     }
@@ -321,15 +321,15 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
     o::Write<o::Real>& xpoints_d, // (out) particle-boundary intersection points
     o::Write<o::LO>& xface_d, // (out) face ids of boundary-intersecting points
     int looplimit=0, int debug=0) {
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh3d");
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_Init");
 
   Kokkos::Timer timer;
   const o::Real tol = 1.0e-20;
   int rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+  MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
+  MPI_Comm_size(mesh.comm()->get_impl(), &comm_size);
 
   Kokkos::Profiling::pushRegion("pumpipic_search_mesh_omegah");
   const auto side_is_exposed = mark_exposed_sides(&mesh);
@@ -371,7 +371,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
       const auto orig = makeVector3(pid, x_ps_d);
       if(!isPointWithinElemTet(mesh2verts, coords, orig, e, tol)) {
         if(debug)
-          printf("Search1: ptcl %d not_in parent_element %d :pos %g %g %g \n", 
+          printInfo("Search1: ptcl %d not_in parent_element %d :pos %g %g %g \n", 
             pid_d(pid), e, orig[0], orig[1], orig[2]);
         OMEGA_H_CHECK(false);
       }
@@ -447,7 +447,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
             xpoints_d[pid*3+i] = xpts[i];
           xface_d[pid] = face_ids[ind_exp];
           if(debug)
-            printf("Search: ptcl %d hit boundary %d  to-be stopped/reflected\n", 
+            printInfo("Search: ptcl %d hit boundary %d  to-be stopped/reflected\n", 
               pid_d(pid), xface_d[pid]);
           elem_ids_next[pid] = -1;
           ptcl_done[pid] = 2;
@@ -503,7 +503,7 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
             xpoints_d[pid*3+i] = xpoints[max_ind*3+i];            
           xface_d[pid] = face_id;
           if(debug)
-            printf("Search: ptcl %d hit boundary tobe reflected/stopped\n", pid_d(pid));
+            printInfo("Search: ptcl %d hit boundary tobe reflected/stopped\n", pid_d(pid));
           ptcl_done[pid] = 2;
         } else {
           elem_ids_next[pid] = dual_elems[face_id];
@@ -531,24 +531,24 @@ bool search_mesh_3d(o::Mesh& mesh, // (in) mesh
           auto ptcl = pid_d(pid);
           const auto dest = makeVector3(pid, xtgt_ps_d);
           const auto orig = makeVector3(pid, x_ps_d);
-          printf("rank %d : el %d next_elm %d ptcl %d  %.15e %.15e %.15e "
+          printInfo("rank %d : el %d next_elm %d ptcl %d  %.15e %.15e %.15e "
             "=> %.15e %.15e %.15e \n", rank, e, elm, ptcl, orig[0], 
             orig[1], orig[2], dest[0], dest[1],dest[2]);
           if(debug)
             for(int il=0; il<nloops; ++il) {
               auto nn = pid*nloops*lsize+lsize*il;
-              printf(" pid %d  loop %d el_hist  : %d %d %d %d %d\n", pid, il, 
+              printInfo(" pid %d  loop %d el_hist  : %d %d %d %d %d\n", pid, il, 
                el_hist[nn], el_hist[nn+1], el_hist[nn+2], el_hist[nn+3], el_hist[nn+4]);
             }
         }
       };
       parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
-      fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+      printError( "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   } //while
   Kokkos::Profiling::popRegion(); //whole
-  //fprintf(stderr, "loop-time seconds %f\n", timer.seconds()); 
+  //printError( "loop-time seconds %f\n", timer.seconds()); 
   pumipic::RecordTime("Search Mesh 3d", timer.seconds(), btime);
   return found;   
 }
@@ -588,7 +588,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         elem_ids[pid] = e;
       ptcl_done[pid] = (elem_ids[pid] == -1);
       if (debug)
-        printf("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
+        printInfo("pid %3d mask %1d elem_ids %6d\n", pid, mask, elem_ids[pid]);
     } else {
       elem_ids[pid] = -1;
       ptcl_done[pid] = 1;
@@ -600,7 +600,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
   int loops = 0;
   while(!found) {
     if(debug) {
-      fprintf(stderr, "------------ %d ------------\n", loops);
+      printError( "------------ %d ------------\n", loops);
     }
     //pid is same for a particle between iterations in this while loop
     auto lamb = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -611,7 +611,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         auto tetv2v = o::gather_verts<4>(mesh2verts, elmId);
         auto M = gatherVectors4x3(coords, tetv2v);
         if(debug)
-          printf("pid %d in element %d\n", pid, elmId);
+          printInfo("pid %d in element %d\n", pid, elmId);
         auto dest = makeVector3(pid, xtgt_ps_d);
         auto orig = makeVector3(pid, x_ps_d);
         o::Vector<4> bcc;
@@ -619,7 +619,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
           //make sure particle origin is in initial element
           find_barycentric_tet(M, orig, bcc);
           if(!all_positive(bcc, tol)) {
-            printf("Warning: Particle not in this element at loops=0"
+            printInfo("Warning: Particle not in this element at loops=0"
               "\tpid %d elem %d\n", pid, elmId);
             OMEGA_H_CHECK(false);
           }
@@ -631,12 +631,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
         // TODO tolerance
         if(all_positive(bcc, tol)) {
           if(debug)
-            printf("ptcl %d is in destination elm %d\n", ptcl, elmId);
+            printInfo("ptcl %d is in destination elm %d\n", ptcl, elmId);
           elem_ids_next[pid] = elmId;
           ptcl_done[pid] = 1;
         } else {
           if(debug)
-            printf("ptcl %d  elemId %d checking adj elms:\n", ptcl, elmId);
+            printInfo("ptcl %d  elemId %d checking adj elms:\n", ptcl, elmId);
           auto dproj = o::zero_vector<4>();
           auto xpoints = o::zero_vector<12>();
           o::LO exposed_faces[4];
@@ -667,12 +667,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               xpoints[findex*3+i] = xpoint[i];
 
             if(debug) {
-              printf("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
+              printInfo("\t :ptcl %d elmId %d faceid %d flipped %d exposed %d intersected %d"
               " findex %d\n", ptcl, elmId, face_id, flip, exposed, intersected, findex);
               for(int i=0; i<3; ++i)
-               printf("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
+               printInfo("\t ptcl %d face:%d %.15f %.15f %.15f\n", 
                 ptcl, i, face[i][0], face[i][1], face[i][2]);
-              printf("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
+              printInfo("\t ptcl: %d orig,dest: %.15f %.15f %.15f %.15f %.15f %.15f \n", 
                 ptcl, orig[0], orig[1], orig[2], dest[0],dest[1],dest[2]);
             }
             if(intersected && exposed) {
@@ -682,14 +682,14 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               xface_d[pid] = face_id;
               elem_ids_next[pid] = -1;
               if(debug)
-                printf("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
+                printInfo("\t ptcl %d e %d faceid %d intersected and exposed, next parent "
                   "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               break;
             } else if(intersected && !exposed) {
               auto adj_elem  = dual_elems[dual_elem_id];
               elem_ids_next[pid] = adj_elem;
               if(debug) {
-                printf("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
+                printInfo("\t ptcl %d e %d faceid %d intersected and !exposed, next parent "
                       "elm %d findex %d\n", ptcl, elmId, face_id, elem_ids_next[pid], findex);
               }
               break;
@@ -699,7 +699,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
             // save next element based on the smallest BCC,
             if(!exposed) {
               if(debug)
-                printf("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
+                printInfo("\t ptcl %d e %d faceid %d findex %d !intersected and !exposed\n",
                 ptcl, elmId, face_id, findex);
               o::LO min_ind = min_index(bcc, 4);
               if(findex == min_ind) {
@@ -711,7 +711,7 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
           } //for iface
 
           if(!intersected) {
-            printf("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
+            printInfo("\t ptcl %d e %d not intersected; using max dproj\n", ptcl, elmId);
             o::LO max_ind = max_index(dproj, 4);
             if(dproj[max_ind]>=0) {
               auto fid = xface_ids[max_ind];
@@ -724,12 +724,12 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
               } else { //if(min_bcc_elem >= 0) {
                 elem_ids_next[pid] = dual_elems[fid]; //min_bcc_elem;
                 if(debug)
-                  printf("\t ptcl %d e %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
+                  printInfo("\t ptcl %d e %d elem_ids_next %d min_bcc_elem %d\n", ptcl, 
                    elmId, elem_ids_next[pid], min_bcc_elem);
               }
             } else {
               // current elem, but bcc failed to detect it on face/corner
-              printf("WARNING: particle %d leaked from e %d \n", ptcl, elmId);
+              printInfo("WARNING: particle %d leaked from e %d \n", ptcl, elmId);
               elem_ids_next[pid] = -1;
               ptcl_done[pid] = 1;
             }
@@ -755,13 +755,13 @@ bool search_mesh(o::Mesh& mesh, ParticleStructure< ParticleType >* ptcls,
 
     if(looplimit && loops > looplimit) {
       //if (debug)
-        fprintf(stderr, "ERROR:loop limit %d exceeded\n", looplimit);
+        printError( "ERROR:loop limit %d exceeded\n", looplimit);
       break;
     }
   } //while
   
   if(debug)
-    fprintf(stderr, "\t: loops %d\n", loops);
+    printError( "\t: loops %d\n", loops);
   Kokkos::Profiling::popRegion();
   return found;
 }
@@ -780,8 +780,8 @@ OMEGA_H_DEVICE Omega_h::Real interpolateTetVtx(const Omega_h::LOs& mesh2verts,
     auto fd = d*dof + comp;
     val = val + bcc[fi]*fv4[fd][0];
     if(debug) {// preprocess
-      printf("bcc %.15f field %.15f val %.15f\n", bcc[fi], fv4[fd][0], val);
-      printf("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
+      printInfo("bcc %.15f field %.15f val %.15f\n", bcc[fi], fv4[fd][0], val);
+      printInfo("interp: %g %d %g %g \n", bcc[fi]*fv4[fd][0], d, 
         bcc[fi], fv4[fd][0]);
     }
   }
@@ -1002,7 +1002,7 @@ OMEGA_H_DEVICE o::Vector<3> closest_point_on_triangle(
     return ptq;
   }
   if(debug)
-    printf("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
+    printInfo("d's:: %0.3f %0.3f %0.3f %0.3f %0.3f %0.3f \n", d1, d2, d3, d4, d5, d6);
 
   return ptq;
 }
@@ -1018,13 +1018,13 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
                     int looplimit=0,  // (in) [optional] number of loops before giving up
                     bool debug = false) {
 
-  const auto btime = pumipic_prebarrier();
+  const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
   Kokkos::Profiling::pushRegion("pumipic_search_mesh_2d");
   Kokkos::Timer timer;
 
   int rank, comm_size;
-  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-  MPI_Comm_size(MPI_COMM_WORLD,&comm_size);
+  MPI_Comm_rank(mesh.comm()->get_impl(),&rank);
+  MPI_Comm_size(mesh.comm()->get_impl(),&comm_size);
 
   const auto faces2edges = mesh.ask_down(o::FACE, o::EDGE);
   const auto edges2faces = mesh.ask_up(o::EDGE, o::FACE);
@@ -1100,9 +1100,11 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
         auto searchElm = elem_ids[pid];
         auto bridge = lastEdge[pid];
         auto e2f_first = e2f_offsets[bridge];
-        auto e2f_last = e2f_offsets[bridge+1];
-        auto upFaces = e2f_last - e2f_first;
-        assert(upFaces==2);
+        #ifdef _DEBUG
+          auto e2f_last = e2f_offsets[bridge+1];
+          auto upFaces = e2f_last - e2f_first;
+          assert(upFaces==2);
+        #endif
         auto faceA = e2f_vals[e2f_first];
         auto faceB = e2f_vals[e2f_first+1];
         assert(faceA != faceB);
@@ -1129,7 +1131,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
           const auto ptclDest = makeVector2(pid, xtgt_ps_d);
           const auto ptclOrigin = makeVector2(pid, x_ps_d);
           if (debug) {
-            printf("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
+            printInfo("rank %d elm %d ptcl %d notFound %g %g to %g %g\n",
                    rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                    ptclDest[0], ptclDest[1]);
           }
@@ -1139,7 +1141,7 @@ bool search_mesh_2d(o::Mesh& mesh, // (in) mesh
       };
       ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
       Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
-      fprintf(stderr, "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
+      printError( "ERROR:Rank %d: loop limit %d exceeded. %d %s were "
               "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0],
               ptcls->getName().c_str());
       break;
@@ -1212,9 +1214,11 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
       const o::LO searchElm = elem_id;
       const o::LO bridge = lastEdge;
       const o::LO e2f_first = e2f_offsets[bridge];
-      const o::LO e2f_last = e2f_offsets[bridge+1];
-      const o::LO upFaces = e2f_last - e2f_first;
-      assert(upFaces == 2);
+      #ifdef _DEBUG
+        const o::LO e2f_last = e2f_offsets[bridge+1];
+        const o::LO upFaces = e2f_last - e2f_first;
+        assert(upFaces == 2);
+      #endif
       const o::LO faceA = e2f_vals[e2f_first];
       const o::LO faceB = e2f_vals[e2f_first+1];
       assert(faceA != faceB);
@@ -1232,12 +1236,12 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
       elem_id = -1;
       //TODO: use preprocessor macro
       if (debug) {
-        printf("elm %d ptcl %d notFound %g %g to %g %g\n",
+        printInfo("elm %d ptcl %d notFound %g %g to %g %g\n",
                searchElm, pid, ptclOrigin[0], ptclOrigin[1],
                ptclDest[0], ptclDest[1]);
       }
       elem_id = -1;
-      printf("ERROR: loop limit %d exceeded, particle %d is "
+      printInfo("ERROR: loop limit %d exceeded, particle %d is "
               "not found; deleting them.\n", looplimit, pid);
       break;
     }

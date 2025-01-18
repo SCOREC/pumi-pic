@@ -43,7 +43,8 @@ namespace pumipic {
           kkLidView particles_per_element,
           kkGidView element_gids,
           kkLidView particle_elements = kkLidView(),
-          MTVs particle_info = NULL);
+          MTVs particle_info = NULL,
+          MPI_Comm mpi_comm = MPI_COMM_WORLD);
     DPS(DPS_Input<DataTypes, MemSpace>&);
     ~DPS();
 
@@ -71,7 +72,7 @@ namespace pumipic {
     template <typename FunctionType>
     void parallel_for(FunctionType& fn, std::string s="");
 
-    void printMetrics() const;
+    void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const;
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
@@ -112,7 +113,8 @@ namespace pumipic {
     void construct(kkLidView ptcls_per_elem,
                   kkGidView element_gids,
                   kkLidView particle_elements,
-                  MTVs particle_info);
+                  MTVs particle_info,
+                  MPI_Comm mpi_comm);
 
     //Private constructor for copy()
     DPS() : ParticleStructure<DataTypes, MemSpace>(), policy(100, 1) {}
@@ -122,12 +124,13 @@ namespace pumipic {
   void DPS<DataTypes, MemSpace>::construct(kkLidView ptcls_per_elem,
                                            kkGidView element_gids,
                                            kkLidView particle_elements,
-                                           MTVs particle_info) {
+                                           MTVs particle_info,
+                                           MPI_Comm mpi_comm) {
     Kokkos::Profiling::pushRegion("dps_construction");
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
     if(!comm_rank)
-      fprintf(stderr, "building DPS\n");
+      printInfo( "building DPS\n");
 
     // calculate num_soa_ from number of particles + extra padding
     num_soa_ = Kokkos::ceil(Kokkos::ceil(double(num_ptcls)/AoSoA_t::vector_length)*(1+extra_padding));
@@ -142,7 +145,7 @@ namespace pumipic {
       createGlobalMapping(element_gids, element_to_gid, element_gid_to_lid);
     // populate AoSoA with input data if given
     if (particle_elements.size() > 0 && particle_info != NULL) {
-      if(!comm_rank) fprintf(stderr, "initializing DPS data\n");
+      if(!comm_rank) printInfo( "initializing DPS data\n");
       fillAoSoA(particle_elements, particle_info, parentElms_); // fill aosoa with data
     }
     else
@@ -172,7 +175,8 @@ namespace pumipic {
                                    kkLidView particles_per_element,
                                    kkGidView element_gids,
                                    kkLidView particle_elements, // optional
-                                   MTVs particle_info) :        // optional
+                                   MTVs particle_info,          // optional
+                                   MPI_Comm mpi_comm) :         // optional
     ParticleStructure<DataTypes, MemSpace>(),
     policy(p),
     element_gid_to_lid(num_elements),
@@ -182,7 +186,7 @@ namespace pumipic {
     num_elems = num_elements;
     num_rows = num_elems;
     num_ptcls = num_particles;
-    construct(particles_per_element, element_gids, particle_elements, particle_info);
+    construct(particles_per_element, element_gids, particle_elements, particle_info, mpi_comm);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -196,7 +200,7 @@ namespace pumipic {
     num_ptcls = input.np;
     extra_padding = input.extra_padding;
     assert(num_elems == input.ppe.size());
-    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info);
+    construct(input.ppe, input.e_gids, input.particle_elms, input.p_info, input.mpi_comm);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -238,7 +242,7 @@ namespace pumipic {
   template <class MSpace>
   typename DPS<DataTypes, MemSpace>::template Mirror<MSpace>* DPS<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
+      printError( "Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new DPS<DataTypes, MSpace>();
@@ -265,7 +269,7 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  void DPS<DataTypes, MemSpace>::printMetrics() const {
+  void DPS<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
     // Sum number of empty cells
     auto mask = Cabana::slice<DPS_DT::size-1>(*aosoa_);
     kkLidView padded_cells("num_padded_cells",1);
@@ -276,7 +280,7 @@ namespace pumipic {
     lid_t num_padded = getLastValue(padded_cells);
 
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
     char buffer[1000];
     char* ptr = buffer;
     // Header
@@ -287,7 +291,7 @@ namespace pumipic {
     // Padded Cells
     ptr += sprintf(ptr, "Padded Cells <Tot %%> %d %.3f%%\n", num_padded,
                    num_padded * 100.0 / capacity_);
-    printf("%s\n", buffer);
+    printInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -399,14 +403,14 @@ namespace pumipic {
     template <typename FunctionType>
     void parallel_for(FunctionType& fn, std::string s="") {reportError();}
 
-    void printMetrics() const {reportError();}
+    void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const {reportError();}
     void printFormat(const char* prefix) const {reportError();}
 
     template <class MSpace>
     Mirror<MSpace>* copy() {reportError(); return NULL;}
 
   private:
-    void reportError() const {fprintf(stderr, "[ERROR] pumi-pic was built "
+    void reportError() const {printError( "pumi-pic was built "
                                       "without Cabana so the DPS structure "
                                       "can not be used\n");}
   };

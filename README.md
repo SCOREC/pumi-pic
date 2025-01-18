@@ -13,6 +13,6 @@ See the wiki build instructions for detailed version info.
 
 ### Documentation
 
-SISC Paper (in-review) - https://www.scorec.rpi.edu/reports/view_report.php?id=760
+SISC Paper - https://www.scorec.rpi.edu/reports/view_report.php?id=760
 
 SCALA19' Paper - https://www.scorec.rpi.edu/reports/view_report.php?id=758

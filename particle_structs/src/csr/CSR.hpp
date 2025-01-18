@@ -39,7 +39,8 @@ namespace pumipic {
         kkLidView particles_per_element,
         kkGidView element_gids,
         kkLidView particle_elements = kkLidView(),
-        MTVs particle_info = NULL);
+        MTVs particle_info = NULL,
+        MPI_Comm mpi_comm = MPI_COMM_WORLD);
     CSR(Input_T& input);
     ~CSR();
 
@@ -64,7 +65,7 @@ namespace pumipic {
     template <typename FunctionType>
     void parallel_for(FunctionType& fn, std::string name="");
 
-    void printMetrics() const;
+    void printMetrics(MPI_Comm mpi_comm = MPI_COMM_WORLD) const;
     void printFormat(const char* prefix) const;
 
     // Do not call these functions:
@@ -99,7 +100,8 @@ namespace pumipic {
     void construct(kkLidView ptcls_per_elem,
                    kkGidView element_gids,
                    kkLidView particle_elements,
-                   MTVs particle_info);
+                   MTVs particle_info,
+                   MPI_Comm mpi_comm);
 
     //Rebuild and Padding variables
     bool always_realloc;
@@ -131,7 +133,8 @@ namespace pumipic {
                                 kkLidView particles_per_element,
                                 kkGidView element_gids,      // optional
                                 kkLidView particle_elements, // optional
-                                MTVs particle_info) :        // optional
+                                MTVs particle_info,          // optional
+                                MPI_Comm mpi_comm) :         // optional
       ParticleStructure<DataTypes, MemSpace>(),
       policy(p),
       element_gid_to_lid(num_elements)
@@ -144,7 +147,7 @@ namespace pumipic {
     minimize_size = 0.8;
     padding_amount = 1.05;
 
-    construct(particles_per_element,element_gids,particle_elements,particle_info);
+    construct(particles_per_element,element_gids,particle_elements,particle_info,mpi_comm);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -160,7 +163,7 @@ namespace pumipic {
     always_realloc = input.always_realloc;
     minimize_size = input.minimize_size;
 
-    construct(input.ppe, input.e_gids, input.particle_elems, input.p_info);
+    construct(input.ppe, input.e_gids, input.particle_elems, input.p_info, input.mpi_comm);
 
 
   }
@@ -210,9 +213,9 @@ namespace pumipic {
   }
 
   template <class DataTypes, typename MemSpace>
-  void CSR<DataTypes, MemSpace>::printMetrics() const {
+  void CSR<DataTypes, MemSpace>::printMetrics(MPI_Comm mpi_comm) const {
     int comm_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+    MPI_Comm_rank(mpi_comm, &comm_rank);
 
     char buffer[1000];
     char* ptr = buffer;
@@ -223,7 +226,7 @@ namespace pumipic {
     ptr += sprintf(ptr, "Number of Elements %d, Number of Particles %d, Capacity %d\n",
                    num_elems, num_ptcls, capacity_);
     
-    printf("%s\n", buffer);
+    printInfo("%s\n", buffer);
   }
 
   template <class DataTypes, typename MemSpace>
@@ -266,7 +269,7 @@ namespace pumipic {
   template <class MSpace>
   typename CSR<DataTypes, MemSpace>::template Mirror<MSpace>* CSR<DataTypes, MemSpace>::copy() {
     if (std::is_same<memory_space, typename MSpace::memory_space>::value) {
-      fprintf(stderr, "[ERROR] Copy to same memory space not supported\n");
+      printError( "Copy to same memory space not supported\n");
       exit(EXIT_FAILURE);
     }
     Mirror<MSpace>* mirror_copy = new CSR<DataTypes, MSpace>();

@@ -10,12 +10,14 @@ set(HEADERS
   ppAssert.h
   ppTiming.hpp
   ppMemUsage.hpp
+  ppPrint.h
 )
 
 set(SOURCES
   ppTiming.cpp
   ppAssert.cpp
   ViewComm.cpp
+  ppPrint.cpp
 )
 
 add_library(support ${SOURCES})
@@ -33,6 +35,18 @@ $<INSTALL_INTERFACE:include>)
 target_include_directories(support INTERFACE
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/support>
 $<INSTALL_INTERFACE:include>)
+
+if(PUMIPIC_PRINT_ENABLED)
+  add_definitions(-DPUMIPIC_PRINT_ENABLED)
+  target_compile_definitions(support INTERFACE -DPUMIPIC_PRINT_ENABLED)
+endif()
+
+if (spdlog_FOUND)
+  add_definitions(-DPUMIPIC_SPDLOG_ENABLED)
+  target_compile_definitions(support INTERFACE -DPUMIPIC_SPDLOG_ENABLED)
+  target_link_libraries(support PUBLIC spdlog::spdlog)
+endif()
+
 target_link_libraries(support PUBLIC Kokkos::kokkos)
 target_link_libraries(support PUBLIC MPI::MPI_CXX)
 if(ENABLE_CABANA)

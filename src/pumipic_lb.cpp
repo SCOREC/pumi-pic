@@ -218,9 +218,9 @@ namespace pumipic {
       }
     }
     int comm_size;
-    MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+    MPI_Comm_size(comm->get_impl(), &comm_size);
     max_sbar = start_num_sbar;
-    MPI_Bcast(&max_sbar, 1, MPI_INT, comm_size - 1, MPI_COMM_WORLD);
+    MPI_Bcast(&max_sbar, 1, MPI_INT, comm_size - 1, comm->get_impl());
 
     //Communicate local numbers to all buffers
 
@@ -321,7 +321,7 @@ namespace pumipic {
             ptr += sprintf(ptr," %d", *pitr);
           }
           ptr += sprintf(ptr, "]\n");
-          fprintf(stderr, "%s", error);
+          printError( "%s", error);
         }
       }
     }
@@ -484,7 +484,7 @@ namespace pumipic {
     agi::gid_t global_edges = weightGraph->numGlobalEdges();
     agi::gid_t global_pins = weightGraph->numGlobalPins();
     if (!comm_rank) {
-      printf("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n",
+      printInfo("Ngraph global stats <vtx edges pins>: %ld %ld %ld\n",
              global_vtx,  global_edges, global_pins);
     }
   }

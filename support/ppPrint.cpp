@@ -25,7 +25,7 @@ namespace pumipic {
       spdlog::error("{}", fmt::vsprintf(fmt, ap));
     #elif defined(PUMIPIC_PRINT_ENABLED)
       fprintf(getStderr(), "[ERROR]");
-      fprintf(getStderr(), fmt, ap);
+      vfprintf(getStderr(), fmt, ap);
     #endif
     va_end(ap);
   }

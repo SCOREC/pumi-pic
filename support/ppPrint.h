@@ -32,7 +32,7 @@ namespace pumipic {
     #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
       spdlog::info("{}", fmt::vsprintf(fmt, ap));
     #elif defined(PUMIPIC_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
-      fprintf(getStdout(), fmt, ap);
+      vfprintf(getStdout(), fmt, ap);
     #endif
     va_end(ap);
   }

@@ -248,7 +248,7 @@ namespace pumipic {
     for (int i = 1; i < offsets_host.size(); i++) {
       if ( offsets_host[i] != offsets_host[i-1] ) {
         if (element_to_gid_host.size() > 0)
-          num_chars = sprintf(ptr,"\n  Element %2d(%2d) |", i-1, element_to_gid_host(i-1));
+          num_chars = sprintf(ptr,"\n  Element %2d(%2ld) |", i-1, element_to_gid_host(i-1));
         else
           num_chars = sprintf(ptr,"\n  Element %2d |", i-1);
         buffer[num_chars] = '\0';

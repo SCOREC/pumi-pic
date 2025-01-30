@@ -348,7 +348,7 @@ namespace pumipic {
       else {
         if (element_to_gid_host.size() > 0) {
           if (last_elm != elm)
-            num_chars = sprintf(ptr,"\n  Element %2d(%2d) | %d", elm, element_to_gid_host(elm), mask_host(i));
+            num_chars = sprintf(ptr,"\n  Element %2d(%2ld) | %d", elm, element_to_gid_host(elm), mask_host(i));
           else
             num_chars = sprintf(ptr,"\n                 | %d", mask_host(i));
           buffer[num_chars] = '\0';

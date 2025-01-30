@@ -17,4 +17,16 @@ namespace pumipic {
     assert(err != NULL);
     pp_stderr = err;
   }
+
+  void printError(const char* fmt, ... ) {
+    va_list ap;
+    va_start(ap,fmt);
+    #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED)
+      spdlog::error("{}", fmt::vsprintf(fmt, ap));
+    #elif defined(PUMIPIC_PRINT_ENABLED)
+      fprintf(getStderr(), "[ERROR]");
+      vfprintf(getStderr(), fmt, ap);
+    #endif
+    va_end(ap);
+  }
 }

@@ -14,10 +14,10 @@ int main(int argc, char* argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
 
-    int num_elems = 5;
-    int num_ptcls = 5;
-    lid_t V = 1024;
-    lid_t sigma = INT_MAX;
+    const int num_elems = 5;
+    const int num_ptcls = 5;
+    const lid_t V = 1024;
+    const lid_t sigma = INT_MAX;
     kkLidView ppe = kkLidView("particles_per_element", num_elems);
     kkGidView element_gids = kkGidView("elemnt_gids", num_elems);
     kkLidView particle_elements = kkLidView("element_of_particle", num_ptcls);

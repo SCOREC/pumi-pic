@@ -1,4 +1,4 @@
-name: build-test
+name: CMake Tests
 on: 
   push:
   schedule:

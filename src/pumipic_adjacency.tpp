@@ -455,6 +455,7 @@ namespace pumipic {
   * @param looplimit Maximum number of iterations
   * @param debug True if debug information is printed
   * @param func Callable object to handle particles at element sides or destination
+  * @param tol Tolerance for intersection. If not positive, it is computed from the minimum element area
   * @return True if all particles are found at destination or left domain
   */
   template <class ParticleType, typename Segment3d, typename SegmentInt, typename Func>
@@ -467,7 +468,7 @@ namespace pumipic {
                    int looplimit,
                    bool debug,
                    Func& func,
-                   o::Real tol = -1.0) {
+                   o::Real &tol) {
     static_assert(
         std::is_invocable_r_v<
             void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
@@ -490,7 +491,7 @@ namespace pumipic {
     const auto elmArea = measure_elements_real(&mesh);
     bool useBcc = !requireIntersection;
 
-    if (tol < 0) {
+    if (tol <= 0.0) {
         tol = compute_tolerance_from_area(elmArea);
     }
     
@@ -652,9 +653,9 @@ namespace pumipic {
                    int looplimit,
                    int debug) {
     RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
-
+    o::Real tol = -1.0;
     return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
-                           inter_faces, inter_points, looplimit, debug, native_handler);
+                           inter_faces, inter_points, looplimit, debug, native_handler, tol);
   }
 }
 #endif

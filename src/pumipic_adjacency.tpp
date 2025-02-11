@@ -466,7 +466,8 @@ namespace pumipic {
                    o::Write<o::Real>& inter_points,
                    int looplimit,
                    bool debug,
-                   Func& func) {
+                   Func& func,
+                   o::Real tol = -1.0) {
     static_assert(
         std::is_invocable_r_v<
             void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
@@ -488,7 +489,10 @@ namespace pumipic {
     o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
     const auto elmArea = measure_elements_real(&mesh);
     bool useBcc = !requireIntersection;
-    o::Real tol = compute_tolerance_from_area(elmArea);
+
+    if (tol < 0) {
+        tol = compute_tolerance_from_area(elmArea);
+    }
     
     int rank;
     MPI_Comm_rank(mesh.comm()->get_impl(), &rank);

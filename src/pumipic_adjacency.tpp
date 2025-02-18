@@ -586,7 +586,7 @@ namespace pumipic {
       func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
       
       // Move to next element
-      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+      //set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
 
       //Check if all particles are found
       found = true;
@@ -656,6 +656,7 @@ namespace pumipic {
       check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids,
                                ptcl_done, lastExit, side_is_exposed_,
                                requireIntersection_, inter_faces);
+      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
     }
 
     private:

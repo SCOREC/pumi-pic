@@ -15,6 +15,7 @@
 #include "pumipic_constants.hpp"
 #include "pumipic_kktypes.hpp"
 #include "pumipic_profiling.hpp"
+#include "pumipic_adjacency.hpp"
 
 namespace o = Omega_h;
 namespace ps = particle_structs;
@@ -337,7 +338,7 @@ namespace pumipic {
               o::Real dproj;
               o::Real closeness;
               o::Real intersection_parametric_coord;
-              const bool success = ray_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
+              const bool success = line_segment_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
                                                            closeness, intersection_parametric_coord);
               if (success) {
                 lastExit[ptcl] = face_id;
@@ -354,7 +355,12 @@ namespace pumipic {
             if (lastExit[ptcl] == -1) {              
                 lastExit[ptcl] = bestFace;
             }
-            ptcl_done[ptcl] = (lastExit[ptcl] == -1);
+            if (lastExit[ptcl == -1]){ // reached destination
+                xPoints[3*ptcl] = x_ps_tgt(ptcl,0);
+                xPoints[3*ptcl+1] = x_ps_tgt(ptcl,1);
+                xPoints[3*ptcl+2] = x_ps_tgt(ptcl,2);
+            }
+            //ptcl_done[ptcl] = (lastExit[ptcl] == -1);
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
@@ -370,6 +376,9 @@ namespace pumipic {
                                 bool requireIntersection,
                                 o::Write<o::LO> xFace) {
     auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
+        if (mask>0 && ptcl_done[pid] && lastExit[pid] == -1){
+            xFace[pid] = -1;
+        }
       if( mask > 0 && !ptcl_done[pid] ) {
         assert(lastExit[pid] != -1);
         const o::LO bridge = lastExit[pid];
@@ -466,6 +475,7 @@ namespace pumipic {
                    bool requireIntersection,
                    o::Write<o::LO>& inter_faces,
                    o::Write<o::Real>& inter_points,
+                   o::Write<o::LO>& lastExit,
                    int looplimit,
                    bool debug,
                    Func& func,
@@ -487,9 +497,14 @@ namespace pumipic {
     //Initial setup
     const auto psCapacity = ptcls->capacity();
     // True if particle has reached new parent element
+    // TODO: ptcl_done is searches internal state, it will be handled when it
+    // is made a class method
     o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
     // Store the last exit face
-    o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
+    //o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
+    if (lastExit.size() == 0){
+        lastExit = Omega_h::Write<Omega_h::LO>(psCapacity, -1, "search_last_exit");
+    }
     bool useBcc = !requireIntersection;
 
     o::Real tol = 0;
@@ -603,14 +618,15 @@ namespace pumipic {
                      rank, searchElm, ptcl, ptclOrigin[0], ptclOrigin[1],
                      ptclDest[0], ptclDest[1]);
             }
-            elem_ids[pid] = -1;
+            // TODO it shouldn't mark them -1, it should throw error or behavior set with parameter
+            //elem_ids[pid] = -1;
             Kokkos::atomic_add(&(numNotFound[0]), 1);
           }
         };
         ps::parallel_for(ptcls, ptclsNotFound, "ptclsNotFound");
         Omega_h::HostWrite<o::LO> numNotFound_h(numNotFound);
         printError( "ERROR:Rank %d: loop limit %d exceeded. %d particles were "
-                "not found. Deleting them...\n", rank, looplimit, numNotFound_h[0]);
+                "not found.\n", rank, looplimit, numNotFound_h[0]);
         break;
       }
 
@@ -658,8 +674,9 @@ namespace pumipic {
                    int debug) {
     RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
     o::Reals elmArea = measure_elements_real(&mesh);
+    o::Write<o::LO> lastExit (ptcls->capacity(), -1, "lastExit");
     return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
-                           inter_faces, inter_points, looplimit, debug, native_handler, elmArea);
+                           inter_faces, inter_points, lastExit, looplimit, debug, native_handler, elmArea);
   }
 }
 #endif

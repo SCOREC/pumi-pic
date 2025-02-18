@@ -352,7 +352,8 @@ namespace pumipic {
             }
 
             //If line intersection fails then use BCC method
-            if (lastExit[ptcl] == -1) {              
+            if (lastExit[ptcl] == -1) {
+                printf("!!!!!!! Best face %d\n", bestFace);
                 lastExit[ptcl] = bestFace;
             }
             if (lastExit[ptcl == -1]){ // reached destination
@@ -396,9 +397,9 @@ namespace pumipic {
   }
 
   template <class ParticleType>
-  void set_new_element(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
-                       o::Write<o::LO> elem_ids, o::LOs ptcl_done,
-                       o::Write<o::LO> lastExit) {
+  void find_next_element(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
+                         o::Write<o::LO> elem_ids, o::Write<o::LO> next_element, o::LOs ptcl_done,
+                         o::Write<o::LO> lastExit) {
     int dim = mesh.dim();
     const auto faces2elms = mesh.ask_up(dim-1, dim);
     auto e2f_vals = faces2elms.ab2b; // CSR value array
@@ -418,7 +419,7 @@ namespace pumipic {
         assert(faceA != faceB);
         assert(faceA == searchElm || faceB == searchElm);
         auto nextElm = (faceA == searchElm) ? faceB : faceA;
-        elem_ids[pid] = nextElm;
+        next_element[pid] = nextElm;
       }
     };
     parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
@@ -472,6 +473,7 @@ namespace pumipic {
   bool trace_particle_through_mesh(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
                    Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
                    o::Write<o::LO>& elem_ids,
+                   o::Write<o::LO>& next_element,
                    bool requireIntersection,
                    o::Write<o::LO>& inter_faces,
                    o::Write<o::Real>& inter_points,
@@ -484,10 +486,10 @@ namespace pumipic {
     static_assert(
         std::is_invocable_r_v<
             void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
-            o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &,
+            o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &, o::Write<o::LO> &,
             o::Write<o::Real> &, o::Write<o::LO> &,
             Segment3d, Segment3d>,
-        "Functional must accept <mesh> <ps> <elem_ids> <inter_faces> <lastExit> <inter_points> <ptcl_done> <x_ps_orig> <x_ps_tgt>\n");
+        "Functional must accept <mesh> <ps> <elem_ids> <next_element> <inter_faces> <lastExit> <inter_points> <ptcl_done> <x_ps_orig> <x_ps_tgt>\n");
 
     //Initialize timer
     const auto btime = pumipic_prebarrier(mesh.comm()->get_impl());
@@ -545,6 +547,11 @@ namespace pumipic {
       parallel_for(ptcls, setInitial, "search_setInitial");
     }
 
+    // if next_element is not initialized, initialize it with elem_ids
+    if (next_element.size() == 0) {
+      next_element = o::Write<o::LO>(elem_ids);
+    }
+
     //Finish particles that didn't move
     auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
       if  (mask){
@@ -582,11 +589,11 @@ namespace pumipic {
     while (!found) {
       //Find intersection face
       find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
+      // find next element
+      find_next_element(mesh, ptcls, elem_ids, next_element, ptcl_done, lastExit);
       //Check if intersection face is exposed
-      func(mesh, ptcls, elem_ids, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
+      func(mesh, ptcls, elem_ids, next_element, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
       
-      // Move to next element
-      //set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
 
       //Check if all particles are found
       found = true;
@@ -647,7 +654,7 @@ namespace pumipic {
     }
 
     void operator()(o::Mesh& mesh, ParticleStructure<ParticleType>* ptcls,
-                    o::Write<o::LO>& elem_ids, o::Write<o::LO>& inter_faces,
+                    o::Write<o::LO>& elem_ids, o::Write<o::LO>& next_element, o::Write<o::LO>& inter_faces,
                     o::Write<o::LO>& lastExit, o::Write<o::Real>& inter_points,
                     o::Write<o::LO>& ptcl_done,
                     Segment3d x_ps_orig,
@@ -656,7 +663,11 @@ namespace pumipic {
       check_model_intersection(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids,
                                ptcl_done, lastExit, side_is_exposed_,
                                requireIntersection_, inter_faces);
-      set_new_element(mesh, ptcls, elem_ids, ptcl_done, lastExit);
+      // make next element the current element
+      auto copy_next_element = OMEGA_H_LAMBDA(o::LO pid) {
+        elem_ids[pid] = next_element[pid];
+      };
+      o::parallel_for(elem_ids.size(), copy_next_element, "copy_next_element");
     }
 
     private:
@@ -676,7 +687,8 @@ namespace pumipic {
     RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
     o::Reals elmArea = measure_elements_real(&mesh);
     o::Write<o::LO> lastExit (ptcls->capacity(), -1, "lastExit");
-    return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
+    o::Write<o::LO> next_element(0, "next_element");
+    return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, next_element, requireIntersection,
                            inter_faces, inter_points, lastExit, looplimit, debug, native_handler, elmArea);
   }
 }

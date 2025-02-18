@@ -47,7 +47,7 @@ template<typename ParticleType, typename Segment3d>
 struct empty_function {
     void operator()(
             o::Mesh &mesh, ps::ParticleStructure<ParticleType> *ptcls,
-            o::Write<o::LO> &elem_ids, o::Write<o::LO> &inter_faces,
+            o::Write<o::LO> &elem_ids, o::Write<o::LO>& next_elements, o::Write<o::LO> &inter_faces,
             o::Write<o::LO> &lastExit, o::Write<o::Real> &inter_points,
             o::Write<o::LO> &ptcl_done,
             Segment3d x_ps_orig,
@@ -152,8 +152,9 @@ int main(int argc, char **argv) {
 
     Omega_h::Write<Omega_h::LO> elem_ids(0, "element ids");
     Omega_h::Write<Omega_h::LO> inter_faces(0, "inter faces");
-    Omega_h::Write<Omega_h::LO> last_exit(ptcls->capacity(), -1, "last exit");
+    Omega_h::Write<Omega_h::LO> last_exit(0, "last exit");
     Omega_h::Write<Omega_h::Real> inter_points(0, "inter points");
+    Omega_h::Write<Omega_h::LO> next_elements(0, "next elements");
 
     o::Reals elmArea = measure_elements_real(&mesh);
     o::Real tol = pumipic::compute_tolerance_from_area(elmArea);
@@ -163,7 +164,7 @@ int main(int argc, char **argv) {
 
     // After a single search operation, auxiliary arrays will be filled and they will be tested
     bool success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
-                    pid_d, elem_ids, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
     if (success){
         printf("[ERROR] Search Shouldn't pass...\n");
     }
@@ -174,6 +175,10 @@ int main(int argc, char **argv) {
     // ******************************************* Checks *********************************************************//
     OMEGA_H_CHECK_PRINTF(inter_faces.size() == ptcls->capacity(), "inter faces and ptcls capacity mismatch(%d,%d)",
                          inter_faces.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(elem_ids.size() == ptcls->capacity(), "elem ids and ptcls capacity mismatch(%d,%d)",
+                         elem_ids.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(elem_ids.size() == next_elements.size(), "elem ids and next elements size mismatch(%d,%d)",
+                         elem_ids.size(), next_elements.size());
 
     Omega_h::Vector<3> expected_intersection {0.75, 0.5, 0.25};
     auto check_arrays = PS_LAMBDA(const int& e, const int& pid, const int& mask){
@@ -186,6 +191,9 @@ int main(int argc, char **argv) {
             OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3], expected_intersection[0]), "Expected %f, found %f\n", expected_intersection[0], inter_points[pid*3]);
             OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+1], expected_intersection[1]), "Expected %f, found %f\n", expected_intersection[1], inter_points[pid*3+1]);
             OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+2], expected_intersection[2]), "Expected %f, found %f\n", expected_intersection[2], inter_points[pid*3+2]);
+
+            printf("Pid %d Next Element %d\n", pid, next_elements[pid]);
+            OMEGA_H_CHECK_PRINTF(next_elements[pid] == 5, "Expected next element 5 but found %d\n", next_elements[pid]);
         }
     };
     pumipic::parallel_for(ptcls, check_arrays, "check arrays");
@@ -203,13 +211,13 @@ int main(int argc, char **argv) {
     printf("==============================================================================================\n");
 
     // set particle destination to the same element
-    Omega_h::Vector<3> cell0_another_location{0.5, 0.75, 0.01};
+    Omega_h::Vector<3> another_location_in_cell0{0.5, 0.75, 0.2};
 
     auto set_new_dest_in_cell0 = PS_LAMBDA (const int& e, const int& pid, const int& mask){
         if (mask > 0) {
-            particle_final_position(pid, 0) = cell0_another_location[0];
-            particle_final_position(pid, 1) = cell0_another_location[1];
-            particle_final_position(pid, 2) = cell0_another_location[2];
+            particle_final_position(pid, 0) = another_location_in_cell0[0];
+            particle_final_position(pid, 1) = another_location_in_cell0[1];
+            particle_final_position(pid, 2) = another_location_in_cell0[2];
 
             printf("New particle %d destination (%f, %f, %f)\n",
             pid, particle_final_position(pid, 0),
@@ -223,12 +231,13 @@ int main(int argc, char **argv) {
     // reset auxiliary arrays
     elem_ids = Omega_h::Write<Omega_h::LO>(0, "element ids");
     inter_faces = Omega_h::Write<Omega_h::LO>(0, "inter faces");
-    last_exit = Omega_h::Write<Omega_h::LO>(ptcls->capacity(), -1, "last exit");
+    last_exit = Omega_h::Write<Omega_h::LO>(0, "last exit");
     inter_points = Omega_h::Write<Omega_h::Real>(0, "inter points");
+    next_elements = Omega_h::Write<Omega_h::LO>(0, "next elements");
 
     // run the search again
     success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
-                    pid_d, elem_ids, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
 
     if (success){
         printf("[ERROR] Search Shouldn't return success...\n");
@@ -242,6 +251,8 @@ int main(int argc, char **argv) {
                          inter_faces.size(), ptcls->capacity());
     OMEGA_H_CHECK_PRINTF(elem_ids.size() == ptcls->capacity(), "elem ids and ptcls capacity mismatch(%d,%d)",
                          elem_ids.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(elem_ids.size() == next_elements.size(), "elem ids and next elements size mismatch(%d,%d)",
+                         elem_ids.size(), next_elements.size());
 
     // expected intersection point is the same as the particle destination
     auto check_move_in_same_element = PS_LAMBDA(const int& e, const int& pid, const int& mask){
@@ -251,13 +262,16 @@ int main(int argc, char **argv) {
             OMEGA_H_CHECK_PRINTF(last_exit[pid] == -1, "Expected no intersection but found %d\n", last_exit[pid]);
 
             printf("Pid %d intersects (reaches) at (%f, %f, %f) and expected (%f, %f, %f)\n",
-            pid,
-            inter_points[pid*3], inter_points[pid*3+1], inter_points[pid*3+2],
-            cell0_another_location[0], cell0_another_location[1], cell0_another_location[2]);
+                   pid,
+                   inter_points[pid*3], inter_points[pid*3+1], inter_points[pid*3+2],
+                   another_location_in_cell0[0], another_location_in_cell0[1], another_location_in_cell0[2]);
 
-            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3], cell0_another_location[0]), "Expected %f, found %f\n", cell0_another_location[0], inter_points[pid*3]);
-            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+1], cell0_another_location[1]), "Expected %f, found %f\n", cell0_another_location[1], inter_points[pid*3+1]);
-            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+2], cell0_another_location[2]), "Expected %f, found %f\n", cell0_another_location[2], inter_points[pid*3+2]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3], another_location_in_cell0[0]), "Expected %f, found %f\n", another_location_in_cell0[0], inter_points[pid * 3]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+1], another_location_in_cell0[1]), "Expected %f, found %f\n", another_location_in_cell0[1], inter_points[pid * 3 + 1]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+2], another_location_in_cell0[2]), "Expected %f, found %f\n", another_location_in_cell0[2], inter_points[pid * 3 + 2]);
+
+            printf("Pid %d Next Element %d\n", pid, next_elements[pid]);
+            OMEGA_H_CHECK_PRINTF(next_elements[pid] == 0, "Expected next element 0 but found %d\n", next_elements[pid]);
         }
     };
     pumipic::parallel_for(ptcls, check_move_in_same_element, "check when particles move inside the same element as the origin(0 here)");

@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   printf("SellCSigma Particle structure created successfully\n");
 #endif
 
-    printf("\n==============================================================================================\n");
+    printf("\n\n\n==============================================================================================\n");
     printf(">============ Checking when particles move from cell 0 to 5 =================================<\n");
     printf("==============================================================================================\n");
 
@@ -162,9 +162,11 @@ int main(int argc, char **argv) {
     // *********************************************** Run The Search *********************************************//
     empty_function<Particle,typeof(particle_final_position)> emptyFunction;
 
+    printf("*** Searching ... ***\n");
     // After a single search operation, auxiliary arrays will be filled and they will be tested
     bool success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
                     pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+    printf("*** Search Done ***\n");
     if (success){
         printf("[ERROR] Search Shouldn't pass...\n");
     }
@@ -192,6 +194,9 @@ int main(int argc, char **argv) {
             OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+1], expected_intersection[1]), "Expected %f, found %f\n", expected_intersection[1], inter_points[pid*3+1]);
             OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+2], expected_intersection[2]), "Expected %f, found %f\n", expected_intersection[2], inter_points[pid*3+2]);
 
+            printf("Pid %d Elem Id %d\n", pid, elem_ids[pid]);
+            OMEGA_H_CHECK_PRINTF(elem_ids[pid] == 0, "Expected element 0 but found %d\n", elem_ids[pid]);
+
             printf("Pid %d Next Element %d\n", pid, next_elements[pid]);
             OMEGA_H_CHECK_PRINTF(next_elements[pid] == 5, "Expected next element 5 but found %d\n", next_elements[pid]);
         }
@@ -206,7 +211,7 @@ int main(int argc, char **argv) {
 
 
     // *************************************************** Check When Particles remain in the same element *********//
-    printf("\n==============================================================================================\n");
+    printf("\n\n\n==============================================================================================\n");
     printf(">============ Checking when particles remain in the same element ============================<\n");
     printf("==============================================================================================\n");
 
@@ -235,9 +240,11 @@ int main(int argc, char **argv) {
     inter_points = Omega_h::Write<Omega_h::Real>(0, "inter points");
     next_elements = Omega_h::Write<Omega_h::LO>(0, "next elements");
 
+    printf("*** Searching ... ***\n");
     // run the search again
     success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
                     pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+    printf("*** Search Done ***\n");
 
     if (success){
         printf("[ERROR] Search Shouldn't return success...\n");
@@ -260,6 +267,9 @@ int main(int argc, char **argv) {
             printf("Pid %d Intersection Face %d\n", pid, inter_faces[pid]);
             printf("Pid %d Last Exit %d\n", pid, last_exit[pid]);
             OMEGA_H_CHECK_PRINTF(last_exit[pid] == -1, "Expected no intersection but found %d\n", last_exit[pid]);
+
+            printf("Pid %d Elem Id %d\n", pid, elem_ids[pid]);
+            OMEGA_H_CHECK_PRINTF(elem_ids[pid] == 0, "Expected element 0 but found %d\n", elem_ids[pid]);
 
             printf("Pid %d intersects (reaches) at (%f, %f, %f) and expected (%f, %f, %f)\n",
                    pid,

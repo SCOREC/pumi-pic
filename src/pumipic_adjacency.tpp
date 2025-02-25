@@ -326,8 +326,8 @@ namespace pumipic {
             auto xpts = o::zero_vector<3>();
             const o::LO prevExit = lastExit[ptcl];
             lastExit[ptcl] = -1;
-            o::Real quality = -1;
-            o::LO bestFace = -1;
+            //o::Real quality = -1;
+            //o::LO bestFace = -1;
             for(int fi=0; fi<4; ++fi) {
               const auto face_id = face_ids[fi];
               if (face_id == prevExit)
@@ -344,18 +344,18 @@ namespace pumipic {
                 lastExit[ptcl] = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
               }
-              if (dproj > -tol && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
-                quality = closeness;
-                bestFace = face_id;
-                xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
-              }
+              //if (dproj > -tol && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
+              //  quality = closeness;
+              //  bestFace = face_id;
+              //  xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
+              //}
             }
 
             //If line intersection fails then use BCC method
-            if (lastExit[ptcl] == -1) {
-                printf("!!!!!!! Best face %d\n", bestFace);
-                lastExit[ptcl] = bestFace;
-            }
+            //if (lastExit[ptcl] == -1) {
+            //    printf("!!!!!!! Best face %d\n", bestFace);
+            //    lastExit[ptcl] = bestFace;
+            //}
             if (lastExit[ptcl == -1]){ // reached destination
                 xPoints[3*ptcl] = x_ps_tgt(ptcl,0);
                 xPoints[3*ptcl+1] = x_ps_tgt(ptcl,1);
@@ -406,20 +406,22 @@ namespace pumipic {
     auto e2f_offsets = faces2elms.a2ab; // CSR offset array, index by mesh edge ids
     auto setNextElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if( mask > 0 && !ptcl_done[pid] ) {
-        auto searchElm = elem_ids[pid];
         auto bridge = lastExit[pid];
-        auto e2f_first = e2f_offsets[bridge];
-        #ifdef _DEBUG
-          auto e2f_last = e2f_offsets[bridge+1];
-          auto upFaces = e2f_last - e2f_first;
-          assert(upFaces==2);
-        #endif
-        auto faceA = e2f_vals[e2f_first];
-        auto faceB = e2f_vals[e2f_first+1];
-        assert(faceA != faceB);
-        assert(faceA == searchElm || faceB == searchElm);
-        auto nextElm = (faceA == searchElm) ? faceB : faceA;
-        next_element[pid] = nextElm;
+        if (bridge != -1) {
+            auto searchElm = elem_ids[pid];
+            auto e2f_first = e2f_offsets[bridge];
+#ifdef _DEBUG
+            auto e2f_last = e2f_offsets[bridge+1];
+            auto upFaces = e2f_last - e2f_first;
+            assert(upFaces==2);
+#endif
+            auto faceA = e2f_vals[e2f_first];
+            auto faceB = e2f_vals[e2f_first + 1];
+            assert(faceA != faceB);
+            assert(faceA == searchElm || faceB == searchElm);
+            auto nextElm = (faceA == searchElm) ? faceB : faceA;
+            next_element[pid] = nextElm;
+        }
       }
     };
     parallel_for(ptcls, setNextElm, "pumipic_setNextElm");
@@ -549,7 +551,7 @@ namespace pumipic {
 
     // if next_element is not initialized, initialize it with elem_ids
     if (next_element.size() == 0) {
-      next_element = o::Write<o::LO>(elem_ids);
+      next_element = o::deep_copy(o::LOs(elem_ids), "next element");
     }
 
     //Finish particles that didn't move

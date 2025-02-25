@@ -410,17 +410,22 @@ namespace pumipic {
         if (bridge != -1) {
             auto searchElm = elem_ids[pid];
             auto e2f_first = e2f_offsets[bridge];
-#ifdef _DEBUG
             auto e2f_last = e2f_offsets[bridge+1];
             auto upFaces = e2f_last - e2f_first;
-            assert(upFaces==2);
-#endif
-            auto faceA = e2f_vals[e2f_first];
-            auto faceB = e2f_vals[e2f_first + 1];
-            assert(faceA != faceB);
-            assert(faceA == searchElm || faceB == searchElm);
-            auto nextElm = (faceA == searchElm) ? faceB : faceA;
-            next_element[pid] = nextElm;
+            if (upFaces == 1) {
+                next_element[pid] = -1;
+            }
+            else if (upFaces==2) {
+                assert(upFaces == 2);
+                auto faceA = e2f_vals[e2f_first];
+                auto faceB = e2f_vals[e2f_first + 1];
+                assert(faceA != faceB);
+                assert(faceA == searchElm || faceB == searchElm);
+                auto nextElm = (faceA == searchElm) ? faceB : faceA;
+                next_element[pid] = nextElm;
+            } else {
+                OMEGA_H_CHECK_PRINTF(false, "Found invalid number of adjacent elements %d\n", upFaces);
+            }
         }
       }
     };

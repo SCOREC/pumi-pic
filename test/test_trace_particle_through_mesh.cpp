@@ -58,6 +58,8 @@ struct empty_function {
 
 
 int main(int argc, char **argv) {
+    printf("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!! Important !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+                     "!!!!!!!!!!!!!!! This test only works when compiled in DEBUG mode !!!!!!!!!!!!!!!!\n\n");
     // **************************************** Setup ***************************************************************//
     p::Library lib(&argc, &argv);
     print_test_info();
@@ -289,6 +291,93 @@ int main(int argc, char **argv) {
     printf("============================ Particle Moving from 0 to 0 Passed ==============================\n");
     printf("==============================================================================================\n");
 
+
+
+
+
+   // *************************************************************************************************************//
+   // Particles moving from cell 0 to outside through face 0                                                       //
+   // *************************************************************************************************************//
+
+    printf("\n\n\n==============================================================================================\n");
+    printf(      ">============ Particle Moving out of the Mesh ===============================================<\n");
+    printf(      "==============================================================================================\n");
+
+    // set particle destination outside the mesh
+    Omega_h::Vector<3> outside_location{0.5, 0.75, -1.0};
+    expected_intersection = {0.5, 0.75, 0.0};
+
+    auto set_new_dest_outside = PS_LAMBDA (const int& e, const int& pid, const int& mask){
+        if (mask > 0) {
+            particle_final_position(pid, 0) = outside_location[0];
+            particle_final_position(pid, 1) = outside_location[1];
+            particle_final_position(pid, 2) = outside_location[2];
+
+            printf("New particle %d destination (%f, %f, %f)\n",
+            pid, particle_final_position(pid, 0),
+            particle_final_position(pid, 1),
+            particle_final_position(pid, 2));
+        }
+    };
+    pumipic::parallel_for(ptcls, set_new_dest_outside, "set new destination outside the mesh");
+
+    // reset auxiliary arrays
+    elem_ids = Omega_h::Write<Omega_h::LO>(0, "element ids");
+    inter_faces = Omega_h::Write<Omega_h::LO>(0, "inter faces");
+    last_exit = Omega_h::Write<Omega_h::LO>(0, "last exit");
+    inter_points = Omega_h::Write<Omega_h::Real>(0, "inter points");
+    next_elements = Omega_h::Write<Omega_h::LO>(0, "next elements");
+
+    printf("*** Searching ... ***\n");
+    // run the search again
+    success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+    printf("*** Search Done ***\n");
+
+    if (success){
+        printf("[ERROR] Search Shouldn't return success...\n");
+    }
+    else {
+        printf("Particle search failed as expected...\n");
+    }
+
+    // ******************************************* Checks *********************************************************//
+    OMEGA_H_CHECK_PRINTF(inter_faces.size() == ptcls->capacity(), "inter faces and ptcls capacity mismatch(%d,%d)",
+                         inter_faces.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(elem_ids.size() == ptcls->capacity(), "elem ids and ptcls capacity mismatch(%d,%d)",
+                         elem_ids.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(next_elements.size() == ptcls->capacity(), "next elem size and capacity mismatch(%d,%d)",
+                         next_elements.size(), ptcls->capacity());
+    OMEGA_H_CHECK_PRINTF(inter_points.size() == ptcls->capacity()*3, "inter points and ptcls capacity mismatch(%d,%d)",
+                         inter_points.size(), ptcls->capacity()*3);
+
+    auto check_move_outside = PS_LAMBDA(const int& e, const int& pid, const int& mask){
+        if (mask>0) {
+            printf("Pid %d Intersection Face %d\n", pid, inter_faces[pid]);
+            printf("Pid %d Last Exit %d\n", pid, last_exit[pid]);
+            OMEGA_H_CHECK_PRINTF(last_exit[pid] == 0, "Expected face 0 but found %d\n", last_exit[pid]);
+
+            printf("Pid %d intersects (reaches) at (%f, %f, %f) and expected (%f, %f, %f)\n",
+                   pid,
+                   inter_points[pid*3], inter_points[pid*3+1], inter_points[pid*3+2],
+                   expected_intersection[0], expected_intersection[1], expected_intersection[2]);
+
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3], expected_intersection[0]), "Expected %f, found %f\n", expected_intersection[0], inter_points[pid * 3]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+1], expected_intersection[1]), "Expected %f, found %f\n", expected_intersection[1], inter_points[pid * 3 + 1]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(inter_points[pid*3+2], expected_intersection[2]), "Expected %f, found %f\n", expected_intersection[2], inter_points[pid * 3 + 2]);
+
+            printf("Pid %d Elem Id %d\n", pid, elem_ids[pid]);
+            OMEGA_H_CHECK_PRINTF(elem_ids[pid] == 0, "Expected element 0 but found %d\n", elem_ids[pid]);
+
+            printf("Pid %d Next Element %d\n", pid, next_elements[pid]);
+            OMEGA_H_CHECK_PRINTF(next_elements[pid] == -1, "Expected next element -1 but found %d\n", next_elements[pid]);
+        }
+    };
+    pumipic::parallel_for(ptcls, check_move_outside, "check when particles move outside the mesh");
+
+
+    printf("\n\n\n==============================================================================================\n");
+    printf(      ">============ Particle Moving out of the Mesh Passed ========================================<\n");
 
 
     // ******************************************* Clean Up *********************************************************//

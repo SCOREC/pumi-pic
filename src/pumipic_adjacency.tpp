@@ -376,24 +376,21 @@ namespace pumipic {
                                 o::Write<o::LO> lastExit, o::Bytes side_is_exposed,
                                 bool requireIntersection,
                                 o::Write<o::LO> xFace) {
-    auto checkExposedEdges = PS_LAMBDA(const int e, const int pid, const int mask) {
-        if (mask>0 && ptcl_done[pid] && lastExit[pid] == -1){
-            xFace[pid] = -1;
+    auto checkIntersectionwGeomBoundary = PS_LAMBDA(const int e, const int pid, const int mask) {
+        if (mask > 0){
+           if (lastExit[pid] == -1){
+               xFace[pid] = -1;
+               ptcl_done[pid] = 1;
+           } else {
+               const o::LO bridge = lastExit[pid];
+               const bool exposed = side_is_exposed[bridge];
+               ptcl_done[pid] = exposed;
+               xFace[pid] = exposed ? lastExit[pid] : -1;
+               elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
+           }
         }
-      if( mask > 0 && !ptcl_done[pid] ) {
-        assert(lastExit[pid] != -1);
-        const o::LO bridge = lastExit[pid];
-        const bool exposed = side_is_exposed[bridge];
-        ptcl_done[pid] = exposed;
-        if (exposed && requireIntersection) {
-          xFace[pid] = lastExit[pid];
-        }
-        else {
-          elem_ids[pid] = exposed ? -1 : elem_ids[pid]; //leaves domain if exposed
-        }
-      }
     };
-    parallel_for(ptcls, checkExposedEdges, "pumipic_checkExposedEdges");
+    parallel_for(ptcls, checkIntersectionwGeomBoundary, "pumipic_checkIntersectionwGeomBoundary");
   }
 
   template <class ParticleType>
@@ -412,10 +409,10 @@ namespace pumipic {
             auto e2f_first = e2f_offsets[bridge];
             auto e2f_last = e2f_offsets[bridge+1];
             auto upFaces = e2f_last - e2f_first;
-            if (upFaces == 1) {
+            if (upFaces == 1) { // particle at Geometry boundary
                 next_element[pid] = -1;
             }
-            else if (upFaces==2) {
+            else if (upFaces==2) { // particle at element boundary to enter next element
                 assert(upFaces == 2);
                 auto faceA = e2f_vals[e2f_first];
                 auto faceB = e2f_vals[e2f_first + 1];
@@ -466,6 +463,7 @@ namespace pumipic {
   * @param x_ps_tgt Particle target position
   * @param pids Particle ids
   * @param elem_ids Paricle parent element ids
+  * @param next_element Next element over the exit face
   * @param requireIntersection True if intersection is required
   * @param inter_faces Exit faces for particles at domain boundary
   * @param inter_points Stores intersection points for particles at each face

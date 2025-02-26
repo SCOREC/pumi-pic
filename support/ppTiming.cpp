@@ -184,8 +184,8 @@ namespace pumipic {
         buffer << "Operation" << std::setw(name_length+6)
                << "Total Time" << std::setw(tt_length+3)
                << "Min Time" << std::setw(min_length+3)
-               << "Max Time" << std::setw(max_length+3)
-               << "RMSD" << std::setw(rmsd_length+3)
+               << "Max Time" << std::setw(max_length+6)
+               << "Squared Average" << std::setw(rmsd_length+3)
                << "Call Count" << std::setw(cc_length+3)
                << "Average Time" << std::setw(cc_length+3) << "\n";
         for (int index = 0; index < time_per_op.size(); ++index) {
@@ -202,7 +202,7 @@ namespace pumipic {
           //Max time spent on operation
                  << std::setw(max_length+3) << time_per_op[index].max
           //Root mean square deviation
-                 << std::setw(rmsd_length+3) << Kokkos::sqrt(averageSq - average*average)
+                 << std::setw(rmsd_length+3) << averageSq
           //Number of calls of operation
                  << std::setw(cc_length+3) << time_per_op[index].count
           //Average time per call

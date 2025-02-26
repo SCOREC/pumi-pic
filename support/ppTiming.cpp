@@ -11,6 +11,8 @@
 namespace {
   int verbosity = 0;
   int enable_timing = 0;
+  const int padding = 3;
+  const int precision = 5;
   std::unordered_map<std::string, int> timing_index;
 
   const double PREBARRIER_TOL = .000001;
@@ -133,83 +135,75 @@ namespace pumipic {
     }
   }
 
-  int length(int x) {
-    if (x== 0)
-      return 1;
-    else
-      return Kokkos::trunc(Kokkos::log10(x)) + 1;
+  template <typename T>
+  int length(T num) {
+    std::stringstream ss;
+    ss << std::setprecision(precision) << num;
+    return ss.str().size();
   }
+
   void determineLengths(int& name_length, int& tt_length, int& min_length, int& max_length, int& rmsd_length,
                         int& cc_length, int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       double average = time_per_op[index].time / time_per_op[index].count;
+      double averageSq = time_per_op[index].timeSq / time_per_op[index].count;
 
-      if (time_per_op[index].str.size() > name_length)
-        name_length = time_per_op[index].str.size();
-      int len = Kokkos::log10(time_per_op[index].time) + 8;
-      if (len > tt_length)
-        tt_length = len;
-      len = Kokkos::log10(time_per_op[index].min) + 8;
-      if (len > min_length)
-        min_length = len;
-      len = Kokkos::log10(time_per_op[index].max) + 8;
-      if (len > max_length)
-        max_length = len;
-      len = Kokkos::log10(time_per_op[index].count) + 1;
-      if (len > cc_length)
-        cc_length = len;
-      len = Kokkos::log10(average) + 8;
-      if (len > at_length)
-        len = at_length;
+      name_length = std::max(name_length, static_cast<int>(time_per_op[index].str.size()));
+      tt_length = std::max(tt_length, length(time_per_op[index].time));
+      min_length = std::max(min_length, length(time_per_op[index].min));
+      max_length = std::max(max_length, length(time_per_op[index].max));
+      cc_length = std::max(cc_length, length(time_per_op[index].count));
+      at_length = std::max(at_length, length(average));
+      rmsd_length = std::max(rmsd_length, length(averageSq));
     }
   }
+
+  template <typename T>
+  void PrintTable(std::stringstream& buffer, T print, int width){
+    buffer << std::left << std::setw(width) << std::setfill(' ') << print;
+  }
+
   void SummarizeTime(TimingSortOption sort) {
     int comm_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
     if (isTiming()) {
       if (verbosity >= 0) {
-        int name_length = 10;
-        int tt_length = 10;
-        int min_length = 10;
-        int max_length = 10;
-        int rmsd_length = 10;
-        int cc_length = 10;
-        int at_length = 12;
+        int name_length = strlen("Operation");
+        int tt_length = strlen("Total Time");
+        int min_length = strlen("Min Time");
+        int max_length = strlen("Max Time");
+        int rmsd_length = strlen("Sqr Average");
+        int cc_length = strlen("Call Count");
+        int at_length = strlen("Average Time");
         determineLengths(name_length, tt_length, min_length, max_length, rmsd_length, cc_length, at_length);
         sortTimeInfo(sort);
         std::stringstream buffer;
+        buffer.precision(precision);
         //Header
         buffer << "Timing Summary " << comm_rank << "\n";
         //Column heads
-        buffer << "Operation" << std::setw(name_length+6)
-               << "Total Time" << std::setw(tt_length+3)
-               << "Min Time" << std::setw(min_length+3)
-               << "Max Time" << std::setw(max_length+6)
-               << "Squared Average" << std::setw(rmsd_length+3)
-               << "Call Count" << std::setw(cc_length+3)
-               << "Average Time" << std::setw(cc_length+3) << "\n";
+        PrintTable(buffer, "Operation", name_length + padding);
+        PrintTable(buffer, "Total Time", tt_length + padding);
+        PrintTable(buffer, "Min Time", min_length + padding);
+        PrintTable(buffer, "Max Time", max_length + padding);
+        PrintTable(buffer, "Sqr Average", rmsd_length + padding);
+        PrintTable(buffer, "Call Count", cc_length + padding);
+        PrintTable(buffer, "Average Time", at_length + padding);
+        buffer << '\n';
         for (int index = 0; index < time_per_op.size(); ++index) {
           double average = time_per_op[index].time / time_per_op[index].count;
           double averageSq = time_per_op[index].timeSq / time_per_op[index].count;
-          //Operation name
-          buffer << time_per_op[index].str.c_str()
-          //Fill space after operation name
-                 << std::string(name_length - time_per_op[index].str.size()+3, ' ')
-          //Total time spent on operation
-                 << std::setw(tt_length+3) << time_per_op[index].time
-          //Min time spent on operation
-                 << std::setw(min_length+3) << time_per_op[index].min
-          //Max time spent on operation
-                 << std::setw(max_length+3) << time_per_op[index].max
-          //Root mean square deviation
-                 << std::setw(rmsd_length+3) << averageSq
-          //Number of calls of operation
-                 << std::setw(cc_length+3) << time_per_op[index].count
-          //Average time per call
-                 << std::setw(at_length+3) << average;
+
+          PrintTable(buffer, time_per_op[index].str.c_str(), name_length + padding);
+          PrintTable(buffer, time_per_op[index].time, tt_length + padding);
+          PrintTable(buffer, time_per_op[index].min, min_length + padding);
+          PrintTable(buffer, time_per_op[index].max, max_length + padding);
+          PrintTable(buffer, averageSq, rmsd_length + padding);
+          PrintTable(buffer, time_per_op[index].count, cc_length + padding);
+          PrintTable(buffer, average, at_length + padding);
           if (time_per_op[index].hasPrebarrier)
             buffer <<"  Total Prebarrier=" << time_per_op[index].prebarrier;
-          buffer <<'\n';
+          buffer << '\n';
         }
         printInfo( "%s\n", buffer.str().c_str());
       }

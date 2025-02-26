@@ -4,6 +4,7 @@ function(make_test exename srcname)
 endfunction(make_test)
 
 make_test(test_trace_particle_through_mesh test_trace_particle_through_mesh.cpp)
+make_test(test_search_mesh test_search_mesh.cpp)
 make_test(print_partition print_partition.cpp)
 make_test(print_classification print_classification.cpp)
 make_test(full_mesh test_full_mesh.cpp)

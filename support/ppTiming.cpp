@@ -19,7 +19,7 @@ namespace {
                                          hasPrebarrier(false), prebarrier(0), count(0), orig_index(index) {}
     std::string str;
     double time;
-    long timeSq;
+    double timeSq;
     double max;
     double min;
     int count;
@@ -73,7 +73,7 @@ namespace pumipic {
         }
         int index = itr->second;
         time_per_op[index].time += seconds;
-        time_per_op[index].timeSq += (long)((long)seconds*(long)seconds);
+        time_per_op[index].timeSq += seconds*seconds;
         ++(time_per_op[index].count);
         if (seconds > time_per_op[index].max) time_per_op[index].max = seconds;
         if (seconds < time_per_op[index].min) time_per_op[index].min = seconds;
@@ -143,7 +143,6 @@ namespace pumipic {
                         int& cc_length, int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       double average = time_per_op[index].time / time_per_op[index].count;
-      long averageSq = time_per_op[index].timeSq / time_per_op[index].count;
 
       if (time_per_op[index].str.size() > name_length)
         name_length = time_per_op[index].str.size();
@@ -156,9 +155,6 @@ namespace pumipic {
       len = Kokkos::log10(time_per_op[index].max) + 8;
       if (len > max_length)
         max_length = len;
-      len = Kokkos::log10(Kokkos::sqrt(averageSq - average*average)) + 8;
-      if (len > rmsd_length)
-        rmsd_length = len;
       len = Kokkos::log10(time_per_op[index].count) + 1;
       if (len > cc_length)
         cc_length = len;
@@ -194,7 +190,7 @@ namespace pumipic {
                << "Average Time" << std::setw(cc_length+3) << "\n";
         for (int index = 0; index < time_per_op.size(); ++index) {
           double average = time_per_op[index].time / time_per_op[index].count;
-          long averageSq = time_per_op[index].timeSq / time_per_op[index].count;
+          double averageSq = time_per_op[index].timeSq / time_per_op[index].count;
           //Operation name
           buffer << time_per_op[index].str.c_str()
           //Fill space after operation name

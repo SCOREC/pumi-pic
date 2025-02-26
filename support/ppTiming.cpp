@@ -11,7 +11,7 @@
 namespace {
   int verbosity = 0;
   int enable_timing = 0;
-  const int padding = 3;
+  const int padding = 2;
   const int precision = 5;
   std::unordered_map<std::string, int> timing_index;
 

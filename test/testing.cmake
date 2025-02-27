@@ -4,6 +4,7 @@ mpi_test(barycentric_3 1 ./barycentric test1)
 #Search tests
 mpi_test(test_trace_particle_through_mesh 1 ./test_trace_particle_through_mesh)
 mpi_test(test_search_mesh 1 ./test_search_mesh)
+mpi_test(test_ParticleTracer 1 ./test_ParticleTracer)
 #mpi_test(test_adj_2d 1 ./test_adj ${TEST_DATA_DIR}/plate/tri8.osh)
 #mpi_test(test_adj_3d 1 ./test_adj ${TEST_DATA_DIR}/cube/7k.osh)
 

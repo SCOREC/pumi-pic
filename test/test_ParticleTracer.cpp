@@ -1,7 +1,8 @@
 //
-// Created by Fuad Hasan on 2/25/25.
+// Created by Fuad Hasan on 2/26/25.
 //
 
+#include "ParticleTracer.tpp"
 #include "pumipic_adjacency.hpp"
 #include "pumipic_adjacency.tpp"
 #include "pumipic_kktypes.hpp"
@@ -104,7 +105,7 @@ int main(int argc, char* argv[]){
   printf("SellCSigma Particle structure created successfully\n");
 #endif
 
-  printf("\n====================== Mesh and Particles are set up ============================\n");
+    printf("\n====================== Mesh and Particles are set up ============================\n");
 
     // ----------------------------------------------------------------------------------//
     // ------------------------------- Particle Movement ---------------------------------//
@@ -172,13 +173,17 @@ int main(int argc, char* argv[]){
     pumipic::parallel_for(ptcls, set_particle_path, "set_particle_path");
 
     // -------------------------------------- Particle Movement Set up Done --------------------------------------//
-    auto elem_ids = Omega_h::Write<Omega_h::LO> (0, "elem ids");
-    bool requireIntersection = true;
-    auto interFaces = Omega_h::Write<Omega_h::LO> (0, "inter faces");
-    auto interPoints = Omega_h::Write<Omega_h::Real> (0, "inter points");
+    pumipic::RemoveParticleOnGeometricModelExit<Particle, typeof(particle_orig)> native_handler(mesh, true);
+    auto particle_tracer = ParticleTracer(mesh, ptcls, native_handler);
 
-    bool success = pumipic::search_mesh(mesh, ptcls, particle_orig, particle_dest, particle_id, elem_ids, requireIntersection, interFaces, interPoints, 100, 1);
-    if (!success) {
+    bool tracer_success = particle_tracer.search();
+
+
+    auto elem_ids = particle_tracer.GetElemIds();
+    auto interFaces = particle_tracer.GetInterFaces();
+    auto interPoints = particle_tracer.GetInterPoints();
+
+    if (!tracer_success) {
         printf("[ERROR] search_mesh failed\n");
         delete ptcls;
         throw std::runtime_error("search_mesh failed");
@@ -201,24 +206,24 @@ int main(int argc, char* argv[]){
     printf("\n\n\n============================ Checking Search Results =================================\n");
     auto check_search_results = PS_LAMBDA(const auto e, const auto pid, const auto mask) {
         if (mask > 0) {
-        printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .6f, % .6f, % .6f],[% .6f, % .6f, % .6f])\n",
+            printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .6f, % .6f, % .6f],[% .6f, % .6f, % .6f])\n",
                    pid, elem_ids[pid], expected_elem_ids[pid], interFaces[pid], expected_interFaces[pid],
                    interPoints[3*pid], interPoints[3*pid+1], interPoints[3*pid+2],
                    expected_interPoints[pid][0], expected_interPoints[pid][1], expected_interPoints[pid][2]);
 
-        OMEGA_H_CHECK_PRINTF(elem_ids[pid] == expected_elem_ids[pid], "Particle %d: Expected elem_id %d != found elem_id %d\n",
-                             pid, expected_elem_ids[pid], elem_ids[pid]);
-        OMEGA_H_CHECK_PRINTF(interFaces[pid] == expected_interFaces[pid], "Particle %d: Expected interFace %d != found interFace %d\n",
-                             pid, expected_interFaces[pid], interFaces[pid]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid], expected_interPoints[pid][0]),
-                             "Particle %d: Expected interPoint x %f != found interPoint x %f\n",
-                             pid, expected_interPoints[pid][0], interPoints[3*pid]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+1], expected_interPoints[pid][1]),
-                             "Particle %d: Expected interPoint y %f != found interPoint y %f\n",
-                             pid, expected_interPoints[pid][1], interPoints[3*pid+1]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+2], expected_interPoints[pid][2]),
-                             "Particle %d: Expected interPoint z %f != found interPoint z %f\n",
-                             pid, expected_interPoints[pid][2], interPoints[3*pid+2]);
+            OMEGA_H_CHECK_PRINTF(elem_ids[pid] == expected_elem_ids[pid], "Particle %d: Expected elem_id %d != found elem_id %d\n",
+                                 pid, expected_elem_ids[pid], elem_ids[pid]);
+            OMEGA_H_CHECK_PRINTF(interFaces[pid] == expected_interFaces[pid], "Particle %d: Expected interFace %d != found interFace %d\n",
+                                 pid, expected_interFaces[pid], interFaces[pid]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid], expected_interPoints[pid][0]),
+                                 "Particle %d: Expected interPoint x %f != found interPoint x %f\n",
+                                 pid, expected_interPoints[pid][0], interPoints[3*pid]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+1], expected_interPoints[pid][1]),
+                                 "Particle %d: Expected interPoint y %f != found interPoint y %f\n",
+                                 pid, expected_interPoints[pid][1], interPoints[3*pid+1]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+2], expected_interPoints[pid][2]),
+                                 "Particle %d: Expected interPoint z %f != found interPoint z %f\n",
+                                 pid, expected_interPoints[pid][2], interPoints[3*pid+2]);
         }
     };
     pumipic::parallel_for(ptcls, check_search_results, "check_search_results");
@@ -237,7 +242,7 @@ void print_test_info() {
            "!!!!!!!!!!!!!!! This test only works when compiled in DEBUG mode !!!!!!!!!!!!!!!!\n\n");
 
     std::string message = "\n========================== Test Search Mesh Function ======================\n";
-    message += "Testing 'search_mesh' function form pumipic_adjacency.tpp ...\n";
+    message += "Testing 'ParticleTracer' class ...\n";
     message += "A 3D internal mesh is created and particles will be moved to different locations\n";
     message += "or will be kept in the same element or same position.\n";
     message += "Particle movements are: \n";

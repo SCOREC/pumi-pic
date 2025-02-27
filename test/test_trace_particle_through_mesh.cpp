@@ -157,6 +157,7 @@ int main(int argc, char **argv) {
     Omega_h::Write<Omega_h::LO> last_exit(0, "last exit");
     Omega_h::Write<Omega_h::Real> inter_points(0, "inter points");
     Omega_h::Write<Omega_h::LO> next_elements(0, "next elements");
+    Omega_h::Write<Omega_h::LO> ptcls_done(0, "ptcls done");
 
     o::Reals elmArea = measure_elements_real(&mesh);
     o::Real tol = pumipic::compute_tolerance_from_area(elmArea);
@@ -167,7 +168,7 @@ int main(int argc, char **argv) {
     printf("*** Searching ... ***\n");
     // After a single search operation, auxiliary arrays will be filled and they will be tested
     bool success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
-                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, ptcls_done, tol);
     printf("*** Search Done ***\n");
     if (success){
         printf("[ERROR] Search Shouldn't pass...\n");
@@ -241,11 +242,12 @@ int main(int argc, char **argv) {
     last_exit = Omega_h::Write<Omega_h::LO>(0, "last exit");
     inter_points = Omega_h::Write<Omega_h::Real>(0, "inter points");
     next_elements = Omega_h::Write<Omega_h::LO>(0, "next elements");
+    ptcls_done = Omega_h::Write<Omega_h::LO>(0, "ptcls done");
 
     printf("*** Searching ... ***\n");
     // run the search again
     success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
-                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, ptcls_done, tol);
     printf("*** Search Done ***\n");
 
     if (success){
@@ -327,11 +329,12 @@ int main(int argc, char **argv) {
     last_exit = Omega_h::Write<Omega_h::LO>(0, "last exit");
     inter_points = Omega_h::Write<Omega_h::Real>(0, "inter points");
     next_elements = Omega_h::Write<Omega_h::LO>(0, "next elements");
+    ptcls_done = Omega_h::Write<Omega_h::LO>(0, "ptcls done");
 
     printf("*** Searching ... ***\n");
     // run the search again
     success = pumipic::trace_particle_through_mesh(mesh, ptcls, particle_init_position, particle_final_position,
-                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, tol);
+                    pid_d, elem_ids, next_elements, requireIntersection, inter_faces, inter_points, last_exit, 1, true, emptyFunction, elmArea, ptcls_done, tol);
     printf("*** Search Done ***\n");
 
     if (success){

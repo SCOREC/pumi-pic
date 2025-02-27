@@ -180,7 +180,8 @@ int main(int argc, char* argv[]){
     bool success = pumipic::search_mesh(mesh, ptcls, particle_orig, particle_dest, particle_id, elem_ids, requireIntersection, interFaces, interPoints, 100, 1);
     if (!success) {
         printf("[ERROR] search_mesh failed\n");
-        throw std::runtime_error("search_mesh failed"); // FIXME: where to delete ptcls?
+        delete ptcls;
+        throw std::runtime_error("search_mesh failed");
     }
 
 

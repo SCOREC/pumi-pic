@@ -114,7 +114,8 @@ int main(int argc, char* argv[]){
 
     // The following are verified using: https://gist.github.com/Fuad-HH/5e0aed99f271617e283e9108091fb1cb
     o::Vector<3> particle_initial_loc {0.5, 0.75, 0.25};
-    o::Vector<3> p0_dest = particle_initial_loc + o::Vector<3>({0.0001, 0.0001, 0.0001}); // moved a little bit
+    o::Real tiny_movement = 1e-9;
+    o::Vector<3> p0_dest = particle_initial_loc + o::Vector<3>({tiny_movement, tiny_movement, tiny_movement}); // moved a little bit
     o::Vector<3> p1_dest = {0.8, 0.9, 0.1}; // inside the same element
     o::Vector<3> p2_dest = {0.8, 0.1, 0.95}; // moved to element 3
     // p2 intersections :   1. [0.57894737 0.57894737 0.43421053]
@@ -201,7 +202,7 @@ int main(int argc, char* argv[]){
     printf("\n\n\n============================ Checking Search Results =================================\n");
     auto check_search_results = PS_LAMBDA(const auto e, const auto pid, const auto mask) {
         if (mask > 0) {
-        printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .6f, % .6f, % .6f],[% .6f, % .6f, % .6f])\n",
+        printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .10f, % .10f, % .10f],[% .10f, % .10f, % .10f])\n",
                    pid, elem_ids[pid], expected_elem_ids[pid], interFaces[pid], expected_interFaces[pid],
                    interPoints[3*pid], interPoints[3*pid+1], interPoints[3*pid+2],
                    expected_interPoints[pid][0], expected_interPoints[pid][1], expected_interPoints[pid][2]);
@@ -210,13 +211,13 @@ int main(int argc, char* argv[]){
                              pid, expected_elem_ids[pid], elem_ids[pid]);
         OMEGA_H_CHECK_PRINTF(interFaces[pid] == expected_interFaces[pid], "Particle %d: Expected interFace %d != found interFace %d\n",
                              pid, expected_interFaces[pid], interFaces[pid]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid], expected_interPoints[pid][0]),
+        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid], expected_interPoints[pid][0], 1e-10),
                              "Particle %d: Expected interPoint x %f != found interPoint x %f\n",
                              pid, expected_interPoints[pid][0], interPoints[3*pid]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+1], expected_interPoints[pid][1]),
+        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+1], expected_interPoints[pid][1], 1e-10),
                              "Particle %d: Expected interPoint y %f != found interPoint y %f\n",
                              pid, expected_interPoints[pid][1], interPoints[3*pid+1]);
-        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+2], expected_interPoints[pid][2]),
+        OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+2], expected_interPoints[pid][2], 1e-10),
                              "Particle %d: Expected interPoint z %f != found interPoint z %f\n",
                              pid, expected_interPoints[pid][2], interPoints[3*pid+2]);
         }

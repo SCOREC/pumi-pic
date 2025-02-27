@@ -471,6 +471,7 @@ namespace pumipic {
   * @param debug True if debug information is printed
   * @param func Callable object to handle particles at element sides or destination
   * @param elmArea Element areas/volumes based on the mesh dimension
+  * @param pctl_done if particle done (internal state) if not sure, pass empty array of size 0
   * @param given_tol Tolerance for intersection. If not positive, it is computed from the minimum element area
   * @return True if all particles are found at destination or left domain
   */
@@ -487,6 +488,7 @@ namespace pumipic {
                    bool debug,
                    Func& func,
                    o::Reals& elmArea,
+                   o::Write<o::LO>& ptcl_done,
                    std::optional<o::Real> given_tol = std::nullopt) {
     static_assert(
         std::is_invocable_r_v<
@@ -503,12 +505,7 @@ namespace pumipic {
 
     //Initial setup
     const auto psCapacity = ptcls->capacity();
-    // True if particle has reached new parent element
-    // TODO: ptcl_done is searches internal state, it will be handled when it
-    // is made a class method
-    o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
-    // Store the last exit face
-    //o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
+
     if (lastExit.size() == 0){
         lastExit = Omega_h::Write<Omega_h::LO>(psCapacity, -1, "search_last_exit");
     }
@@ -532,9 +529,11 @@ namespace pumipic {
     const auto edge_verts =  mesh.ask_verts_of(dim - 1);
     
     //Setup the output information
-    if (elem_ids.size() == 0) {
-      //Setup new parent id arrays
+    // TODO instead of these size tests, test coherence of all arrays at the beginning
+    if (elem_ids.size() == 0 || ptcl_done.size() == 0) {
+      ptcl_done = o::Write<o::LO>(psCapacity, 0, "search_ptcl_done");
       elem_ids = o::Write<o::LO>(psCapacity, -1, "search_elem_ids");
+
       auto setInitial = PS_LAMBDA(const int e, const int pid, const int mask) {
         if(mask) {
           elem_ids[pid] = e;
@@ -682,8 +681,9 @@ namespace pumipic {
     o::Reals elmArea = measure_elements_real(&mesh);
     o::Write<o::LO> lastExit (ptcls->capacity(), -1, "lastExit");
     o::Write<o::LO> next_element(0, "next_element");
+    o::Write<o::LO> ptcl_done(0, "ptcl_done");
     return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, next_element, requireIntersection,
-                           inter_faces, inter_points, lastExit, looplimit, debug, native_handler, elmArea);
+                           inter_faces, inter_points, lastExit, looplimit, debug, native_handler, elmArea, ptcl_done);
   }
 }
 #endif

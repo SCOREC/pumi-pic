@@ -27,6 +27,7 @@ public:
         if (!validate_internal_data_sizes()) {
             return false;
         }
+        reset_particle_done();
 
         auto particle_orig = ptcls_->template get<0>();
         auto particle_dest = ptcls_->template get<1>();
@@ -35,7 +36,7 @@ public:
         bool success = pumipic::trace_particle_through_mesh(oh_mesh_, ptcls_, particle_orig, particle_dest,
                                                             particle_ids, elem_ids_, next_elem_ids_,
                                                             true, inter_faces_, inter_points_, last_exits_, 1000, true,
-                                                            func_, elmAreas_,
+                                                            func_, elmAreas_, ptcl_done_,
                                                             tolerance_);
 
         if (!success) {
@@ -67,16 +68,20 @@ private:
     Omega_h::Write<Omega_h::Real> inter_points_;
     Omega_h::Write<Omega_h::LO> last_exits_;
     Omega_h::Reals elmAreas_;
+    Omega_h::Write<Omega_h::LO> ptcl_done_;
 
 
     bool validate_internal_data_sizes() {
         int dim = oh_mesh_.dim();
 
         if (elem_ids_.size() != next_elem_ids_.size() || elem_ids_.size() != inter_faces_.size() ||
-            elem_ids_.size() != inter_points_.size() / dim) {
+            elem_ids_.size() != inter_points_.size() / dim || elem_ids_.size() != last_exits_.size() ||
+            elem_ids_.size() != ptcl_done_.size()) {
             printf("[ERROR] ParticleTracer: internal data arrays are not of the appropriate size.\nSize of elem_ids: %d, "
-                   "next_elem_ids: %d, inter_faces: %d, inter_points: %d\n", elem_ids_.size(), next_elem_ids_.size(),
-                   inter_faces_.size(), inter_points_.size());
+                   "next_elem_ids: %d, inter_faces: %d, inter_points: %d last_exits: %d ptcl_done: %d\n",
+                   elem_ids_.size(), next_elem_ids_.size(), inter_faces_.size(), inter_points_.size(),
+                   last_exits_.size(),
+                   ptcl_done_.size());
             return false;
         }
 
@@ -91,7 +96,9 @@ private:
         return true;
     }
 
-    //void reset_particle_done() {}
+    void reset_particle_done() {
+        ptcl_done_ = Omega_h::Write<Omega_h::LO>(0, "particle done");
+    }
 };
 
 #endif //PUMIPIC_PARTICLETRACER_H

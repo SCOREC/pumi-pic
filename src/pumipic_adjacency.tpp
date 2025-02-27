@@ -557,17 +557,6 @@ namespace pumipic {
       next_element = o::deep_copy(o::LOs(elem_ids), "next element");
     }
 
-    //Finish particles that didn't move
-    auto finishUnmoved = PS_LAMBDA(const int e, const int pid, const int mask) {
-      if  (mask){
-        const o::Vector<3> start = makeVector3(pid, x_ps_orig);
-        const o::Vector<3> end = makeVector3(pid, x_ps_tgt);
-        if (o::norm(end - start) < tol)
-          ptcl_done[pid] = 1;
-      }
-    };
-    parallel_for(ptcls, finishUnmoved, "search_finishUnmoved");
-    
     if (requireIntersection) {
       //Setup intersection arrays
       if (inter_points.size() == 0 || inter_faces.size() == 0) {

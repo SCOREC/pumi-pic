@@ -179,9 +179,9 @@ int main(int argc, char* argv[]){
     bool tracer_success = particle_tracer.search();
 
 
-    auto elem_ids = particle_tracer.GetElemIds();
-    auto interFaces = particle_tracer.GetInterFaces();
-    auto interPoints = particle_tracer.GetInterPoints();
+    auto elem_ids = particle_tracer.getElementIds();
+    auto interFaces = particle_tracer.getIntersectionFaces();
+    auto interPoints = particle_tracer.getIntersectionPoints();
 
     if (!tracer_success) {
         printf("[ERROR] search_mesh failed\n");

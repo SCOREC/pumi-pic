@@ -55,16 +55,16 @@ public:
     }
 
     [[nodiscard]]
-    Omega_h::Write<Omega_h::LO> GetElemIds() { return elem_ids_; }
+    Omega_h::LOs getElementIds() const { return elem_ids_; }
 
     [[nodiscard]]
-    Omega_h::Write<Omega_h::LO> GetInterFaces() { return inter_faces_; }
+    Omega_h::LOs getIntersectionFaces() const { return inter_faces_; }
 
     [[nodiscard]]
-    Omega_h::Write<Omega_h::Real> GetInterPoints() { return inter_points_; }
+    Omega_h::Reals getIntersectionPoints() const { return inter_points_; }
 
     [[nodiscard]]
-    Omega_h::Write<Omega_h::LO> GetLastExits() { return last_exits_; }
+    Omega_h::LOs GetLastExits() const { return last_exits_; }
 
     void updatePtclPositions() {
         auto origin = ptcls_->template get<0>();

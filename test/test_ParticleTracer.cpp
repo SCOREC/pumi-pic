@@ -206,7 +206,7 @@ int main(int argc, char* argv[]){
     printf("\n\n\n============================ Checking Search Results =================================\n");
     auto check_search_results = PS_LAMBDA(const auto e, const auto pid, const auto mask) {
         if (mask > 0) {
-            printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .6f, % .6f, % .6f],[% .6f, % .6f, % .6f])\n",
+            printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .10f, % .10f, % .10f],[% .10f, % .10f, % .10f])\n",
                    pid, elem_ids[pid], expected_elem_ids[pid], interFaces[pid], expected_interFaces[pid],
                    interPoints[3*pid], interPoints[3*pid+1], interPoints[3*pid+2],
                    expected_interPoints[pid][0], expected_interPoints[pid][1], expected_interPoints[pid][2]);
@@ -230,6 +230,77 @@ int main(int argc, char* argv[]){
     printf("\n============================ Search Results are Correct =================================\n");
 
 
+    // ----------------------------------- Move Particles Again -----------------------------------//
+    printf("\n\n\n============================ Moving Particles Again =================================\n");
+
+    particle_tracer.updatePtclPositions();
+
+    Omega_h::Vector<3> p0_next_dest = {0.75, 0.1, 0.7}; // moved from 0 -> 5 -> 4
+    Omega_h::Vector<3> p1_next_dest = {0.2, 0.1, 0.4}; // moved from 0-> 5 -> 4 -> 3
+    Omega_h::Vector<3> p2_next_dest = {-0.1, 0.2, 0.5}; // moved from 3 -> 2 -> out
+
+    expected_elem_ids = {4, 3, -1, -1, -1};
+    expected_interFaces = {-1, -1, 4, 1, 0};
+    expected_interPoints = {p0_next_dest, p1_next_dest, p2_next_dest, {0,0,0}, {0,0,0}};
+
+    auto set_particle_path_next = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
+        if (mask > 0) {
+            if (pid == 0) {
+                particle_dest(pid, 0) = p0_next_dest[0];
+                particle_dest(pid, 1) = p0_next_dest[1];
+                particle_dest(pid, 2) = p0_next_dest[2];
+            } else if (pid == 1) {
+                particle_dest(pid, 0) = p1_next_dest[0];
+                particle_dest(pid, 1) = p1_next_dest[1];
+                particle_dest(pid, 2) = p1_next_dest[2];
+            } else if (pid == 2) {
+                particle_dest(pid, 0) = p2_next_dest[0];
+                particle_dest(pid, 1) = p2_next_dest[1];
+                particle_dest(pid, 2) = p2_next_dest[2];
+            }
+            printf("\tParticle %d moving from (% .10f, % .10f, % .10f) to (% .10f, % .10f, % .10f)\n",
+                   pid, particle_orig(pid, 0), particle_orig(pid, 1), particle_orig(pid, 2),
+                   particle_dest(pid, 0), particle_dest(pid, 1), particle_dest(pid, 2));
+        }
+    };
+    pumipic::parallel_for(ptcls, set_particle_path_next, "set_particle_path_next");
+
+    tracer_success = particle_tracer.search();
+
+    if (!tracer_success) {
+        printf("[ERROR] search_mesh failed\n");
+        delete ptcls;
+        throw std::runtime_error("search_mesh failed");
+    }
+    printf("Search mesh successful...\n");
+
+    printf("\n\n\n============================ Checking Next Movement Results =================================\n");
+
+    auto check_next_movement = PS_LAMBDA(const auto e, const auto pid, const auto mask) {
+        if (mask > 0) {
+            printf("\tPid %d: elem_id (%2d, %2d), interFace (%2d, %2d), interPoint ([% .10f, % .10f, % .10f],[% .10f, % .10f, % .10f])\n",
+                   pid, elem_ids[pid], expected_elem_ids[pid], interFaces[pid], expected_interFaces[pid],
+                   interPoints[3*pid], interPoints[3*pid+1], interPoints[3*pid+2],
+                   expected_interPoints[pid][0], expected_interPoints[pid][1], expected_interPoints[pid][2]);
+
+            OMEGA_H_CHECK_PRINTF(elem_ids[pid] == expected_elem_ids[pid], "Particle %d: Expected elem_id %d != found elem_id %d\n",
+                                 pid, expected_elem_ids[pid], elem_ids[pid]);
+            OMEGA_H_CHECK_PRINTF(interFaces[pid] == expected_interFaces[pid], "Particle %d: Expected interFace %d != found interFace %d\n",
+                                 pid, expected_interFaces[pid], interFaces[pid]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid], expected_interPoints[pid][0]),
+                                 "Particle %d: Expected interPoint x %f != found interPoint x %f\n",
+                                 pid, expected_interPoints[pid][0], interPoints[3*pid]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+1], expected_interPoints[pid][1]),
+                                 "Particle %d: Expected interPoint y %f != found interPoint y %f\n",
+                                 pid, expected_interPoints[pid][1], interPoints[3*pid+1]);
+            OMEGA_H_CHECK_PRINTF(is_close_d(interPoints[3*pid+2], expected_interPoints[pid][2]),
+                                 "Particle %d: Expected interPoint z %f != found interPoint z %f\n",
+                                 pid, expected_interPoints[pid][2], interPoints[3*pid+2]);
+        }
+    };
+    pumipic::parallel_for(ptcls, check_next_movement, "check_next_movement");
+
+    printf("\n============================ Next Movement Results are Correct =================================\n");
 
     // ------------------------------------------- Clean up -------------------------------------------//
     delete ptcls;

@@ -8,6 +8,14 @@
 #include <pumipic_adjacency.tpp>
 #include <optional>
 
+template<typename ElementType>
+void set_write_to_zero(Omega_h::Write<ElementType> &write) {
+    auto set_zero = OMEGA_H_LAMBDA(int i) {
+        write[i] = 0;
+    };
+    Omega_h::parallel_for(write.size(), set_zero, "set_write_to_zero");
+}
+
 template<typename ParticleType, typename Func>
 class ParticleTracer {
 public:
@@ -46,14 +54,32 @@ public:
         return true;
     }
 
-
+    [[nodiscard]]
     Omega_h::Write<Omega_h::LO> GetElemIds() { return elem_ids_; }
 
+    [[nodiscard]]
     Omega_h::Write<Omega_h::LO> GetInterFaces() { return inter_faces_; }
 
+    [[nodiscard]]
     Omega_h::Write<Omega_h::Real> GetInterPoints() { return inter_points_; }
 
+    [[nodiscard]]
     Omega_h::Write<Omega_h::LO> GetLastExits() { return last_exits_; }
+
+    void updatePtclPositions() {
+        auto origin = ptcls_->template get<0>();
+        auto dest = ptcls_->template get<1>();
+        auto updatePtclPos = PS_LAMBDA(const int &, const int &pid, const bool &) {
+            origin(pid, 0) = dest(pid, 0);
+            origin(pid, 1) = dest(pid, 1);
+            origin(pid, 2) = dest(pid, 2);
+
+            dest(pid, 0) = 0.0;
+            dest(pid, 1) = 0.0;
+            dest(pid, 2) = 0.0;
+        };
+        ps::parallel_for(ptcls_, updatePtclPos, "updatePtclPositions");
+    }
 
 private:
     double tolerance_ = 1e-10;
@@ -97,7 +123,7 @@ private:
     }
 
     void reset_particle_done() {
-        ptcl_done_ = Omega_h::Write<Omega_h::LO>(0, "particle done");
+        set_write_to_zero(ptcl_done_);
     }
 };
 

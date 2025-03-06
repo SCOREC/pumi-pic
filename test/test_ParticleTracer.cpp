@@ -174,7 +174,7 @@ int main(int argc, char* argv[]){
 
     // -------------------------------------- Particle Movement Set up Done --------------------------------------//
     pumipic::RemoveParticleOnGeometricModelExit<Particle, typeof(particle_orig)> native_handler(mesh, true);
-    auto particle_tracer = ParticleTracer(mesh, ptcls, native_handler);
+    auto particle_tracer = ParticleTracer(picparts, ptcls, native_handler);
 
     bool tracer_success = particle_tracer.search();
 

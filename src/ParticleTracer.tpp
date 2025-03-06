@@ -7,6 +7,7 @@
 
 #include <pumipic_adjacency.tpp>
 #include <optional>
+#include "pumipic_ptcl_ops.hpp"
 
 template<typename ElementType>
 void set_write_to_zero(Omega_h::Write<ElementType> &write) {
@@ -19,11 +20,13 @@ void set_write_to_zero(Omega_h::Write<ElementType> &write) {
 template<typename ParticleType, typename Func>
 class ParticleTracer {
 public:
-    ParticleTracer(Omega_h::Mesh &mesh, pumipic::ParticleStructure<ParticleType> *ptcls, Func &func,
+    ParticleTracer(pumipic::Mesh &picparts, pumipic::ParticleStructure<ParticleType> *ptcls, Func &func,
                    std::optional<double> tolerance = std::nullopt) :
-            oh_mesh_(mesh), ptcls_(ptcls), func_(func) {
+            picparts_(picparts),  ptcls_(ptcls), func_(func), func_set_(true) {
 
-        elmAreas_ = Omega_h::measure_elements_real(&mesh);
+        oh_mesh_ = *picparts_.mesh();
+        elmAreas_ = Omega_h::measure_elements_real(&oh_mesh_);
+
         if (tolerance.has_value()) {
             tolerance_ = tolerance.value();
         } else {
@@ -31,11 +34,24 @@ public:
         }
     }
 
-    bool search() {
+    void rebuild(bool migrate) {
+       updatePtclPositions();
+       if(migrate) {
+          pumipic::migrate_lb_ptcls(picparts_, ptcls_, elem_ids_, 1.05);
+       }
+    }
+
+    bool search(bool migrate = true) {
         if (!validate_internal_data_sizes()) {
             return false;
         }
         reset_particle_done();
+
+        // check if the function is set
+        if (!func_set_) {
+            printf("[ERROR] ParticleTracer: Function is not set. Use overload of search(func) or construct with functor\n");
+            return false;
+        }
 
         auto particle_orig = ptcls_->template get<0>();
         auto particle_dest = ptcls_->template get<1>();
@@ -51,6 +67,10 @@ public:
             printf("[ERROR] ParticleTracer: Failed to trace particles through the mesh.\n");
             return false;
         }
+
+        // Migrate if the given value is true or not given at all
+        rebuild(migrate);
+
         return true;
     }
 
@@ -82,9 +102,11 @@ public:
     }
 
 private:
+    bool func_set_ = false;
     double tolerance_ = 1e-10;
 
-    Omega_h::Mesh &oh_mesh_;
+    Omega_h::Mesh oh_mesh_;
+    pumipic::Mesh &picparts_;
     pumipic::ParticleStructure<ParticleType> *ptcls_;
     Func &func_;
 

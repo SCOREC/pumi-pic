@@ -6,6 +6,7 @@ configure_file(
 set(HEADERS
   pumipic_adjacency.hpp
   pumipic_adjacency.tpp
+  ParticleTracer.tpp
   pumipic_push.hpp
   pumipic_lb.hpp
   pumipic_ptcl_ops.hpp

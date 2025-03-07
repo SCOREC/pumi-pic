@@ -344,24 +344,13 @@ namespace pumipic {
                 lastExit[ptcl] = face_id;
                 xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
               }
-              //if (dproj > -tol && (quality < 0 || closeness < quality) && lastExit[ptcl] == -1) {
-              //  quality = closeness;
-              //  bestFace = face_id;
-              //  xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
-              //}
             }
 
-            //If line intersection fails then use BCC method
-            //if (lastExit[ptcl] == -1) {
-            //    printf("!!!!!!! Best face %d\n", bestFace);
-            //    lastExit[ptcl] = bestFace;
-            //}
-            if (lastExit[ptcl == -1]){ // reached destination
+            if (lastExit[ptcl] == -1){ // reached destination
                 xPoints[3*ptcl] = x_ps_tgt(ptcl,0);
                 xPoints[3*ptcl+1] = x_ps_tgt(ptcl,1);
                 xPoints[3*ptcl+2] = x_ps_tgt(ptcl,2);
             }
-            //ptcl_done[ptcl] = (lastExit[ptcl] == -1);
           }
         };
         parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
@@ -586,7 +575,6 @@ namespace pumipic {
       find_next_element(mesh, ptcls, elem_ids, next_element, ptcl_done, lastExit);
       //Check if intersection face is exposed
       func(mesh, ptcls, elem_ids, next_element, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
-      
 
       //Check if all particles are found
       found = true;

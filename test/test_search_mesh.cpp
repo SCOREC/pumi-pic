@@ -197,7 +197,10 @@ int main(int argc, char* argv[]){
 
     Omega_h::Few<Omega_h::LO, 5> expected_elem_ids = {0, 0, 3, -1, -1};
     Omega_h::Few<Omega_h::LO, 5> expected_interFaces = {-1, -1, -1, 1, 0};
-    Omega_h::Few<Omega_h::Vector<3>, 5> expected_interPoints = {p0_dest, p1_dest, p2_dest, p3_dest, p4_dest};
+    // p3 and p4 reaches the boundary
+    auto p3_at_boundary = p3_dest; p3_at_boundary[0] = 0.0;
+    auto p4_at_boundary = p4_dest; p4_at_boundary[2] = 0.0;
+    Omega_h::Few<Omega_h::Vector<3>, 5> expected_interPoints = {p0_dest, p1_dest, p2_dest, p3_at_boundary, p4_at_boundary};
 
     printf("\n\n\n============================ Checking Search Results =================================\n");
     auto check_search_results = PS_LAMBDA(const auto e, const auto pid, const auto mask) {

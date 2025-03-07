@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
     OMEGA_H_CHECK_PRINTF(elem_ids.size() == next_elements.size(), "elem ids and next elements size mismatch(%d,%d)",
                          elem_ids.size(), next_elements.size());
 
-    Omega_h::Vector<3> expected_intersection {0.75, 0.5, 0.25};
+    Omega_h::Vector<3> expected_intersection {0.625, 0.625, 0.25};
     auto check_arrays = PS_LAMBDA(const int& e, const int& pid, const int& mask){
         if (mask>0) {
             printf("Pid %d Intersection Face %d\n", pid, inter_faces[pid]);

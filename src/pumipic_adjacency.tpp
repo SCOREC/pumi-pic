@@ -455,6 +455,8 @@ namespace pumipic {
   * @param looplimit Maximum number of iterations
   * @param debug True if debug information is printed
   * @param func Callable object to handle particles at element sides or destination
+  * @param elmArea Element areas/volumes based on the mesh dimension
+  * @param given_tol Tolerance for intersection. If not positive, it is computed from the minimum element area
   * @return True if all particles are found at destination or left domain
   */
   template <class ParticleType, typename Segment3d, typename SegmentInt, typename Func>
@@ -466,7 +468,9 @@ namespace pumipic {
                    o::Write<o::Real>& inter_points,
                    int looplimit,
                    bool debug,
-                   Func& func) {
+                   Func& func,
+                   o::Reals& elmArea,
+                   std::optional<o::Real> given_tol = std::nullopt) {
     static_assert(
         std::is_invocable_r_v<
             void, Func, o::Mesh &, ParticleStructure<ParticleType> *,
@@ -486,9 +490,14 @@ namespace pumipic {
     o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
     // Store the last exit face
     o::Write<o::LO> lastExit(psCapacity,-1, "search_last_exit");
-    const auto elmArea = measure_elements_real(&mesh);
     bool useBcc = !requireIntersection;
-    o::Real tol = compute_tolerance_from_area(elmArea);
+
+    o::Real tol = 0;
+    if (!given_tol.has_value()) {
+        tol = compute_tolerance_from_area(elmArea);
+    } else {
+        tol = given_tol.value();
+    }
     
     int rank;
     MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
@@ -648,9 +657,9 @@ namespace pumipic {
                    int looplimit,
                    int debug) {
     RemoveParticleOnGeometricModelExit<ParticleType, Segment3d> native_handler(mesh, requireIntersection);
-
+    o::Reals elmArea = measure_elements_real(&mesh);
     return trace_particle_through_mesh(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, requireIntersection,
-                           inter_faces, inter_points, looplimit, debug, native_handler);
+                           inter_faces, inter_points, looplimit, debug, native_handler, elmArea);
   }
 }
 #endif

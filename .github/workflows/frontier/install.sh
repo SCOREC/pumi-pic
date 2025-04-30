@@ -82,6 +82,7 @@ cmake -S pumi-pic -B $bdir \
   -DIS_TESTING=ON \
   -DPS_IS_TESTING=ON \
   -DPS_USE_GPU_AWARE_MPI=ON \
+  -DCMAKE_CXX_STANDARD=20 \
   -DTEST_DATA_DIR=$PWD/pumi-pic/pumipic-data \
   -DOmega_h_PREFIX=$PWD/build-omega_h/install \
   -DKokkos_PREFIX=$PWD/build-kokkos/install \

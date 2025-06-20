@@ -144,7 +144,7 @@ namespace pumipic {
     return ss.str().size();
   }
 
-  void determineLengths(int& name_length, int& tt_length, int& min_length, int& max_length, int& rmsd_length,
+  void determineLengths(int& name_length, int& tt_length, int& min_length, int& max_length, int& sqrAvg_length,
                         int& cc_length, int& at_length) {
     for (std::size_t index = 0; index < time_per_op.size(); ++index) {
       double average = time_per_op[index].time / time_per_op[index].count;
@@ -156,7 +156,7 @@ namespace pumipic {
       max_length = std::max(max_length, length(time_per_op[index].max));
       cc_length = std::max(cc_length, length(time_per_op[index].count));
       at_length = std::max(at_length, length(average));
-      rmsd_length = std::max(rmsd_length, length(averageSq));
+      sqrAvg_length = std::max(sqrAvg_length, length(averageSq));
     }
   }
 

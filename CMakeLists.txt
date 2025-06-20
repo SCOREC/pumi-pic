@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 
-project(pumipic VERSION 2.1.5 LANGUAGES CXX)
+project(pumipic VERSION 2.1.6 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 

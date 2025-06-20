@@ -205,7 +205,7 @@ namespace pumipic {
           PrintTable(buffer, average, at_length + padding);
           if (time_per_op[index].hasPrebarrier)
             buffer <<"  Total Prebarrier=" << time_per_op[index].prebarrier;
-          buffer << '\n';
+          buffer <<'\n';
         }
         printInfo( "%s\n", buffer.str().c_str());
       }

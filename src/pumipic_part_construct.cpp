@@ -285,9 +285,9 @@ namespace {
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       if (c_id < 0)
-        pumipic::printInfo("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
+        printInfo("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
       else if (c_id >= max_cids)
-        pumipic::printInfo("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
+        printInfo("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
       owns[id] = class_owners[c_id];
       const auto hasElm = (class_owners[c_id] == self);
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);
@@ -350,6 +350,14 @@ namespace {
         elem_gids[i] = rank_offsets[own] + vals[own];
       }
       ++(vals[own]);
+    }
+    OMEGA_H_DEVICE void operator()(const size_type& i, Omega_h::LO val,
+                                           const bool& final) const {
+      const Omega_h::LO own = elem_owner[i];
+      if (final) {
+        elem_gids[i] = rank_offsets[own] + val;
+      }
+      ++(val);
     }
     OMEGA_H_DEVICE void join(value_type update,
                              const value_type input) const {

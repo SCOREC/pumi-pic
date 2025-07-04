@@ -61,7 +61,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
   //Init
   auto checkInit = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e != p){
-      printf("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
+      printInfo("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };
@@ -78,7 +78,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   auto checkRebuild = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e != comm_rank){
-      printf("Structure failed to rebuild at Ptcl: %d, Elm: %d\n", p, e);
+      printInfo("Structure failed to rebuild at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };
@@ -95,7 +95,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   auto checkMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e == comm_rank){
-      printf("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
+      printInfo("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };

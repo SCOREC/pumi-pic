@@ -39,7 +39,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
       const lid_t dest_elem = new_element(id);
       Kokkos::atomic_add(&(new_element_sums[e]), id);
       if (dest_elem != e) {
-        printf("[ERROR] Particle %d was moved to incorrect element %d on %s "
+        printInfo("[ERROR] Particle %d was moved to incorrect element %d on %s "
                "(should be in element %d)\n", id, e, name, dest_elem);
         failed(0) = 1;
       }
@@ -53,7 +53,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
     const lid_t old_sum = element_sums(i);
     const lid_t new_sum = new_element_sums(i);
     if (old_sum != new_sum) {
-      printf("[ERROR] Sum of particle ids on element %d do not match on %s. Old: %d New: %d\n",
+      printInfo("[ERROR] Sum of particle ids on element %d do not match on %s. Old: %d New: %d\n",
              i, name, old_sum, new_sum);
       failed(0) = 1;
     }
@@ -103,7 +103,7 @@ int rebuildNewElems(const char* name, PS* structure) {
       const lid_t dest_elem = new_element(id);
       Kokkos::atomic_add(&(new_element_sums[e]), id);
       if (dest_elem != e) {
-        printf("[ERROR] Particle %d was moved to incorrect element %d on %s "
+        printInfo("[ERROR] Particle %d was moved to incorrect element %d on %s "
                "(should be in element %d)\n", id, e, name, dest_elem);
         failed(0) = 1;
       }
@@ -116,7 +116,7 @@ int rebuildNewElems(const char* name, PS* structure) {
     const lid_t old_sum = element_sums(i);
     const lid_t new_sum = new_element_sums(i);
     if (old_sum != new_sum) {
-      printf("[ERROR] Sum of particle ids on element %d do not match on %s. Old: %d New: %d\n",
+      printInfo("[ERROR] Sum of particle ids on element %d do not match on %s. Old: %d New: %d\n",
               i, name, old_sum, new_sum);
       failed(0) = 1;
     }
@@ -239,11 +239,11 @@ int rebuildPtclsDestroyed(const char* name, PS* structure) {
       const lid_t id = pID(p);
       const lid_t dest_elem = new_element(id);
       if (id%7 == 0) {
-        printf("[ERROR] Particle %d (%d, %d) was not removed during rebuild on %s\n", id, e, p, name);
+        printInfo("[ERROR] Particle %d (%d, %d) was not removed during rebuild on %s\n", id, e, p, name);
         failed(0) = 1;
       }
       else if (dest_elem != e) {
-        printf("[ERROR] Particle %d was moved to incorrect element %d on %s "
+        printInfo("[ERROR] Particle %d was moved to incorrect element %d on %s "
                "(should be in element %d)\n", id, e, name, dest_elem);
         failed(0) = 1;
       }
@@ -312,11 +312,11 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
       if (id < cap) { //Check old particles
         const lid_t dest_elem = new_element(id);
         if (id % 7 == 0) { //Check removed particles
-          printf("[ERROR] Particle %d in element %d was not removed during rebuild on %s\n", id, e, name);
+          printInfo("[ERROR] Particle %d in element %d was not removed during rebuild on %s\n", id, e, name);
           failed(0) = 1;
         }
         else if (dest_elem != e) {
-          printf("[ERROR] Particle %d was moved to incorrect element %d on %s "
+          printInfo("[ERROR] Particle %d was moved to incorrect element %d on %s "
                  "(should be in element %d)\n", id, e, name, dest_elem);
           failed(0) = 1;
         }
@@ -325,7 +325,7 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
         const lid_t i = id - cap;
         const lid_t dest_elem = new_particle_elements(i);
         if (e != dest_elem) {
-          printf("[ERROR] New particle %d was added to incorrect element %d on %s "
+          printInfo("[ERROR] New particle %d was added to incorrect element %d on %s "
                  "(should be in element %d)\n", id, e, name, dest_elem);
           failed(0) = 1;
         }

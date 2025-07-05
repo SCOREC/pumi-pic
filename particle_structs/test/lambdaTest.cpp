@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 
     auto lamb = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
       if (mask > 0)
-        printf("SECOND: %d %d\n", eid, pid);
+        printInfo("SECOND: %d %d\n", eid, pid);
     };
 
     scs->parallel_for(lamb);

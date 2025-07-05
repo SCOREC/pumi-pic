@@ -1,4 +1,5 @@
 #include "ViewComm.h"
+#include "ppPrint.h"
 
 int comm_rank, comm_size;
 template <typename Space>
@@ -91,7 +92,7 @@ int sendRecvTest(const char* name, int msg_size) {
     }
     Kokkos::parallel_for(ExecPolicy(exec, 0, msg_size), KOKKOS_LAMBDA(const int i) {
       if (recv_view(i) != i) {
-        printf("[ERROR] Rank %d: Recieved value is incorrect for index %d"
+        printInfo("[ERROR] Rank %d: Recieved value is incorrect for index %d"
                "[(actual)%d != %d(should be)]\n",local_rank, i, recv_view(i), i);
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
@@ -122,7 +123,7 @@ int sendRecvTest(const char* name, int msg_size) {
     }
     Kokkos::parallel_for(ExecPolicy(exec, 0, msg_size), KOKKOS_LAMBDA(const int i) {
       if (recv_view(i) != i) {
-        printf("[ERROR] Rank %d: Recieved value is incorrect for index %d"
+        printInfo("[ERROR] Rank %d: Recieved value is incorrect for index %d"
                "[(actual)%d != %d(should be)]\n",local_rank, i, recv_view(i), i);
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
@@ -207,12 +208,12 @@ int iSendRecvWaitTest(const char* name, int msg_size) {
     }
     Kokkos::parallel_for(ExecPolicy(exec, 0, msg_size), KOKKOS_LAMBDA(const int i) {
         if (recv_view(i) != prev_rank) {
-          printf("[ERROR] Rank %d: Recevied incorrect value in element %d "
+          printInfo("[ERROR] Rank %d: Recevied incorrect value in element %d "
                  "[(actual) %d != %d (should be)]\n", local_rank, i, recv_view(i), prev_rank);
           Kokkos::atomic_add(&(device_fails(0)), 1);
         }
         if (recv_view(i + msg_size) != next_rank) {
-          printf("[ERROR] Rank %d: Recevied incorrect value in element %d "
+          printInfo("[ERROR] Rank %d: Recevied incorrect value in element %d "
                  "[(actual) %d != %d (should be)]\n", local_rank, i + msg_size,
                  recv_view(i + msg_size), next_rank);
           Kokkos::atomic_add(&(device_fails(0)), 1);
@@ -277,12 +278,12 @@ int iSendRecvWaitTest(const char* name, int msg_size) {
     }
     Kokkos::parallel_for(ExecPolicy(exec, 0, msg_size), KOKKOS_LAMBDA(const int i) {
         if (recv_view(i) != prev_rank) {
-          printf("[ERROR] Rank %d: Recevied incorrect value in element %d "
+          printInfo("[ERROR] Rank %d: Recevied incorrect value in element %d "
                  "[(actual) %d != %d (should be)]\n", local_rank, i, recv_view(i), prev_rank);
           Kokkos::atomic_add(&(device_fails(0)), 1);
         }
         if (recv_view(i + msg_size) != next_rank) {
-          printf("[ERROR] Rank %d: Recevied incorrect value in element %d "
+          printInfo("[ERROR] Rank %d: Recevied incorrect value in element %d "
                  "[(actual) %d != %d (should be)]\n", local_rank, i + msg_size,
                  recv_view(i + msg_size), next_rank);
           Kokkos::atomic_add(&(device_fails(0)), 1);
@@ -354,7 +355,7 @@ int iSendRecvWaitAllTest(const char* name) {
     Kokkos::parallel_for(ExecPolicy(exec, 0, local_size), KOKKOS_LAMBDA(const int i) {
         unsigned long int p = Kokkos::pow(2, i);
       if (recv_view(i) != p) {
-        printf("[ERROR] Rank %d: has incorrect value on element %d"
+        printInfo("[ERROR] Rank %d: has incorrect value on element %d"
                "[(actual) %lu != %lu (should be)]\n", local_rank, i, recv_view(i), p);
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
@@ -406,7 +407,7 @@ int iSendRecvWaitAllTest(const char* name) {
     Kokkos::parallel_for(ExecPolicy(exec, 0, local_size), KOKKOS_LAMBDA(const int i) {
         unsigned long int p = Kokkos::pow(2, i);
       if (recv_view(i) != p) {
-        printf("[ERROR] Rank %d: has incorrect value on element %d"
+        printInfo("[ERROR] Rank %d: has incorrect value on element %d"
                "[(actual) %lu != %lu (should be)]\n", local_rank, i, recv_view(i), p);
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
@@ -455,7 +456,7 @@ int reduceTest(const char* name) {
     if (comm_rank == root) {
       Kokkos::parallel_for(ExecPolicy(exec, 0, 1), KOKKOS_LAMBDA(const int i) {
         if (recv_view(i) != local_size) {
-          printf("[ERROR] Rank %d: max value is incorrect"
+          printInfo("[ERROR] Rank %d: max value is incorrect"
                  "[(actual) %d != %d (should be)]\n", local_rank, recv_view(i), local_size);
           Kokkos::atomic_add(&(device_fails(0)), 1);
         }
@@ -482,7 +483,7 @@ int reduceTest(const char* name) {
     if (comm_rank == root) {
       Kokkos::parallel_for(ExecPolicy(exec, 0, 1), KOKKOS_LAMBDA(const int i) {
         if (recv_view(i) != local_size) {
-          printf("[ERROR] Rank %d: max value is incorrect"
+          printInfo("[ERROR] Rank %d: max value is incorrect"
                  "[(actual) %d != %d (should be)]\n", local_rank, recv_view(i), local_size);
           Kokkos::atomic_add(&(device_fails(0)), 1);
         }
@@ -530,7 +531,7 @@ int allReduceTest(const char* name) {
     const double TOL = .000001;
     Kokkos::parallel_for(ExecPolicy(exec, 0, 10), KOKKOS_LAMBDA(const int i) {
       if (Kokkos::fabs(recv_view(i) - sum_view(i)) > TOL) {
-        printf("[ERROR] Rank %d: summed value is incorrect on element %d"
+        printInfo("[ERROR] Rank %d: summed value is incorrect on element %d"
                "[(actual) %f != %f (should be)]\n", local_rank, i, recv_view(i), sum_view(i));
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }
@@ -557,7 +558,7 @@ int allReduceTest(const char* name) {
     const double TOL = .000001;
     Kokkos::parallel_for(ExecPolicy(exec, 0, 10), KOKKOS_LAMBDA(const int i) {
       if (Kokkos::fabs(recv_view(i) - sum_view(i)) > TOL) {
-        printf("[ERROR] Rank %d: summed value is incorrect on element %d"
+        printInfo("[ERROR] Rank %d: summed value is incorrect on element %d"
                "[(actual) %f != %f (should be)]\n", local_rank, i, recv_view(i), sum_view(i));
         Kokkos::atomic_add(&(device_fails(0)), 1);
       }

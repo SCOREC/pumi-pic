@@ -61,7 +61,7 @@ int migrateSendRight(const char* name, PS* structure) {
   neighbors[0] = comm_rank;
   neighbors[1] = (comm_rank - 1 + comm_size) % comm_size;
   neighbors[2] = (comm_rank + 1) % comm_size;
-  ps::Distributor<typename PS::memory_space> dist(Kokkos::min(comm_size, 3), neighbors);
+  ps::Distributor<typename PS::memory_space> dist(std::min(comm_size, 3), neighbors);
 
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());

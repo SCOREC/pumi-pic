@@ -446,7 +446,7 @@ int reduceTest(const char* name) {
     Kokkos::parallel_for(ExecPolicy(exec, 0, 1), KOKKOS_LAMBDA(const int i) {
       send_view(i) = local_rank + 1;
     });
-    int root = Kokkos::min(comm_size - 1, 1);
+    int root = std::min(comm_size - 1, 1);
     int ret = pumipic::PS_Comm_Reduce(send_view, recv_view, 1, MPI_MAX, root, MPI_COMM_WORLD);
     if (ret != MPI_SUCCESS) {
       fprintf(stderr, "[ERROR] Rank %d: PS_Comm_Reduce returned error code %d\n",
@@ -473,7 +473,7 @@ int reduceTest(const char* name) {
     Kokkos::parallel_for(ExecPolicy(exec, 0, 1), KOKKOS_LAMBDA(const int i) {
       send_view(i) = local_rank + 1;
     });
-    int root = Kokkos::min(comm_size - 1, 1);
+    int root = std::min(comm_size - 1, 1);
     int ret = pumipic::PS_Comm_Reduce(send_view, recv_view, 1, MPI_MAX, root, MPI_COMM_WORLD);
     if (ret != MPI_SUCCESS) {
       fprintf(stderr, "[ERROR] Rank %d: PS_Comm_Reduce returned error code %d\n",

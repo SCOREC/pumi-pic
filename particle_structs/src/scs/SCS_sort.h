@@ -33,7 +33,7 @@ namespace pumipic {
         index(i) = elem_ids(i);
       });
 #else
-      sigma = Kokkos::min(sigma, Kokkos::max(num_elems, 1));
+      sigma = std::min(sigma, std::max(num_elems, 1));
       lid_t n_sigma = num_elems/sigma;
       int vectorLen = PolicyType::vector_length_max();
       Kokkos::parallel_for( PolicyType(n_sigma, 1, vectorLen), KOKKOS_LAMBDA(const TeamMem& t){

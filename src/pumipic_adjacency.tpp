@@ -173,7 +173,7 @@ namespace pumipic {
     const o::Real t = invdet * o::inner_product(edge2, qvec);
     intersection_parametric_coord = t/seg_length;
     xpoint = orig + dir * t;
-    closeness = Kokkos::max(Kokkos::max(Kokkos::min(Kokkos::fabs(u), Kokkos::fabs(1 - u)), Kokkos::min(Kokkos::fabs(v), Kokkos::fabs(1 - v))), Kokkos::min(Kokkos::fabs(u + v), Kokkos::fabs(1 - u - v)));
+    closeness = std::max(std::max(std::min(Kokkos::fabs(u), Kokkos::fabs(1 - u)), std::min(Kokkos::fabs(v), Kokkos::fabs(1 - v))), std::min(Kokkos::fabs(u + v), Kokkos::fabs(1 - u - v)));
     return (dproj >= tol) && (t >= -tol) && (u >= -tol) && (v >= -tol) && (u+v <= 1.0 + 2 * tol);
   }
 
@@ -421,8 +421,8 @@ namespace pumipic {
     Kokkos::parallel_reduce(elmArea.size(), OMEGA_H_LAMBDA(const o::LO elm, o::Real& area) {
         if (elmArea[elm] < area)
           area = elmArea[elm];
-      }, Kokkos::Min<o::Real>(min_area));
-    o::Real tol = Kokkos::max(1e-15 / min_area, 1e-8);
+      }, std::min<o::Real>(min_area));
+    o::Real tol = std::max(1e-15 / min_area, 1e-8);
     printInfo("Min area is: %.15f, Planned tol is %.15f\n", min_area, tol);
     return tol;
   }

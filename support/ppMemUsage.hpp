@@ -5,6 +5,8 @@
 typedef Kokkos::CudaSpace DeviceSpace;
 #elif defined(PP_USE_HIP)
 typedef Kokkos::HIPSpace DeviceSpace;
+#elif defined(PP_USE_SYCL)
+typedef Kokkos::SYCLDeviceUSMSpace DeviceSpace;
 #else
 typedef Kokkos::HostSpace DeviceSpace;
 #endif

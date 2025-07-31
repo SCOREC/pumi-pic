@@ -14,10 +14,10 @@ int main(int argc, char* argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
 
-    int num_elems = 5;
-    int num_ptcls = 5;
-    lid_t V = 1024;
-    lid_t sigma = INT_MAX;
+    const int num_elems = 5;
+    const int num_ptcls = 5;
+    const lid_t V = 1024;
+    const lid_t sigma = INT_MAX;
     kkLidView ppe = kkLidView("particles_per_element", num_elems);
     kkGidView element_gids = kkGidView("elemnt_gids", num_elems);
     kkLidView particle_elements = kkLidView("element_of_particle", num_ptcls);
@@ -61,7 +61,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
   //Init
   auto checkInit = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e != p){
-      printf("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
+      printInfo("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };
@@ -78,7 +78,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   auto checkRebuild = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e != comm_rank){
-      printf("Structure failed to rebuild at Ptcl: %d, Elm: %d\n", p, e);
+      printInfo("Structure failed to rebuild at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };
@@ -95,7 +95,7 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   auto checkMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask && e == comm_rank){
-      printf("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
+      printInfo("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
   };

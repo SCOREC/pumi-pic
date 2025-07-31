@@ -2,6 +2,8 @@
 
 CDash: https://my.cdash.org/index.php?project=pumi-pic
 
+Doxygen Documentation (incomplete): https://scorec.github.io/pumi-pic
+
 ### Dependencies
 
 - Kokkos https://github.com/kokkos/kokkos

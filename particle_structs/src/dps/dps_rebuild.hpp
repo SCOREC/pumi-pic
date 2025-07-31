@@ -39,7 +39,7 @@ namespace pumipic {
         if (parent > -1) // count particles kept and move
           parentElms_cpy(soa*soa_len + tuple) = parent;
         else { // count particles deleted and delete
-          Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
+          Kokkos::atomic_inc<lid_t>(&num_removed_d(0));
           active.access(soa,tuple) = false; // delete particles
         }
       }

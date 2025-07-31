@@ -36,9 +36,9 @@ namespace pumipic {
       if (active.access(soa,tuple)) {
         lid_t parent = new_element(soa*soa_len + tuple);
         if (parent > -1) // count particles to be kept
-          Kokkos::atomic_increment<lid_t>(&elmDegree_d(parent));
+          Kokkos::atomic_inc<lid_t>(&elmDegree_d(parent));
         else // count particles to be deleted
-          Kokkos::atomic_increment<lid_t>(&num_removed_d(0));
+          Kokkos::atomic_inc<lid_t>(&num_removed_d(0));
       }
     };
     Cabana::SimdPolicy<soa_len,execution_space> simd_policy(0, capacity_);

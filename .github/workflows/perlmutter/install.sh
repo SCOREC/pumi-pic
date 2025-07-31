@@ -85,6 +85,7 @@ cmake -S pumi-pic -B ${pumipic%%install} \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER=CC \
   -DENABLE_CABANA=ON \
+  -DCMAKE_CXX_STANDARD=20 \
   -DTEST_DATA_DIR=$root/pumi-pic/pumipic-data \
   -DOmega_h_PREFIX=$oh \
   -DEnGPar_PREFIX=$engpar \

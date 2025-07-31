@@ -319,7 +319,7 @@ namespace pumipic {
 
     num_chars += sprintf(ptr+num_chars, "\n  Elements");
     for (int e = 0; e < num_elems; e++){
-      num_chars += sprintf(ptr+num_chars, " %2d(%2d)", e, element_to_gid_host(e));
+      num_chars += sprintf(ptr+num_chars, " %2d(%2ld)", e, element_to_gid_host(e));
     }
 
     lid_t last_soa = -1;

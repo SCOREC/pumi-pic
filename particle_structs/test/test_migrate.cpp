@@ -40,12 +40,12 @@ int migrateSendRight(const char* name, PS* structure) {
       const int pid = pids(p);
       const int rank = rnks(p);
       if (e == num_elems - 1 && rank == local_rank) {
-        printf("[ERROR] Failed to send particle %d on rank %d\n",
+        printInfo("[ERROR] Failed to send particle %d on rank %d\n",
                pid, local_rank);
         failures(0) = 1;
       }
       if (e != num_elems - 1 && rank != local_rank) {
-        printf("[ERROR] Incorrectly received particle %d from rank %d to rank %d in element %d\n", pid, rank, local_rank, e);
+        printInfo("[ERROR] Incorrectly received particle %d from rank %d to rank %d in element %d\n", pid, rank, local_rank, e);
         failures(0) = 1;
       }
     }
@@ -61,7 +61,7 @@ int migrateSendRight(const char* name, PS* structure) {
   neighbors[0] = comm_rank;
   neighbors[1] = (comm_rank - 1 + comm_size) % comm_size;
   neighbors[2] = (comm_rank + 1) % comm_size;
-  ps::Distributor<typename PS::memory_space> dist(Kokkos::min(comm_size, 3), neighbors);
+  ps::Distributor<typename PS::memory_space> dist(std::min(comm_size, 3), neighbors);
 
   new_element = kkLidView("new_element", structure->capacity());
   new_process = kkLidView("new_process", structure->capacity());
@@ -80,7 +80,7 @@ int migrateSendRight(const char* name, PS* structure) {
   auto checkPostBackMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
     if (mask) {
       if (rnks(p) != local_rank) {
-        printf("[ERROR] Test %s: Particle %d from rank %d was not sent back on rank %d\n",
+        printInfo("[ERROR] Test %s: Particle %d from rank %d was not sent back on rank %d\n",
                name, pids(p), rnks(p), local_rank);
         failures(0) = 1;
       }
@@ -148,7 +148,7 @@ int migrateSendToOne(const char* name, PS* structure) {
       int rank = int_slice(ptcl_id);
       double val = double_slice(ptcl_id, 0);
       if (Kokkos::fabs(rank*5 - val) > .0005) {
-        printf("[ERROR] %d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
+        printInfo("[ERROR] %d Value fails on ptcl %d (%d %.2f) on %s", comm_rank_local, ptcl_id, rank*5, val, name);
         failures(0) = 1;
       }
     }
@@ -205,7 +205,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
     auto checkPtcls = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
       if (mask) {
         failures(0) = 1;
-        printf("[ERROR] Particle %d remains on rank %d\n", p, local_rank);
+        printInfo("[ERROR] Particle %d remains on rank %d\n", p, local_rank);
       }
     };
     ps::parallel_for(structure, checkPtcls, "checkPtcls");
@@ -221,7 +221,7 @@ int migrateToEmptyAndRefill(const char* name, PS* structure) {
       if (mask) {
         if (new_rnks(p) != local_rank && new_rnks(p) !=  prev_rank) {
           failures(0) = 1;
-          printf("[ERROR] Particle %d is not from ranks %d or %d\n", p, local_rank, prev_rank);
+          printInfo("[ERROR] Particle %d is not from ranks %d or %d\n", p, local_rank, prev_rank);
         }
       }
     };

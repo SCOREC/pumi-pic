@@ -26,16 +26,3 @@ struct MyPair {
 };
 
 }
-
-#ifdef PP_USE_GPU
-namespace Kokkos {
-  using pumipic::MyPair;
-  PP_DEVICE_VAR MyPair ma = MyPair(10000000);
-  PP_DEVICE_VAR MyPair mi = MyPair(0);
-  template <>
-  struct reduction_identity<MyPair> {
-    KOKKOS_FORCEINLINE_FUNCTION constexpr static const MyPair& max() {return ma;}
-    KOKKOS_FORCEINLINE_FUNCTION constexpr static const  MyPair& min() {return mi;}
-  };
-}
-#endif

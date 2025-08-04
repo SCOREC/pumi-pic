@@ -159,7 +159,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   auto ids = ptcls->get<2>();
   auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
-      printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
+      printInfo("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
   ps::parallel_for(ptcls, printElmIds);
 
@@ -183,7 +183,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   if (output) {
     auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if (mask > 0)
-        printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+        printInfo("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
     };
     ps::parallel_for(ptcls, printElms);
   }
@@ -289,7 +289,7 @@ void setInitialPtclCoords(p::Mesh& picparts, PS* ptcls, bool output) {
       auto cell_nodes2coords = gatherVectors(nodes2coords, cell_nodes2nodes);
       auto center = average(cell_nodes2coords);
       if (output)
-        printf("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
+        printInfo("elm %d xyz %f %f %f\n", e, center[0], center[1], center[2]);
       for(int i=0; i<3; i++)
         x_ps_d(pid,i) = center[i];
     }
@@ -461,7 +461,7 @@ int main(int argc, char** argv) {
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     const int np = ptcls_per_elem(i);
     if (output && np > 0)
-     printf("ppe[%d] %d\n", i, np);
+     printInfo("ppe[%d] %d\n", i, np);
   });
 
   //'sigma', 'V', and the 'policy' control the layout of the PS structure

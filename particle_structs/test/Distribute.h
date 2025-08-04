@@ -7,7 +7,6 @@
 #include <particle_structs.hpp>
 #include <SupportKK.h>
 
-
 bool distribute_elements(int ne, int strat, pumipic::gid_t* gids);
 
 bool distribute_particles(int ne, int np, int strat, int* ptcls_per_elem,
@@ -66,9 +65,9 @@ bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
         int index = mover_index[p];
         new_elems[p] = new_moves_d[index];
         if (new_moves_d[index] < 0)
-          printf("ERROR %d\n", new_moves_d[index]);
+          printInfo("ERROR %d\n", new_moves_d[index]);
         else if (new_moves_d[index] >= numElems)
-          printf("ERROR %d\n", new_moves_d[index]);
+          printInfo("ERROR %d\n", new_moves_d[index]);
       }
       else {
         new_elems[p] = e;

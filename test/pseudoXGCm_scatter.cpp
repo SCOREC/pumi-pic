@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
   Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
     element_gids(i) = mesh_element_gids[i];
     ptcls_per_elem(i) = (i == 0);
-    printf("ppe[%d] %d\n", i, ptcls_per_elem(i));
+    printInfo("ppe[%d] %d\n", i, ptcls_per_elem(i));
   });
 
   const int sigma = INT_MAX; // full sorting

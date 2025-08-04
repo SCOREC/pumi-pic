@@ -52,7 +52,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   auto ids = ptcls->get<2>();
   auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
-      printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
+      printInfo("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
   ps::parallel_for(ptcls, printElmIds);
 
@@ -82,7 +82,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, o::LOs elem_ids, const bool output) {
   if (output) {
     auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if (mask > 0)
-        printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+        printInfo("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
     };
     ps::parallel_for(ptcls, printElms);
   }
@@ -139,7 +139,7 @@ void particleSearch(p::Mesh& picparts,
     element_gids(i) = mesh_element_gids[i];
     ptcls_per_elem(i) = (i == parentElm);
     if( ptcls_per_elem(i) )
-      printf("ppe[%d] %d\n", i, ptcls_per_elem(i));
+      printInfo("ppe[%d] %d\n", i, ptcls_per_elem(i));
   });
 
   const int sigma = INT_MAX; // full sorting
@@ -161,7 +161,7 @@ void particleSearch(p::Mesh& picparts,
         x_ps_d(pid,i) = ptclStart[i];
         x_ps_tgt(pid,i) = ptclEnd[i];
       }
-      printf("pid %d elm %d src %f %f dest %f %f\n",
+      printInfo("pid %d elm %d src %f %f dest %f %f\n",
           pid, e, x_ps_d(pid,0), x_ps_d(pid,1),
           x_ps_tgt(pid,0), x_ps_tgt(pid,1));
     }
@@ -172,7 +172,7 @@ void particleSearch(p::Mesh& picparts,
   auto printPtclElm = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask) {
       assert(e == destElm || e == altDestElm);
-      printf("pid %d elm %d (x,y) %f %f\n",
+      printInfo("pid %d elm %d (x,y) %f %f\n",
           pid, e, x_ps_d(pid, 0), x_ps_d(pid, 1));
     }
   };

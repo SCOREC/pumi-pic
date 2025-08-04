@@ -3,6 +3,7 @@
 #include <Omega_h_file.hpp>  //gmsh
 #include <pumipic_mesh.hpp>
 #include <Omega_h_for.hpp>
+#include "ppPrint.h"
 
 int testGlobalTag(Omega_h::Mesh& mesh, pumipic::Mesh& picparts);
 int main(int argc, char** argv) {
@@ -95,7 +96,7 @@ int testGlobalTag(Omega_h::Mesh& mesh, pumipic::Mesh& picparts) {
 
       if (Kokkos::fabs(center_old[0] - center_new[0]) > TOL ||
           Kokkos::fabs(center_old[1] - center_new[1]) > TOL) {
-        printf("Centroids of same global ids do not match [%ld]\n", global);
+        printInfo("Centroids of same global ids do not match [%ld]\n", global);
         fails[0] = 1;
       }
     };
@@ -118,7 +119,7 @@ int testGlobalTag(Omega_h::Mesh& mesh, pumipic::Mesh& picparts) {
       if (Kokkos::fabs(center_old[0] - center_new[0]) > TOL ||
           Kokkos::fabs(center_old[1] - center_new[1]) > TOL ||
           Kokkos::fabs(center_old[2] - center_new[2]) > TOL) {
-        printf("Centroids of same global ids do not match [%ld]", global);
+        printInfo("Centroids of same global ids do not match [%ld]", global);
         fails[0] = 1;
 
       }

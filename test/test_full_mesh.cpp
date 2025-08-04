@@ -3,6 +3,7 @@
 #include <Omega_h_file.hpp>
 #include <Omega_h_for.hpp>
 #include <pumipic_mesh.hpp>
+#include "ppPrint.h"
 
 int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
@@ -48,7 +49,7 @@ int main(int argc, char** argv) {
   Omega_h::Write<Omega_h::LO> fails(1,0);
   auto checkGlobals = OMEGA_H_LAMBDA(const Omega_h::LO ent) {
     if (global_old[ent] != global_new[ent]) {
-      printf("global ids do not match on entity %d [%ld != %ld]", ent, global_old[ent],
+      printInfo("global ids do not match on entity %d [%ld != %ld]", ent, global_old[ent],
         global_old[ent]);
       fails[0] = 1;
     }

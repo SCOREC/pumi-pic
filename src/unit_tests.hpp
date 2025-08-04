@@ -271,7 +271,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
     std::cout << "\n#Coords: size=" << coords.size() << " (3 x verts)\n\t";    
     auto printCoords = OMEGA_H_LAMBDA(o::LO i) {
       if( i<20 )
-        printf("coords[%2d] %.4f\n", i, coords[i]);
+        printInfo("coords[%2d] %.4f\n", i, coords[i]);
     };
     o::parallel_for(coords.size(), printCoords, "printCoords");
     const auto mesh2verts = m.ask_elem_verts();
@@ -281,13 +281,13 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
         auto ttv2v = Omega_h::gather_verts<4>(mesh2verts, ielem);
         const auto M = Omega_h::gather_vectors<4, 3>(coords, ttv2v);
         for(o::LO i=0; i<4; ++i)
-          printf("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
-        printf("Vertex IDS :");
+          printInfo("M%d %.4f, %.4f, %.4f\n", i, M[i][0], M[i][1], M[i][2]);
+        printInfo("Vertex IDS :");
         for(int i=0; i<4; ++i)
         {
-           printf("%4d, ", ttv2v[i]);
+           printInfo("%4d, ", ttv2v[i]);
         }
-        printf(";\n");
+        printInfo(";\n");
       }
     };
     std::cout << "\n\n";
@@ -298,14 +298,14 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   std::cout << "#down(3,2): #ab2b " << downs.ab2b.size() << "\n";
   o::parallel_for(downs.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i < 10 )
-      printf("%5d %5d\n", i, downs.ab2b[i]);
+      printInfo("%5d %5d\n", i, downs.ab2b[i]);
   });
 
   std::cout << "ask_down(2,1): " <<  m.ask_down(2,1).ab2b.size();
   const auto downs21 = m.ask_down(2, 1);
   o::parallel_for(downs21.ab2b.size(), OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, downs21.ab2b[i]);
+      printInfo("%5d %5d\n", i, downs21.ab2b[i]);
   });
   std::cout << "\n";
 
@@ -317,12 +317,12 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   std::cout <<  "  ups:a2ab\n\t";
   o::parallel_for(ups.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, ups.a2ab[i]);
+      printInfo("%5d %5d\n", i, ups.a2ab[i]);
   });
   std::cout << ";\n ups:ab2b\n\t";
   o::parallel_for(ups.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, ups.ab2b[i]);
+      printInfo("%5d %5d\n", i, ups.ab2b[i]);
   });
   std::cout << "; \n";
 
@@ -331,18 +331,18 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   std::cout << "\nask_up(1, 2):a2ab " <<  up12.a2ab.size();
   o::parallel_for(up12.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, up12.a2ab[i]);
+      printInfo("%5d %5d\n", i, up12.a2ab[i]);
   });
   std::cout << "\n";
   std::cout << "\nask_up(1, 2):ab2b " <<  up12.ab2b.size();
   o::parallel_for(up12.ab2b.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, up12.ab2b[i]);
+      printInfo("%5d %5d\n", i, up12.ab2b[i]);
   });
   std::cout << "\n Entries";
   o::parallel_for(up12.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<20 )
-      printf("%5d %5d\n", i, up12.ab2b[up12.a2ab[i]]);
+      printInfo("%5d %5d\n", i, up12.ab2b[up12.a2ab[i]]);
   });
   std::cout << "\n";
 
@@ -356,7 +356,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   o::parallel_for(dual.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
     if( i<5 ) {
       for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
-        printf("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
+        printInfo("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
     }
   });
 
@@ -365,7 +365,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
     std::cout <<  ".......";
     o::parallel_for(dual.a2ab.size()-1, OMEGA_H_LAMBDA(o::LO i) {
       for(int j=dual.a2ab[i]; j<dual.a2ab[i+1] ; ++j)
-        printf("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
+        printInfo("%5d %5d %5d\n", i, dual.a2ab[i], dual.ab2b[j]);
     });
   }
   std::cout <<  "\n";
@@ -376,7 +376,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   std::cout <<  "  Exposed:\n\t";
   o::parallel_for(side_is_exposed.size(), OMEGA_H_LAMBDA(o::LO i) {
     if( i < 10 ) {
-      printf("%5d %2d\n", i, side_is_exposed[i]>0);
+      printInfo("%5d %2d\n", i, side_is_exposed[i]>0);
     }
   });
 
@@ -384,7 +384,7 @@ void print_mesh_stat(Omega_h::Mesh &m, bool coords=true)
   {
     std::cout <<  "\n.......";
     o::parallel_for(side_is_exposed.size(), OMEGA_H_LAMBDA(o::LO i) {
-      printf("%5d %2d\n", i, side_is_exposed[i]>0);
+      printInfo("%5d %2d\n", i, side_is_exposed[i]>0);
     });
   }
 

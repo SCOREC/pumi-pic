@@ -45,6 +45,11 @@ FunctionType* gpuMemcpy(FunctionType& fn)
   #elif defined(PP_USE_HIP)
     auto error1 = hipMalloc(&fn_d, sizeof(FunctionType));
     auto error2 = hipMemcpy(fn_d,&fn, sizeof(FunctionType), hipMemcpyHostToDevice);
+  #elif defined(PP_USE_SYCL)
+    auto space = Kokkos::Experimental::SYCL();
+    auto queue_kk = space.sycl_queue();
+    fn_d = sycl::malloc_device<FunctionType>(1, queue_kk);
+    queue_kk.memcpy(fn_d, &fn, sizeof(FunctionType)).wait();
   #else
     fn_d = &fn;
   #endif
@@ -58,5 +63,9 @@ void gpuFree(FunctionType& fn_d)
     cudaFree(fn_d);
   #elif defined(PP_USE_HIP)
     auto error = hipFree(fn_d);
+  #elif defined(PP_USE_SYCL)
+    auto space = Kokkos::Experimental::SYCL();
+    auto queue_kk = space.sycl_queue();
+    sycl::free(fn_d, queue_kk);
   #endif
 }

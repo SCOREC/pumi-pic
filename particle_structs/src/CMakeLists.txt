@@ -22,7 +22,6 @@ set(HEADERS
 
   scs/SCS_Macros.h
   scs/SCS_Types.h
-  scs/SCSPair.h
   scs/SCS_sort.h
   scs/SCS_rebuild.h
   scs/SCS_migrate.h

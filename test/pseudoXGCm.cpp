@@ -120,7 +120,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist,
   auto ids = ptcls->get<2>();
   auto printElmIds = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(output && mask > 0)
-      printInfo("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
+      Kokkos::printf("elem_ids[%d] %d ptcl_id:%d\n", pid, elem_ids[pid], ids(pid));
   };
   ps::parallel_for(ptcls, printElmIds);
 
@@ -133,7 +133,7 @@ void rebuild(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist,
   if (output) {
     auto printElms = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
       if (mask > 0)
-        printInfo("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
+        Kokkos::printf("Rank %d Ptcl: %d has Element %d and id %d\n", comm_rank, pid, e, ids(pid));
     };
     ps::parallel_for(ptcls, printElms);
   }
@@ -257,7 +257,7 @@ void setInitialPtclCoords(p::Mesh& picparts, PS* ptcls, bool output) {
                                         + r2 * (vtxCoords[2][i] - vtxCoords[0][i]);
       x_ps_d(pid,2) = 0;
       if (output)
-        printInfo("pid %d: %.3f %.3f %.3f\n", pid, x_ps_d(pid,0), x_ps_d(pid,1), x_ps_d(pid,2));
+        Kokkos::printf("pid %d: %.3f %.3f %.3f\n", pid, x_ps_d(pid,0), x_ps_d(pid,1), x_ps_d(pid,2));
     }
   };
   ps::parallel_for(ptcls, lamb);
@@ -433,7 +433,7 @@ int main(int argc, char** argv) {
     Omega_h::parallel_for(ne, OMEGA_H_LAMBDA(const int& i) {
         const int np = ptcls_per_elem(i);
         if (output && np > 0)
-          printInfo("ppe[%d] %d\n", i, np);
+          Kokkos::printf("ppe[%d] %d\n", i, np);
       });
 
     long int totNumPtcls = 0;

@@ -62,7 +62,7 @@ bool defaultTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView e
   SCS::kkLidView fail("fail",1);
   auto check = KOKKOS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
-      printInfo("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
+      Kokkos::printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
     }
   };
@@ -90,7 +90,7 @@ bool noSortTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
   SCS::kkLidView fail("fail",1);
   auto check = PS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
-      printInfo("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
+      Kokkos::printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
     }
   };
@@ -118,7 +118,7 @@ bool largeCTest(int ne, int np, SCS::kkLidView ptcls_per_elem, SCS::kkGidView el
   SCS::kkLidView fail("fail",1);
   auto check = KOKKOS_LAMBDA(const int i) {
     if (scs_ppe(i) != ptcls_per_elem(i)) {
-      printInfo("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
+      Kokkos::printf("Element %d has incorrect number of particles (%d != %d)\n", i, scs_ppe(i), ptcls_per_elem(i));
       fail(0) = 1;
     }
   };

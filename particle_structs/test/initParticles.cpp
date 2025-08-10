@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     auto elem_scs = scs->get<0>();
     auto check = PS_LAMBDA(const int eid, const int pid, const bool mask) {
       if (mask && (eid != elem_scs(pid))) {
-        printInfo("Particle %d is not assigned to the correct element (%d != %d)\n", pid,
+        Kokkos::printf("Particle %d is not assigned to the correct element (%d != %d)\n", pid,
                eid, elem_scs(pid));
         fail(0) = 1;
       }

@@ -114,7 +114,7 @@ void init2DInternal(o::Mesh mesh, PS* ptcls) {
       Omega_h::Vector<3> faceBcc;
       p::barycentric_tri(elmArea[e], vtxCoords, ptclOrigin, faceBcc);
       assert(p::all_positive(faceBcc, 1e-8));
-      if (!p::all_positive(faceBcc, 1e-8)) printInfo("FAILURE\n");
+      if (!p::all_positive(faceBcc, 1e-8)) Kokkos::printf("FAILURE\n");
       motion(pid, 0) = Kokkos::cos(r3);
       motion(pid, 1) = Kokkos::sin(r3);
       motion(pid, 2) = 0;
@@ -645,7 +645,7 @@ bool check_intersections_3d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids,
       bool pass = p::find_barycentric_tri_simple(abc, xpoint, bcc);
       if(pass && !p::all_positive(bcc, tol)) {
         Kokkos::atomic_add(&(failures[0]),1);
-        printInfo("[ERROR] Particle intersected with model boundary outside the intersection face!\n"
+        Kokkos::printf("[ERROR] Particle intersected with model boundary outside the intersection face!\n"
                "  Initial Element: %d  New Element %d\n  BCC: %.15f %.15f %.15f\n", elm, elem_ids[ptcl],
                bcc[0], bcc[1], bcc[2]);
       }
@@ -672,7 +672,7 @@ bool check_intersections_2d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> intersectio
         xpoint[i] = x_points[2 * ptcl + i];
       if (!check_point_on_edge(abc, xpoint, tol, ptcl)) {
         Kokkos::atomic_add(&(failures[0]),1);
-        printInfo("[ERROR] Particle intersected with model boundary outside the intersection edge!\n");
+        Kokkos::printf("[ERROR] Particle intersected with model boundary outside the intersection edge!\n");
       }
     }
   };
@@ -719,7 +719,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
       for (int i = 0; i < DIM; ++i) {
         if (Kokkos::fabs(dir[i] - dir2[i]) > tol && dir[i] > tol && dir2[i] > tol) {
           Kokkos::atomic_add(&(failures[0]), 1);
-          printInfo("[ERROR] Intersection point is not along the particle path\n"
+          Kokkos::printf("[ERROR] Intersection point is not along the particle path\n"
                  "  dir: %.15f %.15f %.15f\n  dir2 %.15f %.15f %.15f\n", dir[0], dir[1], dir[2], dir2[0], dir2[1], dir2[2]);
         }
       }
@@ -731,7 +731,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
       }
       if (!hasFace) {
         Kokkos::atomic_add(&(failures[0]),1);
-        printInfo("[ERROR] Intersection face is not adjacent to parent element!\n");
+        Kokkos::printf("[ERROR] Intersection face is not adjacent to parent element!\n");
       }
     }
   };

@@ -65,9 +65,9 @@ bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
         int index = mover_index[p];
         new_elems[p] = new_moves_d[index];
         if (new_moves_d[index] < 0)
-          printInfo("ERROR %d\n", new_moves_d[index]);
+          Kokkos::printf("ERROR %d\n", new_moves_d[index]);
         else if (new_moves_d[index] >= numElems)
-          printInfo("ERROR %d\n", new_moves_d[index]);
+          Kokkos::printf("ERROR %d\n", new_moves_d[index]);
       }
       else {
         new_elems[p] = e;

@@ -26,7 +26,7 @@ namespace pumipic {
   void printError(const char* fmt, ... );
 
   PP_INLINE
-  void printStdout(const char* fmt, ...) {
+  void printInfo(const char* fmt, ...) {
     va_list ap;
     va_start(ap,fmt);
     #if defined(PUMIPIC_SPDLOG_ENABLED) && defined(PUMIPIC_PRINT_ENABLED) && !defined(ACTIVE_GPU_EXECUTION)
@@ -37,11 +37,6 @@ namespace pumipic {
     va_end(ap);
   }
 
-  #if defined(KOKKOS_ENABLE_SYCL)
-    #define printInfo(fmt, ...) ((void)0)
-  #else
-    #define printInfo(fmt, ...) printStdout(__VA_ARGS__)
-  #endif
 }
 
 #endif //PUMIPIC_PRINT_H

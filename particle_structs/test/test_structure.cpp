@@ -284,14 +284,14 @@ int testCopy(const char* name, PS* structure) {
   auto testTypes = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
     if (mask) {
       if (ids1(pid) != ids2(pid)) {
-        printInfo("[ERROR] Particle ids do not match for particle %d "
+        Kokkos::printf("[ERROR] Particle ids do not match for particle %d "
                "[(old) %d != %d (copy)] on rank %d\n", pid, ids1(pid),
                ids2(pid), local_rank);
         failure(0) = 1;
       }
       for (int i = 0; i < 3; ++i)
         if (Kokkos::fabs(dbls1(pid,i) - dbls2(pid,i)) > EPSILON) {
-          printInfo("[ERROR] Particle's dbl %d does not match for particle %d"
+          Kokkos::printf("[ERROR] Particle's dbl %d does not match for particle %d"
                  "[(old) %.4f != %.4f (copy)] on rank %d\n", i, pid, dbls1(pid,i),
                  dbls2(pid,i), local_rank);
           failure(0) = 1;
@@ -338,7 +338,7 @@ int testSegmentComp(const char* name, PS* structure) {
       auto comps = dbls.getComponents(p);
       for (int i = 0; i < 3; ++i) {
         if (Kokkos::abs(comps[i] - e * (i + 1)) > TOL) {
-          printInfo("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
+          Kokkos::printf("[ERROR] component is wrong on ptcl %d comp %d (%.3f != %d)\n",
                   p, i, comps[i], e * (i + 1));
           Kokkos::atomic_add(&(failures[0]), 1);
         }

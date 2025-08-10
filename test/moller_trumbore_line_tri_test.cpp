@@ -76,7 +76,7 @@ bool moller_trumbore_line_segment_intersection_test(
 
   auto get_intersections = OMEGA_H_LAMBDA(o::LO ray_id) {
     const o::Few<o::LO, 4> tet_faces {tet2tri[4*tet_id], tet2tri[4*tet_id+1], tet2tri[4*tet_id+2], tet2tri[4*tet_id+3]};
-    printInfo("[INFO] Tet Faces are %d %d %d %d\n", tet_faces[0], tet_faces[1], tet_faces[2], tet_faces[3]);
+    Kokkos::printf("[INFO] Tet Faces are %d %d %d %d\n", tet_faces[0], tet_faces[1], tet_faces[2], tet_faces[3]);
     const auto tet_nodes = o::gather_verts<4>(tet2nodes, tet_id);
 
     for (int i = 0; i < 4; i++) {
@@ -105,7 +105,7 @@ bool moller_trumbore_line_segment_intersection_test(
       xpoints[i * 3 + 2] = xpoint[2];
       face_intersected[i] = success;
 
-      printInfo("INFO: ray o->z %s face %d(%d (%f %f %f),%d (%f %f %f),%d (%f %f %f)) at point (%f, %f, "
+      Kokkos::printf("INFO: ray o->z %s face %d(%d (%f %f %f),%d (%f %f %f),%d (%f %f %f)) at point (%f, %f, "
              "%f) with dprodj %f and closeness %f t %f\n", (success) ? "intersected" : "did not intersect",
              face_id, face_nodes[0], face_coords[0][0], face_coords[0][1], face_coords[0][2],
                 face_nodes[1], face_coords[1][0], face_coords[1][1], face_coords[1][2],

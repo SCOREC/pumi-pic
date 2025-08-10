@@ -285,9 +285,9 @@ namespace {
     auto ownByClassification = OMEGA_H_LAMBDA(const Omega_h::LO& id) {
       const Omega_h::ClassId c_id = class_ids[id];
       if (c_id < 0)
-        printInfo("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
+        Kokkos::printf("%d Class id is too low %d on entitiy %d\n", rank, c_id, id);
       else if (c_id >= max_cids)
-        printInfo("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
+        Kokkos::printf("%d Class id is too high %d on entitiy %d\n", rank, c_id, id);
       owns[id] = class_owners[c_id];
       const auto hasElm = (class_owners[c_id] == self);
       Kokkos::atomic_fetch_add(&(selfcount[0]),hasElm);

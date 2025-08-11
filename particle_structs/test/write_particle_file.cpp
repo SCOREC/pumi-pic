@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
   int ptcl_strat = atoi(argv[4]);
 
   #ifndef PP_USE_GPU
-  num_ptcls = std::min(num_ptcls, 100000);
+  num_ptcls = Kokkos::min(num_ptcls, 100000);
   #endif
 
   {

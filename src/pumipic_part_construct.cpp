@@ -333,42 +333,36 @@ namespace {
   }
 
   struct GlobalNumberer {
-    using value_type=Omega_h::LO[];
+    using value_type=Omega_h::LO;
     using size_type=unsigned long;
     size_type value_count;
 
     Omega_h::LOs rank_offsets;
     Omega_h::Write<Omega_h::GO> elem_gids;
     Omega_h::LOs elem_owner;
+    Omega_h::LO target_owner;
     GlobalNumberer(int comm_size, Omega_h::LOs owner,
-                   Omega_h::LOs offs, Omega_h::Write<Omega_h::GO> gids) :
-      value_count(comm_size), elem_owner(owner), rank_offsets(offs), elem_gids(gids) {}
-    OMEGA_H_DEVICE void operator()(const size_type& i, value_type vals,
-                                           const bool& final) const {
+                  Omega_h::LOs offs, Omega_h::Write<Omega_h::GO> gids, Omega_h::LO own) :
+      value_count(comm_size), elem_owner(owner), rank_offsets(offs), elem_gids(gids), target_owner(own) {}
+    OMEGA_H_DEVICE void operator()(const size_type& i, value_type& val,
+                                          const bool& final) const {
       const Omega_h::LO own = elem_owner[i];
       if (final) {
-        elem_gids[i] = rank_offsets[own] + vals[own];
+        if (own == target_owner) {
+          // If the element is owned by the target owner, set its gid
+          elem_gids[i] = rank_offsets[own] + val;
+        }
       }
-      ++(vals[own]);
-    }
-    OMEGA_H_DEVICE void operator()(const size_type& i, Omega_h::LO val,
-                                           const bool& final) const {
-      const Omega_h::LO own = elem_owner[i];
-      if (final) {
-        elem_gids[i] = rank_offsets[own] + val;
-      }
-      ++(val);
-    }
-    OMEGA_H_DEVICE void join(value_type update,
-                             const value_type input) const {
-      for(int i = 0; i < value_count; ++i) {
-        update[i] += input[i];
+      if (own == target_owner) {
+        ++val;
       }
     }
-    OMEGA_H_DEVICE void init(value_type vals) const {
-      for (size_type i = 0; i < value_count; ++i) {
-        vals[i] = 0;
-      }
+    OMEGA_H_DEVICE void join(value_type& update,
+                              const value_type& input) const {
+      update += input;
+    }
+    OMEGA_H_DEVICE void init(value_type& val) const {
+      val = 0;
     }
   };
   Omega_h::LOs createGlobalNumbering(Omega_h::LOs owner, int comm_size,
@@ -376,8 +370,10 @@ namespace {
     Omega_h::LOs rank_offset_nelms = calculateOwnerOffset(owner, comm_size);
 
     //Globally number the elements
-    GlobalNumberer gnr(comm_size, owner, rank_offset_nelms, elem_gid);
-    Omega_h::parallel_scan(owner.size(), gnr);
+    for (Omega_h::LO i = 0; i < comm_size; ++i) {
+      GlobalNumberer gnr(comm_size, owner, rank_offset_nelms, elem_gid, i);
+      Omega_h::parallel_scan(owner.size(), gnr);
+    }
     return rank_offset_nelms;
   }
 

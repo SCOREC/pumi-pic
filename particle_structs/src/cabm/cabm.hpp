@@ -33,7 +33,7 @@ namespace pumipic {
 
     //from https://github.com/SCOREC/Cabana/blob/53ad18a030f19e0956fd0cab77f62a9670f31941/core/src/CabanaM.hpp#L18-L19
     using CM_DT = PS_DTBool<DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<CM_DT,device_type>;
+    using AoSoA_t = Cabana::AoSoA<CM_DT,memory_space>;
 
     CabM(const CabM&) = delete;
     CabM& operator=(const CabM&) = delete;

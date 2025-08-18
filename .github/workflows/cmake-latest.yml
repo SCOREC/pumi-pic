@@ -1,0 +1,132 @@
+name: CMake Tests Latest
+on: 
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  buildTest:
+    runs-on: ubuntu-22.04
+
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        build_type: [Release, RelWithDebInfo]
+        memory_test: [ON, OFF]
+        compiler: [g++]
+        language: ['cpp']
+        exclude:
+          - build_type: Release
+            memory_test: ON
+          - build_type: RelWithDebInfo
+            memory_test: OFF
+      
+    steps:
+
+    - name: Update packages
+      run: sudo apt-get update
+
+    - name: Install mpi
+      run: sudo apt-get install -yq mpich libmpich-dev
+
+    - name: Install Valgrind
+      run: sudo apt-get install -yq valgrind
+
+    - uses: actions/checkout@v4
+
+    - name: build kokkos
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'kokkos'
+        repo-path: 'kokkos/kokkos'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+                  -DKokkos_ENABLE_SERIAL=ON
+                  -DKokkos_ENABLE_OPENMP=off
+                  -DKokkos_ENABLE_CUDA=off
+                  -DKokkos_ENABLE_CUDA_LAMBDA=off
+                  -DKokkos_ENABLE_IMPL_VIEW_LEGACY=ON
+                  -DKokkos_ENABLE_DEBUG=on'
+
+    - name: build omega_h
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'omega_h'
+        repo-path: 'SCOREC/omega_h'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_BUILD_TYPE=Release
+                  -DBUILD_SHARED_LIBS=OFF
+                  -DOmega_h_USE_Kokkos=ON
+                  -DOmega_h_USE_CUDA=off
+                  -DOmega_h_USE_MPI=on
+                  -DMPIEXEC_EXECUTABLE=srun
+                  -DBUILD_TESTING=off
+                  -DCMAKE_C_COMPILER=mpicc
+                  -DCMAKE_CXX_COMPILER=mpicxx
+                  -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install/lib/cmake'
+
+    - name: build Engpar
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'Engpar'
+        repo-path: 'SCOREC/EnGPar'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_C_COMPILER=mpicc
+                  -DCMAKE_CXX_COMPILER=mpicxx
+                  -DCMAKE_CXX_FLAGS="-std=c++11"
+                  -DENABLE_PARMETIS=OFF
+                  -DENABLE_PUMI=OFF
+                  -DIS_TESTING=OFF'
+
+    - name: build cabana
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'cabana'
+        repo-path: 'ECP-copa/cabana'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+                  -DCMAKE_BUILD_TYPE=Release
+                  -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
+                  -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
+
+    - name: build pumi-pic
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'pumi-pic'
+        repo-path: 'SCOREC/pumi-pic'
+        submodules: 'recursive'
+        repo-ref: ''
+        cache: false
+        options: '-DCMAKE_CXX_COMPILER=mpicxx
+                  -DIS_TESTING=ON
+                  -DPS_IS_TESTING=ON
+                  -DPP_ENABLE_MEMCHECK=${{ matrix.memory_test }}
+                  -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+                  -DTEST_DATA_DIR=$GITHUB_WORKSPACE/pumi-pic/pumipic-data
+                  -DOmega_h_PREFIX=${{ runner.temp }}/build-omega_h/install
+                  -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
+                  -DEnGPar_PREFIX=${{ runner.temp }}/build-Engpar/install
+                  -DCabana_PREFIX=${{ runner.temp }}/build-cabana/install
+                  -DENABLE_CABANA=on
+                  -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
+
+    - name: PUMI-PIC Test
+      if: ${{matrix.memory_test == 'OFF'}}
+      run: ctest --test-dir ${{ runner.temp }}/build-pumi-pic
+
+    - name: PUMI-PIC Test
+      if: ${{matrix.memory_test == 'ON'}}
+      run: ctest -E "medium|large|120" --test-dir ${{ runner.temp }}/build-pumi-pic
+
+    - name: PUMI-PIC Print
+      if: always()
+      run: cat ${{ runner.temp }}/build-pumi-pic/Testing/Temporary/LastTest.log
+  

@@ -33,8 +33,9 @@ namespace pumipic {
     using Base=typename BaseType<Type>::type;
 
     using ViewType = View<Type*, Device>;
+    using memory_space = typename Device::memory_space;
 #ifdef PP_ENABLE_CAB
-    using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
+    using SliceType = Cabana::Slice<Type, memory_space, MemoryAccessType,
                                     VectorLength, Stride>;
 #else
     using SliceType = DummySlice<Base>;
@@ -103,8 +104,9 @@ namespace pumipic {
   public:
     using ViewType=View<Type*, Device>;
     using Base=typename BaseType<Type>::type;
+    using memory_space = typename Device::memory_space;
 #ifdef PP_ENABLE_CAB
-    using SliceType = Cabana::Slice<Type, Device, MemoryAccessType,
+    using SliceType = Cabana::Slice<Type, memory_space, MemoryAccessType,
                                     VectorLength, Stride>;
 #else
     using SliceType = DummySlice<Base>;

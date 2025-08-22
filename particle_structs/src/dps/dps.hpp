@@ -33,7 +33,7 @@ namespace pumipic {
     typedef DPS_Input<DataTypes, MemSpace> Input_T;
 
     using DPS_DT = PS_DTBool<DataTypes>;
-    using AoSoA_t = Cabana::AoSoA<DPS_DT,device_type>;
+    using AoSoA_t = Cabana::AoSoA<DPS_DT,memory_space>;
 
     DPS(const DPS&) = delete;
     DPS& operator=(const DPS&) = delete;

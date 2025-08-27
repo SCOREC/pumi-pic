@@ -11,7 +11,6 @@
 #include <Kokkos_UnorderedMap.hpp>
 #include <Kokkos_Pair.hpp>
 #include <Kokkos_Sort.hpp>
-#include "SCSPair.h"
 #include "scs_input.hpp"
 #include <particle_structs.hpp>
 #include <ppTiming.hpp>
@@ -45,7 +44,6 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
 template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 #endif
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
-  typedef Kokkos::View<MyPair*, device_type> PairView;
   typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
   typedef SCS_Input<DataTypes, MemSpace> Input_T;
 

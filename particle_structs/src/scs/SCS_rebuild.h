@@ -17,18 +17,18 @@ namespace pumipic {
       const bool is_moving = is_particle & (new_elem != element_id);
       if (is_moving && mask) {
         const lid_t new_row = element_to_row_local(new_elem);
-        Kokkos::atomic_increment<lid_t>(&(new_particles_per_row(new_row)));
+        Kokkos::atomic_inc<lid_t>(&(new_particles_per_row(new_row)));
       }
       particle_mask_local(particle_id) = is_particle;
       if (!is_particle)
-        Kokkos::atomic_increment<lid_t>(&(num_holes_per_row(row)));
+        Kokkos::atomic_inc<lid_t>(&(num_holes_per_row(row)));
     };
     parallel_for(countNewParticles, "countNewParticles");
     // Add new particles to counts
     Kokkos::parallel_for("reshuffle_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t new_elem = new_particle_elements(i);
         const lid_t new_row = element_to_row_local(new_elem);
-        Kokkos::atomic_increment<lid_t>(&(new_particles_per_row(new_row)));
+        Kokkos::atomic_inc<lid_t>(&(new_particles_per_row(new_row)));
       });
 
     //Check if the particles will fit in current structure
@@ -133,7 +133,7 @@ namespace pumipic {
     auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
       const lid_t new_elem = new_element(particle_id);
       if (mask && new_elem != -1)
-        Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
+        Kokkos::atomic_inc<lid_t>(&(new_particles_per_elem(new_elem)));
     };
     parallel_for(countNewParticles, "countNewParticles");
 
@@ -153,7 +153,7 @@ namespace pumipic {
     // Add new particles to counts
     Kokkos::parallel_for("rebuild_count", new_particle_elements.size(), KOKKOS_LAMBDA(const lid_t& i) {
         const lid_t new_elem = new_particle_elements(i);
-        Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
+        Kokkos::atomic_inc<lid_t>(&(new_particles_per_elem(new_elem)));
       });
 
     //Reduce the count of particles

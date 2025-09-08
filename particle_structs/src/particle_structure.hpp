@@ -22,7 +22,7 @@ namespace pumipic {
     typedef typename Space::memory_space memory_space;
     typedef typename Space::execution_space execution_space;
     typedef typename Space::device_type device_type;
-    typedef typename Kokkos::ViewTraits<void, Space>::HostMirrorSpace HostMirrorSpace;
+    typedef typename Kokkos::ViewTraits<void, Space>::host_mirror_space HostMirrorSpace;
     typedef ParticleStructure<DataTypes, HostMirrorSpace> HostMirror;
     template <typename Space2> using Mirror = ParticleStructure<DataTypes, Space2>;
 

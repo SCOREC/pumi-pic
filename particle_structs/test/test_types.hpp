@@ -23,5 +23,5 @@ typedef PS::kkGidHostMirror kkGidHost;
 template <class T>
 using KView=Kokkos::View<T*, MemSpace::device_type>;
 template <class T>
-using KViewHost=typename KView<T>::HostMirror;
+using KViewHost=typename KView<T>::host_mirror_type;
 using ps::lid_t;

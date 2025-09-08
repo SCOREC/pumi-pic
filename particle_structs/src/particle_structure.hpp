@@ -29,8 +29,8 @@ namespace pumipic {
     template <class T> using View = Kokkos::View<T*, device_type>;
     typedef View<lid_t> kkLidView;
     typedef View<gid_t> kkGidView;
-    typedef typename kkLidView::HostMirror kkLidHostMirror;
-    typedef typename kkGidView::HostMirror kkGidHostMirror;
+    typedef typename kkLidView::host_mirror_type kkLidHostMirror;
+    typedef typename kkGidView::host_mirror_type kkGidHostMirror;
 
     template <std::size_t N> using DataType =
       typename MemberTypeAtIndex<N, DataTypes>::type;

@@ -13,7 +13,7 @@ namespace pumipic {
     typedef typename KView::device_type device_type;
     typedef typename KView::data_type data_type;
     typedef typename KView::value_type value_type;
-    typedef View<T, typename KView::host_mirror_space, ArrayLayout> HostMirror;
+    typedef View<T, typename KView::host_mirror_space, ArrayLayout> host_mirror_type;
     View() : view_() {}
     View(lid_t size) : view_("ppView", size) {}
     View(std::string name, lid_t size) : view_(name, size) {}

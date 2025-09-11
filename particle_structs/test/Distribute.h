@@ -32,7 +32,7 @@ bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
   assert(percentMoved <= 1);
   Kokkos::Random_XorShift64_Pool<typename PS::execution_space> pool(DISTRIBUTE_SEED);
   typename PS::kkLidView is_moving("is_moving", ptcls->capacity());
-  auto decideMovers = PS_LAMBDA(const int e, const int p, const bool mask) {
+  auto decideMovers = PS_LAMBDA(const int e, const int p, const int mask) {
     if (mask) {
       auto generator = pool.get_state();
       double prob = generator.drand(1.0);
@@ -60,7 +60,7 @@ bool redistribute_particles(PS* ptcls, int strat, double percentMoved,
   typename PS::kkLidView new_ppe("new_ppe", numElems);
   typename PS::kkLidView new_moves_d("new_moves", total);
   distribute_particles(numElems, total, strat, new_ppe, new_moves_d);
-  auto assignMoves = PS_LAMBDA(const int e, const int p, const bool mask) {
+  auto assignMoves = PS_LAMBDA(const int e, const int p, const int mask) {
     if (mask) {
       if (is_moving[p]) {
         int index = mover_index[p];

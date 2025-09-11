@@ -28,7 +28,7 @@ namespace pumipic {
     kkLidView particles_per_element = kkLidView("particlesPerElement", num_elems+1);
     kkLidView num_removed_d("num_removed_d",1);
     // Fill ptcls per elem for existing ptcls
-    auto count_existing = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const bool& mask) {
+    auto count_existing = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const lid_t& mask) {
       if (new_element[ptcl_id] > -1)
         Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);
       else
@@ -56,7 +56,7 @@ namespace pumipic {
     Kokkos::deep_copy(row_indices,offsets_new);
     kkLidView new_indices(Kokkos::ViewAllocateWithoutInitializing("new indices"), new_element.size());
 
-    auto existing_ptcl_new_indices = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const bool& mask) {
+    auto existing_ptcl_new_indices = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const lid_t& mask) {
       const lid_t new_elem = new_element[ptcl_id];
       if (new_elem != -1)
         new_indices[ptcl_id] = Kokkos::atomic_fetch_add(&row_indices(new_elem),1);

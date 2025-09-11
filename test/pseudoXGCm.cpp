@@ -158,7 +158,7 @@ void search(p::Mesh& picparts, PS* ptcls, p::Distributor<>& dist, bool output) {
 
 void setPtclIds(PS* ptcls) {
   auto pid_d = ptcls->get<2>();
-  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
     pid_d(pid) = pid;
   };
   ps::parallel_for(ptcls, setIDs);

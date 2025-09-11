@@ -25,7 +25,7 @@ namespace pumipic {
     static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
     using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
   };
-  template <typename DataTypes> using PS_DTInt = typename AppendMT<int,DataTypes>::type;
+  template <typename DataTypes> using PS_DTInt = typename AppendMT<lid_t,DataTypes>::type;
 
   template <typename ViewT, std::size_t Rank>
   using CheckRank = typename std::enable_if<(ViewT::rank == Rank), void>::type;

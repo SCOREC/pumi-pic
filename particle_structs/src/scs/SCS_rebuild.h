@@ -9,7 +9,7 @@ namespace pumipic {
     kkLidView num_holes_per_row("num_holes_per_row", numRows());
     kkLidView element_to_row_local = element_to_row;
     auto particle_mask_local = particle_mask;
-    auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
+    auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask){
       const lid_t new_elem = new_element(particle_id);
 
       const lid_t row = element_to_row_local(element_id);
@@ -52,14 +52,14 @@ namespace pumipic {
     int num_moving_ptcls = getLastValue(offset_new_particles);
     if (num_moving_ptcls == 0) {
       Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
-          sum += static_cast<lid_t>(particle_mask_local(i));
+          sum += particle_mask_local(i);
         }, num_ptcls);
       return true;
     }
     kkLidView movingPtclIndices(Kokkos::ViewAllocateWithoutInitializing("movingPtclIndices"), num_moving_ptcls);
     kkLidView isFromSCS("isFromSCS", num_moving_ptcls);
     //Gather moving particle list
-    auto gatherMovingPtcls = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
+    auto gatherMovingPtcls = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask){
       const lid_t new_elem = new_element(particle_id);
 
       const lid_t row = element_to_row_local(element_id);
@@ -84,7 +84,7 @@ namespace pumipic {
 
     //Assign hole index for moving particles
     kkLidView holes(Kokkos::ViewAllocateWithoutInitializing("holeIndex"), num_moving_ptcls);
-    auto assignPtclsToHoles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
+    auto assignPtclsToHoles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask){
       const lid_t row = element_to_row_local(element_id);
       if (!mask) {
         const lid_t moving_index = Kokkos::atomic_fetch_add(&(offset_new_particles(row)),1);
@@ -102,8 +102,8 @@ namespace pumipic {
         const lid_t new_index = holes(i);
         const lid_t fromSCS = isFromSCS(i);
         if (fromSCS == 1)
-          particle_mask_local(old_index) = false;
-        particle_mask_local(new_index) = true;
+          particle_mask_local(old_index) = 0;
+        particle_mask_local(new_index) = 1;
       });
 
     //Shift SCS values
@@ -114,7 +114,7 @@ namespace pumipic {
 
     //Count number of active particles
     Kokkos::parallel_reduce(capacity(), KOKKOS_LAMBDA(const lid_t& i, lid_t& sum) {
-        sum += static_cast<lid_t>(particle_mask_local(i));
+        sum += particle_mask_local(i);
       }, num_ptcls);
     return true;
   }
@@ -130,7 +130,7 @@ namespace pumipic {
 
     //Count particles including new and leaving
     kkLidView new_particles_per_elem("new_particles_per_elem", numRows());
-    auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask){
+    auto countNewParticles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask){
       const lid_t new_elem = new_element(particle_id);
       if (mask && new_elem != -1)
         Kokkos::atomic_increment<lid_t>(&(new_particles_per_elem(new_elem)));
@@ -169,8 +169,8 @@ namespace pumipic {
     if (activePtcls == 0) {
       num_ptcls = 0;
       auto local_mask = particle_mask;
-      auto resetMask = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
-        local_mask(particle_id) = false;
+      auto resetMask = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask) {
+        local_mask(particle_id) = 0;
       };
       parallel_for(resetMask, "resetMask");
 
@@ -219,7 +219,7 @@ namespace pumipic {
                      new_capacity);
 
     //Allocate the SCS
-    Kokkos::View<bool*, MemSpace> new_particle_mask("new_particle_mask", new_capacity);
+    Kokkos::View<lid_t*, MemSpace> new_particle_mask("new_particle_mask", new_capacity);
     if (always_realloc || swap_size < new_capacity ||
         swap_size * minimize_size < new_capacity) {
       destroyViews<DataTypes, memory_space>(scs_data_swap);
@@ -249,7 +249,7 @@ namespace pumipic {
       });
     C_ = old_C;
     kkLidView new_indices(Kokkos::ViewAllocateWithoutInitializing("new_scs_index"), capacity());
-    auto copySCS = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
+    auto copySCS = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask) {
       const lid_t new_elem = new_element(particle_id);
       //TODO remove conditional
       if (mask && new_elem != -1) {
@@ -281,7 +281,7 @@ namespace pumipic {
         lid_t new_row = new_element_to_row(new_elem);
         new_particle_indices(i) = Kokkos::atomic_fetch_add(&element_index(new_row), new_C);
         lid_t new_index = new_particle_indices(i);
-        new_particle_mask(new_index) = true;
+        new_particle_mask(new_index) = 1;
       });
 
     if (new_particle_elements.size() > 0)

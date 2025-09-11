@@ -186,7 +186,7 @@ void balancePtcls(pumipic::Mesh& picparts, PS* ptcls, pumipic::ParticleBalancer&
   auto is_safe = picparts.safeTag();
   auto owners = picparts.entOwners(picparts.dim());
   auto vals = ptcls->get<0>();
-  auto setValues = PS_LAMBDA(const int elm, const int ptcl, const bool mask) {
+  auto setValues = PS_LAMBDA(const int elm, const int ptcl, const int mask) {
     if (mask) {
       vals(ptcl) = comm_rank;
       const auto safe = is_safe[elm];

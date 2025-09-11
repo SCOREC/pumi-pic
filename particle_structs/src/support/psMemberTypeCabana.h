@@ -25,7 +25,7 @@ namespace pumipic {
     static constexpr int size = 1 + Cabana::MemberTypes<Types...>::size;
     using type = Cabana::MemberTypes<Types..., T>; //Put T before Types... to put at beginning
   };
-  template <typename DataTypes> using PS_DTBool = typename AppendMT<bool,DataTypes>::type;
+  template <typename DataTypes> using PS_DTInt = typename AppendMT<int,DataTypes>::type;
 
   template <typename ViewT, std::size_t Rank>
   using CheckRank = typename std::enable_if<(ViewT::rank == Rank), void>::type;
@@ -104,8 +104,8 @@ namespace pumipic {
   struct CopyMTVsToAoSoA<PS, MemberTypes<Types...>> {
     typedef typename PS::device_type Device;
     typedef typename PS::memory_space memory_space;
-    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, memory_space> Aosoa;
-    typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
+    typedef Cabana::AoSoA<PS_DTInt<MemberTypes<Types...>>, memory_space> Aosoa;
+    typedef PS_DTInt<MemberTypes<Types...>> CM_DT;
 
     CopyMTVsToAoSoA(Aosoa &dst, MemberTypeViewsConst src,
                     typename PS::kkLidView soa_indices,
@@ -195,8 +195,8 @@ namespace pumipic {
   struct CopyParticlesToSendFromAoSoA<PS, MemberTypes<Types...> > {
     typedef typename PS::device_type Device;
     typedef typename PS::memory_space memory_space;
-    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, memory_space> Aosoa;
-    typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
+    typedef Cabana::AoSoA<PS_DTInt<MemberTypes<Types...>>, memory_space> Aosoa;
+    typedef PS_DTInt<MemberTypes<Types...>> CM_DT;
 
     CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                         typename PS::kkLidView ps_to_array,

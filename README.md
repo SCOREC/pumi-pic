@@ -1,6 +1,8 @@
 ## PUMI-PIC
 
-CDash: https://my.cdash.org/index.php?project=pumi-pic
+CDash: https://my.cdash.org/viewSubProjects.php?project=SCOREC
+
+Doxygen Documentation (incomplete): https://scorec.github.io/pumi-pic
 
 ### Dependencies
 

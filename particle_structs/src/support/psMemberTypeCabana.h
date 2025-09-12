@@ -68,7 +68,8 @@ namespace pumipic {
   template <typename PS, std::size_t M, typename CMDT, typename ViewT>
   struct CopyMTVsToAoSoAImpl<PS, M, CMDT, ViewT> {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<CMDT, memory_space> Aosoa;
     CopyMTVsToAoSoAImpl(Aosoa, MemberTypeViewsConst, ViewT, ViewT) {}
   };
 
@@ -76,7 +77,8 @@ namespace pumipic {
             typename T, typename... Types>
   struct CopyMTVsToAoSoAImpl<PS, M, CMDT, ViewT, T, Types...> {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<CMDT, memory_space> Aosoa;
     CopyMTVsToAoSoAImpl(Aosoa &dst, MemberTypeViewsConst srcs, ViewT soa_indices,
                         ViewT soa_ptcl_indices) {
       enclose(dst, srcs, soa_indices, soa_ptcl_indices);
@@ -101,7 +103,8 @@ namespace pumipic {
   template <typename PS, typename... Types>
   struct CopyMTVsToAoSoA<PS, MemberTypes<Types...>> {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, memory_space> Aosoa;
     typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
 
     CopyMTVsToAoSoA(Aosoa &dst, MemberTypeViewsConst src,
@@ -150,7 +153,8 @@ namespace pumipic {
   template <typename PS, std::size_t M, typename CMDT, typename ViewT>
   struct CopyParticlesToSendFromAoSoAImpl<PS, M, CMDT, ViewT> {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<CMDT, memory_space> Aosoa;
     CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews, const Aosoa,
                             typename PS::kkLidView, typename PS::kkLidView) {}
   };
@@ -158,7 +162,8 @@ namespace pumipic {
   template <typename PS, std::size_t M, typename CMDT, typename ViewT, typename T, typename... Types>
   struct CopyParticlesToSendFromAoSoAImpl<PS, M, CMDT, ViewT, T, Types...> {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<CMDT, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<CMDT, memory_space> Aosoa;
 
     CopyParticlesToSendFromAoSoAImpl(PS* ps, MemberTypeViews dsts, const Aosoa &src,
                             typename PS::kkLidView ps_to_array,
@@ -189,7 +194,8 @@ namespace pumipic {
   template <typename PS, typename... Types>
   struct CopyParticlesToSendFromAoSoA<PS, MemberTypes<Types...> > {
     typedef typename PS::device_type Device;
-    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, Device> Aosoa;
+    typedef typename PS::memory_space memory_space;
+    typedef Cabana::AoSoA<PS_DTBool<MemberTypes<Types...>>, memory_space> Aosoa;
     typedef PS_DTBool<MemberTypes<Types...>> CM_DT;
 
     CopyParticlesToSendFromAoSoA(PS* ps, MemberTypeViews dsts, const Aosoa &src,

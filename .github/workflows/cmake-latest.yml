@@ -1,8 +1,10 @@
-name: CMake Tests
+name: CMake Tests Latest
 on: 
   push:
-  schedule:
-    - cron: '12 14 * * 3'
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   buildTest:
@@ -42,13 +44,14 @@ jobs:
       with:
         repo-name: 'kokkos'
         repo-path: 'kokkos/kokkos'
-        repo-ref: '4.2.00'
+        repo-ref: ''
         cache: true
         options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
                   -DKokkos_ENABLE_SERIAL=ON
                   -DKokkos_ENABLE_OPENMP=off
                   -DKokkos_ENABLE_CUDA=off
                   -DKokkos_ENABLE_CUDA_LAMBDA=off
+                  -DKokkos_ENABLE_IMPL_VIEW_LEGACY=ON
                   -DKokkos_ENABLE_DEBUG=on'
 
     - name: build omega_h
@@ -88,7 +91,7 @@ jobs:
       with:
         repo-name: 'cabana'
         repo-path: 'ECP-copa/cabana'
-        repo-ref: '0.6.1'
+        repo-ref: ''
         cache: true
         options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
                   -DCMAKE_BUILD_TYPE=Release

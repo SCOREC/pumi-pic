@@ -248,14 +248,14 @@ void gitrm_distribution(int ne, int np, Kokkos::View<int*> ptcls_per_elem,
     auto generator = pool.get_state();
     int index = generator.urand(0,cutoff);
     pool.free_state(generator);
-    Kokkos::atomic_increment<int>(&ptcls_per_elem(index));
+    Kokkos::atomic_inc<int>(&ptcls_per_elem(index));
     elem_per_ptcl(i) = index;
   });
   Kokkos::parallel_for(ptcls_second, KOKKOS_LAMBDA(const int i) {
     auto generator = pool.get_state();
     int index = generator.urand(cutoff,ne);
     pool.free_state(generator);
-    Kokkos::atomic_increment<int>(&ptcls_per_elem(index));
+    Kokkos::atomic_inc<int>(&ptcls_per_elem(index));
     elem_per_ptcl(ptcls_first + i) = index;
   });
 }

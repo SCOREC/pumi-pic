@@ -10,7 +10,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
   auto pID = structure->get<0>();
   kkLidView new_element("new_element", structure->capacity());
   kkLidView element_sums("element_sums", structure->nElems());
-  auto setSameElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setSameElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       new_element(p) = e;
       Kokkos::atomic_add(&(element_sums(e)), p);
@@ -33,7 +33,7 @@ int rebuildNoChanges(const char* name, PS* structure) {
 
   kkLidView new_element_sums("new_element_sums", structure->nElems());
   kkLidView failed = kkLidView("failed", 1);
-  auto checkSameElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkSameElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       const lid_t id = pID(p);
       const lid_t dest_elem = new_element(id);
@@ -74,7 +74,7 @@ int rebuildNewElems(const char* name, PS* structure) {
   auto pID = structure->get<0>();
   kkLidView new_element("new_element", structure->capacity());
   kkLidView element_sums("element_sums", structure->nElems());
-  auto setElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       new_element(p) = (e*3 + p) % ne; //assign to diff elems
       Kokkos::atomic_add(&(element_sums(new_element(p))), p);
@@ -97,7 +97,7 @@ int rebuildNewElems(const char* name, PS* structure) {
 
   kkLidView new_element_sums("new_element_sums", structure->nElems());
   kkLidView failed = kkLidView("failed", 1);
-  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       const lid_t id = pID(p);
       const lid_t dest_elem = new_element(id);
@@ -137,7 +137,7 @@ int rebuildNewPtcls(const char* name, PS* structure) {
 
   auto pID = structure->get<0>();
   kkLidView new_element("new_element", structure->capacity());
-  auto setElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask)
       new_element(p) = (e*3 + p + 2) % ne; //assign to diff elems
     else
@@ -171,7 +171,7 @@ int rebuildNewPtcls(const char* name, PS* structure) {
   pID = structure->get<0>();
 
   kkLidView failed = kkLidView("failed", 1);
-  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       const lid_t id = pID(p);
       if (id < cap) { //Check old particles
@@ -210,7 +210,7 @@ int rebuildPtclsDestroyed(const char* name, PS* structure) {
   kkLidView new_element("new_element", structure->capacity());
   kkLidView num_removed("num_removed", 1);
   //Remove every 7th particle, keep other particles in same element
-  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool& mask){
+  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const int& mask){
     if (mask) {
       new_element(p) = e;
       if (p%7 == 0) {
@@ -234,7 +234,7 @@ int rebuildPtclsDestroyed(const char* name, PS* structure) {
   pID = structure->get<0>();
 
   kkLidView failed = kkLidView("failed", 1);
-  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       const lid_t id = pID(p);
       const lid_t dest_elem = new_element(id);
@@ -268,7 +268,7 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
   kkLidView new_element("new_element", structure->capacity());
   kkLidView num_removed("num_removed", 1);
   //Remove every 7th particle and move others to new element
-  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const bool& mask){
+  auto assign_ptcl_elems = PS_LAMBDA(const int& e, const int& p, const int& mask){
     if (mask) {
       new_element(p) = (3*e+7)%ne;
       if (p%7 == 0) {
@@ -306,7 +306,7 @@ int rebuildNewAndDestroyed(const char* name, PS* structure) {
   pID = structure->get<0>();
 
   kkLidView failed = kkLidView("failed", 1);
-  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkElement = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       const lid_t id = pID(p);
       if (id < cap) { //Check old particles

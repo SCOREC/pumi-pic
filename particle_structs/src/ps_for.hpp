@@ -65,7 +65,7 @@ namespace pumipic {
   void ParticleStructure<DataTypes, MemSpace>::getPIDs(ViewT& pids, ViewT& offsets) {
     offsets = ViewT("offsets", num_elems+1);
     ViewT ppe("ppe", num_elems+1);
-    auto setPPE = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    auto setPPE = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
       if (mask) {
         Kokkos::atomic_inc(&ppe(e));
       }
@@ -75,7 +75,7 @@ namespace pumipic {
     
     pids = ViewT("pids", getLastValue(offsets));
     ViewT currIndex("currIndex", num_elems);
-    auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+    auto setPIDs = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
       if (mask) {
         auto index = Kokkos::atomic_fetch_add(&currIndex(e), 1);
         pids(offsets(e)+index) = p;

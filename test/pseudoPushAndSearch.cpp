@@ -219,7 +219,7 @@ OMEGA_H_DEVICE o::Matrix<3, 4> gatherVectors(o::Reals const& a, o::Few<o::LO, 4>
 
 void setPtclIds(PS* ptcls) {
   auto pid_d = ptcls->get<2>();
-  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const bool& mask) {
+  auto setIDs = PS_LAMBDA(const int& eid, const int& pid, const int& mask) {
     pid_d(pid) = pid;
   };
   ps::parallel_for(ptcls, setIDs);

@@ -37,7 +37,7 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
 
   int fails = 0;
   kkLidView count("count", 1);
-  auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask)
       Kokkos::atomic_inc<lid_t>(&(count(0)));
   };
@@ -61,7 +61,7 @@ int setValues(const char* name, PS* structure) {
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
   int local_rank = comm_rank;
-  auto setValues = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setValues = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) {
       dbls(p, 0) = p * e * 100.0;
       dbls(p, 1) = M_PI * p + M_PI / 2.0;
@@ -105,7 +105,7 @@ int pseudoPush(const char* name, PS* structure) {
   auto bools = structure->get<2>();
   auto nums = structure->get<3>();
   int local_rank = comm_rank;
-  auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto quickMaths = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     //printf("e: %d\tp: %d\tmask: %d\n", e, p, mask);
     if (mask) {
       const double p_fp = (double) p;

@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 
 void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failures) {
   //Init
-  auto checkInit = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkInit = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask && e != p){
       printf("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
       failures(0) = 1;
@@ -69,14 +69,14 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   //Rebuild
   kkLidView new_element("new_element", structure->capacity());
-  auto setNewElm = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setNewElm = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) new_element(p) = comm_rank;
     else new_element(p) = -1;
   };
   ps::parallel_for(structure, setNewElm, "setNewElm");
   structure->rebuild(new_element);
 
-  auto checkRebuild = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkRebuild = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask && e != comm_rank){
       printf("Structure failed to rebuild at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
@@ -86,14 +86,14 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
 
   //Migrate
   kkLidView new_process("new_process", structure->capacity());
-  auto setNewProcess = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto setNewProcess = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask) new_process(p) = (comm_rank + 1) % comm_size;
     else new_process(p) = comm_rank;
   };
   ps::parallel_for(structure, setNewProcess, "setNewProcess");
   structure->migrate(new_element, new_process);
 
-  auto checkMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
+  auto checkMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask && e == comm_rank){
       printf("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;

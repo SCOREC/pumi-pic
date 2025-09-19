@@ -32,7 +32,7 @@ namespace pumipic {
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
     typedef DPS_Input<DataTypes, MemSpace> Input_T;
 
-    using DPS_DT = PS_DTBool<DataTypes>;
+    using DPS_DT = PS_DTInt<DataTypes>;
     using AoSoA_t = Cabana::AoSoA<DPS_DT,memory_space>;
 
     DPS(const DPS&) = delete;

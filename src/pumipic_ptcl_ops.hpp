@@ -35,7 +35,7 @@ namespace pumipic {
     auto owners = mesh.entOwners(mesh->dim());
     auto safe = mesh.safeTag();
     int comm_rank = mesh.comm()->rank();
-    auto setUnsafePtcls = PS_LAMBDA(const int elm, const int ptcl, const bool mask) {
+    auto setUnsafePtcls = PS_LAMBDA(const int elm, const int ptcl, const int mask) {
       new_procs[ptcl] = comm_rank;
       const int nelm = elems[ptcl];
       new_elems[ptcl] = nelm;

@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     scs->printFormat();
     SCS::kkLidView fail("fail",1);
     auto elem_scs = scs->get<0>();
-    auto check = PS_LAMBDA(const int eid, const int pid, const bool mask) {
+    auto check = PS_LAMBDA(const int eid, const int pid, const int mask) {
       if (mask && (eid != elem_scs(pid))) {
         printf("Particle %d is not assigned to the correct element (%d != %d)\n", pid,
                eid, elem_scs(pid));

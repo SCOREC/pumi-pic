@@ -31,7 +31,7 @@ namespace pumipic {
       const lid_t process = new_process(particle_id);
       if (mask && (process != comm_rank)) {
         const lid_t process_index = dist.index(process);
-        Kokkos::atomic_increment(&num_send_particles(process_index));
+        Kokkos::atomic_inc(&num_send_particles(process_index));
       }
     };
     parallel_for(count_sending_particles);

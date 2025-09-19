@@ -30,9 +30,9 @@ namespace pumipic {
     // Fill ptcls per elem for existing ptcls
     auto count_existing = PS_LAMBDA(const lid_t& elm_id, const lid_t& ptcl_id, const lid_t& mask) {
       if (new_element[ptcl_id] > -1)
-        Kokkos::atomic_increment(&particles_per_element[new_element[ptcl_id]]);
+        Kokkos::atomic_inc(&particles_per_element[new_element[ptcl_id]]);
       else
-        Kokkos::atomic_increment(&num_removed_d(0));
+        Kokkos::atomic_inc(&num_removed_d(0));
     };
     parallel_for(count_existing,"fill particle Per Element existing");
     lid_t num_removed = getLastValue(num_removed_d); // save number of removed particles for later
@@ -40,7 +40,7 @@ namespace pumipic {
     Kokkos::parallel_for("fill particlesPerElementNew", new_particle_elements.size(),
         KOKKOS_LAMBDA(const int& i) {
           assert(new_particle_elements[i] > -1);
-          Kokkos::atomic_increment(&particles_per_element[new_particle_elements[i]]);
+          Kokkos::atomic_inc(&particles_per_element[new_particle_elements[i]]);
         });
     RecordTime("CSR calc ppe", time_ppe.seconds());
 

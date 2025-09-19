@@ -39,7 +39,7 @@ int testParticleExistence(const char* name, PS* structure, lid_t num_ptcls) {
   kkLidView count("count", 1);
   auto checkExistence = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
     if (mask)
-      Kokkos::atomic_increment<lid_t>(&(count(0)));
+      Kokkos::atomic_inc<lid_t>(&(count(0)));
   };
   ps::parallel_for(structure, checkExistence, "check particle existence");
   lid_t c = ps::getLastValue(count);

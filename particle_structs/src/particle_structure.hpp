@@ -22,15 +22,19 @@ namespace pumipic {
     typedef typename Space::memory_space memory_space;
     typedef typename Space::execution_space execution_space;
     typedef typename Space::device_type device_type;
+#if KOKKOS_VERSION >= 40700
+    typedef typename Kokkos::ViewTraits<void, Space>::host_mirror_space HostMirrorSpace;
+#else
     typedef typename Kokkos::ViewTraits<void, Space>::HostMirrorSpace HostMirrorSpace;
+#endif
     typedef ParticleStructure<DataTypes, HostMirrorSpace> HostMirror;
     template <typename Space2> using Mirror = ParticleStructure<DataTypes, Space2>;
 
     template <class T> using View = Kokkos::View<T*, device_type>;
     typedef View<lid_t> kkLidView;
     typedef View<gid_t> kkGidView;
-    typedef typename kkLidView::HostMirror kkLidHostMirror;
-    typedef typename kkGidView::HostMirror kkGidHostMirror;
+    typedef typename kkLidView::host_mirror_type kkLidHostMirror;
+    typedef typename kkGidView::host_mirror_type kkGidHostMirror;
 
     template <std::size_t N> using DataType =
       typename MemberTypeAtIndex<N, DataTypes>::type;

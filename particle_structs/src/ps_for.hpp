@@ -67,7 +67,7 @@ namespace pumipic {
     ViewT ppe("ppe", num_elems+1);
     auto setPPE = PS_LAMBDA(const lid_t& e, const lid_t& p, const lid_t& mask) {
       if (mask) {
-        Kokkos::atomic_increment(&ppe(e));
+        Kokkos::atomic_inc(&ppe(e));
       }
     };
     parallel_for(this, setPPE, "setPPE");

@@ -41,14 +41,11 @@ namespace pumipic {
     LO core_nents = offsets_nents_host[comm_rank + 1] - offsets_nents_host[comm_rank];
     int safe_buffer_size = core_nents * nbuffers;
     Omega_h::HostWrite<LO> safe_core_per_buffer(safe_buffer_size);
-    MPI_Datatype bufferStride;
-    MPI_Type_vector(core_nents, 1, nbuffers, MPI_INT, &bufferStride);
-    MPI_Type_commit(&bufferStride);
     MPI_Request* send_requests = new MPI_Request[nbuffers];
     MPI_Request* recv_requests = new MPI_Request[nbuffers];
     for (int i = 0; i < nbuffers; ++i) {
       int buffer_rank = buffer_ranks[i];
-      MPI_Irecv(safe_core_per_buffer.data() + i, core_nents, bufferStride,
+      MPI_Irecv(safe_core_per_buffer.data() + i * core_nents, core_nents, MPI_INT,
                 buffer_rank, 0, comm->get_impl(), recv_requests + i);
 
       int offset = offsets_nents_host[buffer_rank];
@@ -79,7 +76,6 @@ namespace pumipic {
 
     //Build N-graph from indices (CPU)
     buildNgraph(comm);
-    MPI_Type_free(&bufferStride);
   }
 
   ParticleBalancer::SBarUnmap::iterator ParticleBalancer::insert(Parts& p) {
@@ -99,7 +95,7 @@ namespace pumipic {
       Parts parts;
       parts.insert(comm_rank);
       for (int j = 0; j < nbuffers; ++j) {
-        int index = i * nbuffers + j;
+        int index = j * nbuffers + i;
         if (safe_core_per_buffer[index])
           parts.insert(buffer_ranks[j]);
       }

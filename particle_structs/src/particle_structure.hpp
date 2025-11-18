@@ -22,7 +22,7 @@ namespace pumipic {
     typedef typename Space::memory_space memory_space;
     typedef typename Space::execution_space execution_space;
     typedef typename Space::device_type device_type;
-#if KOKKOS_VERSION >= 40700
+#if KOKKOS_VERSION >= 50000
     typedef typename Kokkos::ViewTraits<void, Space>::host_mirror_space HostMirrorSpace;
 #else
     typedef typename Kokkos::ViewTraits<void, Space>::HostMirrorSpace HostMirrorSpace;

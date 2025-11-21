@@ -42,12 +42,13 @@ jobs:
       with:
         repo-name: 'kokkos'
         repo-path: 'kokkos/kokkos'
-        repo-ref: '4.2.00'
+        repo-ref: '4.3.00'
         cache: true
         options: '-DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
                   -DKokkos_ENABLE_SERIAL=ON
                   -DKokkos_ENABLE_OPENMP=off
                   -DKokkos_ENABLE_CUDA=off
+                  -DKokkos_ENABLE_IMPL_VIEW_LEGACY=ON
                   -DKokkos_ENABLE_CUDA_LAMBDA=off
                   -DKokkos_ENABLE_DEBUG=on'
 

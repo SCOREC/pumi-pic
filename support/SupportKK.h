@@ -36,12 +36,12 @@ namespace pumipic {
     typename std::enable_if<is_specialization<ViewT, View>{}, T>::type;
 
   template <class ViewT> typename
-  IsKokkosView<ViewT>::HostMirror create_mirror_view(ViewT v) {
+  IsKokkosView<ViewT>::host_mirror_type create_mirror_view(ViewT v) {
     return Kokkos::create_mirror_view(v);
   }
   template <class ViewT> typename
-  IsPPView<ViewT>::HostMirror create_mirror_view(ViewT v) {
-    return typename ViewT::HostMirror(Kokkos::create_mirror_view(v.view()));
+  IsPPView<ViewT>::host_mirror_type create_mirror_view(ViewT v) {
+    return typename ViewT::host_mirror_type(Kokkos::create_mirror_view(v.view()));
   }
 
   template <class ViewT, class ViewT2>
@@ -54,7 +54,7 @@ namespace pumipic {
   }
 
   template <class ViewT>
-  typename ViewT::HostMirror deviceToHost(ViewT view) {
+  typename ViewT::host_mirror_type deviceToHost(ViewT view) {
     auto hv = create_mirror_view(view);
     deep_copy(hv, view);
     return hv;
@@ -62,20 +62,20 @@ namespace pumipic {
 
   template <class ViewT, class T>
   typename std::enable_if<ViewT::rank==1>::type
-  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+  hostToDevice(typename ViewT::host_mirror_type hv, ViewT, T* data) {
     for (size_t i = 0; i < hv.extent(0); ++i)
       hv(i) = data[i];
   }
   template <class ViewT, class T>
   typename std::enable_if<ViewT::rank==2>::type
-  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+  hostToDevice(typename ViewT::host_mirror_type hv, ViewT, T* data) {
     for (size_t i = 0; i < hv.extent(0); ++i)
       for (size_t j = 0; j < hv.extent(1); ++j)
         hv(i,j) = data[i][j];
   }
   template <class ViewT, class T>
   typename std::enable_if<ViewT::rank==3>::type
-  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+  hostToDevice(typename ViewT::host_mirror_type hv, ViewT, T* data) {
     for (size_t i = 0; i < hv.extent(0); ++i)
       for (size_t j = 0; j < hv.extent(1); ++j)
         for (size_t k = 0; k < hv.extent(2); ++k)
@@ -83,7 +83,7 @@ namespace pumipic {
   }
   template <class ViewT, class T>
   typename std::enable_if<ViewT::rank==4>::type
-  hostToDevice(typename ViewT::HostMirror hv, ViewT, T* data) {
+  hostToDevice(typename ViewT::host_mirror_type hv, ViewT, T* data) {
     for (size_t i = 0; i < hv.extent(0); ++i)
       for (size_t j = 0; j < hv.extent(1); ++j)
         for (size_t k = 0; k < hv.extent(2); ++k)
@@ -207,7 +207,7 @@ namespace pumipic {
 
   template <class T, typename Device> struct HostToDevice {
     HostToDevice(Kokkos::View<T*, Device> view, T* data) {
-      typename Kokkos::View<T*, Device>::HostMirror hv = Kokkos::create_mirror_view(view);
+      typename Kokkos::View<T*, Device>::host_mirror_type hv = Kokkos::create_mirror_view(view);
       for (size_t i = 0; i < hv.size(); ++i)
         hv(i) = data[i];
       Kokkos::deep_copy(view, hv);
@@ -215,7 +215,7 @@ namespace pumipic {
   };
   template <class T, typename Device, std::size_t N> struct HostToDevice<T[N], Device> {
     HostToDevice(Kokkos::View<T*[N], Device> view, T (*data)[N]) {
-      typename Kokkos::View<T*[N], Device>::HostMirror hv = Kokkos::create_mirror_view(view);
+      typename Kokkos::View<T*[N], Device>::host_mirror_type hv = Kokkos::create_mirror_view(view);
       for (size_t i = 0; i < hv.extent(0); ++i)
         for (size_t j = 0; j < N; ++j)
           hv(i,j) = data[i][j];

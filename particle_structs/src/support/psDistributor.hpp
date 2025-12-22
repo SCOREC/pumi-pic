@@ -33,7 +33,7 @@ namespace pumipic {
     typedef Kokkos::View<int*, typename Space::device_type> IndexView;
     //List of ranks on the device
     IndexView ranks_d;
-    typename IndexView::HostMirror ranks_h;
+    typename IndexView::host_mirror_type ranks_h;
 
     //Unordered map from rank to index on device
     typedef Kokkos::UnorderedMap<lid_t, lid_t, typename Space::device_type> MapType;

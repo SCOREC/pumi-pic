@@ -34,7 +34,7 @@
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
 #else
-    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
+    typename ViewT::host_mirror_type view_host = create_mirror_view(new_view);
     int ret = MPI_Recv(view_host.data(), view_host.size(),
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        sender, tag, comm, MPI_STATUS_IGNORE);
@@ -83,7 +83,7 @@
                         tag, comm, req);
 #else
     int size_per_entry = BaseType<ViewType<ViewT> >::size;
-    typename ViewT::HostMirror view_host = create_mirror_view(new_view);
+    typename ViewT::host_mirror_type view_host = create_mirror_view(new_view);
     int ret = MPI_Irecv(view_host.data(), size * size_per_entry,
                         MpiType<BT<ViewType<ViewT> > >::mpitype(),
                         sender, tag, comm, req);
@@ -135,8 +135,8 @@
     return MPI_Alltoall(send.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                         recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
 #else
-    typename ViewT::HostMirror send_host = deviceToHost(send);
-    typename ViewT::HostMirror recv_host = create_mirror_view(recv);
+    typename ViewT::host_mirror_type send_host = deviceToHost(send);
+    typename ViewT::host_mirror_type recv_host = create_mirror_view(recv);
     int ret = MPI_Alltoall(send_host.data(), send_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                            recv_host.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(), comm);
     deep_copy(recv, recv_host);
@@ -154,8 +154,8 @@ IsGPU<ViewSpace<ViewT> > PS_Comm_Ialltoall(ViewT send, int send_size,
                       recv.data(), recv_size, MpiType<BT<ViewType<ViewT> > >::mpitype(),
                       comm, request);
 #else
-  typename ViewT::HostMirror send_host = deviceToHost(send);
-  typename ViewT::HostMirror recv_host = create_mirror_view(recv);
+  typename ViewT::host_mirror_type send_host = deviceToHost(send);
+  typename ViewT::host_mirror_type recv_host = create_mirror_view(recv);
   int ret = MPI_Ialltoall(send_host.data(), send_size,
                           MpiType<BT<ViewType<ViewT> > >::mpitype(),
                           recv_host.data(), recv_size,
@@ -178,8 +178,8 @@ IsGPU<ViewSpace<ViewT> > PS_Comm_Reduce(ViewT send_view, ViewT recv_view, int co
                     MpiType<BT<ViewType<ViewT> > >::mpitype(),
                     op, root, comm);
 #else
-  typename ViewT::HostMirror send_host = deviceToHost(send_view);
-  typename ViewT::HostMirror recv_host = create_mirror_view(recv_view);
+  typename ViewT::host_mirror_type send_host = deviceToHost(send_view);
+  typename ViewT::host_mirror_type recv_host = create_mirror_view(recv_view);
   int ret = MPI_Reduce(send_host.data(), recv_host.data(), count,
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),
                        op, root, comm);
@@ -200,8 +200,8 @@ IsGPU<ViewSpace<ViewT> > PS_Comm_Allreduce(ViewT send_view, ViewT recv_view, int
   return MPI_Allreduce(send_view.data(), recv_view.data(), count,
                        MpiType<BT<ViewType<ViewT> > >::mpitype(),op, comm);
 #else
-  typename ViewT::HostMirror send_host = deviceToHost(send_view);
-  typename ViewT::HostMirror recv_host = create_mirror_view(recv_view);
+  typename ViewT::host_mirror_type send_host = deviceToHost(send_view);
+  typename ViewT::host_mirror_type recv_host = create_mirror_view(recv_view);
   int ret = MPI_Allreduce(send_host.data(), recv_host.data(), count,
                           MpiType<BT<ViewType<ViewT> > >::mpitype(), op, comm);
   deep_copy(recv_view, recv_host);

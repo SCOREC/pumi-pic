@@ -407,7 +407,7 @@ void SellCSigma<DataTypes,MemSpace>::printFormat(const char* prefix) const {
   kkGidHostMirror element_to_gid_host = deviceToHost(element_to_gid);
   kkLidHostMirror row_to_element_host = deviceToHost(row_to_element);
   kkLidHostMirror offsets_host = deviceToHost(offsets);
-  Kokkos::View<bool*>::HostMirror particle_mask_host = deviceToHost(particle_mask);
+  Kokkos::View<bool*>::host_mirror_type particle_mask_host = deviceToHost(particle_mask);
 
   std::stringstream ss;
   char buffer[1000];

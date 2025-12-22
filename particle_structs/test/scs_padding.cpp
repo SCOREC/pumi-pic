@@ -31,9 +31,8 @@ int main(int argc, char* argv[]) {
   std::vector<int>* ids = new std::vector<int>[ne];
   distribute_particles(ne, np, 2, ptcls_per_elem, ids);
   int C = 4;
-  Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(128, C);
-
   {
+    Kokkos::TeamPolicy<exe_space> po = pumipic::TeamPolicyAuto(128, C);
     SCS::kkLidView ptcls_per_elem_v("ptcls_per_elem_v", ne);
     SCS::kkGidView element_gids_v("", 0);
     particle_structs::hostToDevice(ptcls_per_elem_v, ptcls_per_elem);

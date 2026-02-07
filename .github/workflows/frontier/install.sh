@@ -2,7 +2,7 @@
 
 branch=$1
 
-cd /lustre/orion/phy122/scratch/castia5/globus-compute/pumi-pic-test
+cd /lustre/orion/csc679/scratch/castia5/globus-compute/pumi-pic-test
 
 module load rocm
 module load craype-accel-amd-gfx90a

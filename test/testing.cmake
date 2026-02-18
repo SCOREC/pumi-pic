@@ -128,3 +128,5 @@ mpi_test(pseudoXGCm_120kElms_4 4
   ./pseudoXGCm
   ${TEST_DATA_DIR}/xgc/120k
   10000 141 10 0.5 0)
+
+mpi_test(particle_adapt 1 ./particle_adapt)

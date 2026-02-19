@@ -1,6 +1,10 @@
 function(make_test exename srcname)
   add_executable(${exename} ${srcname})
   target_link_libraries(${exename} pumipic Omega_h::omega_h)
+
+  if(ENABLE_PCMS)
+    target_link_libraries(${exename} pcms::core)
+  endif()
 endfunction(make_test)
 
 make_test(print_partition print_partition.cpp)

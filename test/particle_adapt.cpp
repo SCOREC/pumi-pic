@@ -19,7 +19,7 @@ typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef SellCSigma<Type,ExeSpace> SCS;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
-PS* resize(PS* ptcls, int newNElems) {
+void resize(PS*& ptcls, int newNElems) {
   int nPtcls = ptcls->nPtcls();
   PS::kkLidView ptclsPerElem("new_ptcls_per_elem", newNElems);
   PS::kkGidView elemGIDs("new_gids", newNElems);
@@ -39,7 +39,7 @@ PS* resize(PS* ptcls, int newNElems) {
   newPtcls->copyParticleData(ptcls);
 
   delete ptcls;
-  return newPtcls;
+  ptcls = newPtcls;
 }
 
 int main(int argc, char* argv[]) {
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
 
   // Move Particle Elements
 
-  ptcls = resize(ptcls, mesh.nelems());
+  resize(ptcls, mesh.nelems());
   PS::kkLidView newElement("new_element", ptcls->capacity());
   auto ptclID = ptcls->get<1>();
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {

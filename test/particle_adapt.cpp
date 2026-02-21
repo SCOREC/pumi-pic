@@ -8,6 +8,7 @@
 #include <Omega_h_adapt.hpp>
 #include "team_policy.hpp"
 #include <pcms/point_search.h>
+#include <MemberTypeLibraries.h>
 
 using particle_structs::SellCSigma;
 using particle_structs::MemberTypes;
@@ -16,6 +17,30 @@ using particle_structs::MemberTypes;
 typedef MemberTypes<double[3], int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef SellCSigma<Type,ExeSpace> SCS;
+typedef ps::ParticleStructure<Type,ExeSpace> PS;
+
+PS* resize(PS* ptcls, int newNElems) {
+  int nPtcls = ptcls->nPtcls();
+  PS::kkLidView ptclsPerElem("new_ptcls_per_elem", newNElems);
+  PS::kkGidView elemGIDs("new_gids", newNElems);
+
+  auto copyPtclsPerElem = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0 && e < newNElems)
+      Kokkos::atomic_add(&(ptclsPerElem(e)), 1);
+  };
+  ps::parallel_for(ptcls, copyPtclsPerElem);
+
+  Kokkos::parallel_for(newNElems, KOKKOS_LAMBDA(const int i) {
+    elemGIDs(i) = i;
+  });
+
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(newNElems,32);
+  PS* newPtcls = new SCS(policy, 1, 32, newNElems, nPtcls, ptclsPerElem, elemGIDs);
+  newPtcls->copyParticleData(ptcls);
+
+  delete ptcls;
+  return newPtcls;
+}
 
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
@@ -28,22 +53,21 @@ int main(int argc, char* argv[]) {
   int nppe = 3;
   int nPtcls = mesh.nelems() * nppe;
 
-  SCS::kkLidView ptclsPerElem("ptcls_per_elem", nElems);
-  SCS::kkGidView elemGIDs("gids", nElems);
+  PS::kkLidView ptclsPerElem("ptcls_per_elem", nElems);
+  PS::kkGidView elemGIDs("gids", nElems);
   Kokkos::parallel_for(nElems, KOKKOS_LAMBDA(const int i) {
     ptclsPerElem(i) = nppe;
-    elemGIDs(i) = nElems;
+    elemGIDs(i) = i;
   });
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nElems,32);
-  SCS* ptcls = new SCS(policy, 5, 2, nElems, nPtcls, ptclsPerElem, elemGIDs);
+  PS* ptcls = new SCS(policy, 1, 32, nElems, nPtcls, ptclsPerElem, elemGIDs);
 
   // Set Particle Positions
 
   auto cells2nodes = mesh.get_adj(Omega_h::FACE, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<0>();
-  auto ptclID = ptcls->get<1>();
 
   auto setPositions = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -55,7 +79,6 @@ int main(int argc, char* argv[]) {
       for (int i=0; i<2; i++)
         ptclPos(pid, i) = pos[i];
     }
-    ptclID(pid) = pid;
   };
   ps::parallel_for(ptcls, setPositions);
 
@@ -86,10 +109,13 @@ int main(int argc, char* argv[]) {
 
   auto searchResults = search(points);
 
-  // Rebuild
+  // Move Particle Elements
 
-  SCS::kkLidView newElement("new_element", ptcls->capacity());
+  ptcls = resize(ptcls, mesh.nelems());
+  PS::kkLidView newElement("new_element", ptcls->capacity());
+  auto ptclID = ptcls->get<1>();
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    ptclID(pid) = pid;
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
       newElement(pid) = idx;
@@ -98,19 +124,26 @@ int main(int argc, char* argv[]) {
       newElement(pid) = -1;
   };
   ps::parallel_for(ptcls, getNewElement);
-  ptcls->rebuild(newElement); //TODO: Right now this can't add new elements
+  ptcls->rebuild(newElement);
 
   // Assert New Elements
 
+  ptclID = ptcls->get<1>();
+  PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto assertElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       const int id = ptclID(pid);
-      auto [dim, idx, coords] = searchResults(id);
-      printf("PID %d Current %d Target %d\n", id, e, idx); //TODO: REPLACE WITH ASSERTION
+      const int destElem = newElement(id);
+      if (destElem != e) {
+        printf("[ERROR] Particle %d was moved to incorrect element %d (should be in element %d)\n", id, e, destElem);
+        failed(0) = 1;
+      }
     }
   };
   ps::parallel_for(ptcls, assertElement);
 
+  int fails = ps::getLastValue(failed);
+
   delete ptcls;
-  return 0;
+  return fails;
 }

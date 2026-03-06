@@ -45,7 +45,7 @@ void resize(PS*& ptcls, int newNElems) {
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
-  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
+  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 10, 10, 0, false);
 
   // Initalize Particles
 
@@ -68,14 +68,18 @@ int main(int argc, char* argv[]) {
   auto cells2nodes = mesh.get_adj(Omega_h::FACE, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<0>();
+  PS::kkLidView vtxPerElm("vtx_per_elm", nElems);
 
   auto setPositions = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto elmVerts = Omega_h::gather_verts<3>(cells2nodes, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<3,2>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
-      int v = (pid / nElems) % 3; //nearest vertex
-      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .1); // point near vertex
+      // int v = (pid / nElems) % 3; //nearest vertex
+      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]);
+      // printf("PID %d, ELM %d, V %d\n", pid, e, v);
+      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
+      printf("%f, %f\n", pos[0], pos[1]);
       for (int i=0; i<2; i++)
         ptclPos(pid, i) = pos[i];
     }
@@ -85,18 +89,21 @@ int main(int argc, char* argv[]) {
   // Adaptation
 
   Omega_h::vtk::write_vtu("particleCubeBefore.vtu", &mesh);
-  auto metrics = Omega_h::get_implied_isos(&mesh);
-  auto scalar = Omega_h::metric_eigenvalue_from_length(0.5);
-  metrics = Omega_h::multiply_each_by(metrics, scalar);
-  mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
-  auto opts = Omega_h::AdaptOpts(&mesh);
-  adapt(&mesh, opts);
-  mesh.remove_tag(Omega_h::VERT, "metric");
+  double factors[]{1.8, 1.7, 0.6, 0.3};
+  for (int i=0; i<4; i++) {
+    auto metrics = Omega_h::get_implied_isos(&mesh);
+    auto scalar = Omega_h::metric_eigenvalue_from_length(factors[i]);
+    metrics = Omega_h::multiply_each_by(metrics, scalar);
+    mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
+    auto opts = Omega_h::AdaptOpts(&mesh);
+    adapt(&mesh, opts);
+    mesh.remove_tag(Omega_h::VERT, "metric");
+  }
   Omega_h::vtk::write_vtu("particleCubeAfter.vtu", &mesh);
 
   // Paricle Search
 
-  pcms::GridPointSearch search{mesh, 10, 10};
+  pcms::GridPointSearch search{mesh, 50, 50};
   Kokkos::View<pcms::Real* [2]> points("test_points", nPtcls);
 
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {

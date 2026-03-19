@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<1; i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
-    auto scalar = Omega_h::metric_eigenvalue_from_length(0.75);
+    auto scalar = Omega_h::metric_eigenvalue_from_length(1.25);
     metrics = Omega_h::multiply_each_by(metrics, scalar);
     mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
     auto opts = Omega_h::AdaptOpts(&mesh);

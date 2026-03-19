@@ -16,6 +16,7 @@ set(HEADERS
   pumipic_input.hpp
   pumipic_kktypes.hpp
   pumipic_profiling.hpp
+  pumipic_adaptation.hpp
   ${CMAKE_CURRENT_BINARY_DIR}/pumipic_version.hpp
 )
 

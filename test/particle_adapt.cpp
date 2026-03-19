@@ -6,6 +6,7 @@
 #include <Omega_h_metric.hpp>
 #include <Omega_h_array_ops.hpp>
 #include <Omega_h_adapt.hpp>
+#include <Omega_h_for.hpp>
 #include "team_policy.hpp"
 #include <pcms/point_search.h>
 #include <MemberTypeLibraries.h>
@@ -18,6 +19,96 @@ typedef MemberTypes<double[3], int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef SellCSigma<Type,ExeSpace> SCS;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
+
+namespace Omega_h {
+  struct ParticleAdapt : public UserTransfer {
+
+  PS* ptcls;
+  PS::kkLidView ptclElems;
+
+  PS::kkLidView getPtcls() {
+    PS::kkLidView particleElems("ptcl_elems", ptcls->nPtcls());
+    auto copyPtclsPerElem = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if(mask > 0) particleElems(pid) = e;
+    };
+    ps::parallel_for(ptcls, copyPtclsPerElem);
+    return particleElems;
+  }
+
+  ParticleAdapt(PS* particles) {
+    ptcls = particles;
+    ptclElems = getPtcls();
+  }
+
+  virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
+      LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
+      LOs same_ents2old_ents, LOs same_ents2new_ents) {
+    int mesh_dim = old_mesh.dim();
+    if (prod_dim != mesh_dim) return;
+
+    Write<LO> elem_dim(old_mesh.nelems());
+    Write<LO> elem2new(old_mesh.nelems());
+
+    auto old_adj = old_mesh.ask_up(EDGE, mesh_dim);
+    parallel_for(keys2edges.size(), OMEGA_H_LAMBDA(LO key) {
+      LO edge = keys2edges[key];
+      auto elem_begin = old_adj.a2ab[edge];
+      auto elem_end = old_adj.a2ab[edge + 1];
+      for (auto idx = elem_begin; idx < elem_end; ++idx) {
+        auto elem = old_adj.ab2b[idx];
+        elem_dim[elem] = 0;
+        elem2new[elem] = edge; //TODO: this is the old edge but we need the new edge
+      }
+    });
+
+    parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
+      LO oldElem = same_ents2old_ents[i];
+      elem_dim[oldElem] = mesh_dim;
+      elem2new[oldElem] = same_ents2new_ents[i];
+    });
+
+    auto new_adj = new_mesh.ask_up(EDGE, mesh_dim);
+    PS::kkLidView ptclElems_cpy = ptclElems;
+    auto ptclPos = ptcls->get<0>();
+    Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
+      auto oldElem = ptclElems_cpy[ptcl];
+      if (elem_dim[oldElem] == mesh_dim)
+        ptclElems_cpy[ptcl] = elem2new[oldElem];
+      else {
+        auto edge = elem2new[oldElem];
+        auto elem_begin = new_adj.a2ab[edge];
+        auto elem_end = new_adj.a2ab[edge + 1];
+        //TODO: assert idx == 2
+        Vector<2> pos; //TODO: make dim variable
+        for (int i = 0; i<2; i++)
+          pos[i] = ptclPos(ptcl,i);
+
+        if (is_barycentric_inside(pos, new_adj.ab2b[elem_begin]))
+          ptclElems_cpy[ptcl] = new_adj.ab2b[elem_begin];
+        else 
+          ptclElems_cpy[ptcl] = new_adj.ab2b[elem_begin+1];
+      }
+    });
+
+
+    printf("Old %d New %d\n", old_mesh.nelems(), new_mesh.nelems());
+
+  }
+  virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
+      Adj keys2doms, Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents,
+      LOs same_ents2new_ents) {
+    printf("==CoarsenFound==\n");
+    };
+  virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
+      LOs keys2edges, LOs keys2prods, LOs prods2new_ents,
+      LOs same_ents2old_ents, LOs same_ents2new_ents) {
+    printf("==SwapFound==\n");
+    };
+  virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {
+    printf("==SwapCopyVertsFound==\n");
+  };
+};
+}
 
 void resize(PS*& ptcls, int newNElems) {
   int nPtcls = ptcls->nPtcls();
@@ -45,7 +136,7 @@ void resize(PS*& ptcls, int newNElems) {
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
-  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 10, 10, 0, false);
+  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
 
   // Initalize Particles
 
@@ -80,7 +171,7 @@ int main(int argc, char* argv[]) {
       // printf("PID %d, ELM %d, V %d\n", pid, e, v);
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
       printf("%f, %f\n", pos[0], pos[1]);
-      for (int i=0; i<2; i++)
+      for (int i=0; i<2; i++) //TODO: make dim variable
         ptclPos(pid, i) = pos[i];
     }
   };
@@ -89,13 +180,16 @@ int main(int argc, char* argv[]) {
   // Adaptation
 
   Omega_h::vtk::write_vtu("particleCubeBefore.vtu", &mesh);
-  double factors[]{1.8, 1.7, 0.6, 0.3};
-  for (int i=0; i<4; i++) {
+  // double factors[]{1.8, 1.7, 0.6, 0.3};
+  for (int i=0; i<1; i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
-    auto scalar = Omega_h::metric_eigenvalue_from_length(factors[i]);
+    auto scalar = Omega_h::metric_eigenvalue_from_length(0.75);
     metrics = Omega_h::multiply_each_by(metrics, scalar);
     mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
     auto opts = Omega_h::AdaptOpts(&mesh);
+    Omega_h::ParticleAdapt particleAdapt(ptcls);
+    opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt>(particleAdapt);
+
     adapt(&mesh, opts);
     mesh.remove_tag(Omega_h::VERT, "metric");
   }

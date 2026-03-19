@@ -24,7 +24,7 @@ namespace Omega_h {
   struct ParticleAdapt : public UserTransfer {
 
   PS* ptcls;
-  PS::kkLidView ptclElems;
+  PS::kkLidView ptclElems; //TODO: might require reset after adaptation complete
 
   PS::kkLidView getPtcls() {
     PS::kkLidView particleElems("ptcl_elems", ptcls->nPtcls());
@@ -57,7 +57,7 @@ namespace Omega_h {
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = old_adj.ab2b[idx];
         elem_dim[elem] = 0;
-        elem2new[elem] = edge; //TODO: this is the old edge but we need the new edge
+        elem2new[elem] = key; //TODO: this is the old edge but we need the new edge
       }
     });
 
@@ -67,32 +67,34 @@ namespace Omega_h {
       elem2new[oldElem] = same_ents2new_ents[i];
     });
 
-    auto new_adj = new_mesh.ask_up(EDGE, mesh_dim);
     PS::kkLidView ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
+    auto cells2nodes = new_mesh.get_adj(Omega_h::FACE, Omega_h::VERT).ab2b;
+    auto nodes2coords = new_mesh.coords();
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
       auto oldElem = ptclElems_cpy[ptcl];
       if (elem_dim[oldElem] == mesh_dim)
         ptclElems_cpy[ptcl] = elem2new[oldElem];
       else {
-        auto edge = elem2new[oldElem];
-        auto elem_begin = new_adj.a2ab[edge];
-        auto elem_end = new_adj.a2ab[edge + 1];
-        //TODO: assert idx == 2
-        Vector<2> pos; //TODO: make dim variable
+        auto key = elem2new[oldElem];
+
+        Vector<2> pos; //TODO: update to function with 3D meshes
         for (int i = 0; i<2; i++)
           pos[i] = ptclPos(ptcl,i);
 
-        if (is_barycentric_inside(pos, new_adj.ab2b[elem_begin]))
-          ptclElems_cpy[ptcl] = new_adj.ab2b[elem_begin];
-        else 
-          ptclElems_cpy[ptcl] = new_adj.ab2b[elem_begin+1];
+        for (auto prod=keys2prods[key]; prod < keys2prods[key+1]; prod++){//TODO: update to only search two elem
+          auto entity = prods2new_ents[prod];
+          auto elmVerts = Omega_h::gather_verts<3>(cells2nodes, Omega_h::LO(entity));
+          auto vtxCoords = Omega_h::gather_vectors<3,2>(nodes2coords, elmVerts);
+          auto xi = barycentric_from_global<2,2>(pos, vtxCoords);//TODO: update to function with 3D meshes
+          if (is_barycentric_inside(xi, 0.01)){
+            ptclElems_cpy[ptcl] = entity;
+            return;
+          }
+        }
+        printf("[ERROR]: Particle not inside any elem\n"); //TODO: change just set to last element
       }
     });
-
-
-    printf("Old %d New %d\n", old_mesh.nelems(), new_mesh.nelems());
-
   }
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
       Adj keys2doms, Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents,
@@ -166,12 +168,10 @@ int main(int argc, char* argv[]) {
       auto elmVerts = Omega_h::gather_verts<3>(cells2nodes, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<3,2>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
-      // int v = (pid / nElems) % 3; //nearest vertex
-      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]);
-      // printf("PID %d, ELM %d, V %d\n", pid, e, v);
+      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
       printf("%f, %f\n", pos[0], pos[1]);
-      for (int i=0; i<2; i++) //TODO: make dim variable
+      for (int i=0; i<2; i++) //TODO: update to function with 3D meshes
         ptclPos(pid, i) = pos[i];
     }
   };
@@ -180,6 +180,7 @@ int main(int argc, char* argv[]) {
   // Adaptation
 
   Omega_h::vtk::write_vtu("particleCubeBefore.vtu", &mesh);
+  Omega_h::ParticleAdapt particleAdapt(ptcls);
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<1; i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
@@ -187,7 +188,6 @@ int main(int argc, char* argv[]) {
     metrics = Omega_h::multiply_each_by(metrics, scalar);
     mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
     auto opts = Omega_h::AdaptOpts(&mesh);
-    Omega_h::ParticleAdapt particleAdapt(ptcls);
     opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt>(particleAdapt);
 
     adapt(&mesh, opts);
@@ -199,7 +199,6 @@ int main(int argc, char* argv[]) {
 
   pcms::GridPointSearch search{mesh, 50, 50};
   Kokkos::View<pcms::Real* [2]> points("test_points", nPtcls);
-
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       points(pid, 0) = ptclPos(pid, 0);
@@ -207,8 +206,12 @@ int main(int argc, char* argv[]) {
     }
   };
   ps::parallel_for(ptcls, copyPoints);
-
   auto searchResults = search(points);
+
+  Kokkos::parallel_for(nPtcls, KOKKOS_LAMBDA(const int pid) {
+    auto [dim, idx, coords] = searchResults(pid);
+    printf("ptcl %d search %d adapt %d\n", pid, idx, particleAdapt.ptclElems(pid));
+  });
 
   // Move Particle Elements
 

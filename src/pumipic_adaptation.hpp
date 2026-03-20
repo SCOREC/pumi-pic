@@ -34,6 +34,7 @@ namespace Omega_h {
       LO oldElem = same_ents2old_ents[i];
       elem_dim[oldElem] = dim;
       elem2new[oldElem] = same_ents2new_ents[i];
+      printf("RENAME %d TO %d\n", oldElem, same_ents2new_ents[i]);
     });
   }
 
@@ -42,8 +43,8 @@ namespace Omega_h {
       LOs same_ents2old_ents, LOs same_ents2new_ents) { //TODO: test refinment multiple times
     if (prod_dim != dim) return;
 
-    Write<LO> elem_dim(old_mesh.nelems());
-    Write<LO> elem2new(old_mesh.nelems());
+    Write<LO> elem_dim(old_mesh.nelems(), -1);
+    Write<LO> elem2new(old_mesh.nelems(), -1);
 
     getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
@@ -96,11 +97,32 @@ namespace Omega_h {
 
     printf("VERTS %d NEW %d SAME %d\n", keys2verts.size(), prods2new_ents.size(), same_ents2old_ents.size());
 
-    Write<LO> elem_dim(old_mesh.nelems());
-    Write<LO> elem2new(old_mesh.nelems());
+    Write<LO> elem_dim(old_mesh.nelems(), -1);
+    Write<LO> elem2new(old_mesh.nelems(), -1);
 
     getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
+    parallel_for(keys2verts.size(), OMEGA_H_LAMBDA(LO key) {
+      auto elem_begin = keys2doms.a2ab[key];
+      auto elem_end = keys2doms.a2ab[key + 1];
+      for (auto idx = elem_begin; idx < elem_end; ++idx) {
+        auto elem = keys2doms.ab2b[idx];
+        elem_dim[elem] = dim;
+        elem2new[elem] = prods2new_ents[idx];
+      }
+    });
+
+    printf("==ADAPTATION RESULTS==\n");
+    parallel_for(elem2new.size(), OMEGA_H_LAMBDA(LO key) {
+      printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
+    });
+
+    ps::kkLidView ptclElems_cpy = ptclElems;
+    Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
+      auto oldElem = ptclElems_cpy[ptcl];
+      if (elem_dim[oldElem] == dim)
+        ptclElems_cpy[ptcl] = elem2new[oldElem];
+    });
 
     };
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,

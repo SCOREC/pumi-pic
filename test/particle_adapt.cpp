@@ -116,10 +116,14 @@ int main(int argc, char* argv[]) {
   ps::parallel_for(ptcls, copyPoints);
   auto searchResults = search(points);
 
-  Kokkos::parallel_for(nPtcls, KOKKOS_LAMBDA(const int pid) {
-    auto [dim, idx, coords] = searchResults(pid);
-    printf("ptcl %d search %d adapt %d\n", pid, idx, particleAdapt.ptclElems(pid));
-  });
+  printf("==COMPARE RESULTS==\n");
+  auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      auto [dim, idx, coords] = searchResults(pid);
+      printf("ptcl %d old %d search %d adapt %d\n", pid, e, idx, particleAdapt.ptclElems(pid));
+    }
+  };
+  ps::parallel_for(ptcls, printResults);
 
   // Move Particle Elements
 

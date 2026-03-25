@@ -112,7 +112,7 @@ namespace Omega_h {
       }
     });
 
-    printf("==ADAPTATION RESULTS==\n");
+    printf("==COARSEN RESULTS==\n");
     parallel_for(elem2new.size(), OMEGA_H_LAMBDA(LO key) {
       printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
     });

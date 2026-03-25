@@ -79,7 +79,6 @@ int main(int argc, char* argv[]) {
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
-      printf("%f, %f\n", pos[0], pos[1]);
       for (int i=0; i<dim; i++)
         ptclPos(pid, i) = pos[i];
     }
@@ -93,7 +92,7 @@ int main(int argc, char* argv[]) {
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<1; i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
-    auto scalar = Omega_h::metric_eigenvalue_from_length(1.25);
+    auto scalar = Omega_h::metric_eigenvalue_from_length(.75);
     metrics = Omega_h::multiply_each_by(metrics, scalar);
     mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
     auto opts = Omega_h::AdaptOpts(&mesh);
@@ -129,12 +128,15 @@ int main(int argc, char* argv[]) {
 
   resize(ptcls, mesh.nelems());
   PS::kkLidView newElement("new_element", ptcls->capacity());
+  ptclPos = ptcls->get<0>();
   auto ptclID = ptcls->get<1>();
+  printf("\n==Particle Positions==\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
       newElement(pid) = idx;
+      printf("%f, %f, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), idx);
     }
     else
       newElement(pid) = -1;

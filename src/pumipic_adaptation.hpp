@@ -2,6 +2,8 @@
 #define PUMIPIC_ADAPTATION_HPP
 
 #include "pumipic_kktypes.hpp"
+#include "Omega_h_align.hpp"
+#include "Omega_h_scalar.hpp"
 
 using particle_structs::MemberTypes;
 typedef MemberTypes<double[3], int> Type;
@@ -45,6 +47,7 @@ namespace Omega_h {
 
     Write<LO> elem_dim(old_mesh.nelems(), -1);
     Write<LO> elem2new(old_mesh.nelems(), -1);
+    Write<LO> elem2code(old_mesh.nelems(), -1);
 
     getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
@@ -57,16 +60,16 @@ namespace Omega_h {
         auto elem = old_adj.ab2b[idx];
         elem_dim[elem] = idx-elem_begin;
         elem2new[elem] = key;
+        elem2code[elem] = code_rotation(old_adj.codes[idx]);
       }
     });
 
     ps::kkLidView ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
-    auto new_elem2verts = new_mesh.get_adj(dim, VERT).ab2b;
     auto new_verts2coords = new_mesh.coords();
+    auto old_elem2verts = old_mesh.get_adj(dim, VERT).ab2b;
+    auto old_verts2coords = old_mesh.coords();
 
-    // auto old_elem2verts = old_mesh.get_adj(dim, VERT).ab2b;
-    // auto old_verts2coords = old_mesh.coords();
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
       auto oldElem = ptclElems_cpy[ptcl];
       if (elem_dim[oldElem] == -1)
@@ -78,20 +81,16 @@ namespace Omega_h {
         for (int i = 0; i<dim; i++)
           pos[i] = ptclPos(ptcl,i);
 
-        // auto splitPos = get_vector<dim>(new_verts2coords, LO(keys2midverts[key]));
-        // auto oldVerts = gather_verts<dim+1>(old_elem2verts, LO(oldElem));
-        // auto oldCoords = gather_vectors<dim+1,dim>(old_verts2coords, oldVerts);
-        // auto centroid = average(oldCoords);
-        // auto side = cross(centroid - splitPos, pos - splitPos);
-        auto offsetProd = keys2prods[key]+elem_dim[oldElem]*2;
-        auto entity = prods2new_ents[offsetProd];
-        auto elmVerts = gather_verts<dim+1>(new_elem2verts, LO(entity));
-        auto vtxCoords = gather_vectors<dim+1,dim>(new_verts2coords, elmVerts);
-        auto xi = barycentric_from_global<dim,dim>(pos, vtxCoords);
-        if (is_barycentric_inside(xi, .0000001))
-          ptclElems_cpy[ptcl] = entity;
-        else //TODO: assert ptcl in here
-          ptclElems_cpy[ptcl] = prods2new_ents[offsetProd+1];
+        auto splitPos = get_vector<dim>(new_verts2coords, LO(keys2midverts[key]));
+        auto oldVerts = gather_verts<dim+1>(old_elem2verts, LO(oldElem));
+        auto oldCoords = gather_vectors<dim+1,dim>(old_verts2coords, oldVerts);
+        auto centroid = average(oldCoords);
+        auto side = cross(centroid - splitPos, pos - splitPos); //TODO: does this need modification for 3D?
+        int dir = are_close(side, 0) ? 0 : sign(side);
+        const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
+        int rotated = rotateDirCode[dir+1][elem2code[oldElem]];
+        auto prod = keys2prods[key] + elem_dim[oldElem]*2 + rotated;
+        ptclElems_cpy[ptcl] = prods2new_ents[prod];
       }
     });
   }

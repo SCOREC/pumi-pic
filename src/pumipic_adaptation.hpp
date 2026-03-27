@@ -32,7 +32,7 @@ namespace Omega_h {
   void getUpdatedEntities(Write<LO>& elem_dim, Write<LO>& elem2new, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
-      elem_dim[oldElem] = dim;
+      elem_dim[oldElem] = -1;
       elem2new[oldElem] = same_ents2new_ents[i];
       printf("RENAME %d TO %d\n", oldElem, same_ents2new_ents[i]);
     });
@@ -55,18 +55,21 @@ namespace Omega_h {
       auto elem_end = old_adj.a2ab[edge + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = old_adj.ab2b[idx];
-        elem_dim[elem] = 0;
+        elem_dim[elem] = idx-elem_begin;
         elem2new[elem] = key;
       }
     });
 
     ps::kkLidView ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
-    auto cells2nodes = new_mesh.get_adj(dim, Omega_h::VERT).ab2b;
-    auto nodes2coords = new_mesh.coords();
+    auto new_elem2verts = new_mesh.get_adj(dim, VERT).ab2b;
+    auto new_verts2coords = new_mesh.coords();
+
+    // auto old_elem2verts = old_mesh.get_adj(dim, VERT).ab2b;
+    // auto old_verts2coords = old_mesh.coords();
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
       auto oldElem = ptclElems_cpy[ptcl];
-      if (elem_dim[oldElem] == dim)
+      if (elem_dim[oldElem] == -1)
         ptclElems_cpy[ptcl] = elem2new[oldElem];
       else {
         auto key = elem2new[oldElem];
@@ -75,17 +78,20 @@ namespace Omega_h {
         for (int i = 0; i<dim; i++)
           pos[i] = ptclPos(ptcl,i);
 
-        for (auto prod=keys2prods[key]; prod < keys2prods[key+1]; prod++){//TODO: update to only search two elem
-          auto entity = prods2new_ents[prod];
-          auto elmVerts = Omega_h::gather_verts<dim+1>(cells2nodes, Omega_h::LO(entity));
-          auto vtxCoords = Omega_h::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
-          auto xi = barycentric_from_global<dim,dim>(pos, vtxCoords);
-          if (is_barycentric_inside(xi, .0000001)){
-            ptclElems_cpy[ptcl] = entity;
-            return;
-          }
-        }
-        printf("[ERROR]: Particle not inside any elem\n"); //TODO: change just set to last element
+        // auto splitPos = get_vector<dim>(new_verts2coords, LO(keys2midverts[key]));
+        // auto oldVerts = gather_verts<dim+1>(old_elem2verts, LO(oldElem));
+        // auto oldCoords = gather_vectors<dim+1,dim>(old_verts2coords, oldVerts);
+        // auto centroid = average(oldCoords);
+        // auto side = cross(centroid - splitPos, pos - splitPos);
+        auto offsetProd = keys2prods[key]+elem_dim[oldElem]*2;
+        auto entity = prods2new_ents[offsetProd];
+        auto elmVerts = gather_verts<dim+1>(new_elem2verts, LO(entity));
+        auto vtxCoords = gather_vectors<dim+1,dim>(new_verts2coords, elmVerts);
+        auto xi = barycentric_from_global<dim,dim>(pos, vtxCoords);
+        if (is_barycentric_inside(xi, .0000001))
+          ptclElems_cpy[ptcl] = entity;
+        else //TODO: assert ptcl in here
+          ptclElems_cpy[ptcl] = prods2new_ents[offsetProd+1];
       }
     });
   }

@@ -11,7 +11,7 @@ typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
-  template<int dim>
+  template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
 
   PS* ptcls;
@@ -43,7 +43,7 @@ namespace Omega_h {
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) { //TODO: test refinment multiple times
-    if (prod_dim != dim) return;
+    if (prod_dim != mesh_dim) return;
 
     Write<LO> elem_dim(old_mesh.nelems(), -1);
     Write<LO> elem2new(old_mesh.nelems(), -1);
@@ -51,7 +51,7 @@ namespace Omega_h {
 
     getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
-    auto old_adj = old_mesh.ask_up(EDGE, dim);
+    auto old_adj = old_mesh.ask_up(EDGE, mesh_dim);
     parallel_for(keys2edges.size(), OMEGA_H_LAMBDA(LO key) {
       LO edge = keys2edges[key];
       auto elem_begin = old_adj.a2ab[edge];
@@ -67,7 +67,7 @@ namespace Omega_h {
     ps::kkLidView ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
     auto new_verts2coords = new_mesh.coords();
-    auto old_elem2verts = old_mesh.get_adj(dim, VERT).ab2b;
+    auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto old_verts2coords = old_mesh.coords();
 
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
@@ -77,13 +77,13 @@ namespace Omega_h {
       else {
         auto key = elem2new[oldElem];
 
-        Vector<dim> pos;
-        for (int i = 0; i<dim; i++)
+        Vector<mesh_dim> pos;
+        for (int i = 0; i<mesh_dim; i++)
           pos[i] = ptclPos(ptcl,i);
 
-        auto splitPos = get_vector<dim>(new_verts2coords, LO(keys2midverts[key]));
-        auto oldVerts = gather_verts<dim+1>(old_elem2verts, LO(oldElem));
-        auto oldCoords = gather_vectors<dim+1,dim>(old_verts2coords, oldVerts);
+        auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
+        auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
+        auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto centroid = average(oldCoords);
         auto side = cross(centroid - splitPos, pos - splitPos); //TODO: does this need modification for 3D?
         int dir = are_close(side, 0) ? 0 : sign(side);
@@ -97,7 +97,7 @@ namespace Omega_h {
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
       Adj keys2doms, Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents,
       LOs same_ents2new_ents) {
-    if (prod_dim != dim) return;
+    if (prod_dim != mesh_dim) return;
     printf("==CoarsenFound==\n");
 
     printf("VERTS %d NEW %d SAME %d\n", keys2verts.size(), prods2new_ents.size(), same_ents2old_ents.size());
@@ -112,7 +112,7 @@ namespace Omega_h {
       auto elem_end = keys2doms.a2ab[key + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = keys2doms.ab2b[idx];
-        elem_dim[elem] = dim;
+        elem_dim[elem] = mesh_dim;
         elem2new[elem] = prods2new_ents[idx];
       }
     });
@@ -125,7 +125,7 @@ namespace Omega_h {
     ps::kkLidView ptclElems_cpy = ptclElems;
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
       auto oldElem = ptclElems_cpy[ptcl];
-      if (elem_dim[oldElem] == dim)
+      if (elem_dim[oldElem] == mesh_dim)
         ptclElems_cpy[ptcl] = elem2new[oldElem];
     });
 

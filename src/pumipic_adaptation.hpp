@@ -14,13 +14,23 @@ namespace Omega_h {
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
 
-  PS* ptcls;
-  ps::kkLidView ptclElems; //TODO: might require reset after adaptation complete
+  struct PtclInfo {
+    int elem;
+    int dim;
 
-  ps::kkLidView getPtcls() {
-    ps::kkLidView particleElems("ptcl_elems", ptcls->nPtcls());
+    KOKKOS_INLINE_FUNCTION
+    PtclInfo() : elem(-1), dim(-1) {}
+    KOKKOS_INLINE_FUNCTION
+    PtclInfo(int e, int d) : elem(e), dim(d) {}
+  };
+
+  PS* ptcls;
+  Kokkos::View<PtclInfo*> ptclElems; //TODO: might require reset after adaptation complete
+
+  Kokkos::View<PtclInfo*> getPtcls() {
+    Kokkos::View<PtclInfo*> particleElems("ptcl_info", ptcls->nPtcls());
     auto copyPtclsPerElem = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if(mask > 0) particleElems(pid) = e;
+      if(mask > 0) particleElems(pid) = PtclInfo(e, mesh_dim);
     };
     ps::parallel_for(ptcls, copyPtclsPerElem);
     return particleElems;
@@ -64,16 +74,16 @@ namespace Omega_h {
       }
     });
 
-    ps::kkLidView ptclElems_cpy = ptclElems;
+    Kokkos::View<PtclInfo*> ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
     auto new_verts2coords = new_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto old_verts2coords = old_mesh.coords();
 
     Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
-      auto oldElem = ptclElems_cpy[ptcl];
+      auto oldElem = ptclElems_cpy[ptcl].elem;
       if (elem_dim[oldElem] == -1)
-        ptclElems_cpy[ptcl] = elem2new[oldElem];
+        ptclElems_cpy[ptcl].elem = elem2new[oldElem];
       else {
         auto key = elem2new[oldElem];
 
@@ -90,7 +100,7 @@ namespace Omega_h {
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
         int rotated = rotateDirCode[dir+1][elem2code[oldElem]];
         auto prod = keys2prods[key] + elem_dim[oldElem]*2 + rotated;
-        ptclElems_cpy[ptcl] = prods2new_ents[prod];
+        ptclElems_cpy[ptcl].elem = prods2new_ents[prod];
       }
     });
   }
@@ -122,12 +132,12 @@ namespace Omega_h {
       printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
     });
 
-    ps::kkLidView ptclElems_cpy = ptclElems;
-    Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
-      auto oldElem = ptclElems_cpy[ptcl];
-      if (elem_dim[oldElem] == mesh_dim)
-        ptclElems_cpy[ptcl] = elem2new[oldElem];
-    });
+    // Kokkos::View<PtclInfo*> ptclElems_cpy = ptclElems;
+    // Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
+      // auto oldElem = ptclElems_cpy[ptcl];
+      // if (elem_dim[oldElem] == mesh_dim)
+      //   ptclElems_cpy[ptcl] = elem2new[oldElem];
+    // });
 
     };
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,

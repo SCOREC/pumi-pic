@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
-      printf("ptcl %d old %d search %d adapt %d\n", pid, e, idx, particleAdapt.ptclElems(pid));
+      printf("ptcl %d old %d search %d adapt %d\n", pid, e, idx, particleAdapt.ptclElems(pid).elem);
     }
   };
   ps::parallel_for(ptcls, printResults);

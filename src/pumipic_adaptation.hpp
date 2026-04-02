@@ -19,6 +19,12 @@ namespace Omega_h {
     int dim;
   };
 
+  struct UpdatedElem {
+    LO dim;
+    LO elem;
+    LO code;
+  };
+
   PS* ptcls;
   Kokkos::View<PtclInfo*> ptclElems; //TODO: might require reset after adaptation complete
   Adj old_vtx2Elem;
@@ -67,11 +73,11 @@ namespace Omega_h {
     }
   }
 
-  void getUpdatedEntities(Write<LO>& elem_dim, Write<LO>& elem2new, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+  void getUpdatedEntities(Kokkos::View<UpdatedElem*> updated, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
-      elem_dim[oldElem] = -1;
-      elem2new[oldElem] = same_ents2new_ents[i];
+      updated[oldElem].dim = -1;
+      updated[oldElem].elem = same_ents2new_ents[i];
       printf("RENAME %d TO %d\n", oldElem, same_ents2new_ents[i]);
     });
   }
@@ -82,11 +88,9 @@ namespace Omega_h {
     if (prod_dim != mesh_dim) return;
     updateAdjacency(old_mesh);
 
-    Write<LO> elem_dim(old_mesh.nelems(), -1);
-    Write<LO> elem2new(old_mesh.nelems(), -1);
-    Write<LO> elem2code(old_mesh.nelems(), -1);
+    Kokkos::View<UpdatedElem*> updated("updated_elems", old_mesh.nelems());
 
-    getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
+    getUpdatedEntities(updated, same_ents2old_ents, same_ents2new_ents);
 
     parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
       LO edge = keys2edges[key];
@@ -94,9 +98,9 @@ namespace Omega_h {
       auto elem_end = old_edge2Elem.a2ab[edge + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = old_edge2Elem.ab2b[idx];
-        elem_dim[elem] = idx-elem_begin;
-        elem2new[elem] = key;
-        elem2code[elem] = code_rotation(old_edge2Elem.codes[idx]);
+        updated[elem].dim = idx-elem_begin;
+        updated[elem].elem = key;
+        updated[elem].code = code_rotation(old_edge2Elem.codes[idx]);
       }
     });
 
@@ -107,10 +111,10 @@ namespace Omega_h {
 
     Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
       auto oldElem = getParentElement(ptcl);
-      if (elem_dim[oldElem] == -1)
-        ptclElems[ptcl].elem = elem2new[oldElem];
+      if (updated[oldElem].dim == -1)
+        ptclElems[ptcl].elem = updated[oldElem].elem;
       else {
-        auto key = elem2new[oldElem];
+        auto key = updated[oldElem].elem;
 
         Vector<mesh_dim> pos;
         for (int i = 0; i<mesh_dim; i++)
@@ -123,8 +127,8 @@ namespace Omega_h {
         auto side = cross(centroid - splitPos, pos - splitPos); //TODO: does this need modification for 3D?
         int dir = are_close(side, 0) ? 0 : sign(side);
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
-        int rotated = rotateDirCode[dir+1][elem2code[oldElem]];
-        auto prod = keys2prods[key] + elem_dim[oldElem]*2 + rotated;
+        int rotated = rotateDirCode[dir+1][updated[oldElem].code];
+        auto prod = keys2prods[key] + updated[oldElem].dim*2 + rotated;
         ptclElems[ptcl].elem = prods2new_ents[prod];
       }
     });
@@ -135,27 +139,27 @@ namespace Omega_h {
     if (prod_dim != mesh_dim) return;
     printf("==CoarsenFound==\n");
 
-    printf("VERTS %d NEW %d SAME %d\n", keys2verts.size(), prods2new_ents.size(), same_ents2old_ents.size());
+    // printf("VERTS %d NEW %d SAME %d\n", keys2verts.size(), prods2new_ents.size(), same_ents2old_ents.size());
 
-    Write<LO> elem_dim(old_mesh.nelems(), -1);
-    Write<LO> elem2new(old_mesh.nelems(), -1);
+    // Write<LO> elem_dim(old_mesh.nelems(), -1);
+    // Write<LO> elem2new(old_mesh.nelems(), -1);
 
-    getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
+    // getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
-    parallel_for(keys2verts.size(), OMEGA_H_LAMBDA(LO key) {
-      auto elem_begin = keys2doms.a2ab[key];
-      auto elem_end = keys2doms.a2ab[key + 1];
-      for (auto idx = elem_begin; idx < elem_end; ++idx) {
-        auto elem = keys2doms.ab2b[idx];
-        elem_dim[elem] = mesh_dim;
-        elem2new[elem] = prods2new_ents[idx];
-      }
-    });
+    // parallel_for(keys2verts.size(), OMEGA_H_LAMBDA(LO key) {
+    //   auto elem_begin = keys2doms.a2ab[key];
+    //   auto elem_end = keys2doms.a2ab[key + 1];
+    //   for (auto idx = elem_begin; idx < elem_end; ++idx) {
+    //     auto elem = keys2doms.ab2b[idx];
+    //     elem_dim[elem] = mesh_dim;
+    //     elem2new[elem] = prods2new_ents[idx];
+    //   }
+    // });
 
-    printf("==COARSEN RESULTS==\n");
-    parallel_for(elem2new.size(), OMEGA_H_LAMBDA(LO key) {
-      printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
-    });
+    // printf("==COARSEN RESULTS==\n");
+    // parallel_for(elem2new.size(), OMEGA_H_LAMBDA(LO key) {
+    //   printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
+    // });
 
     // Kokkos::View<PtclInfo*> ptclElems_cpy = ptclElems;
     // Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {

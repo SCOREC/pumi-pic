@@ -19,10 +19,10 @@ namespace Omega_h {
     int dim;
   };
 
-  struct UpdatedElem {
-    LO dim;
-    LO elem;
-    LO code;
+  struct ModifiedElem {
+    LO offset=-1;
+    LO key=-1;
+    LO rotation=-1;
   };
 
   PS* ptcls;
@@ -96,17 +96,18 @@ namespace Omega_h {
     if (prod_dim != mesh_dim) return;
     updateAdjacency(old_mesh);
 
-    Kokkos::View<UpdatedElem*> updated("updated_elems", old_mesh.nelems());
+    Kokkos::View<ModifiedElem*> modified("updated_elems", old_mesh.nelems());
 
+    //Gather modified elements
     parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
       LO edge = keys2edges[key];
       auto elem_begin = old_edge2Elem.a2ab[edge];
       auto elem_end = old_edge2Elem.a2ab[edge + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = old_edge2Elem.ab2b[idx];
-        updated[elem].dim = idx-elem_begin;
-        updated[elem].elem = key;
-        updated[elem].code = code_rotation(old_edge2Elem.codes[idx]);
+        modified[elem].key = key;
+        modified[elem].offset = idx-elem_begin;
+        modified[elem].rotation = code_rotation(old_edge2Elem.codes[idx]);
       }
     });
 
@@ -117,8 +118,8 @@ namespace Omega_h {
 
     Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
       auto oldElem = getParentElement(ptcl);
-      if (updated[oldElem].dim != -1) {
-        auto key = updated[oldElem].elem;
+      if (modified[oldElem].offset != -1) {
+        auto key = modified[oldElem].key;
 
         Vector<mesh_dim> pos;
         for (int i = 0; i<mesh_dim; i++)
@@ -131,8 +132,8 @@ namespace Omega_h {
         int side = baryCoords[0] > baryCoords[2] ? 0 : 2;
         if (are_close(baryCoords[0], baryCoords[2])) side = 1;
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
-        int rotated = rotateDirCode[side][updated[oldElem].code];
-        auto prod = keys2prods[key] + updated[oldElem].dim*2 + rotated;
+        int rotated = rotateDirCode[side][modified[oldElem].rotation];
+        auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
         ptclElems[ptcl].elem = prods2new_ents[prod];
       }
     });

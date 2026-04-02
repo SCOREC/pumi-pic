@@ -17,11 +17,6 @@ namespace Omega_h {
   struct PtclInfo {
     int elem;
     int dim;
-
-    KOKKOS_INLINE_FUNCTION
-    PtclInfo() : elem(-1), dim(-1) {}
-    KOKKOS_INLINE_FUNCTION
-    PtclInfo(int e, int d) : elem(e), dim(d) {}
   };
 
   PS* ptcls;
@@ -30,18 +25,17 @@ namespace Omega_h {
   Adj old_edge2Elem;
   Adj old_face2Elem;
 
-  Kokkos::View<PtclInfo*> getPtcls() {
-    Kokkos::View<PtclInfo*> particleElems("ptcl_info", ptcls->nPtcls());
-    auto copyPtclsPerElem = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if(mask > 0) particleElems(pid) = PtclInfo(e, mesh_dim);
-    };
-    ps::parallel_for(ptcls, copyPtclsPerElem);
-    return particleElems;
+  ParticleAdapt(PS* particles) {
+    init(particles);
   }
 
-  ParticleAdapt(PS* particles) {
+  void init(PS* particles) {
     ptcls = particles;
-    ptclElems = getPtcls();
+    ptclElems = Kokkos::View<PtclInfo*>("ptcl_info", ptcls->nPtcls());
+    auto copyPtclsPerElem = KOKKOS_CLASS_LAMBDA(const int& e, const int& pid, const int& mask) {
+      if(mask > 0) ptclElems(pid) = PtclInfo(e, mesh_dim);
+    };
+    ps::parallel_for(ptcls, copyPtclsPerElem);
   }
 
   void updateAdjacency(Mesh& old_mesh) {
@@ -94,16 +88,15 @@ namespace Omega_h {
 
     getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
 
-    auto old_adj = old_mesh.ask_up(EDGE, mesh_dim);
-    parallel_for(keys2edges.size(), OMEGA_H_LAMBDA(LO key) {
+    parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
       LO edge = keys2edges[key];
-      auto elem_begin = old_adj.a2ab[edge];
-      auto elem_end = old_adj.a2ab[edge + 1];
+      auto elem_begin = old_edge2Elem.a2ab[edge];
+      auto elem_end = old_edge2Elem.a2ab[edge + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
-        auto elem = old_adj.ab2b[idx];
+        auto elem = old_edge2Elem.ab2b[idx];
         elem_dim[elem] = idx-elem_begin;
         elem2new[elem] = key;
-        elem2code[elem] = code_rotation(old_adj.codes[idx]);
+        elem2code[elem] = code_rotation(old_edge2Elem.codes[idx]);
       }
     });
 

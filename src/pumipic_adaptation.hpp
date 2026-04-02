@@ -73,6 +73,7 @@ namespace Omega_h {
     }
   }
 
+  //TODO: just update entities right away update for all dimensions
   void getUpdatedEntities(Kokkos::View<UpdatedElem*> updated, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
@@ -123,11 +124,11 @@ namespace Omega_h {
         auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
-        auto centroid = average(oldCoords);
-        auto side = cross(centroid - splitPos, pos - splitPos); //TODO: does this need modification for 3D?
-        int dir = are_close(side, 0) ? 0 : sign(side);
+        auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
+        int side = baryCoords[0] > baryCoords[2] ? 0 : 2;
+        if (are_close(baryCoords[0], baryCoords[2])) side = 1;
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
-        int rotated = rotateDirCode[dir+1][updated[oldElem].code];
+        int rotated = rotateDirCode[side][updated[oldElem].code];
         auto prod = keys2prods[key] + updated[oldElem].dim*2 + rotated;
         ptclElems[ptcl].elem = prods2new_ents[prod];
       }

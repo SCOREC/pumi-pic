@@ -73,25 +73,30 @@ namespace Omega_h {
     }
   }
 
-  //TODO: just update entities right away update for all dimensions
-  void getUpdatedEntities(Kokkos::View<UpdatedElem*> updated, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+  void updateEntities(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+    Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
-      updated[oldElem].dim = -1;
-      updated[oldElem].elem = same_ents2new_ents[i];
-      printf("RENAME %d TO %d\n", oldElem, same_ents2new_ents[i]);
+      old2New[oldElem] = same_ents2new_ents[i];
+    });
+
+    Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int id) {
+      auto oldPtcl = ptclElems(id);
+      if (oldPtcl.dim == dim && old2New[oldPtcl.elem] != -1)
+        ptclElems[id].elem = old2New[oldPtcl.elem];
     });
   }
 
+  //TODO: test refinment multiple times
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
-      LOs same_ents2old_ents, LOs same_ents2new_ents) { //TODO: test refinment multiple times
+      LOs same_ents2old_ents, LOs same_ents2new_ents) {
+    
+    updateEntities(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     if (prod_dim != mesh_dim) return;
     updateAdjacency(old_mesh);
 
     Kokkos::View<UpdatedElem*> updated("updated_elems", old_mesh.nelems());
-
-    getUpdatedEntities(updated, same_ents2old_ents, same_ents2new_ents);
 
     parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
       LO edge = keys2edges[key];
@@ -112,9 +117,7 @@ namespace Omega_h {
 
     Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
       auto oldElem = getParentElement(ptcl);
-      if (updated[oldElem].dim == -1)
-        ptclElems[ptcl].elem = updated[oldElem].elem;
-      else {
+      if (updated[oldElem].dim != -1) {
         auto key = updated[oldElem].elem;
 
         Vector<mesh_dim> pos;

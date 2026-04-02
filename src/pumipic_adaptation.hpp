@@ -96,7 +96,7 @@ namespace Omega_h {
     if (prod_dim != mesh_dim) return;
     updateAdjacency(old_mesh);
 
-    Kokkos::View<ModifiedElem*> modified("updated_elems", old_mesh.nelems());
+    Kokkos::View<ModifiedElem*> modified("modified_elems", old_mesh.nelems());
 
     //Gather modified elements
     parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
@@ -116,6 +116,7 @@ namespace Omega_h {
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto old_verts2coords = old_mesh.coords();
 
+    //Update modified elements
     Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
       auto oldElem = getParentElement(ptcl);
       if (modified[oldElem].offset != -1) {
@@ -134,7 +135,7 @@ namespace Omega_h {
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
         int rotated = rotateDirCode[side][modified[oldElem].rotation];
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
-        ptclElems[ptcl].elem = prods2new_ents[prod];
+        ptclElems[ptcl] = PtclInfo(prods2new_ents[prod], mesh_dim);
       }
     });
   }

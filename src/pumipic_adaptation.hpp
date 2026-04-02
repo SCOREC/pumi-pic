@@ -26,6 +26,9 @@ namespace Omega_h {
 
   PS* ptcls;
   Kokkos::View<PtclInfo*> ptclElems; //TODO: might require reset after adaptation complete
+  Adj old_vtx2Elem;
+  Adj old_edge2Elem;
+  Adj old_face2Elem;
 
   Kokkos::View<PtclInfo*> getPtcls() {
     Kokkos::View<PtclInfo*> particleElems("ptcl_info", ptcls->nPtcls());
@@ -41,6 +44,35 @@ namespace Omega_h {
     ptclElems = getPtcls();
   }
 
+  void updateAdjacency(Mesh& old_mesh) {
+    old_vtx2Elem = old_mesh.ask_up(VERT, mesh_dim);
+    old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
+    old_face2Elem = old_mesh.ask_up(FACE, mesh_dim);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  LO getParentElement(LO ptclID) const {
+    auto ptcl = ptclElems(ptclID);
+    if (ptcl.dim == mesh_dim)
+      return ptcl.elem;
+    else if (ptcl.dim == 0) {
+      auto firstElem = old_vtx2Elem.a2ab[ptcl.elem];
+      return old_vtx2Elem.ab2b[firstElem];
+    }
+    else if (ptcl.dim == 1) {
+      auto firstElem = old_edge2Elem.a2ab[ptcl.elem];
+      return old_edge2Elem.ab2b[firstElem];
+    }
+    else if (ptcl.dim == 2) {
+      auto firstElem = old_face2Elem.a2ab[ptcl.elem];
+      return old_face2Elem.ab2b[firstElem];
+    }
+    else {
+      printf("ERROR: PARTICLE ELEM NOT FOUND\n");
+      return 0;
+    }
+  }
+
   void getUpdatedEntities(Write<LO>& elem_dim, Write<LO>& elem2new, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
@@ -54,6 +86,7 @@ namespace Omega_h {
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) { //TODO: test refinment multiple times
     if (prod_dim != mesh_dim) return;
+    updateAdjacency(old_mesh);
 
     Write<LO> elem_dim(old_mesh.nelems(), -1);
     Write<LO> elem2new(old_mesh.nelems(), -1);
@@ -74,16 +107,15 @@ namespace Omega_h {
       }
     });
 
-    Kokkos::View<PtclInfo*> ptclElems_cpy = ptclElems;
     auto ptclPos = ptcls->get<0>();
     auto new_verts2coords = new_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto old_verts2coords = old_mesh.coords();
 
-    Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
-      auto oldElem = ptclElems_cpy[ptcl].elem;
+    Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
+      auto oldElem = getParentElement(ptcl);
       if (elem_dim[oldElem] == -1)
-        ptclElems_cpy[ptcl].elem = elem2new[oldElem];
+        ptclElems[ptcl].elem = elem2new[oldElem];
       else {
         auto key = elem2new[oldElem];
 
@@ -100,7 +132,7 @@ namespace Omega_h {
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
         int rotated = rotateDirCode[dir+1][elem2code[oldElem]];
         auto prod = keys2prods[key] + elem_dim[oldElem]*2 + rotated;
-        ptclElems_cpy[ptcl].elem = prods2new_ents[prod];
+        ptclElems[ptcl].elem = prods2new_ents[prod];
       }
     });
   }

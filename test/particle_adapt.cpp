@@ -9,16 +9,11 @@
 #include <Omega_h_for.hpp>
 #include "team_policy.hpp"
 #include <pcms/point_search.h>
-#include <MemberTypeLibraries.h>
 #include "pumipic_adaptation.hpp"
 
 using particle_structs::SellCSigma;
-using particle_structs::MemberTypes;
 
-typedef MemberTypes<double[3], int> Type;
-typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef SellCSigma<Type,ExeSpace> SCS;
-typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 void resize(PS*& ptcls, int newNElems) {
   int nPtcls = ptcls->nPtcls();

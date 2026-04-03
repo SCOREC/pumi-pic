@@ -116,10 +116,12 @@ int main(int argc, char* argv[]) {
   auto searchResults = search(points);
 
   printf("==COMPARE RESULTS==\n");
+  particleAdapt.updateAdjacency(mesh);
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
-      printf("ptcl %d old %d search %d adapt %d\n", pid, e, idx, particleAdapt.ptclElems(pid).elem);
+      auto ptcl = particleAdapt.ptclElems(pid);
+      printf("ptcl %-2d old %d search %-2d parent %-2d elem %-2d dim %d\n", pid, e, idx, particleAdapt.getParentElement(pid), ptcl.elem, ptcl.dim);
     }
   };
   ps::parallel_for(ptcls, printResults);

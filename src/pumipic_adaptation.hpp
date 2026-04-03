@@ -4,6 +4,7 @@
 #include "pumipic_kktypes.hpp"
 #include "Omega_h_align.hpp"
 #include "Omega_h_scalar.hpp"
+#include "Omega_h_element.hpp"
 
 using particle_structs::MemberTypes;
 typedef MemberTypes<double[3], int> Type;
@@ -113,8 +114,10 @@ namespace Omega_h {
 
     auto ptclPos = ptcls->get<0>();
     auto new_verts2coords = new_mesh.coords();
-    auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto old_verts2coords = old_mesh.coords();
+    auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
+    auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE).ab2b;
+    auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
     Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
@@ -126,7 +129,7 @@ namespace Omega_h {
         for (int i = 0; i<mesh_dim; i++)
           pos[i] = ptclPos(ptcl,i);
 
-        auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
+        // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
@@ -136,6 +139,11 @@ namespace Omega_h {
         int rotated = rotateDirCode[side][modified[oldElem].rotation];
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
         ptclElems[ptcl] = PtclInfo(prods2new_ents[prod], mesh_dim);
+        if (side == 1) {
+          auto edgeIdx = ptclElems[ptcl].elem*nEdges + 1;
+          auto edge = new_elem2edge[edgeIdx];
+          ptclElems[ptcl] = PtclInfo(edge, 1);
+        }
       }
     });
   }

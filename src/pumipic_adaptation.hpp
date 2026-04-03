@@ -116,7 +116,7 @@ namespace Omega_h {
     auto new_verts2coords = new_mesh.coords();
     auto old_verts2coords = old_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
-    auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE).ab2b;
+    auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE);
     auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
@@ -140,8 +140,8 @@ namespace Omega_h {
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
         ptclElems[ptcl] = PtclInfo(prods2new_ents[prod], mesh_dim);
         if (side == 1) {
-          auto edgeIdx = ptclElems[ptcl].elem*nEdges + 1;
-          auto edge = new_elem2edge[edgeIdx];
+          auto edgeIdx = ptclElems[ptcl].elem*nEdges + modified[oldElem].rotation + side;
+          auto edge = new_elem2edge.ab2b[edgeIdx];
           ptclElems[ptcl] = PtclInfo(edge, 1);
         }
       }

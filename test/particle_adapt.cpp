@@ -102,6 +102,7 @@ int main(int argc, char* argv[]) {
     mesh.remove_tag(Omega_h::VERT, "metric");
   }
   Omega_h::vtk::write_vtu("particleCubeAfter.vtu", &mesh);
+  Omega_h::vtk::write_vtu("particleCubeAfterEdges.vtu", &mesh, 1);
 
   // Paricle Search
 
@@ -132,13 +133,14 @@ int main(int argc, char* argv[]) {
   PS::kkLidView newElement("new_element", ptcls->capacity());
   ptclPos = ptcls->get<0>();
   auto ptclID = ptcls->get<1>();
-  printf("\n==Particle Positions==\n");
+  printf("\n==Particle Positions==\nx, y, elem, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
       newElement(pid) = idx;
-      printf("%f, %f, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), idx);
+      auto ptcl = particleAdapt.ptclElems(pid);
+      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptcl.elem, ptcl.dim);
     }
     else
       newElement(pid) = -1;

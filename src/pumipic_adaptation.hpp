@@ -8,18 +8,14 @@
 #include <MemberTypeLibraries.h>
 
 using particle_structs::MemberTypes;
-typedef MemberTypes<double[3], int> Type;
+//position, elem, dim
+typedef MemberTypes<double[3], int, int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
-
-  struct PtclInfo {
-    int elem;
-    int dim;
-  };
 
   struct ModifiedElem {
     LO offset=-1;
@@ -28,22 +24,12 @@ namespace Omega_h {
   };
 
   PS* ptcls;
-  Kokkos::View<PtclInfo*> ptclElems; //TODO: might require reset after adaptation complete
   Adj old_vtx2Elem;
   Adj old_edge2Elem;
   Adj old_face2Elem;
 
   ParticleAdapt(PS* particles) {
-    init(particles);
-  }
-
-  void init(PS* particles) {
     ptcls = particles;
-    ptclElems = Kokkos::View<PtclInfo*>("ptcl_info", ptcls->nPtcls());
-    auto copyPtclsPerElem = KOKKOS_CLASS_LAMBDA(const int& e, const int& pid, const int& mask) {
-      if(mask > 0) ptclElems(pid) = PtclInfo(e, mesh_dim);
-    };
-    ps::parallel_for(ptcls, copyPtclsPerElem);
   }
 
   void updateAdjacency(Mesh& old_mesh) {
@@ -53,20 +39,19 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  LO getParentElement(LO ptclID) const {
-    auto ptcl = ptclElems(ptclID);
-    if (ptcl.dim == mesh_dim)
-      return ptcl.elem;
-    else if (ptcl.dim == 0) {
-      auto firstElem = old_vtx2Elem.a2ab[ptcl.elem];
+  LO getParentElement(int elem, int dim) const {
+    if (dim == mesh_dim)
+      return elem;
+    else if (dim == 0) {
+      auto firstElem = old_vtx2Elem.a2ab[elem];
       return old_vtx2Elem.ab2b[firstElem];
     }
-    else if (ptcl.dim == 1) {
-      auto firstElem = old_edge2Elem.a2ab[ptcl.elem];
+    else if (dim == 1) {
+      auto firstElem = old_edge2Elem.a2ab[elem];
       return old_edge2Elem.ab2b[firstElem];
     }
-    else if (ptcl.dim == 2) {
-      auto firstElem = old_face2Elem.a2ab[ptcl.elem];
+    else if (dim == 2) {
+      auto firstElem = old_face2Elem.a2ab[elem];
       return old_face2Elem.ab2b[firstElem];
     }
     else {
@@ -82,10 +67,11 @@ namespace Omega_h {
       old2New[oldElem] = same_ents2new_ents[i];
     });
 
-    Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int id) {
-      auto oldPtcl = ptclElems(id);
-      if (oldPtcl.dim == dim && old2New[oldPtcl.elem] != -1)
-        ptclElems[id].elem = old2New[oldPtcl.elem];
+    auto ptclElem = ptcls->get<1>();
+    auto ptclDim = ptcls->get<2>();
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      if (ptclDim(pid) == dim && old2New[ptclElem(pid)] != -1)
+        ptclElem(pid) = old2New[ptclElem(pid)];
     });
   }
 
@@ -114,6 +100,8 @@ namespace Omega_h {
     });
 
     auto ptclPos = ptcls->get<0>();
+    auto ptclElem = ptcls->get<1>();
+    auto ptclDim = ptcls->get<2>();
     auto new_verts2coords = new_mesh.coords();
     auto old_verts2coords = old_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
@@ -121,14 +109,14 @@ namespace Omega_h {
     auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
-    Kokkos::parallel_for(ptclElems.size(), KOKKOS_CLASS_LAMBDA(const int ptcl) {
-      auto oldElem = getParentElement(ptcl);
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      auto oldElem = getParentElement(ptclElem(pid), ptclDim(pid));
       if (modified[oldElem].offset != -1) {
         auto key = modified[oldElem].key;
 
         Vector<mesh_dim> pos;
         for (int i = 0; i<mesh_dim; i++)
-          pos[i] = ptclPos(ptcl,i);
+          pos[i] = ptclPos(pid,i);
 
         // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
@@ -139,11 +127,12 @@ namespace Omega_h {
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
         int rotated = rotateDirCode[side][modified[oldElem].rotation];
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
-        ptclElems[ptcl] = PtclInfo(prods2new_ents[prod], mesh_dim);
+        ptclElem(pid) = prods2new_ents[prod];
+        ptclDim(pid) = mesh_dim;
         if (side == 1) {
-          auto edgeIdx = ptclElems[ptcl].elem*nEdges + modified[oldElem].rotation + side;
-          auto edge = new_elem2edge.ab2b[edgeIdx];
-          ptclElems[ptcl] = PtclInfo(edge, 1);
+          auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
+          ptclElem(pid) = new_elem2edge.ab2b[edgeIdx];
+          ptclDim(pid) = 1;
         }
       }
     });

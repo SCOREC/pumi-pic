@@ -60,14 +60,16 @@ int main(int argc, char* argv[]) {
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nElems,32);
   PS* ptcls = new SCS(policy, 1, 32, nElems, nPtcls, ptclsPerElem, elemGIDs);
 
-  // Set Particle Positions
+  // Set Particle Info
 
   auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<0>();
+  auto ptclElem = ptcls->get<1>();
+  auto ptclDim = ptcls->get<2>();
   PS::kkLidView vtxPerElm("vtx_per_elm", nElems);
 
-  auto setPositions = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto elmVerts = Omega_h::gather_verts<dim+1>(cells2nodes, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
@@ -76,9 +78,11 @@ int main(int argc, char* argv[]) {
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
       for (int i=0; i<dim; i++)
         ptclPos(pid, i) = pos[i];
+      ptclElem(pid) = e;
+      ptclDim(pid) = dim;
     }
   };
-  ps::parallel_for(ptcls, setPositions);
+  ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
 
@@ -116,8 +120,8 @@ int main(int argc, char* argv[]) {
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
-      auto ptcl = particleAdapt.ptclElems(pid);
-      printf("ptcl %-2d old %d search %-2d parent %-2d elem %-2d dim %d\n", pid, e, idx, particleAdapt.getParentElement(pid), ptcl.elem, ptcl.dim);
+      auto parent = particleAdapt.getParentElement(ptclElem(pid), ptclDim(pid));
+      printf("ptcl %-2d old %d search %-2d parent %-2d elem %-2d dim %d\n", pid, e, idx, parent, ptclElem(pid), ptclDim(pid));
     }
   };
   ps::parallel_for(ptcls, printResults);
@@ -127,15 +131,16 @@ int main(int argc, char* argv[]) {
   resize(ptcls, mesh.nelems());
   PS::kkLidView newElement("new_element", ptcls->capacity());
   ptclPos = ptcls->get<0>();
-  auto ptclID = ptcls->get<1>();
+  ptclElem = ptcls->get<1>();
+  ptclDim = ptcls->get<2>();
+  auto ptclID = ptcls->get<3>();
   printf("\n==Particle Positions==\nx, y, elem, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
       newElement(pid) = idx;
-      auto ptcl = particleAdapt.ptclElems(pid);
-      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptcl.elem, ptcl.dim);
+      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), ptclDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -145,7 +150,7 @@ int main(int argc, char* argv[]) {
 
   // Assert New Elements
 
-  ptclID = ptcls->get<1>();
+  ptclID = ptcls->get<3>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto assertElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {

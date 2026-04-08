@@ -64,9 +64,9 @@ int main(int argc, char* argv[]) {
 
   auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
-  auto ptclPos = ptcls->get<0>();
-  auto ptclElem = ptcls->get<1>();
-  auto ptclDim = ptcls->get<2>();
+  auto ptclPos = ptcls->get<POS>();
+  auto ptclElem = ptcls->get<PARENT>();
+  auto ptclDim = ptcls->get<DIM>();
   PS::kkLidView vtxPerElm("vtx_per_elm", nElems);
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -129,10 +129,10 @@ int main(int argc, char* argv[]) {
 
   resize(ptcls, mesh.nelems());
   PS::kkLidView newElement("new_element", ptcls->capacity());
-  ptclPos = ptcls->get<0>();
-  ptclElem = ptcls->get<1>();
-  ptclDim = ptcls->get<2>();
-  auto ptclID = ptcls->get<3>();
+  ptclPos = ptcls->get<POS>();
+  ptclElem = ptcls->get<PARENT>();
+  ptclDim = ptcls->get<DIM>();
+  auto ptclID = ptcls->get<PID>();
   printf("\n==Particle Positions==\nx, y, elem, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
 
   // Assert New Elements
 
-  ptclID = ptcls->get<3>();
+  ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto assertElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {

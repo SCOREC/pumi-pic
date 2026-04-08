@@ -66,6 +66,7 @@ int main(int argc, char* argv[]) {
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
   auto ptclElem = ptcls->get<PARENT>();
+  auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
   PS::kkLidView vtxPerElm("vtx_per_elm", nElems);
 
@@ -120,7 +121,7 @@ int main(int argc, char* argv[]) {
     if(mask > 0) {
       auto [dim, idx, coords] = searchResults(pid);
       //TODO: update to print child element
-      printf("ptcl %-2d old %d search %-2d parent %-2d child %-2d dim %d\n", pid, e, idx, ptclElem(pid), ptclElem(pid), ptclDim(pid));
+      printf("ptcl %-2d old %d search %-2d parent %-2d child %-2d dim %d\n", pid, e, idx, ptclElem(pid), ptclChild(pid), ptclDim(pid));
     }
   };
   ps::parallel_for(ptcls, printResults);

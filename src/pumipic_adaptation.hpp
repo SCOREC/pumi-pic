@@ -8,8 +8,8 @@
 #include <MemberTypeLibraries.h>
 
 using particle_structs::MemberTypes;
-enum MemberIndex{POS, PARENT, DIM, PID};
-typedef MemberTypes<double[3], int, int, int> Type;
+enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
+typedef MemberTypes<double[3], int, int, int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
@@ -64,6 +64,7 @@ namespace Omega_h {
 
     auto ptclPos = ptcls->get<POS>();
     auto ptclElem = ptcls->get<PARENT>();
+    auto ptclChild = ptcls->get<CHILD>();
     auto ptclDim = ptcls->get<DIM>();
     auto new_verts2coords = new_mesh.coords();
     auto old_verts2coords = old_mesh.coords();
@@ -96,7 +97,7 @@ namespace Omega_h {
         ptclDim(pid) = mesh_dim;
         if (side == 1) {
           auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
-          ptclElem(pid) = new_elem2edge.ab2b[edgeIdx];
+          ptclChild(pid) = edgeIdx;
           ptclDim(pid) = 1;
         }
       }

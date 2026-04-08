@@ -18,61 +18,24 @@ namespace Omega_h {
   struct ParticleAdapt : public UserTransfer {
 
   struct ModifiedElem {
-    LO offset=-1;
     LO key=-1;
+    LO offset=-1;
     LO rotation=-1;
   };
 
   PS* ptcls;
-  Adj old_vtx2Elem;
-  Adj old_edge2Elem;
-  Adj old_face2Elem;
 
   ParticleAdapt(PS* particles) {
     ptcls = particles;
   }
 
-  void updateAdjacency(Mesh& old_mesh) {
-    old_vtx2Elem = old_mesh.ask_up(VERT, mesh_dim);
-    old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
-    old_face2Elem = old_mesh.ask_up(FACE, mesh_dim);
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  LO getParentElement(int elem, int dim) const {
-    if (dim == mesh_dim)
-      return elem;
-    else if (dim == 0) {
-      auto firstElem = old_vtx2Elem.a2ab[elem];
-      return old_vtx2Elem.ab2b[firstElem];
-    }
-    else if (dim == 1) {
-      auto firstElem = old_edge2Elem.a2ab[elem];
-      return old_edge2Elem.ab2b[firstElem];
-    }
-    else if (dim == 2) {
-      auto firstElem = old_face2Elem.a2ab[elem];
-      return old_face2Elem.ab2b[firstElem];
-    }
-    else {
-      printf("ERROR: PARTICLE ELEM NOT FOUND\n");
-      return 0;
-    }
-  }
-
-  void updateEntities(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+  Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
       old2New[oldElem] = same_ents2new_ents[i];
     });
-
-    auto ptclElem = ptcls->get<1>();
-    auto ptclDim = ptcls->get<2>();
-    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
-      if (ptclDim(pid) == dim && old2New[ptclElem(pid)] != -1)
-        ptclElem(pid) = old2New[ptclElem(pid)];
-    });
+    return old2New;
   }
 
   //TODO: test refinment multiple times
@@ -80,11 +43,11 @@ namespace Omega_h {
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
     
-    updateEntities(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     if (prod_dim != mesh_dim) return;
-    updateAdjacency(old_mesh);
+    Write<LO> same_old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
 
     Kokkos::View<ModifiedElem*> modified("modified_elems", old_mesh.nelems());
+    auto old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
 
     //Gather modified elements
     parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
@@ -110,8 +73,10 @@ namespace Omega_h {
 
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
-      auto oldElem = getParentElement(ptclElem(pid), ptclDim(pid));
-      if (modified[oldElem].offset != -1) {
+      auto oldElem = ptclElem(pid);
+      if (same_old2New[oldElem] != -1)
+        ptclElem(pid) = same_old2New[oldElem];
+      else if (modified[oldElem].offset != -1) {
         auto key = modified[oldElem].key;
 
         Vector<mesh_dim> pos;
@@ -134,6 +99,9 @@ namespace Omega_h {
           ptclElem(pid) = new_elem2edge.ab2b[edgeIdx];
           ptclDim(pid) = 1;
         }
+      }
+      else {
+        printf("WARNING: element skipped during particle adaptation\n");
       }
     });
   }

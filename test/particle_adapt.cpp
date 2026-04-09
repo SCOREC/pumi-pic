@@ -38,6 +38,23 @@ void resize(PS*& ptcls, int newNElems) {
   ptcls = newPtcls;
 }
 
+bool testVert2Vert(Omega_h::Mesh& mesh)
+{
+  printf("==Test: Migrate ptcl from vertex to vertex==\n");
+
+  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
+  PS::kkGidView elemGIDs("gids", mesh.nelems());
+  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
+    ptclsPerElem(i) = 1;
+    elemGIDs(i) = i;
+  });
+
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
+  PS* ptcls = new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems(), ptclsPerElem, elemGIDs);
+
+  return true;
+}
+
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
@@ -46,19 +63,15 @@ int main(int argc, char* argv[]) {
 
   // Initalize Particles
 
-  int nElems = mesh.nelems();
-  int nppe = 3;
-  int nPtcls = mesh.nelems() * nppe;
-
-  PS::kkLidView ptclsPerElem("ptcls_per_elem", nElems);
-  PS::kkGidView elemGIDs("gids", nElems);
-  Kokkos::parallel_for(nElems, KOKKOS_LAMBDA(const int i) {
-    ptclsPerElem(i) = nppe;
+  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
+  PS::kkGidView elemGIDs("gids", mesh.nelems());
+  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
+    ptclsPerElem(i) = 3;
     elemGIDs(i) = i;
   });
 
-  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nElems,32);
-  PS* ptcls = new SCS(policy, 1, 32, nElems, nPtcls, ptclsPerElem, elemGIDs);
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
+  PS* ptcls = new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems()*3, ptclsPerElem, elemGIDs);
 
   // Set Particle Info
 
@@ -68,7 +81,7 @@ int main(int argc, char* argv[]) {
   auto ptclElem = ptcls->get<PARENT>();
   auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
-  PS::kkLidView vtxPerElm("vtx_per_elm", nElems);
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -107,7 +120,7 @@ int main(int argc, char* argv[]) {
   // Paricle Search
 
   pcms::GridPointSearch search{mesh, 50, 50};
-  Kokkos::View<pcms::Real*[dim]> points("test_points", nPtcls);
+  Kokkos::View<pcms::Real*[dim]> points("test_points", mesh.nelems()*3);
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0)
       for (int i=0; i<dim; i++)

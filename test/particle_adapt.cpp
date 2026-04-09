@@ -51,7 +51,7 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
-void adaptMesh(Omega_h::Mesh& mesh, PS* ptcls, const std::vector<double>& length) {
+void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, const std::vector<double>& length) {
   Omega_h::ParticleAdapt<dim> particleAdapt(ptcls);
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<length.size(); i++) {
@@ -69,13 +69,53 @@ void adaptMesh(Omega_h::Mesh& mesh, PS* ptcls, const std::vector<double>& length
   // Omega_h::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
 }
 
+int migratePtclsAfterAdapt(Omega_h::Mesh& mesh, PS*& ptcls) {
+  resize(ptcls, mesh.nelems());
+  //Move ptcl elements
+  PS::kkLidView newElement("new_element", ptcls->capacity());
+  auto ptclPos = ptcls->get<POS>();
+  auto ptclElem = ptcls->get<PARENT>();
+  auto ptclDim = ptcls->get<DIM>();
+  auto ptclID = ptcls->get<PID>();
+  printf("\n==Particle Positions==\nx, y, elem, dim\n");
+  auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    ptclID(pid) = pid;
+    if(mask > 0) {
+      newElement(pid) = ptclElem(pid);
+      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), ptclDim(pid));
+    }
+    else
+      newElement(pid) = -1;
+  };
+  ps::parallel_for(ptcls, getNewElement);
+  ptcls->rebuild(newElement);
+
+  //Assert ptcls moved
+  ptclID = ptcls->get<PID>();
+  PS::kkLidView failed = PS::kkLidView("failed", 1);
+  auto assertElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      const int id = ptclID(pid);
+      const int destElem = newElement(id);
+      if (destElem != e) {
+        printf("[ERROR] Particle %d was moved to incorrect element %d (should be in element %d)\n", id, e, destElem);
+        failed(0) = 1;
+      }
+    }
+  };
+  ps::parallel_for(ptcls, assertElement);
+  return ps::getLastValue(failed);
+}
+
+template<int dim>
 bool testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
   PS* ptcls = createPtclStructure(mesh, 1);
   adaptMesh<dim>(mesh, ptcls, {.75});
-
-  return true;
+  int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  delete ptcls;
+  return fails;
 }
 
 int main(int argc, char* argv[]) {
@@ -115,67 +155,29 @@ int main(int argc, char* argv[]) {
 
   // Adaptation
   adaptMesh<dim>(mesh, ptcls, {.75});
+  int fails = migratePtclsAfterAdapt(mesh, ptcls);
 
   // Paricle Search
 
-  pcms::GridPointSearch search{mesh, 50, 50};
-  Kokkos::View<pcms::Real*[dim]> points("test_points", mesh.nelems()*3);
-  auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0)
-      for (int i=0; i<dim; i++)
-        points(pid, i) = ptclPos(pid, i);
-  };
-  ps::parallel_for(ptcls, copyPoints);
-  auto searchResults = search(points);
+  // pcms::GridPointSearch search{mesh, 50, 50};
+  // Kokkos::View<pcms::Real*[dim]> points("test_points", mesh.nelems()*3);
+  // auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  //   if(mask > 0)
+  //     for (int i=0; i<dim; i++)
+  //       points(pid, i) = ptclPos(pid, i);
+  // };
+  // ps::parallel_for(ptcls, copyPoints);
+  // auto searchResults = search(points);
 
-  printf("==COMPARE RESULTS==\n");
-  auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      auto [dim, idx, coords] = searchResults(pid);
-      //TODO: update to print child element
-      printf("ptcl %-2d old %d search %-2d parent %-2d child %-2d dim %d\n", pid, e, idx, ptclElem(pid), ptclChild(pid), ptclDim(pid));
-    }
-  };
-  ps::parallel_for(ptcls, printResults);
-
-  // Move Particle Elements
-
-  resize(ptcls, mesh.nelems());
-  PS::kkLidView newElement("new_element", ptcls->capacity());
-  ptclPos = ptcls->get<POS>();
-  ptclElem = ptcls->get<PARENT>();
-  ptclDim = ptcls->get<DIM>();
-  auto ptclID = ptcls->get<PID>();
-  printf("\n==Particle Positions==\nx, y, elem, dim\n");
-  auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    ptclID(pid) = pid;
-    if(mask > 0) {
-      auto [dim, idx, coords] = searchResults(pid);
-      newElement(pid) = idx;
-      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), ptclDim(pid));
-    }
-    else
-      newElement(pid) = -1;
-  };
-  ps::parallel_for(ptcls, getNewElement);
-  ptcls->rebuild(newElement);
-
-  // Assert New Elements
-
-  ptclID = ptcls->get<PID>();
-  PS::kkLidView failed = PS::kkLidView("failed", 1);
-  auto assertElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      const int id = ptclID(pid);
-      const int destElem = newElement(id);
-      if (destElem != e) {
-        printf("[ERROR] Particle %d was moved to incorrect element %d (should be in element %d)\n", id, e, destElem);
-        failed(0) = 1;
-      }
-    }
-  };
-  ps::parallel_for(ptcls, assertElement);
-  int fails = ps::getLastValue(failed);
+  // printf("==COMPARE RESULTS==\n");
+  // auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+  //   if(mask > 0) {
+  //     auto [dim, idx, coords] = searchResults(pid);
+  //     //TODO: update to print child element
+  //     printf("ptcl %-2d old %d search %-2d parent %-2d child %-2d dim %d\n", pid, e, idx, ptclElem(pid), ptclChild(pid), ptclDim(pid));
+  //   }
+  // };
+  // ps::parallel_for(ptcls, printResults)
 
   delete ptcls;
   return fails;

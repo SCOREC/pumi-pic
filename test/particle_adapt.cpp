@@ -108,12 +108,42 @@ int migratePtclsAfterAdapt(Omega_h::Mesh& mesh, PS*& ptcls) {
 }
 
 template<int dim>
+int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
+  auto ptclPos = ptcls->get<POS>();
+  pcms::GridPointSearch search{mesh, 50, 50};
+  Kokkos::View<pcms::Real*[dim]> points("test_points", ptcls->nPtcls()*dim);
+  auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0)
+      for (int i=0; i<dim; i++)
+        points(pid, i) = ptclPos(pid, i);
+  };
+  ps::parallel_for(ptcls, copyPoints);
+  auto searchResults = search(points);
+
+  auto ptclElem = ptcls->get<PARENT>();
+  PS::kkLidView failed = PS::kkLidView("failed", 1);
+  auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      auto [eDim, idx, coords] = searchResults(pid);
+      if (idx != ptclElem(pid)) {
+        printf("[ERROR] Particle %-5d : search elem %-5d != migration elem %-5d \n", pid, idx, ptclElem(pid));
+        failed(0) = 1;
+      }
+
+    }
+  };
+  ps::parallel_for(ptcls, printResults);
+  return ps::getLastValue(failed);
+}
+
+template<int dim>
 bool testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
   PS* ptcls = createPtclStructure(mesh, 1);
   adaptMesh<dim>(mesh, ptcls, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  fails += compareWithSearch<dim>(mesh, ptcls);
   delete ptcls;
   return fails;
 }
@@ -156,28 +186,7 @@ int main(int argc, char* argv[]) {
   // Adaptation
   adaptMesh<dim>(mesh, ptcls, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
-
-  // Paricle Search
-
-  // pcms::GridPointSearch search{mesh, 50, 50};
-  // Kokkos::View<pcms::Real*[dim]> points("test_points", mesh.nelems()*3);
-  // auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-  //   if(mask > 0)
-  //     for (int i=0; i<dim; i++)
-  //       points(pid, i) = ptclPos(pid, i);
-  // };
-  // ps::parallel_for(ptcls, copyPoints);
-  // auto searchResults = search(points);
-
-  // printf("==COMPARE RESULTS==\n");
-  // auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-  //   if(mask > 0) {
-  //     auto [dim, idx, coords] = searchResults(pid);
-  //     //TODO: update to print child element
-  //     printf("ptcl %-2d old %d search %-2d parent %-2d child %-2d dim %d\n", pid, e, idx, ptclElem(pid), ptclChild(pid), ptclDim(pid));
-  //   }
-  // };
-  // ps::parallel_for(ptcls, printResults)
+  fails += compareWithSearch<dim>(mesh, ptcls);
 
   delete ptcls;
   return fails;

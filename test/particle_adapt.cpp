@@ -50,10 +50,30 @@ void resize(PS*& ptcls, int newNElems) {
   ptcls = newPtcls;
 }
 
+template<int dim>
+void adaptMesh(Omega_h::Mesh& mesh, PS* ptcls, const std::vector<double>& length) {
+  Omega_h::ParticleAdapt<dim> particleAdapt(ptcls);
+  // double factors[]{1.8, 1.7, 0.6, 0.3};
+  for (int i=0; i<length.size(); i++) {
+    auto metrics = Omega_h::get_implied_isos(&mesh);
+    auto scalar = Omega_h::metric_eigenvalue_from_length(length[i]);
+    metrics = Omega_h::multiply_each_by(metrics, scalar);
+    mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
+    auto opts = Omega_h::AdaptOpts(&mesh);
+    opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt<dim>>(particleAdapt);
+
+    adapt(&mesh, opts);
+    mesh.remove_tag(Omega_h::VERT, "metric");
+  }
+  Omega_h::vtk::write_vtu("box_after_adapt.vtu", &mesh);
+  // Omega_h::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
+}
+
 bool testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
   PS* ptcls = createPtclStructure(mesh, 1);
+  adaptMesh<dim>(mesh, ptcls, {.75});
 
   return true;
 }
@@ -62,6 +82,7 @@ int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
   auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
+  Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
 
   // Initalize Particles
@@ -93,23 +114,7 @@ int main(int argc, char* argv[]) {
   ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
-
-  Omega_h::vtk::write_vtu("particleCubeBefore.vtu", &mesh);
-  Omega_h::ParticleAdapt<dim> particleAdapt(ptcls);
-  // double factors[]{1.8, 1.7, 0.6, 0.3};
-  for (int i=0; i<1; i++) {
-    auto metrics = Omega_h::get_implied_isos(&mesh);
-    auto scalar = Omega_h::metric_eigenvalue_from_length(.75);
-    metrics = Omega_h::multiply_each_by(metrics, scalar);
-    mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
-    auto opts = Omega_h::AdaptOpts(&mesh);
-    opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt<dim>>(particleAdapt);
-
-    adapt(&mesh, opts);
-    mesh.remove_tag(Omega_h::VERT, "metric");
-  }
-  Omega_h::vtk::write_vtu("particleCubeAfter.vtu", &mesh);
-  Omega_h::vtk::write_vtu("particleCubeAfterEdges.vtu", &mesh, 1);
+  adaptMesh<dim>(mesh, ptcls, {.75});
 
   // Paricle Search
 

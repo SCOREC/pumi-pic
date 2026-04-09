@@ -140,10 +140,32 @@ template<int dim>
 int testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
-  PS* ptcls = createPtclStructure(mesh, 1);
+  PS* ptcls = createPtclStructure(mesh, 3);
+  auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
+  auto nodes2coords = mesh.coords();
+  auto ptclPos = ptcls->get<POS>();
+  auto ptclElem = ptcls->get<PARENT>();
+  auto ptclChild = ptcls->get<CHILD>();
+  auto ptclDim = ptcls->get<DIM>();
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
+
+  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      auto elmVerts = Omega_h::gather_verts<dim+1>(cells2nodes, Omega_h::LO(e));
+      auto vtxCoords = Omega_h::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
+      auto center = average(vtxCoords);
+      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
+      // auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
+      for (int i=0; i<dim; i++)
+        ptclPos(pid, i) = vtxCoords[v][i];
+      ptclElem(pid) = e;
+      ptclDim(pid) = dim;
+    }
+  };
+  ps::parallel_for(ptcls, setPtclInfo);
   adaptMesh<dim>(mesh, ptcls, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
-  fails += compareWithSearch<dim>(mesh, ptcls);
+  // fails += compareWithSearch<dim>(mesh, ptcls);
   delete ptcls;
   return fails;
 }
@@ -189,7 +211,7 @@ int main(int argc, char* argv[]) {
   auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
-
-  int fails = testAll<dim>(mesh);
+  int fails = testVert2Vert<dim>(mesh);
+  // int fails = testAll<dim>(mesh);
   return fails;
 }

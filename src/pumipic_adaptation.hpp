@@ -75,15 +75,17 @@ namespace Omega_h {
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = ptclElem(pid);
-      if (same_old2New[oldElem] != -1)
+      if (same_old2New[oldElem] != -1) //update unchanged element id
         ptclElem(pid) = same_old2New[oldElem];
-      else if (modified[oldElem].offset != -1) {
+      else if (modified[oldElem].offset != -1) { //find new split element
         auto key = modified[oldElem].key;
 
+        //Get ptcl position
         Vector<mesh_dim> pos;
         for (int i = 0; i<mesh_dim; i++)
           pos[i] = ptclPos(pid,i);
 
+        //Get parent element
         // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
@@ -95,11 +97,27 @@ namespace Omega_h {
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
         ptclElem(pid) = prods2new_ents[prod];
         ptclDim(pid) = mesh_dim;
+
+        //case 1: elem on new ptcl
+        if (side == 1 && are_close(baryCoords[1], 0)){
+          ptclChild(pid) = 1;
+          ptclDim(pid) = 0;
+          return; //go to next ptcl
+        }
+        //case 2: elem on old ptcl
+        for (int i=0; i<2; i++)
+          if (are_close(baryCoords[i], 1)) {
+            ptclChild(pid) = i;
+            ptclDim(pid) = 0;
+            return; //go to next ptcl
+          }
+        //case 3: elem on new edge
         if (side == 1) {
           auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
           ptclChild(pid) = edgeIdx;
           ptclDim(pid) = 1;
         }
+        // case 4: elem on old edge
       }
       else {
         printf("WARNING: element skipped during particle adaptation\n");

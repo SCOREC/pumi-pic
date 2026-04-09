@@ -137,7 +137,7 @@ int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
 }
 
 template<int dim>
-bool testVert2Vert(Omega_h::Mesh& mesh)
+int testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
   PS* ptcls = createPtclStructure(mesh, 1);
@@ -148,18 +148,10 @@ bool testVert2Vert(Omega_h::Mesh& mesh)
   return fails;
 }
 
-int main(int argc, char* argv[]) {
-  auto lib = Omega_h::Library(&argc, &argv);
-  auto world = lib.world();
-  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
-  Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
-  const int dim = 2;
-
-  // Initalize Particles
+template<int dim>
+int testAll(Omega_h::Mesh& mesh)
+{
   PS* ptcls = createPtclStructure(mesh, 3);
-
-  // Set Particle Info
-
   auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
@@ -187,7 +179,17 @@ int main(int argc, char* argv[]) {
   adaptMesh<dim>(mesh, ptcls, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
-
   delete ptcls;
+  return fails;
+}
+
+int main(int argc, char* argv[]) {
+  auto lib = Omega_h::Library(&argc, &argv);
+  auto world = lib.world();
+  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
+  Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
+  const int dim = 2;
+
+  int fails = testAll<dim>(mesh);
   return fails;
 }

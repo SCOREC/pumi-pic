@@ -95,7 +95,7 @@ namespace Omega_h {
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
         int rotated = rotateDirCode[side][modified[oldElem].rotation];
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
-        // ptclElem(pid) = prods2new_ents[prod];
+        ptclElem(pid) = prods2new_ents[prod];
         ptclDim(pid) = mesh_dim;
 
         //case 1: elem on new ptcl
@@ -112,11 +112,11 @@ namespace Omega_h {
             return; //go to next ptcl
           }
         //case 3: elem on new edge
-        // if (side == 1) {
-        //   auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
-        //   ptclChild(pid) = edgeIdx;
-        //   ptclDim(pid) = 1;
-        // }
+        if (side == 1) {
+          auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
+          ptclChild(pid) = edgeIdx;
+          ptclDim(pid) = 1;
+        }
         // case 4: elem on old edge
       }
       else {

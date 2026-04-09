@@ -15,6 +15,18 @@ using particle_structs::SellCSigma;
 
 typedef SellCSigma<Type,ExeSpace> SCS;
 
+PS* createPtclStructure(Omega_h::Mesh& mesh, int ppe) {
+  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
+  PS::kkGidView elemGIDs("gids", mesh.nelems());
+  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
+    ptclsPerElem(i) = ppe;
+    elemGIDs(i) = i;
+  });
+
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
+  return new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems()*ppe, ptclsPerElem, elemGIDs);
+}
+
 void resize(PS*& ptcls, int newNElems) {
   int nPtcls = ptcls->nPtcls();
   PS::kkLidView ptclsPerElem("new_ptcls_per_elem", newNElems);
@@ -41,16 +53,7 @@ void resize(PS*& ptcls, int newNElems) {
 bool testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("==Test: Migrate ptcl from vertex to vertex==\n");
-
-  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
-  PS::kkGidView elemGIDs("gids", mesh.nelems());
-  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
-    ptclsPerElem(i) = 1;
-    elemGIDs(i) = i;
-  });
-
-  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
-  PS* ptcls = new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems(), ptclsPerElem, elemGIDs);
+  PS* ptcls = createPtclStructure(mesh, 1);
 
   return true;
 }
@@ -62,16 +65,7 @@ int main(int argc, char* argv[]) {
   const int dim = 2;
 
   // Initalize Particles
-
-  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
-  PS::kkGidView elemGIDs("gids", mesh.nelems());
-  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
-    ptclsPerElem(i) = 3;
-    elemGIDs(i) = i;
-  });
-
-  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
-  PS* ptcls = new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems()*3, ptclsPerElem, elemGIDs);
+  PS* ptcls = createPtclStructure(mesh, 3);
 
   // Set Particle Info
 

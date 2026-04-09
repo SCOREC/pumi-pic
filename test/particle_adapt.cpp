@@ -15,16 +15,16 @@ using particle_structs::SellCSigma;
 
 typedef SellCSigma<Type,ExeSpace> SCS;
 
-PS* createPtclStructure(Omega_h::Mesh& mesh, int ppe) {
-  PS::kkLidView ptclsPerElem("ptcls_per_elem", mesh.nelems());
-  PS::kkGidView elemGIDs("gids", mesh.nelems());
-  Kokkos::parallel_for(mesh.nelems(), KOKKOS_LAMBDA(const int i) {
+PS* createPtclStructure(Omega_h::Mesh& mesh, int nelems, int ppe) {
+  PS::kkLidView ptclsPerElem("ptcls_per_elem", nelems);
+  PS::kkGidView elemGIDs("gids", nelems);
+  Kokkos::parallel_for(nelems, KOKKOS_LAMBDA(const int i) {
     ptclsPerElem(i) = ppe;
     elemGIDs(i) = i;
   });
 
-  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(mesh.nelems(),32);
-  return new SCS(policy, 1, 32, mesh.nelems(), mesh.nelems()*ppe, ptclsPerElem, elemGIDs);
+  Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nelems,32);
+  return new SCS(policy, 1, 32, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
 }
 
 void resize(PS*& ptcls, int newNElems) {
@@ -77,7 +77,7 @@ int migratePtclsAfterAdapt(Omega_h::Mesh& mesh, PS*& ptcls) {
   auto ptclElem = ptcls->get<PARENT>();
   auto ptclDim = ptcls->get<DIM>();
   auto ptclID = ptcls->get<PID>();
-  printf("\n==Particle Positions==\nx, y, elem, dim\n");
+  printf("\n== Particle Positions ==\nx, y, elem, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
@@ -121,12 +121,13 @@ int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
   auto searchResults = search(points);
 
   auto ptclElem = ptcls->get<PARENT>();
+  auto ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto [eDim, idx, coords] = searchResults(pid);
       if (idx != ptclElem(pid)) {
-        printf("[ERROR] Particle %-5d : search elem %-5d != migration elem %-5d \n", pid, idx, ptclElem(pid));
+        printf("[ERROR] Particle %-5d : search elem %-5d != migration elem %-5d \n", ptclID(pid), idx, ptclElem(pid));
         failed(0) = 1;
       }
 
@@ -139,27 +140,23 @@ int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
 template<int dim>
 int testVert2Vert(Omega_h::Mesh& mesh)
 {
-  printf("==Test: Migrate ptcl from vertex to vertex==\n");
-  PS* ptcls = createPtclStructure(mesh, 3);
-  auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
+  printf("== Test: Migrate ptcl from vertex to vertex ==\n");
+  PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
+  auto vert2elem = mesh.ask_up(Omega_h::VERT, dim);
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
   auto ptclElem = ptcls->get<PARENT>();
-  auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elmVerts = Omega_h::gather_verts<dim+1>(cells2nodes, Omega_h::LO(e));
-      auto vtxCoords = Omega_h::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
-      auto center = average(vtxCoords);
-      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      // auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
+      auto elem_begin = vert2elem.a2ab[pid];
+      auto elem = vert2elem.ab2b[elem_begin];
+      auto pos = get_vector<dim>(nodes2coords, Omega_h::LO(pid));
       for (int i=0; i<dim; i++)
-        ptclPos(pid, i) = vtxCoords[v][i];
-      ptclElem(pid) = e;
-      ptclDim(pid) = dim;
+        ptclPos(pid, i) = pos[i];
+      ptclElem(pid) = elem;
+      ptclDim(pid) = 0;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -173,12 +170,11 @@ int testVert2Vert(Omega_h::Mesh& mesh)
 template<int dim>
 int testAll(Omega_h::Mesh& mesh)
 {
-  PS* ptcls = createPtclStructure(mesh, 3);
+  PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
   auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
   auto ptclElem = ptcls->get<PARENT>();
-  auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
 

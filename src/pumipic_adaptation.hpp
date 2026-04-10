@@ -9,7 +9,7 @@
 
 using particle_structs::MemberTypes;
 enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
-typedef MemberTypes<double[3], int, int, int, int> Type;
+typedef MemberTypes<double[3], Omega_h::LO, int, int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
@@ -28,6 +28,13 @@ namespace Omega_h {
 
   ParticleAdapt(PS* particles) {
     ptcls = particles;
+  }
+ 
+  KOKKOS_INLINE_FUNCTION
+  int getChildIndex(Adj elem2Vert, LO parent, LO child) const {
+    for (auto i = 0; i < 3; i++)
+      if (elem2Vert.ab2b[parent*3 + i] == child) return i;
+    return 0;
   }
 
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -73,6 +80,7 @@ namespace Omega_h {
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE);
     auto new_vert2elem = new_mesh.ask_up(VERT, mesh_dim);
+    auto new_elem2vert = new_mesh.get_adj(mesh_dim, VERT);
     auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
@@ -113,7 +121,7 @@ namespace Omega_h {
             auto newVert = old_vert2new_vert[oldVerts[i]];
             auto firstElemIdx = new_vert2elem.a2ab[newVert];
             ptclElem(pid) = new_vert2elem.ab2b[firstElemIdx];
-            ptclChild(pid) = i;
+            ptclChild(pid) = getChildIndex(new_elem2vert, ptclElem(pid), newVert);
             ptclDim(pid) = 0;
             return; //go to next ptcl
           }

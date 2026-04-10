@@ -111,7 +111,7 @@ template<int dim>
 int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
   auto ptclPos = ptcls->get<POS>();
   pcms::GridPointSearch search{mesh, 50, 50};
-  Kokkos::View<pcms::Real*[dim]> points("test_points", ptcls->nPtcls()*dim);
+  Kokkos::View<pcms::Real*[dim]> points("test_points", ptcls->capacity()*dim);
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0)
       for (int i=0; i<dim; i++)
@@ -188,7 +188,7 @@ int testVert2Vert(Omega_h::Mesh& mesh)
   ps::parallel_for(ptcls, setPtclInfo);
   adaptMesh<dim>(mesh, ptcls, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
-  // fails += compareWithSearch<dim>(mesh, ptcls);
+  fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls);
   delete ptcls;
   return fails;

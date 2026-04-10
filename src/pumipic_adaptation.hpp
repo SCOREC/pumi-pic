@@ -105,7 +105,7 @@ namespace Omega_h {
           return; //go to next ptcl
         }
         //case 2: elem on old ptcl
-        for (int i=0; i<2; i++)
+        for (int i=0; i<3; i++)
           if (are_close(baryCoords[i], 1)) {
             ptclChild(pid) = i;
             ptclDim(pid) = 0;

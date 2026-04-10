@@ -24,6 +24,7 @@ namespace Omega_h {
   };
 
   PS* ptcls;
+  LOs old_vert2new_vert;
 
   ParticleAdapt(PS* particles) {
     ptcls = particles;
@@ -43,6 +44,7 @@ namespace Omega_h {
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
     
+    if (prod_dim == 0) old_vert2new_vert = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     if (prod_dim != mesh_dim) return;
     Write<LO> same_old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
 
@@ -70,6 +72,7 @@ namespace Omega_h {
     auto old_verts2coords = old_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
     auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE);
+    auto new_vert2elem = new_mesh.ask_up(VERT, mesh_dim);
     auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
@@ -107,6 +110,9 @@ namespace Omega_h {
         //case 2: elem on old ptcl
         for (int i=0; i<3; i++)
           if (are_close(baryCoords[i], 1)) {
+            auto newVert = old_vert2new_vert[oldVerts[i]];
+            auto firstElemIdx = new_vert2elem.a2ab[newVert];
+            ptclElem(pid) = new_vert2elem.ab2b[firstElemIdx];
             ptclChild(pid) = i;
             ptclDim(pid) = 0;
             return; //go to next ptcl

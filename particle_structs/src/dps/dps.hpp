@@ -49,6 +49,9 @@ namespace pumipic {
     ~DPS();
 
     template <class MSpace>
+    void copyParticleData(Mirror<MSpace>* src);
+
+    template <class MSpace>
     Mirror<MSpace>* copy();
 
     //Functions from ParticleStructure
@@ -236,6 +239,13 @@ namespace pumipic {
     gpuFree(fn_d);
 #endif
 
+  }
+
+  template <class DataTypes, class MemSpace>
+  template <class MSpace>
+  void DPS<DataTypes, MemSpace>::copyParticleData(Mirror<MSpace>* src) {
+    aosoa_ = new typename DPS<DataTypes, MSpace>::AoSoA_t(std::string(src->aosoa_->label()).append("_mirror"), src->aosoa_->size());
+    Cabana::deep_copy(*aosoa_, *(src->aosoa_));
   }
 
   template<class DataTypes, typename MemSpace>

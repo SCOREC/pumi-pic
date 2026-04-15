@@ -11,9 +11,8 @@
 #include <pcms/point_search.h>
 #include "pumipic_adaptation.hpp"
 
-using particle_structs::SellCSigma;
-
-typedef SellCSigma<Type,ExeSpace> SCS;
+typedef ps::SellCSigma<Type,ExeSpace> SCS;
+typedef ps::DPS<Type,ExeSpace> DPS;
 
 PS* createPtclStructure(Omega_h::Mesh& mesh, int nelems, int ppe) {
   PS::kkLidView ptclsPerElem("ptcls_per_elem", nelems);
@@ -24,7 +23,8 @@ PS* createPtclStructure(Omega_h::Mesh& mesh, int nelems, int ppe) {
   });
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nelems,32);
-  return new SCS(policy, 1, 32, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
+  // return new SCS(policy, 1, 32, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
+  return new DPS(policy, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
 }
 
 void resize(PS*& ptcls, int newNElems) {
@@ -43,8 +43,9 @@ void resize(PS*& ptcls, int newNElems) {
   });
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(newNElems,32);
-  PS* newPtcls = new SCS(policy, 1, 32, newNElems, nPtcls, ptclsPerElem, elemGIDs);
-  newPtcls->copyParticleData(ptcls);
+  // PS* newPtcls = new SCS(policy, 1, 32, newNElems, nPtcls, ptclsPerElem, elemGIDs);
+  DPS* newPtcls = new DPS(policy, newNElems, nPtcls, ptclsPerElem, elemGIDs);
+  newPtcls->copyParticleData(static_cast<DPS*>(ptcls));
 
   delete ptcls;
   ptcls = newPtcls;

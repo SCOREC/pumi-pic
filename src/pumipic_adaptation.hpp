@@ -139,40 +139,9 @@ namespace Omega_h {
     });
   }
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
-      Adj keys2doms, Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents,
-      LOs same_ents2new_ents) {
-    if (prod_dim != mesh_dim) return;
+      Adj keys2doms, Int prod_dim, LOs prods2new_ents, 
+      LOs same_ents2old_ents, LOs same_ents2new_ents) {
     printf("==CoarsenFound==\n");
-
-    // printf("VERTS %d NEW %d SAME %d\n", keys2verts.size(), prods2new_ents.size(), same_ents2old_ents.size());
-
-    // Write<LO> elem_dim(old_mesh.nelems(), -1);
-    // Write<LO> elem2new(old_mesh.nelems(), -1);
-
-    // getUpdatedEntities(elem_dim, elem2new, same_ents2old_ents, same_ents2new_ents);
-
-    // parallel_for(keys2verts.size(), OMEGA_H_LAMBDA(LO key) {
-    //   auto elem_begin = keys2doms.a2ab[key];
-    //   auto elem_end = keys2doms.a2ab[key + 1];
-    //   for (auto idx = elem_begin; idx < elem_end; ++idx) {
-    //     auto elem = keys2doms.ab2b[idx];
-    //     elem_dim[elem] = mesh_dim;
-    //     elem2new[elem] = prods2new_ents[idx];
-    //   }
-    // });
-
-    // printf("==COARSEN RESULTS==\n");
-    // parallel_for(elem2new.size(), OMEGA_H_LAMBDA(LO key) {
-    //   printf("OLD %d NEW %d FOUND %d\n", key, elem2new[key], elem_dim[key]);
-    // });
-
-    // Kokkos::View<PtclInfo*> ptclElems_cpy = ptclElems;
-    // Kokkos::parallel_for(ptclElems_cpy.size(), KOKKOS_LAMBDA(const int ptcl) {
-      // auto oldElem = ptclElems_cpy[ptcl];
-      // if (elem_dim[oldElem] == mesh_dim)
-      //   ptclElems_cpy[ptcl] = elem2new[oldElem];
-    // });
-
     };
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
       LOs keys2edges, LOs keys2prods, LOs prods2new_ents,

@@ -53,7 +53,7 @@ void resize(PS*& ptcls, int newNElems) {
 
 template<int dim>
 void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, const std::vector<double>& length) {
-  Omega_h::ParticleAdapt<dim> particleAdapt(ptcls);
+  Omega_h::ParticleAdapt<dim> particleAdapt(ptcls, mesh);
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<length.size(); i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
@@ -177,13 +177,47 @@ int testVert2Vert(Omega_h::Mesh& mesh)
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elem_begin = vert2elem.a2ab[pid];
+      auto elem_begin = vert2elem.a2ab[e];
       auto elem = vert2elem.ab2b[elem_begin];
-      auto pos = get_vector<dim>(nodes2coords, Omega_h::LO(pid));
+      auto pos = get_vector<dim>(nodes2coords, Omega_h::LO(e));
       for (int i=0; i<dim; i++)
         ptclPos(pid, i) = pos[i];
       ptclElem(pid) = elem;
       ptclDim(pid) = 0;
+    }
+  };
+  ps::parallel_for(ptcls, setPtclInfo);
+  adaptMesh<dim>(mesh, ptcls, {.75});
+  int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  fails += compareWithSearch<dim>(mesh, ptcls);
+  fails += isParticleInLowest<dim>(mesh, ptcls);
+  delete ptcls;
+  return fails;
+}
+
+template<int dim>
+int testEdges(Omega_h::Mesh& mesh)
+{
+  printf("== Test: Migrate ptcl from edges ==\n");
+  PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
+  auto edge2elem = mesh.ask_up(Omega_h::EDGE, dim);
+  auto edge2verts = mesh.get_adj(Omega_h::EDGE, Omega_h::VERT).ab2b;
+  auto nodes2coords = mesh.coords();
+  auto ptclPos = ptcls->get<POS>();
+  auto ptclElem = ptcls->get<PARENT>();
+  auto ptclDim = ptcls->get<DIM>();
+
+  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      auto elem_begin = edge2elem.a2ab[e];
+      auto parent = edge2elem.ab2b[elem_begin];
+      auto edgeVerts = Omega_h::gather_verts<2>(edge2verts, Omega_h::LO(e));
+      auto vtxCoords = Omega_h::gather_vectors<2,2>(nodes2coords, edgeVerts);
+      auto pos = (e % 2 == 0) ? average(vtxCoords) : vtxCoords[0] + ((vtxCoords[1] - vtxCoords[0]) / 4);
+      for (int i=0; i<dim; i++)
+        ptclPos(pid, i) = pos[i];
+      ptclElem(pid) = parent;
+      ptclDim(pid) = 1;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -235,7 +269,8 @@ int main(int argc, char* argv[]) {
   auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
-  int fails = testVert2Vert<dim>(mesh);
+  // int fails = testVert2Vert<dim>(mesh);
+  int fails = testEdges<dim>(mesh);
   // int fails = testAll<dim>(mesh);
   return fails;
 }

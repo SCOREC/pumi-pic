@@ -25,9 +25,12 @@ namespace Omega_h {
 
   PS* ptcls;
   LOs old_vert2new_vert;
+  int numEnt[mesh_dim];
 
-  ParticleAdapt(PS* particles) {
+  ParticleAdapt(PS* particles, Mesh& mesh) {
     ptcls = particles;
+    for (int i=0; i<mesh_dim; i++)
+      numEnt[i] = element_degree(mesh.family(), mesh_dim, i);
   }
  
   KOKKOS_INLINE_FUNCTION
@@ -81,7 +84,6 @@ namespace Omega_h {
     auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE);
     auto new_vert2elem = new_mesh.ask_up(VERT, mesh_dim);
     auto new_elem2vert = new_mesh.get_adj(mesh_dim, VERT);
-    auto nEdges = element_degree(new_mesh.family(), mesh_dim, EDGE);
 
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
@@ -109,14 +111,12 @@ namespace Omega_h {
         ptclElem(pid) = prods2new_ents[prod];
         ptclDim(pid) = mesh_dim;
 
-        //case 1: elem on new ptcl
-        if (side == 1 && are_close(baryCoords[1], 0)){
+        if (side == 1 && are_close(baryCoords[1], 0)){ //case 1: elem on new ptcl
           ptclChild(pid) = 1;
           ptclDim(pid) = 0;
           return; //go to next ptcl
         }
-        //case 2: elem on old ptcl
-        for (int i=0; i<3; i++)
+        for (int i=0; i<numEnt[0]; i++) //case 2: elem on old ptcl
           if (are_close(baryCoords[i], 1)) {
             auto newVert = old_vert2new_vert[oldVerts[i]];
             auto firstElemIdx = new_vert2elem.a2ab[newVert];
@@ -125,13 +125,14 @@ namespace Omega_h {
             ptclDim(pid) = 0;
             return; //go to next ptcl
           }
-        //case 3: elem on new edge
-        if (side == 1) {
-          auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
-          ptclChild(pid) = edgeIdx;
+        if (side == 1) { //case 3: elem on new edge
+          // auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
+          // ptclChild(pid) = edgeIdx;
           ptclDim(pid) = 1;
+          return; //go to next ptcl
         }
-        // case 4: elem on old edge
+        // for (int i=0; i<numEnt[1]; i++) // case 4: elem on old edge
+        //   if (are_close(baryCoords[i], ))
       }
       else {
         printf("WARNING: element skipped during particle adaptation\n");

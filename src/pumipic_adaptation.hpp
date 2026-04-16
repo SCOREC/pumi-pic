@@ -24,8 +24,8 @@ namespace Omega_h {
   };
 
   PS* ptcls;
-  LOs old_vert2new_vert;
   int numEnt[mesh_dim];
+  LOs old2New[mesh_dim+1];
 
   ParticleAdapt(PS* particles, Mesh& mesh) {
     ptcls = particles;
@@ -54,9 +54,8 @@ namespace Omega_h {
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
     
-    if (prod_dim == 0) old_vert2new_vert = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
+    old2New[prod_dim] = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     if (prod_dim != mesh_dim) return;
-    Write<LO> same_old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
 
     Kokkos::View<ModifiedElem*> modified("modified_elems", old_mesh.nelems());
     auto old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
@@ -88,8 +87,8 @@ namespace Omega_h {
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = ptclElem(pid);
-      if (same_old2New[oldElem] != -1) //update unchanged element id
-        ptclElem(pid) = same_old2New[oldElem];
+      if (old2New[mesh_dim][oldElem] != -1) //update unchanged element id
+        ptclElem(pid) = old2New[mesh_dim][oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
         auto key = modified[oldElem].key;
 
@@ -111,28 +110,30 @@ namespace Omega_h {
         ptclElem(pid) = prods2new_ents[prod];
         ptclDim(pid) = mesh_dim;
 
-        if (side == 1 && are_close(baryCoords[1], 0)){ //case 1: elem on new ptcl
-          ptclChild(pid) = 1;
-          ptclDim(pid) = 0;
-          return; //go to next ptcl
+        if (side == 1 && are_close(baryCoords[1], 0)){ //case 1: ptcl on new vert
+          // ptclChild(pid) = 1;
+          // ptclDim(pid) = 0;
+          // return; //go to next ptcl
         }
-        for (int i=0; i<numEnt[0]; i++) //case 2: elem on old ptcl
+        for (int i=0; i<numEnt[0]; i++) //case 2: ptcl on old vert
           if (are_close(baryCoords[i], 1)) {
-            auto newVert = old_vert2new_vert[oldVerts[i]];
+            auto newVert = old2New[0][oldVerts[i]];
             auto firstElemIdx = new_vert2elem.a2ab[newVert];
             ptclElem(pid) = new_vert2elem.ab2b[firstElemIdx];
             ptclChild(pid) = getChildIndex(new_elem2vert, ptclElem(pid), newVert);
             ptclDim(pid) = 0;
             return; //go to next ptcl
           }
-        if (side == 1) { //case 3: elem on new edge
+        if (side == 1) { //case 3: ptcl on new edge
           // auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
           // ptclChild(pid) = edgeIdx;
-          ptclDim(pid) = 1;
-          return; //go to next ptcl
+          // ptclDim(pid) = 1;
+          // return; //go to next ptcl
         }
-        // for (int i=0; i<numEnt[1]; i++) // case 4: elem on old edge
-        //   if (are_close(baryCoords[i], ))
+        for (int i=0; i<numEnt[1]; i++) //case 4: ptcl on old edge
+          if (are_close(baryCoords[i], 0)) {
+            ptclDim(pid) = 1;
+          }
       }
       else {
         printf("WARNING: element skipped during particle adaptation\n");

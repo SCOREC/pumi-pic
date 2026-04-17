@@ -52,8 +52,7 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
-void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, const std::vector<double>& length) {
-  Omega_h::ParticleAdapt<dim> particleAdapt(ptcls, mesh);
+void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<dim>& ptclAdapt, const std::vector<double>& length) {
   // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<length.size(); i++) {
     auto metrics = Omega_h::get_implied_isos(&mesh);
@@ -61,7 +60,7 @@ void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, const std::vector<double>& lengt
     metrics = Omega_h::multiply_each_by(metrics, scalar);
     mesh.add_tag(Omega_h::VERT, "metric", 1, metrics);
     auto opts = Omega_h::AdaptOpts(&mesh);
-    opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt<dim>>(particleAdapt);
+    opts.xfer_opts.user_xfer = std::make_shared<Omega_h::ParticleAdapt<dim>>(ptclAdapt);
 
     adapt(&mesh, opts);
     mesh.remove_tag(Omega_h::VERT, "metric");
@@ -169,6 +168,7 @@ int testVert2Vert(Omega_h::Mesh& mesh)
 {
   printf("== Test: Migrate ptcl from vertex to vertex ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
+  Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   auto vert2elem = mesh.ask_up(Omega_h::VERT, dim);
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
@@ -187,7 +187,7 @@ int testVert2Vert(Omega_h::Mesh& mesh)
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, {.75});
+  adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls);
@@ -200,11 +200,16 @@ int testEdges(Omega_h::Mesh& mesh)
 {
   printf("== Test: Migrate ptcl from edges ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
+  Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
+
+  Omega_h::Adj downward[dim];
+  for (int i=0; i<dim; i++) downward[i] = mesh.ask_down(dim, i);
   auto edge2elem = mesh.ask_up(Omega_h::EDGE, dim);
   auto edge2verts = mesh.get_adj(Omega_h::EDGE, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
   auto ptclElem = ptcls->get<PARENT>();
+  auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -217,11 +222,12 @@ int testEdges(Omega_h::Mesh& mesh)
       for (int i=0; i<dim; i++)
         ptclPos(pid, i) = pos[i];
       ptclElem(pid) = parent;
+      ptclChild(pid) = ptclAdapt.getChildIndex(downward, 1, parent, e);
       ptclDim(pid) = 1;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, {.75});
+  adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls);
@@ -233,6 +239,7 @@ template<int dim>
 int testAll(Omega_h::Mesh& mesh)
 {
   PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
+  Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto ptclPos = ptcls->get<POS>();
@@ -256,7 +263,7 @@ int testAll(Omega_h::Mesh& mesh)
   ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
-  adaptMesh<dim>(mesh, ptcls, {.75});
+  adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
   delete ptcls;

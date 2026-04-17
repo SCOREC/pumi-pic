@@ -37,10 +37,15 @@ namespace Omega_h {
   }
  
   KOKKOS_INLINE_FUNCTION
-  int getChildIndex(int dim, LO parent, LO child) const {
+  int getChildIndex(const Adj downward[mesh_dim], int dim, LO parent, LO child) const {
     for (auto i = 0; i < 3; i++)
-      if (new_downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
+      if (downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
     return 0;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  LO getChildElem(const Adj downward[mesh_dim], int dim, LO parent, int index) const {
+    return downward[dim].ab2b[parent*numEnt[dim] + index];
   }
 
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -81,10 +86,11 @@ namespace Omega_h {
     auto ptclChild = ptcls->get<CHILD>();
     auto ptclDim = ptcls->get<DIM>();
     auto old_verts2coords = old_mesh.coords();
-    auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
+    Adj old_downward[mesh_dim];
     for (int i=0; i<mesh_dim; i++) {
       new_upward[i] = new_mesh.ask_up(i, mesh_dim);
       new_downward[i] = new_mesh.ask_down(mesh_dim, i);
+      old_downward[i] = old_mesh.ask_down(mesh_dim, i);
     }
 
     //Update modified elements
@@ -94,6 +100,7 @@ namespace Omega_h {
         ptclElem(pid) = old2New[mesh_dim][oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
         auto key = modified[oldElem].key;
+        auto oldChild = getChildElem(old_downward, ptclDim(pid), ptclElem(pid), ptclChild(pid));
 
         //Get ptcl position
         Vector<mesh_dim> pos;
@@ -102,7 +109,7 @@ namespace Omega_h {
 
         //Get parent element
         // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
-        auto oldVerts = gather_verts<mesh_dim+1>(old_elem2verts, LO(oldElem));
+        auto oldVerts = gather_verts<mesh_dim+1>(old_downward[0].ab2b, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
         int side = baryCoords[0] > baryCoords[2] ? 0 : 2;
@@ -123,7 +130,7 @@ namespace Omega_h {
             auto newVert = old2New[0][oldVerts[i]];
             auto firstElemIdx = new_upward[0].a2ab[newVert];
             ptclElem(pid) = new_upward[0].ab2b[firstElemIdx];
-            ptclChild(pid) = getChildIndex(0, ptclElem(pid), newVert);
+            ptclChild(pid) = getChildIndex(new_downward, 0, ptclElem(pid), newVert);
             ptclDim(pid) = 0;
             return; //go to next ptcl
           }
@@ -135,10 +142,10 @@ namespace Omega_h {
         }
         for (int i=0; i<numEnt[1]; i++) //case 4: ptcl on old edge
           if (are_close(baryCoords[i], 0)) {
-            // auto newEdge = old2New[1][oldVerts[i]];
-            // auto firstElemIdx = new_upward[1].a2ab[newEdge];
-            // ptclElem(pid) = new_upward[1].ab2b[firstElemIdx];
-            // ptclChild(pid) = getChildIndex(1, ptclElem(pid), newEdge);
+            auto newEdge = old2New[1][oldChild];
+            auto firstElemIdx = new_upward[1].a2ab[newEdge];
+            ptclElem(pid) = new_upward[1].ab2b[firstElemIdx];
+            ptclChild(pid) = getChildIndex(new_downward, 1, ptclElem(pid), newEdge);
             ptclDim(pid) = 1;
             return;
           }

@@ -26,6 +26,9 @@ namespace Omega_h {
   PS* ptcls;
   int numEnt[mesh_dim];
   LOs old2New[mesh_dim+1];
+  Adj new_upward[mesh_dim];
+  Adj new_downward[mesh_dim];
+
 
   ParticleAdapt(PS* particles, Mesh& mesh) {
     ptcls = particles;
@@ -34,9 +37,9 @@ namespace Omega_h {
   }
  
   KOKKOS_INLINE_FUNCTION
-  int getChildIndex(Adj elem2Vert, LO parent, LO child) const {
+  int getChildIndex(int dim, LO parent, LO child) const {
     for (auto i = 0; i < 3; i++)
-      if (elem2Vert.ab2b[parent*3 + i] == child) return i;
+      if (new_downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
     return 0;
   }
 
@@ -77,12 +80,12 @@ namespace Omega_h {
     auto ptclElem = ptcls->get<PARENT>();
     auto ptclChild = ptcls->get<CHILD>();
     auto ptclDim = ptcls->get<DIM>();
-    auto new_verts2coords = new_mesh.coords();
     auto old_verts2coords = old_mesh.coords();
     auto old_elem2verts = old_mesh.get_adj(mesh_dim, VERT).ab2b;
-    auto new_elem2edge = new_mesh.get_adj(mesh_dim, EDGE);
-    auto new_vert2elem = new_mesh.ask_up(VERT, mesh_dim);
-    auto new_elem2vert = new_mesh.get_adj(mesh_dim, VERT);
+    for (int i=0; i<mesh_dim; i++) {
+      new_upward[i] = new_mesh.ask_up(i, mesh_dim);
+      new_downward[i] = new_mesh.ask_down(mesh_dim, i);
+    }
 
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
@@ -111,16 +114,16 @@ namespace Omega_h {
         ptclDim(pid) = mesh_dim;
 
         if (side == 1 && are_close(baryCoords[1], 0)){ //case 1: ptcl on new vert
-          // ptclChild(pid) = 1;
-          // ptclDim(pid) = 0;
-          // return; //go to next ptcl
+          ptclChild(pid) = 1;
+          ptclDim(pid) = 0;
+          return; //go to next ptcl
         }
         for (int i=0; i<numEnt[0]; i++) //case 2: ptcl on old vert
           if (are_close(baryCoords[i], 1)) {
             auto newVert = old2New[0][oldVerts[i]];
-            auto firstElemIdx = new_vert2elem.a2ab[newVert];
-            ptclElem(pid) = new_vert2elem.ab2b[firstElemIdx];
-            ptclChild(pid) = getChildIndex(new_elem2vert, ptclElem(pid), newVert);
+            auto firstElemIdx = new_upward[0].a2ab[newVert];
+            ptclElem(pid) = new_upward[0].ab2b[firstElemIdx];
+            ptclChild(pid) = getChildIndex(0, ptclElem(pid), newVert);
             ptclDim(pid) = 0;
             return; //go to next ptcl
           }
@@ -132,7 +135,12 @@ namespace Omega_h {
         }
         for (int i=0; i<numEnt[1]; i++) //case 4: ptcl on old edge
           if (are_close(baryCoords[i], 0)) {
+            // auto newEdge = old2New[1][oldVerts[i]];
+            // auto firstElemIdx = new_upward[1].a2ab[newEdge];
+            // ptclElem(pid) = new_upward[1].ab2b[firstElemIdx];
+            // ptclChild(pid) = getChildIndex(1, ptclElem(pid), newEdge);
             ptclDim(pid) = 1;
+            return;
           }
       }
       else {

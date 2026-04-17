@@ -138,33 +138,35 @@ int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
 }
 
 template<int dim>
-int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls) {
-  auto elem2Vert = mesh.get_adj(dim, Omega_h::VERT).ab2b;
-  auto vert2Elem = mesh.ask_up(Omega_h::VERT, dim);
+int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   auto ptclElem = ptcls->get<PARENT>();
   auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
   auto ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
+  Omega_h::Adj upward[dim];
+  Omega_h::Adj downward[dim];
+  for (int i=0; i<dim; i++) {
+    upward[i] = mesh.ask_up(i, dim);
+    downward[i] = mesh.ask_down(dim, i);
+  }
+
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
-    if (ptclDim(pid) == 0) {
-      auto verts = gather_verts<dim+1>(elem2Vert, Omega_h::LO(ptclElem(pid)));
-      auto vert = verts[ptclChild(pid)];
-      auto startElemIdx = vert2Elem.a2ab[vert];
-      auto lowestAdj = vert2Elem.ab2b[startElemIdx];
-      if (ptclElem(pid) != lowestAdj) {
-        printf("Ptcl %-2d: Not on lowest elem. Is %-2d should be %-2d\n", ptclID(pid), ptclElem(pid), lowestAdj);
-        failed(0) = 1;
-      }
-    }
+    auto d = ptclDim(pid);
+    auto child = ptclAdapt.getChildElem(downward, d, ptclElem(pid), ptclChild(pid));
+    auto lowestElemIdx = upward[d].a2ab[child];
+    auto lowestElem = upward[d].ab2b[lowestElemIdx];
+    if (ptclElem(pid) == lowestElem) return;
+    printf("Ptcl %-2d: Not on lowest elem. Is %-2d should be %-2d\n", ptclID(pid), ptclElem(pid), lowestElem);
+    failed(0) = 1;
   };
   ps::parallel_for(ptcls, printResults);
   return ps::getLastValue(failed);
 }
 
 template<int dim>
-int testVert2Vert(Omega_h::Mesh& mesh)
+int testVerts(Omega_h::Mesh& mesh)
 {
   printf("== Test: Migrate ptcl from vertex to vertex ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
@@ -190,7 +192,7 @@ int testVert2Vert(Omega_h::Mesh& mesh)
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
-  fails += isParticleInLowest<dim>(mesh, ptcls);
+  fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
   delete ptcls;
   return fails;
 }
@@ -230,7 +232,7 @@ int testEdges(Omega_h::Mesh& mesh)
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt(mesh, ptcls);
   fails += compareWithSearch<dim>(mesh, ptcls);
-  fails += isParticleInLowest<dim>(mesh, ptcls);
+  fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
   delete ptcls;
   return fails;
 }
@@ -276,7 +278,7 @@ int main(int argc, char* argv[]) {
   auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
-  // int fails = testVert2Vert<dim>(mesh);
+  // int fails = testVerts<dim>(mesh);
   int fails = testEdges<dim>(mesh);
   // int fails = testAll<dim>(mesh);
   return fails;

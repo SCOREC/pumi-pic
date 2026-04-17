@@ -279,7 +279,7 @@ int main(int argc, char* argv[]) {
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
   // int fails = testVerts<dim>(mesh);
-  int fails = testEdges<dim>(mesh);
-  // int fails = testAll<dim>(mesh);
+  // int fails = testEdges<dim>(mesh);
+  int fails = testAll<dim>(mesh);
   return fails;
 }

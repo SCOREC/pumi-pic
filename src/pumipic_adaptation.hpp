@@ -121,7 +121,7 @@ namespace Omega_h {
         ptclDim(pid) = mesh_dim;
 
         if (side == 1 && are_close(baryCoords[1], 0)){ //case 1: ptcl on new vert
-          ptclChild(pid) = 1;
+          ptclChild(pid) = getChildIndex(new_downward, 0, ptclElem(pid), keys2midverts[key]);
           ptclDim(pid) = 0;
           return; //go to next ptcl
         }

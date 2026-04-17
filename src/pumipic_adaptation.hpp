@@ -45,6 +45,7 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   LO getChildElem(const Adj downward[mesh_dim], int dim, LO parent, int index) const {
+    if (dim == mesh_dim) return parent;
     return downward[dim].ab2b[parent*numEnt[dim] + index];
   }
 
@@ -135,10 +136,10 @@ namespace Omega_h {
             return; //go to next ptcl
           }
         if (side == 1) { //case 3: ptcl on new edge
-          // auto edgeIdx = ptclElem(pid)*nEdges + modified[oldElem].rotation + side;
-          // ptclChild(pid) = edgeIdx;
-          // ptclDim(pid) = 1;
-          // return; //go to next ptcl
+          auto edgeIdx = ptclElem(pid)*numEnt[1] + modified[oldElem].rotation + side;
+          ptclChild(pid) = edgeIdx;
+          ptclDim(pid) = 1;
+          return; //go to next ptcl
         }
         for (int i=0; i<numEnt[1]; i++) //case 4: ptcl on old edge
           if (are_close(baryCoords[i], 0)) {

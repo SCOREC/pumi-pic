@@ -20,7 +20,7 @@ namespace Omega_h {
   struct ModifiedElem {
     LO key=-1;
     LO offset=-1;
-    LO rotation=-1;
+    LO code=-1;
   };
 
   PS* ptcls;
@@ -78,7 +78,7 @@ namespace Omega_h {
         auto elem = old_edge2Elem.ab2b[idx];
         modified[elem].key = key;
         modified[elem].offset = idx-elem_begin;
-        modified[elem].rotation = code_rotation(old_edge2Elem.codes[idx]);
+        modified[elem].code = old_edge2Elem.codes[idx];
       }
     });
 
@@ -100,23 +100,28 @@ namespace Omega_h {
       if (old2New[mesh_dim][oldElem] != -1) //update unchanged element id
         ptclElem(pid) = old2New[mesh_dim][oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
-        auto key = modified[oldElem].key;
-        auto oldChild = getChildElem(old_downward, ptclDim(pid), ptclElem(pid), ptclChild(pid));
-
         //Get ptcl position
         Vector<mesh_dim> pos;
         for (int i = 0; i<mesh_dim; i++)
           pos[i] = ptclPos(pid,i);
 
         //Get parent element
+        auto key = modified[oldElem].key;
+        auto oldChild = getChildElem(old_downward, ptclDim(pid), ptclElem(pid), ptclChild(pid));
+        auto spltEdge = keys2edges[key];
+        auto i_spltEdge = code_which_down(modified[oldElem].code);
+        auto i_spltVert = simplex_opposite_template(mesh_dim, EDGE, i_spltEdge);
         // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_downward[0].ab2b, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
-        int side = baryCoords[0] > baryCoords[2] ? 0 : 2;
-        if (are_close(baryCoords[0], baryCoords[2])) side = 1;
+        auto left = (i_spltVert - 1) % numEnt[0];
+        auto right = (i_spltVert + 1) % numEnt[0];
+        int side = baryCoords[left] > baryCoords[right] ? left : right;
+        if (are_close(baryCoords[left], baryCoords[right])) side = i_spltVert;
         const int rotateDirCode[3][2] = {{0,1},{0,0},{1,0}};
-        int rotated = rotateDirCode[side][modified[oldElem].rotation];
+        int rotation = code_rotation(modified[oldElem].code);
+        int rotated = rotateDirCode[side][rotation];
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + rotated;
         ptclElem(pid) = prods2new_ents[prod];
         ptclDim(pid) = mesh_dim;
@@ -136,7 +141,7 @@ namespace Omega_h {
             return; //go to next ptcl
           }
         if (side == 1) { //case 3: ptcl on new edge
-          auto edgeIdx = ptclElem(pid)*numEnt[1] + modified[oldElem].rotation + side;
+          auto edgeIdx = ptclElem(pid)*numEnt[1] + rotation + side;
           ptclChild(pid) = edgeIdx;
           ptclDim(pid) = 1;
           return; //go to next ptcl

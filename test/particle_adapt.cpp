@@ -66,7 +66,7 @@ void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<dim>& ptc
     mesh.remove_tag(Omega_h::VERT, "metric");
   }
   Omega_h::vtk::write_vtu("box_after_adapt.vtu", &mesh);
-  // Omega_h::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
+  Omega_h::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
 }
 
 int migratePtclsAfterAdapt(Omega_h::Mesh& mesh, PS*& ptcls) {
@@ -272,14 +272,32 @@ int testAll(Omega_h::Mesh& mesh)
   return fails;
 }
 
+namespace Omega_h {
+  template <int dim>
+  void printOrderInfo(Mesh& mesh) {
+    printf("\n== ORDER INFO ==\n");
+    auto elem2vert = mesh.get_adj(dim, Omega_h::VERT);
+    auto elem2edge = mesh.get_adj(dim, Omega_h::EDGE);
+    parallel_for(mesh.nelems(), OMEGA_H_LAMBDA(LO elem) {
+      // auto i = elem2vert.a2ab[elem];
+      auto verts = Omega_h::gather_verts<dim+1>(elem2vert.ab2b, Omega_h::LO(elem));
+      auto edges = Omega_h::gather_down<dim+1>(elem2edge.ab2b, Omega_h::LO(elem));
+      printf("Elem %d : Verts (%d, %d, %d) Edges (%d, %d, %d)\n", elem, verts[0], verts[1], verts[2], edges[0], edges[1], edges[2]);
+    });
+  }
+}
+
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
   auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
-  // int fails = testVerts<dim>(mesh);
-  // int fails = testEdges<dim>(mesh);
-  int fails = testAll<dim>(mesh);
+  int fails = 0;
+  // fails += testVerts<dim>(mesh);
+  fails += testEdges<dim>(mesh);
+  // fails += testAll<dim>(mesh);
+
+  // Omega_h::printOrderInfo<dim>(mesh);
   return fails;
 }

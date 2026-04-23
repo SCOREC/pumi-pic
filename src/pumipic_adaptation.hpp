@@ -24,16 +24,18 @@ namespace Omega_h {
   };
 
   PS* ptcls;
+  Mesh* mesh;
   int numEnt[mesh_dim];
   LOs old2New[mesh_dim+1];
   Adj new_upward[mesh_dim];
   Adj new_downward[mesh_dim];
 
 
-  ParticleAdapt(PS* particles, Mesh& mesh) {
+  ParticleAdapt(PS* particles, Mesh& meshIn) {
+    mesh = &meshIn;
     ptcls = particles;
     for (int i=0; i<mesh_dim; i++)
-      numEnt[i] = element_degree(mesh.family(), mesh_dim, i);
+      numEnt[i] = element_degree(mesh->family(), mesh_dim, i);
   }
  
   KOKKOS_INLINE_FUNCTION
@@ -122,13 +124,15 @@ namespace Omega_h {
         auto target = baryCoords[leftIndex] < baryCoords[rightIndex] ? 0 : 1;
         bool onSplit = are_close(baryCoords[leftIndex], baryCoords[rightIndex]);
         if (onSplit) target = 0;
-
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + target;
         ptclElem(pid) = prods2new_ents[prod];
-        ptclDim(pid) = mesh_dim;
+        
+        //Update child index
+        auto newSideIndex = simplex_opposite_template(mesh_dim, VERT, target == 0 ? leftIndex : rightIndex);
+        ptclChild(pid) = simplex_down_template(mesh_dim, mesh_dim - 1, newSideIndex, ptclChild(pid));
 
-        if (onSplit && are_close(baryCoords[1], 0)){ //case 1: ptcl on new vert
-          ptclChild(pid) = getChildIndex(new_downward, 0, ptclElem(pid), keys2midverts[key]);
+        if (onSplit && are_close(baryCoords[spltVertIndex], 0)){ //case 1: ptcl on new vert
+          ptclChild(pid) = mesh_dim;
           ptclDim(pid) = 0;
           return; //go to next ptcl
         }

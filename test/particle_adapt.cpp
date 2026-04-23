@@ -166,7 +166,7 @@ int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<d
 }
 
 template<int dim>
-int testVerts(Omega_h::Mesh& mesh)
+int testVerts(Omega_h::Mesh mesh)
 {
   printf("== Test: Migrate ptcl from vertex to vertex ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
@@ -198,7 +198,7 @@ int testVerts(Omega_h::Mesh& mesh)
 }
 
 template<int dim>
-int testEdges(Omega_h::Mesh& mesh)
+int testEdges(Omega_h::Mesh mesh)
 {
   printf("== Test: Migrate ptcl from edges ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
@@ -238,7 +238,7 @@ int testEdges(Omega_h::Mesh& mesh)
 }
 
 template<int dim>
-int testAll(Omega_h::Mesh& mesh)
+int testAll(Omega_h::Mesh mesh)
 {
   PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
@@ -290,14 +290,15 @@ namespace Omega_h {
 int main(int argc, char* argv[]) {
   auto lib = Omega_h::Library(&argc, &argv);
   auto world = lib.world();
-  auto mesh = Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);
+
+  auto mesh2D = [&]() { return Omega_h::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
+  auto mesh = mesh2D();
   Omega_h::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   const int dim = 2;
   int fails = 0;
-  // fails += testVerts<dim>(mesh);
-  fails += testEdges<dim>(mesh);
-  // fails += testAll<dim>(mesh);
-
+  fails += testVerts<dim>(mesh2D());
+  fails += testEdges<dim>(mesh2D());
+  fails += testAll<dim>(mesh2D());
   // Omega_h::printOrderInfo<dim>(mesh);
   return fails;
 }

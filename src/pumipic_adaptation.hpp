@@ -29,11 +29,35 @@ namespace Omega_h {
   LOs old2New[mesh_dim+1];
   Adj new_upward[mesh_dim];
   Adj new_downward[mesh_dim];
+  PS::Slice<POS> pPos;
+  PS::Slice<PARENT> pParent;
+  PS::Slice<CHILD> pChild;
+  PS::Slice<DIM> pDim;
 
 
   ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     for (int i=0; i<mesh_dim; i++)
       numEnt[i] = element_degree(mesh.family(), mesh_dim, i);
+    update(meshIn);
+  }
+
+  void update(Mesh& meshIn) {
+    mesh = meshIn;
+    pPos = ptcls->get<POS>();
+    pParent = ptcls->get<PARENT>();
+    pChild = ptcls->get<CHILD>();
+    pDim = ptcls->get<DIM>();
+    for (int i=0; i<mesh_dim; i++) {
+      new_upward[i] = mesh.ask_up(i, mesh_dim);
+      new_downward[i] = mesh.ask_down(mesh_dim, i);
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  int getChildIndex(int dim, LO parent, LO child) const {
+    for (auto i = 0; i < 3; i++)
+      if (new_downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
+    return 0;
   }
  
   KOKKOS_INLINE_FUNCTION

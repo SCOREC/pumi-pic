@@ -178,21 +178,18 @@ int testVerts(Omega_h::Mesh mesh)
   printf("== Test: Migrate ptcl from vertex to vertex ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
-  auto vert2elem = mesh.ask_up(Omega_h::VERT, dim);
   auto nodes2coords = mesh.coords();
-  auto ptclPos = ptcls->get<POS>();
-  auto ptclElem = ptcls->get<PARENT>();
-  auto ptclDim = ptcls->get<DIM>();
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elem_begin = vert2elem.a2ab[e];
-      auto elem = vert2elem.ab2b[elem_begin];
+      auto elem_begin = ptclAdapt.new_upward[0].a2ab[e];
+      auto parent = ptclAdapt.new_upward[0].ab2b[elem_begin];
       auto pos = get_vector<dim>(nodes2coords, Omega_h::LO(e));
       for (int i=0; i<dim; i++)
-        ptclPos(pid, i) = pos[i];
-      ptclElem(pid) = elem;
-      ptclDim(pid) = 0;
+        ptclAdapt.pPos(pid, i) = pos[i];
+      ptclAdapt.pParent(pid) = parent;
+      ptclAdapt.pChild(pid) = ptclAdapt.getChildIndex(0, parent, e);
+      ptclAdapt.pDim(pid) = 0;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -210,29 +207,21 @@ int testEdges(Omega_h::Mesh mesh)
   printf("== Test: Migrate ptcl from edges ==\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
-
-  Omega_h::Adj downward[dim];
-  for (int i=0; i<dim; i++) downward[i] = mesh.ask_down(dim, i);
-  auto edge2elem = mesh.ask_up(Omega_h::EDGE, dim);
   auto edge2verts = mesh.get_adj(Omega_h::EDGE, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
-  auto ptclPos = ptcls->get<POS>();
-  auto ptclElem = ptcls->get<PARENT>();
-  auto ptclChild = ptcls->get<CHILD>();
-  auto ptclDim = ptcls->get<DIM>();
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elem_begin = edge2elem.a2ab[e];
-      auto parent = edge2elem.ab2b[elem_begin];
+      auto elem_begin = ptclAdapt.new_upward[1].a2ab[e];
+      auto parent = ptclAdapt.new_upward[1].ab2b[elem_begin];
       auto edgeVerts = Omega_h::gather_verts<2>(edge2verts, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<2,2>(nodes2coords, edgeVerts);
       auto pos = (e % 2 == 0) ? average(vtxCoords) : vtxCoords[0] + ((vtxCoords[1] - vtxCoords[0]) / 4);
       for (int i=0; i<dim; i++)
-        ptclPos(pid, i) = pos[i];
-      ptclElem(pid) = parent;
-      ptclChild(pid) = ptclAdapt.getChildIndex(downward, 1, parent, e);
-      ptclDim(pid) = 1;
+        ptclAdapt.pPos(pid, i) = pos[i];
+      ptclAdapt.pParent(pid) = parent;
+      ptclAdapt.pChild(pid) = ptclAdapt.getChildIndex(1, parent, e);
+      ptclAdapt.pDim(pid) = 1;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -249,24 +238,20 @@ int testAll(Omega_h::Mesh mesh)
 {
   PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
-  auto cells2nodes = mesh.get_adj(dim, Omega_h::VERT).ab2b;
-  auto nodes2coords = mesh.coords();
-  auto ptclPos = ptcls->get<POS>();
-  auto ptclElem = ptcls->get<PARENT>();
-  auto ptclDim = ptcls->get<DIM>();
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
+  auto nodes2coords = mesh.coords();
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elmVerts = Omega_h::gather_verts<dim+1>(cells2nodes, Omega_h::LO(e));
+      auto elmVerts = Omega_h::gather_verts<dim+1>(ptclAdapt.new_downward->ab2b, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
       for (int i=0; i<dim; i++)
-        ptclPos(pid, i) = pos[i];
-      ptclElem(pid) = e;
-      ptclDim(pid) = dim;
+        ptclAdapt.pPos(pid, i) = pos[i];
+      ptclAdapt.pParent(pid) = e;
+      ptclAdapt.pDim(pid) = dim;
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);

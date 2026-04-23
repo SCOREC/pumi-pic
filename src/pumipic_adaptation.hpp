@@ -23,19 +23,17 @@ namespace Omega_h {
     LO code=-1;
   };
 
-  PS* ptcls;
-  Mesh* mesh;
+  PS*& ptcls;
+  Mesh& mesh;
   int numEnt[mesh_dim];
   LOs old2New[mesh_dim+1];
   Adj new_upward[mesh_dim];
   Adj new_downward[mesh_dim];
 
 
-  ParticleAdapt(PS* particles, Mesh& meshIn) {
-    mesh = &meshIn;
-    ptcls = particles;
+  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     for (int i=0; i<mesh_dim; i++)
-      numEnt[i] = element_degree(mesh->family(), mesh_dim, i);
+      numEnt[i] = element_degree(mesh.family(), mesh_dim, i);
   }
  
   KOKKOS_INLINE_FUNCTION

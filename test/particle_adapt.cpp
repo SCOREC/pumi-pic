@@ -69,20 +69,27 @@ void adaptMesh(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<dim>& ptc
   Omega_h::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
 }
 
-int migratePtclsAfterAdapt(Omega_h::Mesh& mesh, PS*& ptcls) {
+template<int dim>
+int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
+  Omega_h::Mesh& mesh = ptclAdapt.mesh;
+  PS*& ptcls = ptclAdapt.ptcls;
   resize(ptcls, mesh.nelems());
   //Move ptcl elements
   PS::kkLidView newElement("new_element", ptcls->capacity());
   auto ptclPos = ptcls->get<POS>();
   auto ptclElem = ptcls->get<PARENT>();
+  auto ptclChild = ptcls->get<CHILD>();
   auto ptclDim = ptcls->get<DIM>();
   auto ptclID = ptcls->get<PID>();
-  printf("\n== Particle Positions ==\nx, y, elem, dim\n");
+  Omega_h::Adj downward[dim];
+  for (int i=0; i<dim; i++) downward[i] = mesh.ask_down(dim, i);
+  printf("\n== Particle Positions ==\nx, y, parent, child, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       newElement(pid) = ptclElem(pid);
-      printf("%f, %f, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), ptclDim(pid));
+      auto child = ptclAdapt.getChildElem(downward, ptclDim(pid), ptclElem(pid), ptclChild(dim));
+      printf("%f, %f, %d, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), child, ptclDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -190,7 +197,7 @@ int testVerts(Omega_h::Mesh mesh)
   };
   ps::parallel_for(ptcls, setPtclInfo);
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
-  int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
   delete ptcls;
@@ -230,7 +237,7 @@ int testEdges(Omega_h::Mesh mesh)
   };
   ps::parallel_for(ptcls, setPtclInfo);
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
-  int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
   delete ptcls;
@@ -266,7 +273,7 @@ int testAll(Omega_h::Mesh mesh)
 
   // Adaptation
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
-  int fails = migratePtclsAfterAdapt(mesh, ptcls);
+  int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   delete ptcls;
   return fails;

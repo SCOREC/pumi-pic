@@ -25,7 +25,6 @@ namespace Omega_h {
 
   PS*& ptcls;
   Mesh& mesh;
-  int numEnt[mesh_dim];
   LOs old2New[mesh_dim+1];
   Adj new_upward[mesh_dim];
   Adj new_downward[mesh_dim];
@@ -36,8 +35,6 @@ namespace Omega_h {
 
 
   ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
-    for (int i=0; i<mesh_dim; i++)
-      numEnt[i] = element_degree(mesh.family(), mesh_dim, i);
     update(meshIn);
   }
 
@@ -55,22 +52,25 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   int getChildIndex(int dim, LO parent, LO child) const {
+    auto degree = simplex_degree(mesh_dim, dim);
     for (auto i = 0; i < 3; i++)
-      if (new_downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
+      if (new_downward[dim].ab2b[parent*degree + i] == child) return i;
     return 0;
   }
  
   KOKKOS_INLINE_FUNCTION
   int getChildIndex(const Adj downward[mesh_dim], int dim, LO parent, LO child) const {
+    auto degree = simplex_degree(mesh_dim, dim);
     for (auto i = 0; i < 3; i++)
-      if (downward[dim].ab2b[parent*numEnt[dim] + i] == child) return i;
+      if (downward[dim].ab2b[parent*degree + i] == child) return i;
     return 0;
   }
 
   KOKKOS_INLINE_FUNCTION
   LO getChildElem(const Adj downward[mesh_dim], int dim, LO parent, int index) const {
     if (dim == mesh_dim) return parent;
-    return downward[dim].ab2b[parent*numEnt[dim] + index];
+    auto degree = simplex_degree(mesh_dim, dim);
+    return downward[dim].ab2b[parent*degree + index];
   }
 
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -158,7 +158,7 @@ namespace Omega_h {
           ptclDim(pid) = 0;
           return; //go to next ptcl
         }
-        for (int i=0; i<numEnt[0]; i++) //case 2: ptcl on old vert
+        for (int i=0; i<simplex_degree(mesh_dim, 0); i++) //case 2: ptcl on old vert
           if (are_close(baryCoords[i], 1)) {
             auto newVert = old2New[0][oldVerts[i]];
             auto firstElemIdx = new_upward[0].a2ab[newVert];
@@ -168,12 +168,12 @@ namespace Omega_h {
             return; //go to next ptcl
           }
         if (onSplit) { //case 3: ptcl on new edge
-          auto edgeIdx = ptclElem(pid)*numEnt[1] + rotation + spltEdgeIndex;
+          auto edgeIdx = ptclElem(pid)*simplex_degree(mesh_dim, 1) + rotation + spltEdgeIndex;
           ptclChild(pid) = edgeIdx;
           ptclDim(pid) = 1;
           return; //go to next ptcl
         }
-        for (int i=0; i<numEnt[1]; i++) //case 4: ptcl on old edge
+        for (int i=0; i<simplex_degree(mesh_dim, 1); i++) //case 4: ptcl on old edge
           if (are_close(baryCoords[i], 0)) {
             auto newEdge = old2New[1][oldChild];
             auto firstElemIdx = new_upward[1].a2ab[newEdge];

@@ -63,14 +63,6 @@ namespace Omega_h {
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return new_downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
- 
-  KOKKOS_INLINE_FUNCTION
-  int getChildIndex(const Adj downward[mesh_dim], int dim, LO parent, LO child) const {
-    auto degree = simplex_degree(mesh_dim, dim);
-    for (auto i = 0; i < 3; i++)
-      if (downward[dim].ab2b[parent*degree + i] == child) return i;
-    return 0;
-  }
 
   KOKKOS_INLINE_FUNCTION
   LO getChildElem(const Adj downward[mesh_dim], int dim, LO parent, int index) const {
@@ -163,10 +155,10 @@ namespace Omega_h {
         for (int i=0; i<simplex_degree(mesh_dim, 0); i++) //case 2: ptcl on old vert
           if (are_close(baryCoords[i], 1)) {
             pChild(pid) = old2NewIdx[pChild(pid)];
-            auto newVert = getChildElem(new_downward, 0, pParent(pid), pChild(pid));
+            auto newVert = getChildElem(pid);
             auto firstElemIdx = new_upward[0].a2ab[newVert];
             pParent(pid) = new_upward[0].ab2b[firstElemIdx];
-            pChild(pid) = getChildIndex(new_downward, 0, pParent(pid), newVert);
+            pChild(pid) = getChildIndex(0, pParent(pid), newVert);
             pDim(pid) = 0;
             return; //go to next ptcl
           }
@@ -181,7 +173,7 @@ namespace Omega_h {
             auto newEdge = old2New[1][oldChild];
             auto firstElemIdx = new_upward[1].a2ab[newEdge];
             pParent(pid) = new_upward[1].ab2b[firstElemIdx];
-            pChild(pid) = getChildIndex(new_downward, 1, pParent(pid), newEdge);
+            pChild(pid) = getChildIndex(1, pParent(pid), newEdge);
             pDim(pid) = 1;
             return;
           }

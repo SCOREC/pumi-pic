@@ -160,26 +160,18 @@ int compareWithSearch(Omega_h::Mesh& mesh, PS*& ptcls) {
 
 template<int dim>
 int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<dim>& ptclAdapt) {
-  auto ptclElem = ptcls->get<PARENT>();
-  auto ptclChild = ptcls->get<CHILD>();
-  auto ptclDim = ptcls->get<DIM>();
+  ptclAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
-  Omega_h::Adj upward[dim];
-  Omega_h::Adj downward[dim];
-  for (int i=0; i<dim; i++) {
-    upward[i] = mesh.ask_up(i, dim);
-    downward[i] = mesh.ask_down(dim, i);
-  }
 
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
-    auto d = ptclDim(pid);
-    auto child = ptclAdapt.getChildElem(downward, d, ptclElem(pid), ptclChild(pid));
-    auto lowestElemIdx = upward[d].a2ab[child];
-    auto lowestElem = upward[d].ab2b[lowestElemIdx];
-    if (ptclElem(pid) == lowestElem) return;
-    printf("Ptcl %-2d: Not on lowest elem. Is %-2d should be %-2d\n", ptclID(pid), ptclElem(pid), lowestElem);
+    auto d = ptclAdapt.pDim(pid);
+    auto child = ptclAdapt.getChildElem(pid);
+    auto lowestElemIdx = ptclAdapt.new_upward[d].a2ab[child];
+    auto lowestElem = ptclAdapt.new_upward[d].ab2b[lowestElemIdx];
+    if (ptclAdapt.pParent(pid) == lowestElem) return;
+    printf("Ptcl %-2d: Not on lowest elem. Is %-2d should be %-2d\n", ptclID(pid), ptclAdapt.pParent(pid), lowestElem);
     failed(0) = 1;
   };
   ps::parallel_for(ptcls, printResults);

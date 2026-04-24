@@ -160,19 +160,18 @@ namespace Omega_h {
         }
         pParent(pid) = prods2new_ents[prod];
 
-        if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on new vert
+        if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
           return; //go to next ptcl
         }
-        for (int i=0; i<simplex_degree(mesh_dim, 0); i++) //case 2: ptcl on old vert
-          if (are_close(baryCoords[i], 1)) {
-            pChild(pid) = old2NewIdx[pChild(pid)];
-            auto newVert = getChildElem(pid);
-            auto firstElemIdx = new_upward[0].a2ab[newVert];
-            setPtcl(pid, 0, new_upward[0].ab2b[firstElemIdx], newVert);
-            return; //go to next ptcl
-          }
+        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
+          pChild(pid) = old2NewIdx[pChild(pid)];
+          auto newVert = getChildElem(pid);
+          auto firstElemIdx = new_upward[0].a2ab[newVert];
+          setPtcl(pid, 0, new_upward[0].ab2b[firstElemIdx], newVert);
+          return; //go to next ptcl
+        }
         if (onSplit) { //case 3: ptcl on new edge
           auto edgeIdx = pParent(pid)*simplex_degree(mesh_dim, 1) + rotation + spltEdgeIdx;
           pChild(pid) = edgeIdx;

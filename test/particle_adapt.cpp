@@ -78,12 +78,12 @@ int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   PS::kkLidView newElement("new_element", ptcls->capacity());
   ptclAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
-  printf("\n== Particle Positions ==\nx, y, parent, child, dim\n");
+  printf("\n== Particle Positions ==\nx, y, \"(pid, parent, child, dim)\"\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       newElement(pid) = ptclAdapt.pParent(pid);
-      printf("%f, %f, %d, %d, %d\n", ptclAdapt.pPos(pid, 0), ptclAdapt.pPos(pid, 1), newElement(pid), ptclAdapt.getChildElem(pid), ptclAdapt.pDim(pid));
+      printf("%f, %f, \"(%d, %d, %d, %d)\"\n", ptclAdapt.pPos(pid, 0), ptclAdapt.pPos(pid, 1), pid, newElement(pid), ptclAdapt.getChildElem(pid), ptclAdapt.pDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -181,7 +181,7 @@ int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<d
 template<int dim>
 int testVerts(Omega_h::Mesh mesh)
 {
-  printf("== Test: Migrate ptcl from vertex to vertex ==\n");
+  printf("\n== Test: Migrate ptcl from vertices ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   auto nodes2coords = mesh.coords();
@@ -209,7 +209,7 @@ int testVerts(Omega_h::Mesh mesh)
 template<int dim>
 int testEdges(Omega_h::Mesh mesh)
 {
-  printf("== Test: Migrate ptcl from edges ==\n");
+  printf("\n== Test: Migrate ptcl from edges ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   auto edge2verts = mesh.get_adj(Omega_h::EDGE, Omega_h::VERT).ab2b;

@@ -193,9 +193,7 @@ int testVerts(Omega_h::Mesh mesh)
       auto pos = get_vector<dim>(nodes2coords, Omega_h::LO(e));
       for (int i=0; i<dim; i++)
         ptclAdapt.pPos(pid, i) = pos[i];
-      ptclAdapt.pParent(pid) = parent;
-      ptclAdapt.pChild(pid) = ptclAdapt.getChildIndex(0, parent, e);
-      ptclAdapt.pDim(pid) = 0;
+      ptclAdapt.setPtcl(pid, 0, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -226,9 +224,7 @@ int testEdges(Omega_h::Mesh mesh)
       auto pos = (e % 2 == 0) ? average(vtxCoords) : vtxCoords[0] + ((vtxCoords[1] - vtxCoords[0]) / 4);
       for (int i=0; i<dim; i++)
         ptclAdapt.pPos(pid, i) = pos[i];
-      ptclAdapt.pParent(pid) = parent;
-      ptclAdapt.pChild(pid) = ptclAdapt.getChildIndex(1, parent, e);
-      ptclAdapt.pDim(pid) = 1;
+      ptclAdapt.setPtcl(pid, 1, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);

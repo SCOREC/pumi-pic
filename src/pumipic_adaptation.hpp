@@ -57,6 +57,19 @@ namespace Omega_h {
     return 0;
   }
 
+  //TODO: replace previous with this
+  KOKKOS_INLINE_FUNCTION
+  void setPtcl(LO pid, int dim, LO parent, LO child) const {
+    auto degree = simplex_degree(mesh_dim, dim);
+    int childIdx = -1;
+    for (auto i = 0; i < degree; i++)
+      if (new_downward[dim].ab2b[parent*degree + i] == child) childIdx = i;
+
+    pDim(pid) = dim;
+    pParent(pid) = parent;
+    pChild(pid) = childIdx;
+  }
+
   KOKKOS_INLINE_FUNCTION
   LO getChildElem(LO pid) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
@@ -157,9 +170,7 @@ namespace Omega_h {
             pChild(pid) = old2NewIdx[pChild(pid)];
             auto newVert = getChildElem(pid);
             auto firstElemIdx = new_upward[0].a2ab[newVert];
-            pParent(pid) = new_upward[0].ab2b[firstElemIdx];
-            pChild(pid) = getChildIndex(0, pParent(pid), newVert);
-            pDim(pid) = 0;
+            setPtcl(pid, 0, new_upward[0].ab2b[firstElemIdx], newVert);
             return; //go to next ptcl
           }
         if (onSplit) { //case 3: ptcl on new edge

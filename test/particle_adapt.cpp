@@ -76,20 +76,14 @@ int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   resize(ptcls, mesh.nelems());
   //Move ptcl elements
   PS::kkLidView newElement("new_element", ptcls->capacity());
-  auto ptclPos = ptcls->get<POS>();
-  auto ptclElem = ptcls->get<PARENT>();
-  auto ptclChild = ptcls->get<CHILD>();
-  auto ptclDim = ptcls->get<DIM>();
+  ptclAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
-  Omega_h::Adj downward[dim];
-  for (int i=0; i<dim; i++) downward[i] = mesh.ask_down(dim, i);
   printf("\n== Particle Positions ==\nx, y, parent, child, dim\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
-      newElement(pid) = ptclElem(pid);
-      auto child = ptclAdapt.getChildElem(downward, ptclDim(pid), ptclElem(pid), ptclChild(dim));
-      printf("%f, %f, %d, %d, %d\n", ptclPos(pid, 0), ptclPos(pid, 1), ptclElem(pid), child, ptclDim(pid));
+      newElement(pid) = ptclAdapt.pParent(pid);
+      printf("%f, %f, %d, %d, %d\n", ptclAdapt.pPos(pid, 0), ptclAdapt.pPos(pid, 1), newElement(pid), ptclAdapt.getChildElem(pid), ptclAdapt.pDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -111,6 +105,26 @@ int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
     }
   };
   ps::parallel_for(ptcls, assertElement);
+  return ps::getLastValue(failed);
+}
+
+template<int dim>
+int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
+  ptclAdapt.update(ptclAdapt.mesh);
+  auto vert2coords = ptclAdapt.mesh.coords();
+  PS::kkLidView failed = PS::kkLidView("failed", 1);
+  auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if (mask <= 0) return;
+    if (ptclAdapt.pDim(pid) == 0) {
+      auto verts = gather_verts<dim+1>(ptclAdapt.new_downward[0].ab2b, Omega_h::LO(ptclAdapt.pParent(pid)));
+      auto coords = gather_vectors<dim+1,dim>(vert2coords, verts);
+      if (!Omega_h::are_close(coords[ptclAdapt.pChild(pid)][0], ptclAdapt.pPos(pid, 0)) || !Omega_h::are_close(coords[ptclAdapt.pChild(pid)][1], ptclAdapt.pPos(pid, 1))) {
+        printf("[ERROR] Particle %d not at correct vertex\n", pid);
+        failed(0) = 1;
+      }
+    }
+  };
+  ps::parallel_for(ptclAdapt.ptcls, getNewElement);
   return ps::getLastValue(failed);
 }
 
@@ -197,6 +211,7 @@ int testVerts(Omega_h::Mesh mesh)
   int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
+  fails += compareWithPosition<dim>(ptclAdapt);
   delete ptcls;
   return fails;
 }

@@ -57,6 +57,13 @@ namespace Omega_h {
       if (new_downward[dim].ab2b[parent*degree + i] == child) return i;
     return 0;
   }
+
+  KOKKOS_INLINE_FUNCTION
+  LO getChildElem(LO pid) const {
+    if (pDim(pid) == mesh_dim) return pParent(pid);
+    auto degree = simplex_degree(mesh_dim, pDim(pid));
+    return new_downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
+  }
  
   KOKKOS_INLINE_FUNCTION
   int getChildIndex(const Adj downward[mesh_dim], int dim, LO parent, LO child) const {
@@ -111,7 +118,6 @@ namespace Omega_h {
     auto ptclChild = ptcls->get<CHILD>();
     auto ptclDim = ptcls->get<DIM>();
     auto old_verts2coords = old_mesh.coords();
-    auto new_verts2coords = new_mesh.coords();
     Adj old_downward[mesh_dim];
     for (int i=0; i<mesh_dim; i++) {
       new_upward[i] = new_mesh.ask_up(i, mesh_dim);
@@ -136,7 +142,6 @@ namespace Omega_h {
         auto spltEdge = keys2edges[key];
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVertIdx = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
-        // auto splitPos = get_vector<mesh_dim>(new_verts2coords, LO(keys2midverts[key]));
         auto oldVerts = gather_verts<mesh_dim+1>(old_downward[0].ab2b, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords); //TODO: account for flipping in 3D cases
@@ -148,6 +153,13 @@ namespace Omega_h {
         bool onSplit = are_close(baryCoords[highIdx], baryCoords[lowIdx]);
         if (onSplit) target = 0;
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + target;
+
+        auto keptSide = simplex_opposite_template(mesh_dim, VERT, (target == 0) ? highIdx : lowIdx);
+        Int old2NewIdx[mesh_dim+1] = {0};
+        for (Int newIdx = 0; newIdx < mesh_dim; ++newIdx) {
+          auto oldIdx = simplex_down_template(mesh_dim, mesh_dim - 1, keptSide, newIdx);
+          old2NewIdx[oldIdx] = newIdx;
+        }
         ptclElem(pid) = prods2new_ents[prod];
 
         if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on new vert
@@ -157,7 +169,8 @@ namespace Omega_h {
         }
         for (int i=0; i<simplex_degree(mesh_dim, 0); i++) //case 2: ptcl on old vert
           if (are_close(baryCoords[i], 1)) {
-            auto newVert = old2New[0][oldVerts[i]];
+            ptclChild(pid) = old2NewIdx[ptclChild(pid)];
+            auto newVert = getChildElem(new_downward, 0, ptclElem(pid), ptclChild(pid));
             auto firstElemIdx = new_upward[0].a2ab[newVert];
             ptclElem(pid) = new_upward[0].ab2b[firstElemIdx];
             ptclChild(pid) = getChildIndex(new_downward, 0, ptclElem(pid), newVert);

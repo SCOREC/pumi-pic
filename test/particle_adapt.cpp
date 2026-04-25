@@ -229,10 +229,11 @@ template<int dim>
 int testEdges(Omega_h::Mesh mesh)
 {
   printf("\n== Test: Migrate ptcl from edges ==\n\n");
-  PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 1);
+  PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 3);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   auto edge2verts = mesh.get_adj(Omega_h::EDGE, Omega_h::VERT).ab2b;
   auto nodes2coords = mesh.coords();
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nedges());
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -240,7 +241,11 @@ int testEdges(Omega_h::Mesh mesh)
       auto parent = ptclAdapt.new_upward[1].ab2b[elem_begin];
       auto edgeVerts = Omega_h::gather_verts<2>(edge2verts, Omega_h::LO(e));
       auto vtxCoords = Omega_h::gather_vectors<2,2>(nodes2coords, edgeVerts);
-      auto pos = (e % 2 == 0) ? average(vtxCoords) : vtxCoords[0] + ((vtxCoords[1] - vtxCoords[0]) / 4);
+      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
+      auto center = average(vtxCoords);
+      const double interval[3] = {.5, 1, 1.5};
+      auto pos = vtxCoords[0] + ((center - vtxCoords[0]) * interval[v]); // point near vertex
+
       for (int i=0; i<dim; i++)
         ptclAdapt.pPos(pid, i) = pos[i];
       ptclAdapt.setPtcl(pid, 1, parent, e);

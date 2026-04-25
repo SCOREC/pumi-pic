@@ -25,7 +25,6 @@ namespace Omega_h {
 
   PS*& ptcls;
   Mesh& mesh;
-  LOs old2New[mesh_dim+1];
   Adj new_upward[mesh_dim];
   Adj new_downward[mesh_dim];
   PS::Slice<POS> pPos;
@@ -50,15 +49,6 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  int getChildIndex(int dim, LO parent, LO child) const {
-    auto degree = simplex_degree(mesh_dim, dim);
-    for (auto i = 0; i < 3; i++)
-      if (new_downward[dim].ab2b[parent*degree + i] == child) return i;
-    return 0;
-  }
-
-  //TODO: replace previous with this
-  KOKKOS_INLINE_FUNCTION
   void setPtcl(LO pid, int dim, LO parent, LO child) const {
     auto degree = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
@@ -77,13 +67,6 @@ namespace Omega_h {
     return new_downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
-  KOKKOS_INLINE_FUNCTION
-  LO getChildElem(const Adj downward[mesh_dim], int dim, LO parent, int index) const {
-    if (dim == mesh_dim) return parent;
-    auto degree = simplex_degree(mesh_dim, dim);
-    return downward[dim].ab2b[parent*degree + index];
-  }
-
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -97,9 +80,8 @@ namespace Omega_h {
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
-    
-    old2New[prod_dim] = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     if (prod_dim != mesh_dim) return;
+    auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
 
     Kokkos::View<ModifiedElem*> modified("modified_elems", old_mesh.nelems());
     auto old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
@@ -126,8 +108,8 @@ namespace Omega_h {
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
-      if (old2New[mesh_dim][oldElem] != -1) //update unchanged element id
-        pParent(pid) = old2New[mesh_dim][oldElem];
+      if (old2New[oldElem] != -1) //update unchanged element id
+        pParent(pid) = old2New[oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
         //Get ptcl position
         Vector<mesh_dim> pos;
@@ -136,7 +118,6 @@ namespace Omega_h {
 
         //Get parent element
         auto key = modified[oldElem].key;
-        auto oldChild = getChildElem(old_downward, pDim(pid), pParent(pid), pChild(pid));
         auto spltEdge = keys2edges[key];
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVertIdx = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
@@ -144,6 +125,7 @@ namespace Omega_h {
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords); //TODO: account for flipping in 3D cases
 
+        auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid));
         int rotation = code_rotation(modified[oldElem].code);
         auto highIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 0 ^ rotation);
         auto lowIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 1 ^ rotation);
@@ -163,32 +145,23 @@ namespace Omega_h {
         if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
-          return; //go to next ptcl
         }
-        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
+        else if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
           pChild(pid) = old2NewIdx[pChild(pid)];
           auto newVert = getChildElem(pid);
           auto firstElemIdx = new_upward[0].a2ab[newVert];
           setPtcl(pid, 0, new_upward[0].ab2b[firstElemIdx], newVert);
-          return; //go to next ptcl
         }
-        if (onSplit) { //case 3: ptcl on new edge
+        else if (onSplit) { //case 3: ptcl on new edge
           auto edgeIdx = pParent(pid)*simplex_degree(mesh_dim, 1) + rotation + spltEdgeIdx;
           pChild(pid) = edgeIdx;
           pDim(pid) = 1;
-          return; //go to next ptcl
         }
-        auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid)); //case 3: ptcl stayed on edge edge
-        if (pDim(pid) == 1 && are_close(baryCoords[oppositeVert], 0)) {
-          if (pChild(pid) == spltEdgeIdx)
-            pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[spltVertIdx]);
-          else
-            pChild(pid) = simplex_opposite_template(mesh_dim, VERT, mesh_dim);
-
+        else if (pDim(pid) == 1 && are_close(baryCoords[oppositeVert], 0)) { //case 3: ptcl stayed on edge
+          pChild(pid) = simplex_opposite_template(mesh_dim, VERT, (pChild(pid) == spltEdgeIdx) ? old2NewIdx[spltVertIdx] : mesh_dim);
           auto newEdge = getChildElem(pid);
           auto firstElemIdx = new_upward[1].a2ab[newEdge];
           setPtcl(pid, 1, new_upward[1].ab2b[firstElemIdx], newEdge);
-          return;
         }
       }
       else {

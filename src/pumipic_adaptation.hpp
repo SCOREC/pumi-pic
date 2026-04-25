@@ -14,6 +14,14 @@ typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
+
+  template <Int n>
+  OMEGA_H_INLINE Real distance(Vector<n> a, Vector<n> b) OMEGA_H_NOEXCEPT {
+    Real x = 0;
+    for (Int i = 0; i < n; ++i) x += std::pow(a[i] - b[i], 2);
+    return std::sqrt(x);
+  }
+
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
 
@@ -46,6 +54,13 @@ namespace Omega_h {
       new_upward[i] = meshIn.ask_up(i, mesh_dim);
       new_downward[i] = meshIn.ask_down(mesh_dim, i);
     }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  Vector<mesh_dim> getPos(LO pid) const {
+    Vector<mesh_dim> pos;
+    for (int i = 0; i<mesh_dim; i++) pos[i] = pPos(pid,i);
+    return pos;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -109,21 +124,15 @@ namespace Omega_h {
       if (old2New[oldElem] != -1) //update unchanged element id
         pParent(pid) = old2New[oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
-        //Get ptcl position
-        Vector<mesh_dim> pos;
-        for (int i = 0; i<mesh_dim; i++)
-          pos[i] = pPos(pid,i);
-
-        //Get parent element
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVertIdx = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
         auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid));
-        int rotation = code_rotation(modified[oldElem].code); //TODO: account for flipping in 3D cases
+        auto rotation = code_rotation(modified[oldElem].code); //TODO: account for flipping in 3D cases
         auto highIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 0 ^ rotation);
         auto lowIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 1 ^ rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
-        auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
+        auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
         bool onSplit = are_close(baryCoords[highIdx], baryCoords[lowIdx]);
         auto target = (onSplit || baryCoords[lowIdx] > baryCoords[highIdx]) ? 0 : 1;
         auto key = modified[oldElem].key;

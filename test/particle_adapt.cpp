@@ -112,13 +112,11 @@ template<int dim>
 int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   ptclAdapt.update(ptclAdapt.mesh);
   auto vert2coords = ptclAdapt.mesh.coords();
+  auto edge2verts = ptclAdapt.mesh.ask_verts_of(Omega_h::EDGE);
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
-    Omega_h::Vector<dim> pos;
-    for (int i = 0; i<dim; i++)
-      pos[i] = ptclAdapt.pPos(pid,i);
-
+    auto pos = ptclAdapt.getPos(pid);
     if (ptclAdapt.pDim(pid) == 0) {
       auto verts = gather_verts<dim+1>(ptclAdapt.new_downward[0].ab2b, Omega_h::LO(ptclAdapt.pParent(pid)));
       auto coords = gather_vectors<dim+1,dim>(vert2coords, verts);
@@ -126,6 +124,14 @@ int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
         printf("[ERROR] Particle %d not at correct vertex\n", pid);
         failed(0) = 1;
       }
+    }
+    else if (ptclAdapt.pDim(pid) == 1) {
+      auto child = ptclAdapt.getChildElem(pid);
+      auto edgeVerts = gather_verts<2>(edge2verts, child);
+      auto edgeCoords = gather_vectors<2, dim>(vert2coords, edgeVerts);
+      if (Omega_h::are_close(Omega_h::distance(edgeCoords[0], pos) + Omega_h::distance(edgeCoords[1], pos), Omega_h::distance(edgeCoords[0], edgeCoords[1]))) return;
+      printf("[ERROR] Particle %d is on edge %d which is not correct\n", pid, child);
+      failed(0) = 1;
     }
   };
   ps::parallel_for(ptclAdapt.ptcls, getNewElement);

@@ -108,21 +108,6 @@ int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   return ps::getLastValue(failed);
 }
 
-namespace Omega_h {
-  template <int dim>
-  void printOrderInfo(Mesh& mesh) {
-    printf("\n== ORDER INFO ==\n");
-    auto elem2vert = mesh.get_adj(dim, Omega_h::VERT);
-    auto elem2edge = mesh.get_adj(dim, Omega_h::EDGE);
-    parallel_for(mesh.nelems(), OMEGA_H_LAMBDA(LO elem) {
-      // auto i = elem2vert.a2ab[elem];
-      auto verts = Omega_h::gather_verts<dim+1>(elem2vert.ab2b, Omega_h::LO(elem));
-      auto edges = Omega_h::gather_down<dim+1>(elem2edge.ab2b, Omega_h::LO(elem));
-      printf("Elem %d : Verts (%d, %d, %d) Edges (%d, %d, %d)\n", elem, verts[0], verts[1], verts[2], edges[0], edges[1], edges[2]);
-    });
-  }
-}
-
 template<int dim>
 int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   ptclAdapt.update(ptclAdapt.mesh);
@@ -184,13 +169,13 @@ int isParticleInLowest(Omega_h::Mesh& mesh, PS*& ptcls, Omega_h::ParticleAdapt<d
   PS::kkLidView failed = PS::kkLidView("failed", 1);
 
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if (mask <= 0) return;
+    if (mask <= 0 || ptclAdapt.pDim(pid) == dim) return;
     auto d = ptclAdapt.pDim(pid);
     auto child = ptclAdapt.getChildElem(pid);
     auto lowestElemIdx = ptclAdapt.new_upward[d].a2ab[child];
     auto lowestElem = ptclAdapt.new_upward[d].ab2b[lowestElemIdx];
     if (ptclAdapt.pParent(pid) == lowestElem) return;
-    printf("Ptcl %-2d: Not on lowest elem. Is %-2d should be %-2d\n", ptclID(pid), ptclAdapt.pParent(pid), lowestElem);
+    printf("Ptcl %-2d: Not on lowest parent. Is (%-2d) should be (%-2d)\n", ptclID(pid), ptclAdapt.pParent(pid), lowestElem);
     failed(0) = 1;
   };
   ps::parallel_for(ptcls, printResults);
@@ -262,8 +247,9 @@ int testEdges(Omega_h::Mesh mesh)
 }
 
 template<int dim>
-int testAll(Omega_h::Mesh mesh)
+int testFaces(Omega_h::Mesh mesh)
 {
+  printf("\n== Test: Migrate ptcl from faces ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
   Omega_h::ParticleAdapt<dim> ptclAdapt(ptcls, mesh);
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
@@ -288,6 +274,8 @@ int testAll(Omega_h::Mesh mesh)
   adaptMesh<dim>(mesh, ptcls, ptclAdapt, {.75});
   int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
+  fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
+  fails += compareWithPosition<dim>(ptclAdapt);
   delete ptcls;
   return fails;
 }
@@ -303,7 +291,7 @@ int main(int argc, char* argv[]) {
   int fails = 0;
   fails += testVerts<dim>(mesh2D());
   fails += testEdges<dim>(mesh2D());
-  fails += testAll<dim>(mesh2D());
+  fails += testFaces<dim>(mesh2D());
   // Omega_h::printOrderInfo<dim>(mesh);
   return fails;
 }

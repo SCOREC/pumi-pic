@@ -100,10 +100,8 @@ namespace Omega_h {
     });
 
     update(new_mesh);
-    auto old_verts2coords = old_mesh.coords();
-    Adj old_downward[mesh_dim];
-    for (int i=0; i<mesh_dim; i++)
-      old_downward[i] = old_mesh.ask_down(mesh_dim, i);
+    auto old_vert2coords = old_mesh.coords();
+    auto old_cell2verts = old_mesh.ask_down(mesh_dim, 0).ab2b;
 
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
@@ -117,30 +115,27 @@ namespace Omega_h {
           pos[i] = pPos(pid,i);
 
         //Get parent element
-        auto key = modified[oldElem].key;
-        auto spltEdge = keys2edges[key];
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVertIdx = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
-        auto oldVerts = gather_verts<mesh_dim+1>(old_downward[0].ab2b, LO(oldElem));
-        auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_verts2coords, oldVerts);
-        auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords); //TODO: account for flipping in 3D cases
-
         auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid));
-        int rotation = code_rotation(modified[oldElem].code);
+        int rotation = code_rotation(modified[oldElem].code); //TODO: account for flipping in 3D cases
         auto highIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 0 ^ rotation);
         auto lowIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 1 ^ rotation);
-        auto target = baryCoords[lowIdx] > baryCoords[highIdx] ? 0 : 1;
+        auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
+        auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
+        auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(pos, oldCoords);
         bool onSplit = are_close(baryCoords[highIdx], baryCoords[lowIdx]);
-        if (onSplit) target = 0;
+        auto target = (onSplit || baryCoords[lowIdx] > baryCoords[highIdx]) ? 0 : 1;
+        auto key = modified[oldElem].key;
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + target;
+        pParent(pid) = prods2new_ents[prod];
 
         auto keptSide = simplex_opposite_template(mesh_dim, VERT, (target == 0) ? highIdx : lowIdx);
-        Int old2NewIdx[mesh_dim+1] = {0};
+        Int old2NewIdx[mesh_dim+1] = {0}; //one elem kept blank
         for (Int newIdx = 0; newIdx < mesh_dim; ++newIdx) {
           auto oldIdx = simplex_down_template(mesh_dim, mesh_dim - 1, keptSide, newIdx);
           old2NewIdx[oldIdx] = newIdx;
         }
-        pParent(pid) = prods2new_ents[prod];
 
         if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
@@ -148,25 +143,21 @@ namespace Omega_h {
         }
         else if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
           pChild(pid) = old2NewIdx[pChild(pid)];
-          auto newVert = getChildElem(pid);
-          auto firstElemIdx = new_upward[0].a2ab[newVert];
-          setPtcl(pid, 0, new_upward[0].ab2b[firstElemIdx], newVert);
         }
-        else if (onSplit) { //case 3: ptcl on new edge
-          auto edgeIdx = pParent(pid)*simplex_degree(mesh_dim, 1) + rotation + spltEdgeIdx;
-          pChild(pid) = edgeIdx;
+        else if (onSplit) { //case 3: ptcl on the new edge
+          pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[lowIdx]);
           pDim(pid) = 1;
         }
         else if (pDim(pid) == 1 && are_close(baryCoords[oppositeVert], 0)) { //case 3: ptcl stayed on edge
           pChild(pid) = simplex_opposite_template(mesh_dim, VERT, (pChild(pid) == spltEdgeIdx) ? old2NewIdx[spltVertIdx] : mesh_dim);
-          auto newEdge = getChildElem(pid);
-          auto firstElemIdx = new_upward[1].a2ab[newEdge];
-          setPtcl(pid, 1, new_upward[1].ab2b[firstElemIdx], newEdge);
+        }
+        if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
+          auto newChild = getChildElem(pid);
+          auto lowestParent = new_upward[pDim(pid)].a2ab[newChild];
+          setPtcl(pid, pDim(pid), new_upward[pDim(pid)].ab2b[lowestParent], newChild);
         }
       }
-      else {
-        printf("WARNING: element skipped during particle adaptation\n");
-      }
+      else printf("WARNING: element skipped during particle adaptation\n");
     });
   }
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,

@@ -178,15 +178,18 @@ namespace Omega_h {
           pDim(pid) = 1;
           return; //go to next ptcl
         }
-        for (int i=0; i<simplex_degree(mesh_dim, 1); i++) //case 4: ptcl on old edge
-          if (are_close(baryCoords[i], 0)) {
-            auto newEdge = old2New[1][oldChild];
-            auto firstElemIdx = new_upward[1].a2ab[newEdge];
-            pParent(pid) = new_upward[1].ab2b[firstElemIdx];
-            pChild(pid) = getChildIndex(1, pParent(pid), newEdge);
-            pDim(pid) = 1;
-            return;
-          }
+        auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid)); //case 3: ptcl stayed on edge edge
+        if (pDim(pid) == 1 && are_close(baryCoords[oppositeVert], 0)) {
+          if (pChild(pid) == spltEdgeIdx)
+            pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[spltVertIdx]);
+          else
+            pChild(pid) = simplex_opposite_template(mesh_dim, VERT, mesh_dim);
+
+          auto newEdge = getChildElem(pid);
+          auto firstElemIdx = new_upward[1].a2ab[newEdge];
+          setPtcl(pid, 1, new_upward[1].ab2b[firstElemIdx], newEdge);
+          return;
+        }
       }
       else {
         printf("WARNING: element skipped during particle adaptation\n");

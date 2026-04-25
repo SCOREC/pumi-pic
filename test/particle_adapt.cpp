@@ -108,6 +108,21 @@ int migratePtclsAfterAdapt(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   return ps::getLastValue(failed);
 }
 
+namespace Omega_h {
+  template <int dim>
+  void printOrderInfo(Mesh& mesh) {
+    printf("\n== ORDER INFO ==\n");
+    auto elem2vert = mesh.get_adj(dim, Omega_h::VERT);
+    auto elem2edge = mesh.get_adj(dim, Omega_h::EDGE);
+    parallel_for(mesh.nelems(), OMEGA_H_LAMBDA(LO elem) {
+      // auto i = elem2vert.a2ab[elem];
+      auto verts = Omega_h::gather_verts<dim+1>(elem2vert.ab2b, Omega_h::LO(elem));
+      auto edges = Omega_h::gather_down<dim+1>(elem2edge.ab2b, Omega_h::LO(elem));
+      printf("Elem %d : Verts (%d, %d, %d) Edges (%d, %d, %d)\n", elem, verts[0], verts[1], verts[2], edges[0], edges[1], edges[2]);
+    });
+  }
+}
+
 template<int dim>
 int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   ptclAdapt.update(ptclAdapt.mesh);
@@ -115,10 +130,14 @@ int compareWithPosition(Omega_h::ParticleAdapt<dim>& ptclAdapt) {
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
+    Omega_h::Vector<dim> pos;
+    for (int i = 0; i<dim; i++)
+      pos[i] = ptclAdapt.pPos(pid,i);
+
     if (ptclAdapt.pDim(pid) == 0) {
       auto verts = gather_verts<dim+1>(ptclAdapt.new_downward[0].ab2b, Omega_h::LO(ptclAdapt.pParent(pid)));
       auto coords = gather_vectors<dim+1,dim>(vert2coords, verts);
-      if (!Omega_h::are_close(coords[ptclAdapt.pChild(pid)][0], ptclAdapt.pPos(pid, 0)) || !Omega_h::are_close(coords[ptclAdapt.pChild(pid)][1], ptclAdapt.pPos(pid, 1))) {
+      if (!Omega_h::are_close(coords[ptclAdapt.pChild(pid)], pos)) {
         printf("[ERROR] Particle %d not at correct vertex\n", pid);
         failed(0) = 1;
       }
@@ -232,6 +251,7 @@ int testEdges(Omega_h::Mesh mesh)
   int fails = migratePtclsAfterAdapt<dim>(ptclAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, ptclAdapt);
+  fails += compareWithPosition<dim>(ptclAdapt);
   delete ptcls;
   return fails;
 }
@@ -265,21 +285,6 @@ int testAll(Omega_h::Mesh mesh)
   fails += compareWithSearch<dim>(mesh, ptcls);
   delete ptcls;
   return fails;
-}
-
-namespace Omega_h {
-  template <int dim>
-  void printOrderInfo(Mesh& mesh) {
-    printf("\n== ORDER INFO ==\n");
-    auto elem2vert = mesh.get_adj(dim, Omega_h::VERT);
-    auto elem2edge = mesh.get_adj(dim, Omega_h::EDGE);
-    parallel_for(mesh.nelems(), OMEGA_H_LAMBDA(LO elem) {
-      // auto i = elem2vert.a2ab[elem];
-      auto verts = Omega_h::gather_verts<dim+1>(elem2vert.ab2b, Omega_h::LO(elem));
-      auto edges = Omega_h::gather_down<dim+1>(elem2edge.ab2b, Omega_h::LO(elem));
-      printf("Elem %d : Verts (%d, %d, %d) Edges (%d, %d, %d)\n", elem, verts[0], verts[1], verts[2], edges[0], edges[1], edges[2]);
-    });
-  }
 }
 
 int main(int argc, char* argv[]) {

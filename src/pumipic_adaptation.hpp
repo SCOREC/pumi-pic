@@ -9,7 +9,7 @@
 
 using particle_structs::MemberTypes;
 enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
-typedef MemberTypes<double[3], Omega_h::LO, int, int, int> Type;
+typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
@@ -64,7 +64,7 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void setPtcl(LO pid, int dim, LO parent, LO child) const {
+  void setPtcl(LO pid, Int dim, LO parent, LO child) const {
     auto degree = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
     for (auto i = 0; i < degree; i++)
@@ -73,6 +73,13 @@ namespace Omega_h {
     pDim(pid) = dim;
     pParent(pid) = parent;
     pChild(pid) = childIdx;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  LO getLowestParent(LO child, Int dim) const {
+    if (dim == mesh_dim) return child;
+    auto lowestParentIdx = new_upward[dim].a2ab[child];
+    return new_upward[dim].ab2b[lowestParentIdx];
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -108,9 +115,7 @@ namespace Omega_h {
       auto elem_end = old_edge2Elem.a2ab[edge + 1];
       for (auto idx = elem_begin; idx < elem_end; ++idx) {
         auto elem = old_edge2Elem.ab2b[idx];
-        modified[elem].key = key;
-        modified[elem].offset = idx-elem_begin;
-        modified[elem].code = old_edge2Elem.codes[idx];
+        modified[elem] = ModifiedElem(key, idx-elem_begin, old_edge2Elem.codes[idx]);
       }
     });
 
@@ -162,8 +167,8 @@ namespace Omega_h {
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
           auto newChild = getChildElem(pid);
-          auto lowestParent = new_upward[pDim(pid)].a2ab[newChild];
-          setPtcl(pid, pDim(pid), new_upward[pDim(pid)].ab2b[lowestParent], newChild);
+          auto lowestParent = getLowestParent(newChild, pDim(pid));
+          setPtcl(pid, pDim(pid), lowestParent, newChild);
         }
       }
       else printf("WARNING: element skipped during particle adaptation\n");

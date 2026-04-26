@@ -174,13 +174,10 @@ int isParticleInLowest(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdap
   pAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
-
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0 || pAdapt.pDim(pid) == dim) return;
-    auto d = pAdapt.pDim(pid);
     auto child = pAdapt.getChildElem(pid);
-    auto lowestElemIdx = pAdapt.new_upward[d].a2ab[child];
-    auto lowestElem = pAdapt.new_upward[d].ab2b[lowestElemIdx];
+    auto lowestElem = pAdapt.getLowestParent(child, pAdapt.pDim(pid));
     if (pAdapt.pParent(pid) == lowestElem) return;
     printf("Ptcl %-2d: Not on lowest parent. Is (%-2d) should be (%-2d)\n", ptclID(pid), pAdapt.pParent(pid), lowestElem);
     failed(0) = 1;
@@ -199,8 +196,7 @@ int testVerts(OH::Mesh mesh)
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elem_begin = pAdapt.new_upward[0].a2ab[e];
-      auto parent = pAdapt.new_upward[0].ab2b[elem_begin];
+      auto parent = pAdapt.getLowestParent(e, 0);
       auto pos = get_vector<dim>(nodes2coords, OH::LO(e));
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
@@ -229,8 +225,7 @@ int testEdges(OH::Mesh mesh)
 
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elem_begin = pAdapt.new_upward[1].a2ab[e];
-      auto parent = pAdapt.new_upward[1].ab2b[elem_begin];
+      auto parent = pAdapt.getLowestParent(e, 1);
       auto edgeVerts = OH::gather_verts<2>(edge2verts, OH::LO(e));
       auto vtxCoords = OH::gather_vectors<2,2>(nodes2coords, edgeVerts);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
@@ -261,14 +256,14 @@ int testFaces(OH::Mesh mesh)
   OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
   auto nodes2coords = mesh.coords();
-
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto elmVerts = OH::gather_verts<dim+1>(pAdapt.new_downward->ab2b, OH::LO(e));
       auto vtxCoords = OH::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * .5); // point near vertex
+      const double interval[3] = {.5, 1, .25};
+      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * interval[v]); // point near vertex
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
       pAdapt.pParent(pid) = e;
@@ -278,7 +273,7 @@ int testFaces(OH::Mesh mesh)
   ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.75});
+  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);
@@ -299,6 +294,5 @@ int main(int argc, char* argv[]) {
   fails += testVerts<dim>(mesh2D());
   fails += testEdges<dim>(mesh2D());
   fails += testFaces<dim>(mesh2D());
-  // OH::printOrderInfo<dim>(mesh);
   return fails;
 }

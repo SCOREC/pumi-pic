@@ -98,7 +98,6 @@ namespace Omega_h {
     return old2New;
   }
 
-  //TODO: test refinment multiple times
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {

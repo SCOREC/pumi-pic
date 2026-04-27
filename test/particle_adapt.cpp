@@ -204,7 +204,7 @@ int testVerts(OH::Mesh mesh)
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.75});
+  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);
@@ -239,7 +239,7 @@ int testEdges(OH::Mesh mesh)
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.75});
+  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
   fails += compareWithSearch<dim>(mesh, ptcls);
   fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);

@@ -150,6 +150,12 @@ namespace Omega_h {
           old2NewIdx[oldIdx] = newIdx;
         }
 
+        // if (code_is_flipped(modified[oldElem].code)) {
+        //   std::swap(old2NewIdx[1], old2NewIdx[2]);
+        //   std::swap(baryCoords[1], baryCoords[2]);
+        // }
+        // flip_new_elem<mesh_dim>(&old2NewIdx[0]);
+
         if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;

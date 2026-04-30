@@ -79,12 +79,14 @@ int migratePtclsAfterAdapt(OH::ParticleAdapt<dim>& pAdapt) {
   PS::kkLidView newElement("new_element", ptcls->capacity());
   pAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
-  printf("\n== Particle Positions ==\nx, y, \"(pid, parent, child, dim)\"\n");
+  printf("\n== Particle Positions ==\nx, y, z, \"(pid, parent, child, dim)\"\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       newElement(pid) = pAdapt.pParent(pid);
-      printf("%f, %f, \"(%d, %d, %d, %d)\"\n", pAdapt.pPos(pid, 0), pAdapt.pPos(pid, 1), pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
+      OH::Vector<3> pos = OH::zero_vector<3>();
+      for (int i=0; i<dim; i++) pos[i] = pAdapt.pPos(pid, i);
+      printf("%f, %f, %f, \"(%d, %d, %d, %d)\"\n", pos[0], pos[1], pos[2], pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -134,6 +136,12 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
       printf("[ERROR] Particle %d is on edge %d which is not correct\n", pid, child);
       failed(0) = 1;
     }
+    auto parentVerts = gather_verts<dim+1>(pAdapt.new_downward->ab2b, OH::LO(pAdapt.pParent(pid)));
+    auto parentCoords = gather_vectors<dim+1,dim>(vert2coords, parentVerts);
+    auto baryCoords = barycentric_from_global<dim,dim>(pPos, parentCoords);
+    if (is_barycentric_inside(baryCoords)) return;
+    printf("[ERROR] Particle %d is not in parent %d\n", pid, pAdapt.pParent(pid));
+    failed(0) = 1;
   };
   ps::parallel_for(pAdapt.ptcls, getNewElement);
   return ps::getLastValue(failed);
@@ -141,9 +149,10 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
 
 template<int dim>
 int compareWithSearch(OH::Mesh& mesh, PS*& ptcls) {
+  if (dim == 3) return 0;
   auto ptclPos = ptcls->get<POS>();
   pcms::GridPointSearch search{mesh, 50, 50};
-  Kokkos::View<pcms::Real*[dim]> points("test_points", ptcls->capacity()*dim);
+  Kokkos::View<pcms::Real*[2]> points("test_points", ptcls->capacity()*dim);
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0)
       for (int i=0; i<dim; i++)
@@ -286,13 +295,16 @@ int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
 
-  auto mesh2D = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
-  auto mesh = mesh2D();
-  OH::vtk::write_vtu("box_before_adapt.vtu", &mesh);
-  const int dim = 2;
+  auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
+  auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
+  auto mesh2D = create2DMesh();
+  auto mesh3D = create3DMesh();
+  OH::vtk::write_vtu("box_before_adapt.vtu", &mesh2D);
+  OH::vtk::write_vtu("3D_box_before_adapt.vtu", &mesh3D);
   int fails = 0;
-  fails += testVerts<dim>(mesh2D());
-  fails += testEdges<dim>(mesh2D());
-  fails += testFaces<dim>(mesh2D());
+  fails += testVerts<2>(create2DMesh());
+  fails += testEdges<2>(create2DMesh());
+  fails += testFaces<2>(create2DMesh());
+  // fails += testVerts<3>(create3DMesh());
   return fails;
 }

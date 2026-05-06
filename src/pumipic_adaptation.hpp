@@ -89,6 +89,14 @@ namespace Omega_h {
     return new_downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
+  KOKKOS_INLINE_FUNCTION
+  Int flip(Int index) const {
+    if (mesh_dim < 3) return index;
+    if (index == 1) return 2;
+    if (index == 2) return 1;
+    return index;
+  }
+
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -147,21 +155,15 @@ namespace Omega_h {
         Int old2NewIdx[mesh_dim+1] = {0}; //one elem kept blank
         for (Int newIdx = 0; newIdx < mesh_dim; ++newIdx) {
           auto oldIdx = simplex_down_template(mesh_dim, mesh_dim - 1, keptSide, newIdx);
-          old2NewIdx[oldIdx] = newIdx;
+          old2NewIdx[oldIdx] = flip(newIdx);
         }
 
-        // if (code_is_flipped(modified[oldElem].code)) {
-        //   std::swap(old2NewIdx[1], old2NewIdx[2]);
-        //   std::swap(baryCoords[1], baryCoords[2]);
-        // }
-        // flip_new_elem<mesh_dim>(&old2NewIdx[0]);
-
-        if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
+        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
+          pChild(pid) = old2NewIdx[pChild(pid)];
+        }
+        else if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
-        }
-        else if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
-          pChild(pid) = old2NewIdx[pChild(pid)];
         }
         else if (onSplit) { //case 3: ptcl on the new edge
           pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[lowIdx]);

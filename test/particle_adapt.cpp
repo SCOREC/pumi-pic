@@ -54,7 +54,6 @@ void resize(PS*& ptcls, int newNElems) {
 
 template<int dim>
 void adaptMesh(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length) {
-  // double factors[]{1.8, 1.7, 0.6, 0.3};
   for (int i=0; i<length.size(); i++) {
     auto metrics = OH::get_implied_isos(&mesh);
     auto scalar = OH::metric_eigenvalue_from_length(length[i]);
@@ -305,6 +304,6 @@ int main(int argc, char* argv[]) {
   fails += testVerts<2>(create2DMesh());
   fails += testEdges<2>(create2DMesh());
   fails += testFaces<2>(create2DMesh());
-  // fails += testVerts<3>(create3DMesh());
+  fails += testVerts<3>(create3DMesh());
   return fails;
 }

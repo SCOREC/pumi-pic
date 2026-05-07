@@ -260,22 +260,23 @@ template<int dim>
 int testFaces(OH::Mesh mesh)
 {
   printf("\n== Test: Migrate ptcl from faces ==\n\n");
-  PS* ptcls = createPtclStructure(mesh, mesh.nelems(), 3);
+  PS* ptcls = createPtclStructure(mesh, mesh.nfaces(), 3);
   OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nelems());
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nfaces());
+  auto face2verts = mesh.get_adj(OH::FACE, OH::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto elmVerts = OH::gather_verts<dim+1>(pAdapt.new_downward->ab2b, OH::LO(e));
-      auto vtxCoords = OH::gather_vectors<dim+1,dim>(nodes2coords, elmVerts);
+      auto parent = pAdapt.getLowestParent(e, 2);
+      auto elmVerts = OH::gather_verts<3>(face2verts, OH::LO(e));
+      auto vtxCoords = OH::gather_vectors<3,dim>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
       const double interval[3] = {.5, 1, .25};
       auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * interval[v]); // point near vertex
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
-      pAdapt.pParent(pid) = e;
-      pAdapt.pDim(pid) = dim;
+      pAdapt.setPtcl(pid, 2, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
@@ -305,6 +306,7 @@ int main(int argc, char* argv[]) {
   fails += testEdges<2>(create2DMesh());
   fails += testFaces<2>(create2DMesh());
   fails += testVerts<3>(create3DMesh());
-  // fails += testEdges<3>(create3DMesh());
+  fails += testEdges<3>(create3DMesh());
+  // fails += testFaces<3>(create3DMesh());
   return fails;
 }

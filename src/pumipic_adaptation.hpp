@@ -150,20 +150,19 @@ namespace Omega_h {
       else if (modified[oldElem].offset != -1) { //find new split element
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        auto childVert0 = simplex_down_template(mesh_dim, EDGE, pChild(pid), 0 ^ rotation);
-        auto childVert1 = simplex_down_template(mesh_dim, EDGE, pChild(pid), 1 ^ rotation);
-        auto highIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 0 ^ rotation);
-        auto lowIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 1 ^ rotation);
+        Int edgeVerts[2]; Int spltVerts[2];
+        for (int i=0; i<2; i++) edgeVerts[i] = simplex_down_template(mesh_dim, EDGE, pChild(pid), i ^ rotation);
+        for (int i=0; i<2; i++) spltVerts[i] = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, i ^ rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
-        bool onSplit = are_close(baryCoords[highIdx], baryCoords[lowIdx]);
-        auto target = (onSplit || baryCoords[lowIdx] > baryCoords[highIdx]) ? 0 : 1;
+        bool onSplit = are_close(baryCoords[spltVerts[0]], baryCoords[spltVerts[1]]);
+        auto target = (onSplit || baryCoords[spltVerts[1]] > baryCoords[spltVerts[0]]) ? 0 : 1;
         auto key = modified[oldElem].key;
         auto prod = keys2prods[key] + modified[oldElem].offset*2 + target;
         pParent(pid) = prods2new_ents[prod];
 
-        auto keptSide = simplex_opposite_template(mesh_dim, VERT, (target == 0) ? highIdx : lowIdx);
+        auto keptSide = simplex_opposite_template(mesh_dim, VERT, spltVerts[target]);
         Int old2NewIdx[mesh_dim+1] = {0}; //one elem kept blank
         for (Int newIdx = 0; newIdx < mesh_dim; ++newIdx) {
           auto oldIdx = simplex_down_template(mesh_dim, mesh_dim - 1, keptSide, newIdx);
@@ -173,19 +172,18 @@ namespace Omega_h {
         if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
-        else if (onSplit && are_close(baryCoords[lowIdx]+baryCoords[highIdx], 1)){ //case 1: ptcl on the new vert
+        else if (onSplit && are_close(baryCoords[spltVerts[1]]+baryCoords[spltVerts[0]], 1)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
         }
         else if (onSplit) { //case 3: ptcl on the new edge
-          pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[lowIdx]);
+          pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[spltVerts[1]]);
           pDim(pid) = 1;
         }
-        else if (pDim(pid) == 1 && are_close(baryCoords[childVert0]+baryCoords[childVert1], 1)) { //case 3: ptcl stayed on edge
-          if (pChild(pid) == spltEdgeIdx)
-            pChild(pid) = verts2Edge(mesh_dim, old2NewIdx[(target == 0) ? lowIdx : highIdx]);
-          else
-            pChild(pid) = verts2Edge(old2NewIdx[childVert0], old2NewIdx[childVert1]);
+        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //case 3: ptcl stayed on edge
+          pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
+            verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
+            verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
           auto newChild = getChildElem(pid);

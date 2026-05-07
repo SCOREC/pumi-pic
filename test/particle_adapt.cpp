@@ -235,7 +235,7 @@ int testEdges(OH::Mesh mesh)
     if(mask > 0) {
       auto parent = pAdapt.getLowestParent(e, 1);
       auto edgeVerts = OH::gather_verts<2>(edge2verts, OH::LO(e));
-      auto vtxCoords = OH::gather_vectors<2,2>(nodes2coords, edgeVerts);
+      auto vtxCoords = OH::gather_vectors<2,dim>(nodes2coords, edgeVerts);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
       auto center = average(vtxCoords);
       const double interval[3] = {.5, 1, 1.5};
@@ -305,5 +305,6 @@ int main(int argc, char* argv[]) {
   fails += testEdges<2>(create2DMesh());
   fails += testFaces<2>(create2DMesh());
   fails += testVerts<3>(create3DMesh());
+  // fails += testEdges<3>(create3DMesh());
   return fails;
 }

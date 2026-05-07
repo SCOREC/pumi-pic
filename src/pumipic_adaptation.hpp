@@ -97,6 +97,18 @@ namespace Omega_h {
     return index;
   }
 
+  KOKKOS_INLINE_FUNCTION
+  Int verts2Edge(Int vert1, Int vert2) const {
+    for (int i=0; i<3; ++i) {
+      auto edge1 = simplex_up_template(mesh_dim, VERT, vert1, i);
+      for (int j=0; j<3; ++j) {
+        auto edge2 = simplex_up_template(mesh_dim, VERT, vert2, j);
+        if (edge1.up == edge2.up) return edge1.up;
+      }
+    }
+    return -1;
+  }
+
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -136,10 +148,10 @@ namespace Omega_h {
       if (old2New[oldElem] != -1) //update unchanged element id
         pParent(pid) = old2New[oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
+        auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        auto spltVertIdx = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
-        auto oppositeVert = simplex_opposite_template(mesh_dim, EDGE, pChild(pid));
-        auto rotation = code_rotation(modified[oldElem].code); //TODO: account for flipping in 3D cases
+        auto childVert0 = simplex_down_template(mesh_dim, EDGE, pChild(pid), 0 ^ rotation);
+        auto childVert1 = simplex_down_template(mesh_dim, EDGE, pChild(pid), 1 ^ rotation);
         auto highIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 0 ^ rotation);
         auto lowIdx = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, 1 ^ rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
@@ -161,7 +173,7 @@ namespace Omega_h {
         if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
-        else if (onSplit && are_close(baryCoords[spltVertIdx], 0)){ //case 1: ptcl on the new vert
+        else if (onSplit && are_close(baryCoords[lowIdx]+baryCoords[highIdx], 1)){ //case 1: ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
         }
@@ -169,8 +181,11 @@ namespace Omega_h {
           pChild(pid) = simplex_opposite_template(mesh_dim, VERT, old2NewIdx[lowIdx]);
           pDim(pid) = 1;
         }
-        else if (pDim(pid) == 1 && are_close(baryCoords[oppositeVert], 0)) { //case 3: ptcl stayed on edge
-          pChild(pid) = simplex_opposite_template(mesh_dim, VERT, (pChild(pid) == spltEdgeIdx) ? old2NewIdx[spltVertIdx] : mesh_dim);
+        else if (pDim(pid) == 1 && are_close(baryCoords[childVert0]+baryCoords[childVert1], 1)) { //case 3: ptcl stayed on edge
+          if (pChild(pid) == spltEdgeIdx)
+            pChild(pid) = verts2Edge(mesh_dim, old2NewIdx[(target == 0) ? lowIdx : highIdx]);
+          else
+            pChild(pid) = verts2Edge(old2NewIdx[childVert0], old2NewIdx[childVert1]);
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
           auto newChild = getChildElem(pid);

@@ -35,7 +35,7 @@ namespace pumipic {
 
     // Count number of particles to send to each process
     kkLidView num_send_particles("num_send_particles", comm_size + 1);
-    auto count_sending_particles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
+    auto count_sending_particles = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask) {
       const lid_t process = new_process(particle_id);
       if (mask && (process != comm_rank)) {
         const lid_t process_index = dist.index(process);
@@ -87,7 +87,7 @@ namespace pumipic {
     CreateViews<device_type, DataTypes>(send_particle, np_send);
     kkLidView send_index(Kokkos::ViewAllocateWithoutInitializing("send_particle_index"), capacity());
     auto element_to_gid_local = element_to_gid;
-    auto gatherParticlesToSend = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const bool& mask) {
+    auto gatherParticlesToSend = PS_LAMBDA(const lid_t& element_id, const lid_t& particle_id, const lid_t& mask) {
       const lid_t process = new_process(particle_id);
       if (mask && process != comm_rank) {
         const lid_t process_index = dist.index(process);

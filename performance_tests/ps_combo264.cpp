@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
       auto nums = ptcls->get<1>();
       auto lint = ptcls->get<2>();
 
-      auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+      auto pseudoPush = PS_LAMBDA(const int& e, const int& p, const int& mask) {
         if (mask) {
           for (int i = 0; i < 17; i++) {
             dbls(p,i) = 10.3;
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
       Kokkos::Timer tp;
       kkLidView new_process("new_process", ptcls->capacity());
       if (comm_size > 1) {
-        auto to_new_processes = PS_LAMBDA(const int& e, const int& p, const bool& mask) {
+        auto to_new_processes = PS_LAMBDA(const int& e, const int& p, const int& mask) {
           if (mask) {
             auto generator = pool.get_state();
             double prob = generator.drand(1.0);

@@ -48,7 +48,7 @@ namespace pumipic {
       MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
-      auto copyPSToArray = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+      auto copyPSToArray = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
         const int arr_index = ps_to_array(ptcl_id);
         if (mask && arr_index != comm_rank) {
           const int index = array_indices(ptcl_id);
@@ -92,7 +92,7 @@ namespace pumipic {
                  typename PS::kkLidView ps_indices) {
       MemberTypeView<T, Device> dst = *static_cast<MemberTypeView<T, Device> const*>(dsts[0]);
       MemberTypeView<T, Device> src = *static_cast<MemberTypeView<T, Device> const*>(srcs[0]);
-      auto copyPSToPS = PS_LAMBDA(int elm_id, int ptcl_id, bool mask) {
+      auto copyPSToPS = PS_LAMBDA(int elm_id, int ptcl_id, int mask) {
         const lid_t new_elem = new_element(ptcl_id);
         if (mask && new_elem != -1) {
           const int index = ps_indices(ptcl_id);

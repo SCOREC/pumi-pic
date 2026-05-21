@@ -152,7 +152,6 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
     auto parentCoords = gather_vectors<dim+1,dim>(vert2coords, parentVerts);
     auto baryCoords = barycentric_from_global<dim,dim>(pPos, parentCoords);
     if (is_barycentric_inside(baryCoords, OH::EPSILON)) return;
-    printf("COORDS %f %f %f\n", baryCoords[0], baryCoords[1], baryCoords[2]);
     printf("[ERROR] Particle %d is not in parent %d\n", pid, pAdapt.pParent(pid));
     failed(0) = 1;
   };
@@ -305,6 +304,40 @@ int testFaces(OH::Mesh mesh)
   return fails;
 }
 
+int testRegions(OH::Mesh mesh)
+{
+  printf("\n== Test: Migrate ptcl from regions ==\n\n");
+  PS* ptcls = createPtclStructure(mesh, mesh.nregions(), 4);
+  OH::ParticleAdapt<3> pAdapt(ptcls, mesh);
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nregions());
+  auto region2verts = mesh.get_adj(OH::REGION, OH::VERT).ab2b;
+  auto nodes2coords = mesh.coords();
+  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
+    if(mask > 0) {
+      auto parent = pAdapt.getLowestParent(e, 3);
+      auto elmVerts = OH::gather_verts<4>(region2verts, OH::LO(e));
+      auto vtxCoords = OH::gather_vectors<4,3>(nodes2coords, elmVerts);
+      auto center = average(vtxCoords);
+      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
+      const double interval[4] = {.1, .25, .5, 1};
+      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * interval[v]); // point near vertex
+      for (int i=0; i<3; i++)
+        pAdapt.pPos(pid, i) = pos[i];
+      pAdapt.setPtcl(pid, 3, parent, e);
+    }
+  };
+  ps::parallel_for(ptcls, setPtclInfo);
+
+  // Adaptation
+  adaptMesh<3>(mesh, ptcls, pAdapt, {.5});
+  int fails = migratePtclsAfterAdapt<3>(pAdapt);
+  fails += compareWithSearch<3>(mesh, ptcls);
+  fails += isParticleInLowest<3>(mesh, ptcls, pAdapt);
+  fails += compareWithPosition<3>(pAdapt);
+  delete ptcls;
+  return fails;
+}
+
 int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
@@ -318,5 +351,6 @@ int main(int argc, char* argv[]) {
   fails += testVerts<3>(create3DMesh());
   fails += testEdges<3>(create3DMesh());
   fails += testFaces<3>(create3DMesh());
+  fails += testRegions(create3DMesh());
   return fails;
 }

@@ -184,18 +184,18 @@ namespace Omega_h {
           old2NewIdx[oldIdx] = flip(newIdx);
         }
 
-        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //ptcl stayed on a vert
+        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //ptcl stayed on same vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
         else if (onSplit && are_close(baryCoords[spltVerts[1]]+baryCoords[spltVerts[0]], 1)){ //ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
         }
-        else if (onSplit && nonZeroVert > -1) { //ptcl on the new edge
+        else if (onSplit && pDim(pid) == 2) { //ptcl on a new edge
           pChild(pid) = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
           pDim(pid) = 1;
         }
-        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //ptcl stayed on edge
+        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //ptcl stayed on same edge
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
@@ -212,6 +212,10 @@ namespace Omega_h {
             edge2 = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
           }
           pChild(pid) = edges2Face(edge1, edge2);
+        }
+        else if (onSplit && pDim(pid) == 3) { //particle on a new face
+          pChild(pid) = 3;
+          pDim(pid) = 2;
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
           auto newChild = getChildElem(pid);

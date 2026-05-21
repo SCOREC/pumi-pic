@@ -99,6 +99,18 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
+  Int edges2Face(Int edge1, Int edge2) const {
+    for (int i=0; i<2; ++i) {
+      auto face1 = simplex_up_template(mesh_dim, EDGE, edge1, i);
+      for (int j=0; j<2; ++j) {
+        auto face2 = simplex_up_template(mesh_dim, EDGE, edge2, j);
+        if (face1.up == face2.up) return face1.up;
+      }
+    }
+    return -1;
+  }
+
+  KOKKOS_INLINE_FUNCTION
   Int verts2Edge(Int vert1, Int vert2) const {
     for (int i=0; i<3; ++i) {
       auto edge1 = simplex_up_template(mesh_dim, VERT, vert1, i);
@@ -172,21 +184,34 @@ namespace Omega_h {
           old2NewIdx[oldIdx] = flip(newIdx);
         }
 
-        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //case 2: ptcl stayed on a vert
+        if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //ptcl stayed on a vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
-        else if (onSplit && are_close(baryCoords[spltVerts[1]]+baryCoords[spltVerts[0]], 1)){ //case 1: ptcl on the new vert
+        else if (onSplit && are_close(baryCoords[spltVerts[1]]+baryCoords[spltVerts[0]], 1)){ //ptcl on the new vert
           pChild(pid) = mesh_dim;
           pDim(pid) = 0;
         }
-        else if (onSplit && nonZeroVert > -1) { //case 3: ptcl on the new edge
+        else if (onSplit && nonZeroVert > -1) { //ptcl on the new edge
           pChild(pid) = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
           pDim(pid) = 1;
         }
-        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //case 3: ptcl stayed on edge
+        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //ptcl stayed on edge
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
+        }
+        else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
+          Int faceVerts[3]; Int edge1; Int edge2;
+          for (int i=0; i<3; i++) faceVerts[i] = simplex_down_template(mesh_dim, FACE, pChild(pid), i);
+          if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) {
+            edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
+            edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
+          }
+          else {
+            edge1 = verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]);
+            edge2 = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
+          }
+          pChild(pid) = edges2Face(edge1, edge2);
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent
           auto newChild = getChildElem(pid);

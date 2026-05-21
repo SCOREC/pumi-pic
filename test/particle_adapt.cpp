@@ -54,6 +54,7 @@ void resize(PS*& ptcls, int newNElems) {
 
 template<int dim>
 void adaptMesh(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length) {
+  OH::vtk::write_vtu("box_before_adapt.vtu", &mesh);
   for (int i=0; i<length.size(); i++) {
     auto metrics = OH::get_implied_isos(&mesh);
     auto scalar = OH::metric_eigenvalue_from_length(length[i]);
@@ -115,6 +116,7 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
   pAdapt.update(pAdapt.mesh);
   auto vert2coords = pAdapt.mesh.coords();
   auto edge2verts = pAdapt.mesh.ask_verts_of(OH::EDGE);
+  auto face2verts = pAdapt.mesh.ask_verts_of(OH::FACE);
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
@@ -131,14 +133,26 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
       auto child = pAdapt.getChildElem(pid);
       auto eVerts = gather_verts<2>(edge2verts, child);
       auto eCoords = gather_vectors<2, dim>(vert2coords, eVerts);
-      if (OH::are_close(OH::distance(eCoords[0], pPos) + OH::distance(eCoords[1], pPos), OH::distance(eCoords[0], eCoords[1]))) return;
-      printf("[ERROR] Particle %d is on edge %d which is not correct\n", pid, child);
-      failed(0) = 1;
+      if (!OH::are_close(OH::distance(eCoords[0], pPos) + OH::distance(eCoords[1], pPos), OH::distance(eCoords[0], eCoords[1]))){
+        printf("[ERROR] Particle %d is on edge %d which is not correct\n", pid, child);
+        failed(0) = 1;
+      }
+    }
+    else if (pAdapt.pDim(pid) == 2) {
+      auto child = pAdapt.getChildElem(pid);
+      auto eVerts = gather_verts<3>(face2verts, child);
+      auto eCoords = gather_vectors<3, dim>(vert2coords, eVerts);
+      auto baryCoords = barycentric_from_global<dim,2>(pPos, eCoords);
+      if (!is_barycentric_inside(baryCoords, OH::EPSILON)){
+        printf("[ERROR] Particle %d is on face %d which is not correct\n", pid, child);
+        failed(0) = 1;
+      }
     }
     auto parentVerts = gather_verts<dim+1>(pAdapt.new_downward->ab2b, OH::LO(pAdapt.pParent(pid)));
     auto parentCoords = gather_vectors<dim+1,dim>(vert2coords, parentVerts);
     auto baryCoords = barycentric_from_global<dim,dim>(pPos, parentCoords);
-    if (is_barycentric_inside(baryCoords)) return;
+    if (is_barycentric_inside(baryCoords, OH::EPSILON)) return;
+    printf("COORDS %f %f %f\n", baryCoords[0], baryCoords[1], baryCoords[2]);
     printf("[ERROR] Particle %d is not in parent %d\n", pid, pAdapt.pParent(pid));
     failed(0) = 1;
   };
@@ -297,16 +311,12 @@ int main(int argc, char* argv[]) {
 
   auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
   auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
-  auto mesh2D = create2DMesh();
-  auto mesh3D = create3DMesh();
-  OH::vtk::write_vtu("box_before_adapt.vtu", &mesh2D);
-  OH::vtk::write_vtu("3D_box_before_adapt.vtu", &mesh3D);
   int fails = 0;
   fails += testVerts<2>(create2DMesh());
   fails += testEdges<2>(create2DMesh());
   fails += testFaces<2>(create2DMesh());
   fails += testVerts<3>(create3DMesh());
   fails += testEdges<3>(create3DMesh());
-  // fails += testFaces<3>(create3DMesh());
+  fails += testFaces<3>(create3DMesh());
   return fails;
 }

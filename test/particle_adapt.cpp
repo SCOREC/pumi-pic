@@ -304,36 +304,35 @@ int testFaces(OH::Mesh mesh)
   return fails;
 }
 
-int testRegions(OH::Mesh mesh)
+template <int test_dim, int mesh_dim>
+int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
 {
-  printf("\n== Test: Migrate ptcl from regions ==\n\n");
-  PS* ptcls = createPtclStructure(mesh, mesh.nregions(), 4);
-  OH::ParticleAdapt<3> pAdapt(ptcls, mesh);
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nregions());
-  auto region2verts = mesh.get_adj(OH::REGION, OH::VERT).ab2b;
+  printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
+  PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
+  OH::ParticleAdapt<test_dim> pAdapt(ptcls, mesh);
+  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nents(test_dim));
+  auto test_ent2verts = mesh.get_adj(test_dim, OH::VERT).ab2b;
   auto nodes2coords = mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto parent = pAdapt.getLowestParent(e, 3);
-      auto elmVerts = OH::gather_verts<4>(region2verts, OH::LO(e));
-      auto vtxCoords = OH::gather_vectors<4,3>(nodes2coords, elmVerts);
+      auto parent = pAdapt.getLowestParent(e, test_dim);
+      auto elmVerts = OH::gather_verts<test_dim+1>(test_ent2verts, OH::LO(e));
+      auto vtxCoords = OH::gather_vectors<test_dim+1, mesh_dim>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      const double interval[4] = {.1, .25, .5, 1};
-      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * interval[v]); // point near vertex
-      for (int i=0; i<3; i++)
-        pAdapt.pPos(pid, i) = pos[i];
-      pAdapt.setPtcl(pid, 3, parent, e);
+      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * lengthCenter[v]); // point near vertex
+      for (int i=0; i<mesh_dim; i++) pAdapt.pPos(pid, i) = pos[i];
+      pAdapt.setPtcl(pid, test_dim, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
-  adaptMesh<3>(mesh, ptcls, pAdapt, {.5});
-  int fails = migratePtclsAfterAdapt<3>(pAdapt);
-  fails += compareWithSearch<3>(mesh, ptcls);
-  fails += isParticleInLowest<3>(mesh, ptcls, pAdapt);
-  fails += compareWithPosition<3>(pAdapt);
+  adaptMesh<mesh_dim>(mesh, ptcls, pAdapt, {.5});
+  int fails = migratePtclsAfterAdapt<mesh_dim>(pAdapt);
+  fails += compareWithSearch<mesh_dim>(mesh, ptcls);
+  fails += isParticleInLowest<mesh_dim>(mesh, ptcls, pAdapt);
+  fails += compareWithPosition<mesh_dim>(pAdapt);
   delete ptcls;
   return fails;
 }
@@ -351,6 +350,6 @@ int main(int argc, char* argv[]) {
   fails += testVerts<3>(create3DMesh());
   fails += testEdges<3>(create3DMesh());
   fails += testFaces<3>(create3DMesh());
-  fails += testRegions(create3DMesh());
+  fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
   return fails;
 }

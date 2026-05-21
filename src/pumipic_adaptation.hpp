@@ -40,7 +40,6 @@ namespace Omega_h {
   PS::Slice<CHILD> pChild;
   PS::Slice<DIM> pDim;
 
-
   ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     update(meshIn);
   }

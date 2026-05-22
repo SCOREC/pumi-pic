@@ -105,6 +105,15 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
+  Int faceVertOppositeEdge(const Int face, const std::array<Int, 2> edgeVerts) const {
+    for (int i = 0; i < 3; i++){
+      auto v = (mesh_dim == 2) ? i : simplex_down_template(mesh_dim, FACE, face, i);
+      if (v != edgeVerts[0] && v != edgeVerts[1]) return v;
+    }
+    return -1;
+  }
+
+  KOKKOS_INLINE_FUNCTION
   Int edges2Face(Int edge1, Int edge2) const {
     for (int i=0; i<2; ++i) {
       auto face1 = simplex_up_template(mesh_dim, EDGE, edge1, i);
@@ -167,6 +176,7 @@ namespace Omega_h {
       if (old2New[oldElem] != -1) //update unchanged element id
         pParent(pid) = old2New[oldElem];
       else if (modified[oldElem].offset != -1) { //find new split element
+        auto newVert = mesh_dim;
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVerts = get_indices<EDGE>(mesh_dim, spltEdgeIdx, rotation);
@@ -175,10 +185,6 @@ namespace Omega_h {
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
         bool onSplit = are_close(baryCoords[spltVerts[0]], baryCoords[spltVerts[1]]) && !are_close(baryCoords[spltVerts[0]], 0);
         auto target = (onSplit || baryCoords[spltVerts[1]] > baryCoords[spltVerts[0]]) ? 0 : 1;
-        Int nonZeroVert = -1;
-        for (Int i=0; i<mesh_dim+1; i++) 
-          if (i != spltVerts[0] && i != spltVerts[1] && !are_close(baryCoords[i], 0))
-            nonZeroVert = i;
         auto prod = keys2prods[modified[oldElem].key] + modified[oldElem].offset*2 + target;
         pParent(pid) = prods2new_ents[prod];
 
@@ -191,10 +197,11 @@ namespace Omega_h {
 
         if (onSplit) pDim(pid) = pDim(pid) - 1;
         if (onSplit && pDim(pid) == 0) { //ptcl on the new vert
-          pChild(pid) = mesh_dim;
+          pChild(pid) = newVert;
         }
         else if (onSplit && pDim(pid) == 1) { //ptcl on a new edge
-          pChild(pid) = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
+          auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
+          pChild(pid) = verts2Edge(newVert, old2NewIdx[oppositeVert]);
         }
         else if (onSplit && pDim(pid) == 2) { //particle on a new face
           pChild(pid) = 3;
@@ -205,7 +212,7 @@ namespace Omega_h {
         else if (pDim(pid) == 1) { //ptcl stayed on same edge
           auto edgeVerts = get_indices<EDGE>(mesh_dim, pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
-            verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
+            verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : 
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
         }
         else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
@@ -216,8 +223,9 @@ namespace Omega_h {
             edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
           }
           else {
-            edge1 = verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]);
-            edge2 = verts2Edge(mesh_dim, old2NewIdx[nonZeroVert]);
+            auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
+            edge1 = verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]);
+            edge2 = verts2Edge(newVert, old2NewIdx[oppositeVert]);
           }
           pChild(pid) = edges2Face(edge1, edge2);
         }

@@ -22,6 +22,13 @@ namespace Omega_h {
     return std::sqrt(x);
   }
 
+  template <Int dim>
+  constexpr std::array<Int, dim+1> get_indices(Int mesh_dim, Int index, Int rotation = 0) OMEGA_H_NOEXCEPT {
+    std::array<Int, dim+1> output;
+    for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
+    return output;
+  }
+
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
 
@@ -162,13 +169,13 @@ namespace Omega_h {
       else if (modified[oldElem].offset != -1) { //find new split element
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        Int spltVerts[2]; Int nonZeroVert = -1;
-        for (int i=0; i<2; i++) spltVerts[i] = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, i ^ rotation);
+        auto spltVerts = get_indices<EDGE>(mesh_dim, spltEdgeIdx, rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
         bool onSplit = are_close(baryCoords[spltVerts[0]], baryCoords[spltVerts[1]]) && !are_close(baryCoords[spltVerts[0]], 0);
         auto target = (onSplit || baryCoords[spltVerts[1]] > baryCoords[spltVerts[0]]) ? 0 : 1;
+        Int nonZeroVert = -1;
         for (Int i=0; i<mesh_dim+1; i++) 
           if (i != spltVerts[0] && i != spltVerts[1] && !are_close(baryCoords[i], 0))
             nonZeroVert = i;
@@ -196,15 +203,14 @@ namespace Omega_h {
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
         else if (pDim(pid) == 1) { //ptcl stayed on same edge
-          Int edgeVerts[2];
-          for (int i=0; i<2; i++) edgeVerts[i] = simplex_down_template(mesh_dim, EDGE, pChild(pid), i);
+          auto edgeVerts = get_indices<EDGE>(mesh_dim, pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
         }
         else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
-          Int faceVerts[3]; Int edge1; Int edge2;
-          for (int i=0; i<3; i++) faceVerts[i] = simplex_down_template(mesh_dim, FACE, pChild(pid), i);
+          Int edge1; Int edge2;
+          auto faceVerts = get_indices<FACE>(mesh_dim, pChild(pid));
           if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) {
             edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
             edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);

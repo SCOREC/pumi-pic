@@ -212,22 +212,22 @@ namespace Omega_h {
         else if (pDim(pid) == 1) { //ptcl stayed on same edge
           auto edgeVerts = get_indices<EDGE>(mesh_dim, pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
-            verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : 
-            verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);
+            verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
+            verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
         }
         else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
-          Int edge1; Int edge2;
-          auto faceVerts = get_indices<FACE>(mesh_dim, pChild(pid));
-          if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) {
-            edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
-            edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
+          if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) { //old face stayed the same
+            auto faceVerts = get_indices<FACE>(mesh_dim, pChild(pid));
+            auto edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
+            auto edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
+            pChild(pid) = edges2Face(edge1, edge2);
           }
-          else {
+          else { //old face was split
             auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
-            edge1 = verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]);
-            edge2 = verts2Edge(newVert, old2NewIdx[oppositeVert]);
+            auto edge1 = verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]);
+            auto edge2 = verts2Edge(newVert, old2NewIdx[oppositeVert]);
+            pChild(pid) = edges2Face(edge1, edge2);
           }
-          pChild(pid) = edges2Face(edge1, edge2);
         }
         if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent face/region
           auto newChild = getChildElem(pid);

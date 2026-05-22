@@ -79,14 +79,14 @@ int migratePtclsAfterAdapt(OH::ParticleAdapt<dim>& pAdapt) {
   PS::kkLidView newElement("new_element", ptcls->capacity());
   pAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
-  printf("\n== Particle Positions ==\nx, y, z, \"(pid, parent, child, dim)\"\n");
+  printf("\n== Particle Positions ==\nx, y, z, dim, \"(pid, parent, child, dim)\"\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       newElement(pid) = pAdapt.pParent(pid);
       OH::Vector<3> pos = OH::zero_vector<3>();
       for (int i=0; i<dim; i++) pos[i] = pAdapt.pPos(pid, i);
-      printf("%f, %f, %f, \"(%d, %d, %d, %d)\"\n", pos[0], pos[1], pos[2], pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
+      printf("%f, %f, %f, %d, \"(%d, %d, %d, %d)\"\n", pos[0], pos[1], pos[2], pAdapt.pDim(pid), pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
     }
     else
       newElement(pid) = -1;
@@ -234,82 +234,12 @@ int testVerts(OH::Mesh mesh)
   return fails;
 }
 
-template<int dim>
-int testEdges(OH::Mesh mesh)
-{
-  printf("\n== Test: Migrate ptcl from edges ==\n\n");
-  PS* ptcls = createPtclStructure(mesh, mesh.nedges(), 3);
-  OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
-  auto edge2verts = mesh.get_adj(OH::EDGE, OH::VERT).ab2b;
-  auto nodes2coords = mesh.coords();
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nedges());
-
-  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      auto parent = pAdapt.getLowestParent(e, 1);
-      auto edgeVerts = OH::gather_verts<2>(edge2verts, OH::LO(e));
-      auto vtxCoords = OH::gather_vectors<2,dim>(nodes2coords, edgeVerts);
-      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      auto center = average(vtxCoords);
-      const double interval[3] = {.5, 1, 1.5};
-      auto pos = vtxCoords[0] + ((center - vtxCoords[0]) * interval[v]); // point near vertex
-
-      for (int i=0; i<dim; i++)
-        pAdapt.pPos(pid, i) = pos[i];
-      pAdapt.setPtcl(pid, 1, parent, e);
-    }
-  };
-  ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
-  int fails = migratePtclsAfterAdapt<dim>(pAdapt);
-  fails += compareWithSearch<dim>(mesh, ptcls);
-  fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);
-  fails += compareWithPosition<dim>(pAdapt);
-  delete ptcls;
-  return fails;
-}
-
-template<int dim>
-int testFaces(OH::Mesh mesh)
-{
-  printf("\n== Test: Migrate ptcl from faces ==\n\n");
-  PS* ptcls = createPtclStructure(mesh, mesh.nfaces(), 3);
-  OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nfaces());
-  auto face2verts = mesh.get_adj(OH::FACE, OH::VERT).ab2b;
-  auto nodes2coords = mesh.coords();
-  auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
-    if(mask > 0) {
-      auto parent = pAdapt.getLowestParent(e, 2);
-      auto elmVerts = OH::gather_verts<3>(face2verts, OH::LO(e));
-      auto vtxCoords = OH::gather_vectors<3,dim>(nodes2coords, elmVerts);
-      auto center = average(vtxCoords);
-      int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      const double interval[3] = {.5, 1, .25};
-      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * interval[v]); // point near vertex
-      for (int i=0; i<dim; i++)
-        pAdapt.pPos(pid, i) = pos[i];
-      pAdapt.setPtcl(pid, 2, parent, e);
-    }
-  };
-  ps::parallel_for(ptcls, setPtclInfo);
-
-  // Adaptation
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
-  int fails = migratePtclsAfterAdapt<dim>(pAdapt);
-  fails += compareWithSearch<dim>(mesh, ptcls);
-  fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);
-  fails += compareWithPosition<dim>(pAdapt);
-  delete ptcls;
-  return fails;
-}
-
 template <int test_dim, int mesh_dim>
 int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
-  OH::ParticleAdapt<test_dim> pAdapt(ptcls, mesh);
+  OH::ParticleAdapt<mesh_dim> pAdapt(ptcls, mesh);
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nents(test_dim));
   auto test_ent2verts = mesh.get_adj(test_dim, OH::VERT).ab2b;
   auto nodes2coords = mesh.coords();
@@ -345,11 +275,11 @@ int main(int argc, char* argv[]) {
   auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
   int fails = 0;
   fails += testVerts<2>(create2DMesh());
-  fails += testEdges<2>(create2DMesh());
-  fails += testFaces<2>(create2DMesh());
+  fails += testDimension<1,2>(create2DMesh(), {.25, .5, 1});
+  fails += testDimension<2,2>(create2DMesh(), {.25, .5, 1});
   fails += testVerts<3>(create3DMesh());
-  fails += testEdges<3>(create3DMesh());
-  fails += testFaces<3>(create3DMesh());
+  fails += testDimension<1,3>(create3DMesh(), {.25, .5, 1});
+  fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
   fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
   return fails;
 }

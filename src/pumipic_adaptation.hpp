@@ -162,8 +162,7 @@ namespace Omega_h {
       else if (modified[oldElem].offset != -1) { //find new split element
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        Int edgeVerts[2]; Int spltVerts[2]; Int nonZeroVert = -1;
-        for (int i=0; i<2; i++) edgeVerts[i] = simplex_down_template(mesh_dim, EDGE, pChild(pid), i ^ rotation);
+        Int spltVerts[2]; Int nonZeroVert = -1;
         for (int i=0; i<2; i++) spltVerts[i] = simplex_down_template(mesh_dim, EDGE, spltEdgeIdx, i ^ rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
@@ -193,10 +192,12 @@ namespace Omega_h {
         else if (onSplit && pDim(pid) == 2) { //particle on a new face
           pChild(pid) = 3;
         }
-        else if (pDim(pid) == 0 && are_close(baryCoords[pChild(pid)], 1)) { //ptcl stayed on same vert
+        else if (pDim(pid) == 0) { //ptcl stayed on same vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
-        else if (pDim(pid) == 1 && are_close(baryCoords[edgeVerts[0]]+baryCoords[edgeVerts[1]], 1)) { //ptcl stayed on same edge
+        else if (pDim(pid) == 1) { //ptcl stayed on same edge
+          Int edgeVerts[2];
+          for (int i=0; i<2; i++) edgeVerts[i] = simplex_down_template(mesh_dim, EDGE, pChild(pid), i);
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(mesh_dim, old2NewIdx[spltVerts[1-target]]) : 
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]);

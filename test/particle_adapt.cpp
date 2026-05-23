@@ -53,21 +53,21 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
-void adaptMesh(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length) {
-  OH::vtk::write_vtu("box_before_adapt.vtu", &mesh);
+void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length) {
+  OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   for (int i=0; i<length.size(); i++) {
-    auto metrics = OH::get_implied_isos(&mesh);
+    auto metrics = OH::get_implied_isos(&pAdapt.mesh);
     auto scalar = OH::metric_eigenvalue_from_length(length[i]);
     metrics = OH::multiply_each_by(metrics, scalar);
-    mesh.add_tag(OH::VERT, "metric", 1, metrics);
-    auto opts = OH::AdaptOpts(&mesh);
+    pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
+    auto opts = OH::AdaptOpts(&pAdapt.mesh);
     opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim>>(pAdapt);
 
-    adapt(&mesh, opts);
-    mesh.remove_tag(OH::VERT, "metric");
+    adapt(&pAdapt.mesh, opts);
+    pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }
-  OH::vtk::write_vtu("box_after_adapt.vtu", &mesh);
-  OH::vtk::write_vtu("box_edges_after_adapt.vtu", &mesh, 1);
+  OH::vtk::write_vtu("box_after_adapt.vtu", &pAdapt.mesh);
+  OH::vtk::write_vtu("box_edges_after_adapt.vtu", &pAdapt.mesh, 1);
 }
 
 template<int dim>
@@ -160,10 +160,11 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
 }
 
 template<int dim>
-int compareWithSearch(OH::Mesh& mesh, PS*& ptcls) {
+int compareWithSearch(OH::ParticleAdapt<dim>& pAdapt) {
   if (dim == 3) return 0;
+  PS*& ptcls = pAdapt.ptcls;
   auto ptclPos = ptcls->get<POS>();
-  pcms::GridPointSearch search{mesh, 50, 50};
+  pcms::GridPointSearch search{pAdapt.mesh, 50, 50};
   Kokkos::View<pcms::Real*[2]> points("test_points", ptcls->capacity()*dim);
   auto copyPoints = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0)
@@ -191,8 +192,9 @@ int compareWithSearch(OH::Mesh& mesh, PS*& ptcls) {
 }
 
 template<int dim>
-int isParticleInLowest(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdapt) {
-  pAdapt.update(mesh);
+int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
+  pAdapt.update(pAdapt.mesh);
+  PS*& ptcls = pAdapt.ptcls;
   auto ptclID = ptcls->get<PID>();
   PS::kkLidView failed = PS::kkLidView("failed", 1);
   auto printResults = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
@@ -203,8 +205,17 @@ int isParticleInLowest(OH::Mesh& mesh, PS*& ptcls, OH::ParticleAdapt<dim>& pAdap
     printf("Ptcl %-2d: Not on lowest parent. Is (%-2d) should be (%-2d)\n", ptclID(pid), pAdapt.pParent(pid), lowestElem);
     failed(0) = 1;
   };
-  ps::parallel_for(ptcls, printResults);
+  ps::parallel_for(pAdapt.ptcls, printResults);
   return ps::getLastValue(failed);
+}
+
+template<int dim>
+int runAdaptTests(OH::ParticleAdapt<dim>& pAdapt) {
+  int fails = migratePtclsAfterAdapt<dim>(pAdapt);
+  fails += compareWithSearch<dim>(pAdapt);
+  fails += isParticleInLowest<dim>(pAdapt);
+  fails += compareWithPosition<dim>(pAdapt);
+  return fails;
 }
 
 template<int dim>
@@ -214,7 +225,6 @@ int testVerts(OH::Mesh mesh)
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
   OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
   auto nodes2coords = mesh.coords();
-
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto parent = pAdapt.getLowestParent(e, 0);
@@ -225,11 +235,8 @@ int testVerts(OH::Mesh mesh)
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(mesh, ptcls, pAdapt, {.5});
-  int fails = migratePtclsAfterAdapt<dim>(pAdapt);
-  fails += compareWithSearch<dim>(mesh, ptcls);
-  fails += isParticleInLowest<dim>(mesh, ptcls, pAdapt);
-  fails += compareWithPosition<dim>(pAdapt);
+  adaptMesh<dim>(pAdapt, {.5});
+  int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
 }
@@ -258,11 +265,8 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
   ps::parallel_for(ptcls, setPtclInfo);
 
   // Adaptation
-  adaptMesh<mesh_dim>(mesh, ptcls, pAdapt, {.5});
-  int fails = migratePtclsAfterAdapt<mesh_dim>(pAdapt);
-  fails += compareWithSearch<mesh_dim>(mesh, ptcls);
-  fails += isParticleInLowest<mesh_dim>(mesh, ptcls, pAdapt);
-  fails += compareWithPosition<mesh_dim>(pAdapt);
+  adaptMesh<mesh_dim>(pAdapt, {.5});
+  int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
 }

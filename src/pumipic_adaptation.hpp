@@ -14,14 +14,6 @@ typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
-
-  template <Int n>
-  OMEGA_H_INLINE Real distance(Vector<n> a, Vector<n> b) OMEGA_H_NOEXCEPT {
-    Real x = 0;
-    for (Int i = 0; i < n; ++i) x += std::pow(a[i] - b[i], 2);
-    return std::sqrt(x);
-  }
-
   template <Int dim>
   constexpr std::array<Int, dim+1> get_indices(Int mesh_dim, Int index, Int rotation = 0) OMEGA_H_NOEXCEPT {
     std::array<Int, dim+1> output;

@@ -133,7 +133,8 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
       auto child = pAdapt.getChildElem(pid);
       auto eVerts = gather_verts<2>(edge2verts, child);
       auto eCoords = gather_vectors<2, dim>(vert2coords, eVerts);
-      if (!OH::are_close(OH::distance(eCoords[0], pPos) + OH::distance(eCoords[1], pPos), OH::distance(eCoords[0], eCoords[1]))){
+      auto baryCoords = barycentric_from_global<dim,1>(pPos, eCoords);
+      if (!is_barycentric_inside(baryCoords, OH::EPSILON)){
         printf("[ERROR] Particle %d is on edge %d which is not correct\n", pid, child);
         failed(0) = 1;
       }

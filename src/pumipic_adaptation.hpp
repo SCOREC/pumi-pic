@@ -14,9 +14,6 @@ typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
-  template <Int dim>
-  
-
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
 
@@ -125,6 +122,13 @@ namespace Omega_h {
     return -1;
   }
 
+  template <Int dim>
+  constexpr std::array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
+    std::array<Int, dim+1> output;
+    for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
+    return output;
+  }
+
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -167,7 +171,7 @@ namespace Omega_h {
         auto newVert = mesh_dim;
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        auto spltVerts = get_indices<EDGE>(mesh_dim, spltEdgeIdx, rotation);
+        auto spltVerts = get_indices<EDGE>(spltEdgeIdx, rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
@@ -198,14 +202,14 @@ namespace Omega_h {
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
         else if (pDim(pid) == 1) { //ptcl stayed on same edge
-          auto edgeVerts = get_indices<EDGE>(mesh_dim, pChild(pid));
+          auto edgeVerts = get_indices<EDGE>(pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
         }
         else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
           if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) { //old face stayed the same
-            auto faceVerts = get_indices<FACE>(mesh_dim, pChild(pid));
+            auto faceVerts = get_indices<FACE>(pChild(pid));
             auto edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
             auto edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
             pChild(pid) = edges2Face(edge1, edge2);

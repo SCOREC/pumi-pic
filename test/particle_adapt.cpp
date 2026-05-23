@@ -122,7 +122,7 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
     if (mask <= 0) return;
     auto pPos = pAdapt.getPos(pid);
     if (pAdapt.pDim(pid) == 0) {
-      auto verts = gather_verts<dim+1>(pAdapt.new_downward[0].ab2b, OH::LO(pAdapt.pParent(pid)));
+      auto verts = gather_verts<dim+1>(pAdapt.downward[0].ab2b, OH::LO(pAdapt.pParent(pid)));
       auto coords = gather_vectors<dim+1,dim>(vert2coords, verts);
       if (!OH::are_close(coords[pAdapt.pChild(pid)], pPos)) {
         printf("[ERROR] Particle %d not at correct vertex\n", pid);
@@ -149,7 +149,7 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
         failed(0) = 1;
       }
     }
-    auto parentVerts = gather_verts<dim+1>(pAdapt.new_downward->ab2b, OH::LO(pAdapt.pParent(pid)));
+    auto parentVerts = gather_verts<dim+1>(pAdapt.downward->ab2b, OH::LO(pAdapt.pParent(pid)));
     auto parentCoords = gather_vectors<dim+1,dim>(vert2coords, parentVerts);
     auto baryCoords = barycentric_from_global<dim,dim>(pPos, parentCoords);
     if (is_barycentric_inside(baryCoords, OH::EPSILON)) return;

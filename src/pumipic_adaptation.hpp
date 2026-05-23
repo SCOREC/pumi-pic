@@ -15,11 +15,7 @@ typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
   template <Int dim>
-  constexpr std::array<Int, dim+1> get_indices(Int mesh_dim, Int index, Int rotation = 0) OMEGA_H_NOEXCEPT {
-    std::array<Int, dim+1> output;
-    for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
-    return output;
-  }
+  
 
   template<int mesh_dim>
   struct ParticleAdapt : public UserTransfer {
@@ -32,8 +28,8 @@ namespace Omega_h {
 
   PS*& ptcls;
   Mesh& mesh;
-  Adj new_upward[mesh_dim];
-  Adj new_downward[mesh_dim];
+  Adj upward[mesh_dim];
+  Adj downward[mesh_dim];
   PS::Slice<POS> pPos;
   PS::Slice<PARENT> pParent;
   PS::Slice<CHILD> pChild;
@@ -49,8 +45,8 @@ namespace Omega_h {
     pChild = ptcls->get<CHILD>();
     pDim = ptcls->get<DIM>();
     for (int i=0; i<mesh_dim; i++) {
-      new_upward[i] = meshIn.ask_up(i, mesh_dim);
-      new_downward[i] = meshIn.ask_down(mesh_dim, i);
+      upward[i] = meshIn.ask_up(i, mesh_dim);
+      downward[i] = meshIn.ask_down(mesh_dim, i);
     }
   }
 
@@ -67,7 +63,7 @@ namespace Omega_h {
     int childIdx = -1;
     if (dim != mesh_dim)
       for (auto i = 0; i < degree; i++)
-        if (new_downward[dim].ab2b[parent*degree + i] == child) childIdx = i;
+        if (downward[dim].ab2b[parent*degree + i] == child) childIdx = i;
 
     pDim(pid) = dim;
     pParent(pid) = parent;
@@ -77,15 +73,15 @@ namespace Omega_h {
   KOKKOS_INLINE_FUNCTION
   LO getLowestParent(LO child, Int dim) const {
     if (dim == mesh_dim) return child;
-    auto lowestParentIdx = new_upward[dim].a2ab[child];
-    return new_upward[dim].ab2b[lowestParentIdx];
+    auto lowestParentIdx = upward[dim].a2ab[child];
+    return upward[dim].ab2b[lowestParentIdx];
   }
 
   KOKKOS_INLINE_FUNCTION
   LO getChildElem(LO pid) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
-    return new_downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
+    return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
   KOKKOS_INLINE_FUNCTION

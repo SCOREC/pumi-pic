@@ -90,14 +90,6 @@ namespace pumipic {
       return Slice<N>(*view);
     }
 
-    // template <class Space2>
-    // void copyParticleData(Mirror<Space2>* src) {
-    //   auto first_data_view = static_cast<MTV<0>*>(src->ptcl_data[0]);
-    //   int s = first_data_view->size() / BaseType<DataType<0> >::size;
-    //   ptcl_data = createMemberViews<DataTypes, Space>(s);
-    //   CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
-    // }
-
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void migrate(kkLidView new_element, kkLidView new_process,

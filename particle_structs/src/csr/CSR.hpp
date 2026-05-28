@@ -26,6 +26,10 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
+    template <std::size_t N>
+    using MTV = typename ParticleStructure<DataTypes, MemSpace>::template MTV<N>;
+    template <std::size_t N> 
+    using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 
@@ -43,6 +47,9 @@ namespace pumipic {
         MPI_Comm mpi_comm = MPI_COMM_WORLD);
     CSR(Input_T& input);
     ~CSR();
+
+    template <class MSpace>
+    void copyParticleData(Mirror<MSpace>* src);
 
     template <class MSpace>
     Mirror<MSpace>* copy();
@@ -263,6 +270,15 @@ namespace pumipic {
     }
     ss << "\n";
     std::cout << ss.str();
+  }
+
+  template <class DataTypes, class Space>
+  template <class Space2>
+  void CSR<DataTypes, Space>::copyParticleData(Mirror<Space2>* src) {
+    auto first_data_view = static_cast<MTV<0>*>(src->ptcl_data[0]);
+    int s = first_data_view->size() / BaseType<DataType<0> >::size;
+    ptcl_data = createMemberViews<DataTypes, Space>(s);
+    CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
   }
 
   template<class DataTypes, typename MemSpace>

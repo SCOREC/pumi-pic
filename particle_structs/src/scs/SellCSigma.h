@@ -37,12 +37,16 @@ class SellCSigma : public ParticleStructure<DataTypes, MemSpace> {
   using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
   using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
+  template <std::size_t N>
+  using MTV = typename ParticleStructure<DataTypes, MemSpace>::template MTV<N>;
+  template <std::size_t N> 
+  using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
 #ifdef PP_USE_GPU
   template <std::size_t N>
   using Slice = typename ParticleStructure<DataTypes, MemSpace>::template Slice<N>;
 #else
   template <std::size_t N> using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
-template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
+  template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
 #endif
   typedef Kokkos::TeamPolicy<execution_space> PolicyType;
   typedef Kokkos::View<MyPair*, device_type> PairView;
@@ -71,6 +75,9 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
              MPI_Comm mpi_comm = MPI_COMM_WORLD);
   SellCSigma(SCS_Input<DataTypes, MemSpace>&);
   ~SellCSigma();
+
+  template <class MSpace>
+  void copyParticleData(Mirror<MSpace>* src);
 
   template <class MSpace>
   Mirror<MSpace>* copy();
@@ -331,6 +338,15 @@ template <typename Space>
 typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type
   maxChunk(int C_max) {
     return C_max;
+}
+
+template <class DataTypes, class Space>
+template <class Space2>
+void SellCSigma<DataTypes, Space>::copyParticleData(Mirror<Space2>* src) {
+  auto first_data_view = static_cast<MTV<0>*>(src->ptcl_data[0]);
+  int s = first_data_view->size() / BaseType<DataType<0> >::size;
+  ptcl_data = createMemberViews<DataTypes, Space>(s);
+  CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
 }
 
 template<class DataTypes, typename MemSpace>

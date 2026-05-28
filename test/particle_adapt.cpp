@@ -45,9 +45,8 @@ void resize(PS*& ptcls, int newNElems) {
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(newNElems,32);
   // PS* newPtcls = new SCS(policy, 1, 32, newNElems, nPtcls, ptclsPerElem, elemGIDs);
-  DPS* newPtcls = new DPS(policy, newNElems, nPtcls, ptclsPerElem, elemGIDs);
-  newPtcls->copyParticleData(static_cast<DPS*>(ptcls));
-
+  PS* newPtcls = new DPS(policy, newNElems, nPtcls, ptclsPerElem, elemGIDs);
+  copyParticleData(newPtcls, ptcls);
   delete ptcls;
   ptcls = newPtcls;
 }
@@ -62,7 +61,6 @@ void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length
     pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
     auto opts = OH::AdaptOpts(&pAdapt.mesh);
     opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim>>(pAdapt);
-
     adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }
@@ -88,8 +86,7 @@ int migratePtclsAfterAdapt(OH::ParticleAdapt<dim>& pAdapt) {
       for (int i=0; i<dim; i++) pos[i] = pAdapt.pPos(pid, i);
       printf("%f, %f, %f, %d, \"(%d, %d, %d, %d)\"\n", pos[0], pos[1], pos[2], pAdapt.pDim(pid), pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
     }
-    else
-      newElement(pid) = -1;
+    else newElement(pid) = -1;
   };
   ps::parallel_for(ptcls, getNewElement);
   ptcls->rebuild(newElement);

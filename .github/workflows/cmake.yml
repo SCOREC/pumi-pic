@@ -171,6 +171,12 @@ jobs:
     - name: Install fftw3
       run: sudo apt-get install -yq libfftw3-dev pkg-config
 
+    - name: checkout pcms_testcases
+      uses: actions/checkout@v3
+      with:
+        repository: jacobmerson/pcms_testcases
+        path: pcms_testcases
+
     - name: build pcms
       uses: ./.github/actions/install-repo
       with:
@@ -183,7 +189,6 @@ jobs:
                   -DCMAKE_CXX_COMPILER=`which mpicxx`
                   -DCMAKE_Fortran_COMPILER=`which mpifort`
                   -DMPIEXEC_PREFLAGS="--oversubscribe"
-                  -DBUILD_TESTING=OFF
                   -DPCMS_TIMEOUT=10
                   -DPCMS_ENABLE_SPDLOG=OFF
                   -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h
@@ -194,7 +199,8 @@ jobs:
                   -DADIOS2_DIR=${{ runner.temp }}/build-ADIOS2/install/lib/cmake/adios2
                   -Dperfstubs_DIR=${{ runner.temp }}/build-perfstubs/install/lib/cmake
                   -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos
-                  -DKokkosKernels_DIR=${{ runner.temp }}/build-kokkos-kernels/install/lib/cmake/KokkosKernels/'
+                  -DKokkosKernels_DIR=${{ runner.temp }}/build-kokkos-kernels/install/lib/cmake/KokkosKernels/
+                  -DPCMS_TEST_DATA_DIR=$PWD/pcms_testcases'
 
     - name: build pumi-pic
       uses: ./.github/actions/install-repo

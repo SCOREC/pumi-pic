@@ -96,6 +96,105 @@ jobs:
                   -DCMAKE_DISABLE_FIND_PACKAGE_HDF5=ON
                   -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
 
+    - name: build kokkos-kernels
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'kokkos-kernels'
+        repo-path: 'kokkos/kokkos-kernels'
+        repo-ref: '4.6.01'
+        cache: true
+        options: '-DCMAKE_CXX_STANDARD=17
+                  -DBUILD_SHARED_LIBS=OFF
+                  -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos'
+
+    - name: build meshFields
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'meshFields'
+        repo-path: 'SCOREC/meshFields'
+        repo-ref: 'b1482bbba288df210784b2345eae08e34faabdc4'
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=`which mpicxx`
+                  -DCMAKE_C_COMPILER=`which mpicc`
+                  -DMPIEXEC_EXECUTABLE=`which mpirun`
+                  -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos
+                  -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h'
+
+    - name: build perfstubs
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'perfstubs'
+        repo-path: 'UO-OACISS/perfstubs'
+        repo-ref: 'a1fa3feb1d89214e28047f166500351074b5f0c2'
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=mpicxx'
+
+    - name: build kokkos-fortran-interop
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'kokkos-fortran-interop'
+        repo-path: 'kokkos/kokkos-fortran-interop'
+        repo-ref: 'abae737ce1159c4d7a9165c5629e6f5e6ae91d87'
+        cache: true
+        options: '-DCMAKE_BUILD_TYPE=Release
+                  -DCMAKE_CXX_COMPILER=`which mpicxx`
+                  -DCMAKE_C_COMPILER=`which mpicc`
+                  -DCMAKE_Fortran_COMPILER=`which mpifort`
+                  -DBUILD_TESTING=OFF
+                  -DFLCL_BUILD_TESTS=OFF
+                  -DFLCL_BUILD_EXAMPLE=OFF
+                  -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos'
+
+    - name: build ADIOS2
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'ADIOS2'
+        repo-path: 'ornladios/ADIOS2'
+        repo-ref: 'v2.10.2'
+        cache: true
+        options: '-DADIOS2_USE_CUDA=OFF'
+
+    - name: build redev
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'redev'
+        repo-path: 'SCOREC/redev'
+        repo-ref: 'ac09848a5f9b89493e8b679c9080b9efe5538376'
+        cache: true
+        options: '-DCMAKE_CXX_COMPILER=`which mpicxx`
+                  -DMPIEXEC_EXECUTABLE=`which mpirun`
+                  -DCMAKE_BUILD_TYPE=Release
+                  -DBUILD_SHARED_LIBS=OFF
+                  -DADIOS2_DIR=${{ runner.temp }}/build-ADIOS2/install/lib/cmake/adios2
+                  -Dperfstubs_DIR=${{ runner.temp }}/build-perfstubs/install/lib/cmake'
+
+    - name: Install fftw3
+      run: sudo apt-get install -yq libfftw3-dev pkg-config
+
+    - name: build pcms
+      uses: ./.github/actions/install-repo
+      with:
+        repo-name: 'pcms'
+        repo-path: 'SCOREC/pcms'
+        repo-ref: ''
+        cache: true
+        options: '-DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+                  -DCMAKE_C_COMPILER=`which mpicc`
+                  -DCMAKE_CXX_COMPILER=`which mpicxx`
+                  -DCMAKE_Fortran_COMPILER=`which mpifort`
+                  -DMPIEXEC_PREFLAGS="--oversubscribe"
+                  -DPCMS_TIMEOUT=10
+                  -DPCMS_ENABLE_SPDLOG=OFF
+                  -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h
+                  -Dmeshfields_DIR=${{ runner.temp }}/build-meshFields/install/lib/cmake/meshfields
+                  -Dredev_DIR=${{ runner.temp }}/build-redev/install/lib/cmake/redev
+                  -Dflcl_DIR=${{ runner.temp }}/build-kokkos-fortran-interop/install/lib/cmake/flcl
+                  -DMPIEXEC_EXECUTABLE=`which mpirun`
+                  -DADIOS2_DIR=${{ runner.temp }}/build-ADIOS2/install/lib/cmake/adios2
+                  -Dperfstubs_DIR=${{ runner.temp }}/build-perfstubs/install/lib/cmake
+                  -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos
+                  -DKokkosKernels_DIR=${{ runner.temp }}/build-kokkos-kernels/install/lib/cmake/KokkosKernels/'
+
     - name: build pumi-pic
       uses: ./.github/actions/install-repo
       with:
@@ -114,6 +213,7 @@ jobs:
                   -DKokkos_PREFIX=${{ runner.temp }}/build-kokkos/install
                   -DEnGPar_PREFIX=${{ runner.temp }}/build-Engpar/install
                   -DCabana_PREFIX=${{ runner.temp }}/build-cabana/install
+                  -Dpcms_PREFIX=${{ runner.temp }}/build-pcms/install
                   -DENABLE_CABANA=on
                   -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake'
 

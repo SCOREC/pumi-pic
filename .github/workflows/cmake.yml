@@ -191,6 +191,7 @@ jobs:
                   -DMPIEXEC_PREFLAGS="--oversubscribe"
                   -DPCMS_TIMEOUT=10
                   -DPCMS_ENABLE_SPDLOG=OFF
+                  -DBUILD_TESTING=ON
                   -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h
                   -Dmeshfields_DIR=${{ runner.temp }}/build-meshFields/install/lib/cmake/meshfields
                   -Dredev_DIR=${{ runner.temp }}/build-redev/install/lib/cmake/redev

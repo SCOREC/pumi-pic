@@ -3,8 +3,7 @@ function(make_test exename srcname)
   target_link_libraries(${exename} pumipic Omega_h::omega_h)
 
   if(ENABLE_PCMS)
-    target_link_libraries(${exename} pcms::core pcms::pcms)
-    target_include_directories(${exename} PRIVATE ${pcms_PREFIX}/include)
+    target_link_libraries(${exename} pcms::core)
   endif()
 endfunction(make_test)
 

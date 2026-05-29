@@ -90,7 +90,7 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  Int faceVertOppositeEdge(const Int face, const std::array<Int, 2> edgeVerts) const {
+  Int faceVertOppositeEdge(const Int face, const Kokkos::Array<Int, 2> edgeVerts) const {
     for (int i = 0; i < 3; i++){
       auto v = (mesh_dim == 2) ? i : simplex_down_template(mesh_dim, FACE, face, i);
       if (v != edgeVerts[0] && v != edgeVerts[1]) return v;
@@ -123,8 +123,8 @@ namespace Omega_h {
   }
 
   template <Int dim>
-  constexpr std::array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
-    std::array<Int, dim+1> output;
+  constexpr Kokkos::Array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
+    Kokkos::Array<Int, dim+1> output;
     for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
     return output;
   }

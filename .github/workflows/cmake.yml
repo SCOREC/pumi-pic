@@ -183,6 +183,7 @@ jobs:
                   -DCMAKE_CXX_COMPILER=`which mpicxx`
                   -DCMAKE_Fortran_COMPILER=`which mpifort`
                   -DMPIEXEC_PREFLAGS="--oversubscribe"
+                  -DBUILD_TESTING=OFF
                   -DPCMS_TIMEOUT=10
                   -DPCMS_ENABLE_SPDLOG=OFF
                   -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h

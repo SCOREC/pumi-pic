@@ -224,7 +224,7 @@ jobs:
                   -Dpcms_PREFIX=${{ runner.temp }}/build-pcms/install
                   -DENABLE_CABANA=on
                   -DENABLE_PCMS=on
-                  -DCMAKE_PREFIX_PATH=${{ runner.temp }}/build-kokkos/install/lib/cmake;${{ runner.temp }}/build-pcms/install/lib/cmake'
+                  -DCMAKE_PREFIX_PATH="${{ runner.temp }}/build-kokkos/install/lib/cmake;${{ runner.temp }}/build-pcms/install/lib/cmake"'
 
     - name: PUMI-PIC Test
       if: ${{matrix.memory_test == 'OFF'}}

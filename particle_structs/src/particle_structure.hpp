@@ -90,6 +90,7 @@ namespace pumipic {
       return Slice<N>(*view);
     }
 
+
     virtual void rebuild(kkLidView new_element, kkLidView new_particle_elements = kkLidView(),
                          MTVs new_particle_info = NULL) = 0;
     virtual void migrate(kkLidView new_element, kkLidView new_process,

@@ -21,6 +21,9 @@ namespace Omega_h {
     LO key=-1;
     LO offset=-1;
     LO code=-1;
+
+    ModifiedElem() : key(-1), offset(-1), code(-1) {}
+    ModifiedElem(LO k, LO o, LO c) : key(k), offset(o), code(c) {}
   };
 
   PS*& ptcls;

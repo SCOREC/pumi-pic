@@ -210,7 +210,7 @@ int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
 template<int dim>
 int runAdaptTests(OH::ParticleAdapt<dim>& pAdapt) {
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
-  // fails += compareWithSearch<dim>(pAdapt);
+  fails += compareWithSearch<dim>(pAdapt);
   fails += isParticleInLowest<dim>(pAdapt);
   fails += compareWithPosition<dim>(pAdapt);
   return fails;

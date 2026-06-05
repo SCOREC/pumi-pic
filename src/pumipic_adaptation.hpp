@@ -277,15 +277,26 @@ namespace Omega_h {
           pDim(pid) = mesh_dim;
 
           for (int i = 0; i < simplex_degree(mesh_dim, 0); i++) {
-            if (are_close(baryCoords[i], 1.0)) {
-              pChild(pid) = i;
-              pDim(pid) = 0;
-            }
-            for (int j = 0; j < simplex_degree(mesh_dim, 0); j++)
-            if (i != j && are_close(baryCoords[i] + baryCoords[j], 1.0) && !are_close(baryCoords[i], 0) && !are_close(baryCoords[j], 0)) {
-              pChild(pid) = verts2Edge(i, j);
-              pDim(pid) = 1;
-            }
+            if (!are_close(baryCoords[i], 1.0)) continue;
+            pChild(pid) = i;
+            pDim(pid) = 0;
+          }
+          for (Int i = 0; i < simplex_degree(mesh_dim, 1); i++) {
+            auto a = simplex_down_template(mesh_dim, EDGE, i, 0);
+            auto b = simplex_down_template(mesh_dim, EDGE, i, 1);
+            if (!are_close(baryCoords[a] + baryCoords[b], 1.0)) continue;
+            if (are_close(baryCoords[a], 0) || are_close(baryCoords[b], 0)) continue;
+            pChild(pid) = i;
+            pDim(pid) = 1;
+          }
+          for (Int i = 0; i < simplex_degree(mesh_dim, 2); i++) {
+            auto a = simplex_down_template(mesh_dim, FACE, i, 0);
+            auto b = simplex_down_template(mesh_dim, FACE, i, 1);
+            auto c = simplex_down_template(mesh_dim, FACE, i, 2);
+            if (!are_close(baryCoords[a] + baryCoords[b] + baryCoords[c], 1.0)) continue;
+            if (are_close(baryCoords[a], 0) || are_close(baryCoords[b], 0) || are_close(baryCoords[c], 0)) continue;
+            pChild(pid) = i;
+            pDim(pid) = 2;
           }
         }
       }

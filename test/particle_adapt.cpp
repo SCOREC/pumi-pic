@@ -285,6 +285,8 @@ int main(int argc, char* argv[]) {
   fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
 
   auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
+  auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
   fails += testVerts<2>(large2DMesh(), {2});
+  fails += testVerts<3>(large3DMesh(), {2});
   return fails;
 }

@@ -141,6 +141,13 @@ namespace Omega_h {
     return old2New;
   }
 
+  void update2LowestParent(const LO pid) const {
+    if (pDim(pid) == mesh_dim) return;
+    auto newChild = getChildElem(pid);
+    auto lowestParent = getLowestParent(newChild, pDim(pid));
+    setPtcl(pid, pDim(pid), lowestParent, newChild);
+  }
+
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -166,7 +173,7 @@ namespace Omega_h {
     auto old_cell2verts = old_mesh.ask_down(mesh_dim, 0).ab2b;
 
     //Update modified elements
-    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
       auto oldElem = pParent(pid);
       if (old2New[oldElem] != -1) //update unchanged element id
         pParent(pid) = old2New[oldElem];
@@ -224,11 +231,7 @@ namespace Omega_h {
             pChild(pid) = edges2Face(edge1, edge2);
           }
         }
-        if (pDim(pid) < mesh_dim) { //update parent to lowest adjacent face/region
-          auto newChild = getChildElem(pid);
-          auto lowestParent = getLowestParent(newChild, pDim(pid));
-          setPtcl(pid, pDim(pid), lowestParent, newChild);
-        }
+        update2LowestParent(pid);
       }
       else printf("WARNING: element skipped during particle adaptation\n");
     });
@@ -236,8 +239,49 @@ namespace Omega_h {
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
       Adj keys2doms, Int prod_dim, LOs prods2new_ents, 
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
-    printf("==CoarsenFound==\n");
-    };
+    if (prod_dim != mesh_dim) return;
+    auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
+    Kokkos::View<LO*> modified_elem("modified_elem", old_mesh.nelems());
+    Kokkos::deep_copy(modified_elem, -1);
+    auto old_vert2Elem = old_mesh.ask_up(VERT, mesh_dim);
+
+    //Gather modified elements
+    parallel_for(keys2verts.size(), KOKKOS_CLASS_LAMBDA(LO key) {
+      auto vert = keys2verts[key];
+      auto elem_begin = old_vert2Elem.a2ab[vert];
+      auto elem_end = old_vert2Elem.a2ab[vert + 1];
+      for (auto idx = elem_begin; idx < elem_end; ++idx) {
+        auto oldElem = old_vert2Elem.ab2b[idx];
+        modified_elem[oldElem] = key;
+      }
+    });
+
+    update(new_mesh);
+    auto vert2coords = new_mesh.coords();
+    //Update modified elements
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      auto oldElem = pParent(pid);
+      if (old2New[oldElem] != -1) //update unchanged element id
+        pParent(pid) = old2New[oldElem];
+      else if (modified_elem[oldElem] != -1) {
+        auto key = modified_elem[oldElem];
+        auto elem_begin = keys2doms.a2ab[key];
+        auto elem_end = keys2doms.a2ab[key+1];
+        for (auto idx = elem_begin; idx < elem_end; ++idx) {
+          auto newElem = prods2new_ents[idx];
+          auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(newElem));
+          auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+          auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+          if (!is_barycentric_inside(baryCoords, EPSILON)) continue;
+          pParent(pid) = newElem;
+          pDim(pid) = mesh_dim;
+          return;
+        }
+        printf("WARNING: parent not found\n");
+      }
+      else printf("WARNING: element skipped during particle adaptation coarsening\n");
+    });
+  }
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
       LOs keys2edges, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {

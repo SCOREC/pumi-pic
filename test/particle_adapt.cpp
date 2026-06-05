@@ -217,7 +217,7 @@ int runAdaptTests(OH::ParticleAdapt<dim>& pAdapt) {
 }
 
 template<int dim>
-int testVerts(OH::Mesh mesh)
+int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
 {
   printf("\n== Test: Migrate ptcl from vertices ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
@@ -233,7 +233,7 @@ int testVerts(OH::Mesh mesh)
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
-  adaptMesh<dim>(pAdapt, {.5});
+  adaptMesh<dim>(pAdapt, averageLength);
   int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
@@ -283,5 +283,8 @@ int main(int argc, char* argv[]) {
   fails += testDimension<1,3>(create3DMesh(), {.25, .5, 1});
   fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
   fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
+
+  // auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
+  // fails += testVerts<2>(large2DMesh(), {2});
   return fails;
 }

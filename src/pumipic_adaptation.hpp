@@ -275,11 +275,22 @@ namespace Omega_h {
           if (!is_barycentric_inside(baryCoords, EPSILON)) continue;
           pParent(pid) = newElem;
           pDim(pid) = mesh_dim;
-          return;
+
+          for (int i = 0; i < simplex_degree(mesh_dim, 0); i++) {
+            if (are_close(baryCoords[i], 1.0)) {
+              pChild(pid) = i;
+              pDim(pid) = 0;
+            }
+            for (int j = 0; j < simplex_degree(mesh_dim, 0); j++)
+            if (i != j && are_close(baryCoords[i] + baryCoords[j], 1.0) && !are_close(baryCoords[i], 0) && !are_close(baryCoords[j], 0)) {
+              pChild(pid) = verts2Edge(i, j);
+              pDim(pid) = 1;
+            }
+          }
         }
-        printf("WARNING: parent not found\n");
       }
       else printf("WARNING: element skipped during particle adaptation coarsening\n");
+      update2LowestParent(pid);
     });
   }
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,

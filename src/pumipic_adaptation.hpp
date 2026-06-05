@@ -261,8 +261,10 @@ namespace Omega_h {
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
-      if (old2New[oldElem] != -1) //update unchanged element id
+      if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
+        update2LowestParent(pid);
+      }
       else if (modified_elem[oldElem] != -1) {
         auto key = modified_elem[oldElem];
         auto elem_begin = keys2doms.a2ab[key];
@@ -276,32 +278,23 @@ namespace Omega_h {
           pParent(pid) = newElem;
           pDim(pid) = mesh_dim;
 
-          for (int i = 0; i < simplex_degree(mesh_dim, 0); i++) {
-            if (!are_close(baryCoords[i], 1.0)) continue;
-            pChild(pid) = i;
-            pDim(pid) = 0;
-          }
-          for (Int i = 0; i < simplex_degree(mesh_dim, 1); i++) {
-            auto a = simplex_down_template(mesh_dim, EDGE, i, 0);
-            auto b = simplex_down_template(mesh_dim, EDGE, i, 1);
-            if (!are_close(baryCoords[a] + baryCoords[b], 1.0)) continue;
-            if (are_close(baryCoords[a], 0) || are_close(baryCoords[b], 0)) continue;
-            pChild(pid) = i;
-            pDim(pid) = 1;
-          }
-          for (Int i = 0; i < simplex_degree(mesh_dim, 2); i++) {
-            auto a = simplex_down_template(mesh_dim, FACE, i, 0);
-            auto b = simplex_down_template(mesh_dim, FACE, i, 1);
-            auto c = simplex_down_template(mesh_dim, FACE, i, 2);
-            if (!are_close(baryCoords[a] + baryCoords[b] + baryCoords[c], 1.0)) continue;
-            if (are_close(baryCoords[a], 0) || are_close(baryCoords[b], 0) || are_close(baryCoords[c], 0)) continue;
-            pChild(pid) = i;
-            pDim(pid) = 2;
+          for (Int dim = 0; dim < mesh_dim; dim++)
+          for (Int ent = 0; ent < simplex_degree(mesh_dim, dim); ent++) {
+            Real baryCoordsSum = 0.0;
+            for (Int vert = 0; vert < simplex_degree(dim, VERT); vert++) {
+              auto vertIdx = simplex_down_template(mesh_dim, dim, ent, vert);
+              if (are_close(baryCoords[vertIdx], 0)) {baryCoordsSum = -100.0; break;}
+              else baryCoordsSum += baryCoords[vertIdx];
+            }
+            if (!are_close(baryCoordsSum, 1.0)) continue;
+            pChild(pid) = ent;
+            pDim(pid) = dim;
+            update2LowestParent(pid);
+            return;
           }
         }
       }
       else printf("WARNING: element skipped during particle adaptation coarsening\n");
-      update2LowestParent(pid);
     });
   }
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,

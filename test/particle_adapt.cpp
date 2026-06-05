@@ -77,14 +77,14 @@ int migratePtclsAfterAdapt(OH::ParticleAdapt<dim>& pAdapt) {
   PS::kkLidView newElement("new_element", ptcls->capacity());
   pAdapt.update(mesh);
   auto ptclID = ptcls->get<PID>();
-  printf("\n== Particle Positions ==\nx, y, z, dim, \"(pid, parent, child, dim)\"\n");
+  printf("\n== Particle Positions ==\nx, y, z, dim, \"(pid, parent, child)\"\n");
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     ptclID(pid) = pid;
     if(mask > 0) {
       newElement(pid) = pAdapt.pParent(pid);
       OH::Vector<3> pos = OH::zero_vector<3>();
       for (int i=0; i<dim; i++) pos[i] = pAdapt.pPos(pid, i);
-      printf("%f, %f, %f, %d, \"(%d, %d, %d, %d)\"\n", pos[0], pos[1], pos[2], pAdapt.pDim(pid), pid, newElement(pid), pAdapt.getChildElem(pid), pAdapt.pDim(pid));
+      printf("%f, %f, %f, %d, \"(%d, %d, %d)\"\n", pos[0], pos[1], pos[2], pAdapt.pDim(pid), pid, newElement(pid), pAdapt.getChildElem(pid));
     }
     else newElement(pid) = -1;
   };

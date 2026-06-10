@@ -148,29 +148,31 @@ namespace Omega_h {
     setPtcl(pid, pDim(pid), lowestParent, newChild);
   }
 
+  Kokkos::View<ModifiedElem*> gatherModified(LOs keys2entity, Int dim) {
+    auto entity2elem = mesh.ask_up(dim, mesh_dim);
+    Kokkos::View<ModifiedElem*> modified("modified_elems", mesh.nelems());
+    parallel_for(keys2entity.size(), KOKKOS_CLASS_LAMBDA(LO key) {
+      LO ent = keys2entity[key];
+      auto elem_begin = entity2elem.a2ab[ent];
+      auto elem_end = entity2elem.a2ab[ent + 1];
+      for (auto idx = elem_begin; idx < elem_end; ++idx) {
+        auto elem = entity2elem.ab2b[idx];
+        modified[elem] = ModifiedElem(key, idx-elem_begin, entity2elem.codes[idx]);
+      }
+    });
+    return modified;
+  }
+
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
       LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
+
     if (prod_dim != mesh_dim) return;
     auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
-
-    Kokkos::View<ModifiedElem*> modified("modified_elems", old_mesh.nelems());
-    auto old_edge2Elem = old_mesh.ask_up(EDGE, mesh_dim);
-
-    //Gather modified elements
-    parallel_for(keys2edges.size(), KOKKOS_CLASS_LAMBDA(LO key) {
-      LO edge = keys2edges[key];
-      auto elem_begin = old_edge2Elem.a2ab[edge];
-      auto elem_end = old_edge2Elem.a2ab[edge + 1];
-      for (auto idx = elem_begin; idx < elem_end; ++idx) {
-        auto elem = old_edge2Elem.ab2b[idx];
-        modified[elem] = ModifiedElem(key, idx-elem_begin, old_edge2Elem.codes[idx]);
-      }
-    });
-
-    update(new_mesh);
-    auto old_vert2coords = old_mesh.coords();
+    auto modified = gatherModified(keys2edges, EDGE);
     auto old_cell2verts = old_mesh.ask_down(mesh_dim, 0).ab2b;
+    auto old_vert2coords = old_mesh.coords();
+    update(new_mesh);
 
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
@@ -239,25 +241,13 @@ namespace Omega_h {
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
       Adj keys2doms, Int prod_dim, LOs prods2new_ents, 
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
+
     if (prod_dim != mesh_dim) return;
     auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
-    Kokkos::View<LO*> modified_elem("modified_elem", old_mesh.nelems());
-    Kokkos::deep_copy(modified_elem, -1);
-    auto old_vert2Elem = old_mesh.ask_up(VERT, mesh_dim);
-
-    //Gather modified elements
-    parallel_for(keys2verts.size(), KOKKOS_CLASS_LAMBDA(LO key) {
-      auto vert = keys2verts[key];
-      auto elem_begin = old_vert2Elem.a2ab[vert];
-      auto elem_end = old_vert2Elem.a2ab[vert + 1];
-      for (auto idx = elem_begin; idx < elem_end; ++idx) {
-        auto oldElem = old_vert2Elem.ab2b[idx];
-        modified_elem[oldElem] = key;
-      }
-    });
-
-    update(new_mesh);
+    auto modified_elem = gatherModified(keys2verts, VERT);
     auto vert2coords = new_mesh.coords();
+    update(new_mesh);
+
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
@@ -265,8 +255,8 @@ namespace Omega_h {
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);
       }
-      else if (modified_elem[oldElem] != -1) {
-        auto key = modified_elem[oldElem];
+      else if (modified_elem[oldElem].key != -1) {
+        auto key = modified_elem[oldElem].key;
         auto elem_begin = keys2doms.a2ab[key];
         auto elem_end = keys2doms.a2ab[key+1];
         for (auto idx = elem_begin; idx < elem_end; ++idx) {

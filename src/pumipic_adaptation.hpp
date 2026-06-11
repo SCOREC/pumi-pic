@@ -283,15 +283,61 @@ namespace Omega_h {
             return;
           }
         }
+        printf("WARNING: no element found for particle %d\n", pid);
       }
-      else printf("WARNING: element skipped during particle adaptation coarsening\n");
+      else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);
     });
   }
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
       LOs keys2edges, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
-    printf("==SwapFound==\n");
-    };
+
+    if (prod_dim != mesh_dim) return;
+    auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
+    auto modified_elem = gatherModified(keys2edges, EDGE);
+    auto vert2coords = new_mesh.coords();
+    update(new_mesh);
+    
+    //Update modified elements
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      auto oldElem = pParent(pid);
+      if (old2New[oldElem] != -1) { //update unchanged element id
+        pParent(pid) = old2New[oldElem];
+        update2LowestParent(pid);
+      }
+      else if (modified_elem[oldElem].key != -1) {
+        auto key = modified_elem[oldElem].key;
+        auto elem_begin = keys2prods[key];
+        auto elem_end = keys2prods[key+1];
+        for (auto idx = elem_begin; idx < elem_end; ++idx) {
+          auto newElem = prods2new_ents[idx];
+          auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(newElem));
+          auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+          auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+          if (!is_barycentric_inside(baryCoords, EPSILON)) continue;
+          pParent(pid) = newElem;
+          pDim(pid) = mesh_dim;
+
+          for (Int dim = 0; dim < mesh_dim; dim++)
+          for (Int ent = 0; ent < simplex_degree(mesh_dim, dim); ent++) {
+            Real baryCoordsSum = 0.0;
+            for (Int vert = 0; vert < simplex_degree(dim, VERT); vert++) {
+              auto vertIdx = simplex_down_template(mesh_dim, dim, ent, vert);
+              if (are_close(baryCoords[vertIdx], 0)) {baryCoordsSum = -100.0; break;}
+              else baryCoordsSum += baryCoords[vertIdx];
+            }
+            if (!are_close(baryCoordsSum, 1.0)) continue;
+            pChild(pid) = ent;
+            pDim(pid) = dim;
+            update2LowestParent(pid);
+            return;
+          }
+        }
+        printf("WARNING: no element found for particle %d\n", pid);
+      }
+      else printf("WARNING: particle %d skipped during particle adaptation swap\n", pid);
+    });
+  };
   virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {
     printf("==SwapCopyVertsFound==\n");
   };

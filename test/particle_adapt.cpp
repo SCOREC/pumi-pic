@@ -273,9 +273,11 @@ int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
 
+  int fails = 0;
+
+  // Refinement Tests:
   auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
   auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
-  int fails = 0;
   fails += testVerts<2>(create2DMesh());
   fails += testDimension<1,2>(create2DMesh(), {.25, .5, 1});
   fails += testDimension<2,2>(create2DMesh(), {.25, .5, 1});
@@ -284,9 +286,14 @@ int main(int argc, char* argv[]) {
   fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
   fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
 
+  // Coarsen Tests:
   auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
   auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
   fails += testVerts<2>(large2DMesh(), {2});
   fails += testVerts<3>(large3DMesh(), {2});
+
+  // Coarsen, Refinement and Swap Tests:
+  // fails += testVerts<2>(large2DMesh(), {2, .1});
+  // fails += testVerts<3>(large3DMesh(), {2, .1});
   return fails;
 }

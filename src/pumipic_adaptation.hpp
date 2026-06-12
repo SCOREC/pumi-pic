@@ -148,6 +148,13 @@ namespace Omega_h {
     setPtcl(pid, pDim(pid), lowestParent, newChild);
   }
 
+  //TODO: Temporary remove
+  template <Int n>
+  void how_barycentric_inside(Vector<n> xi, Real& min, Real& max) const {
+    min = reduce(xi, minimum<Real>());
+    max = reduce(xi, maximum<Real>());
+  }
+
   Kokkos::View<ModifiedElem*> gatherModified(LOs keys2entity, Int dim) {
     auto entity2elem = mesh.ask_up(dim, mesh_dim);
     Kokkos::View<ModifiedElem*> modified("modified_elems", mesh.nelems());
@@ -264,6 +271,9 @@ namespace Omega_h {
           auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(newElem));
           auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
           auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+          // Real min, max;
+          // how_barycentric_inside(baryCoords, min, max);
+          // if (pid == 99) printf("old %d new %d MIN %f MAX %f\n", oldElem, newElem, min, max);
           if (!is_barycentric_inside(baryCoords, EPSILON)) continue;
           pParent(pid) = newElem;
           pDim(pid) = mesh_dim;
@@ -282,8 +292,9 @@ namespace Omega_h {
             update2LowestParent(pid);
             return;
           }
+          return;
         }
-        printf("WARNING: no element found for particle %d\n", pid);
+        printf("WARNING: no coarsen element found for particle %d\n", pid);
       }
       else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);
     });
@@ -332,8 +343,9 @@ namespace Omega_h {
             update2LowestParent(pid);
             return;
           }
+          return;
         }
-        printf("WARNING: no element found for particle %d\n", pid);
+        printf("WARNING: no swap element found for particle %d\n", pid);
       }
       else printf("WARNING: particle %d skipped during particle adaptation swap\n", pid);
     });

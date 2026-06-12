@@ -61,6 +61,8 @@ void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length
     pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
     auto opts = OH::AdaptOpts(&pAdapt.mesh);
     opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim>>(pAdapt);
+    // opts.should_coarsen_slivers = false; //TODO: Fix bug with this enabled
+    // opts.should_swap = false;
     adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }

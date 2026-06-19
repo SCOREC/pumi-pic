@@ -301,7 +301,7 @@ int main(int argc, char* argv[]) {
   fails += testVerts<3>(large3DMesh(), {2});
 
   // Coarsen, Refinement and Swap Tests:
-  fails += testVerts<2>(large2DMesh(), {2, .1});
-  fails += testVerts<3>(large3DMesh(), {2, .1});
+  fails += testVerts<2>(large2DMesh(), {2, .4});
+  fails += testVerts<3>(large3DMesh(), {2, .4});
   return fails;
 }

@@ -250,7 +250,7 @@ namespace Omega_h {
     });
   }
 
-  void searchUpdateCavity(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
+  void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
 
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
@@ -305,7 +305,7 @@ namespace Omega_h {
 
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2verts, VERT);
-    searchUpdateCavity(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
@@ -314,7 +314,7 @@ namespace Omega_h {
 
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2edges, EDGE);
-    searchUpdateCavity(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 
   virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {};

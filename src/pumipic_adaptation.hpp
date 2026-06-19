@@ -215,7 +215,11 @@ namespace Omega_h {
           pChild(pid) = verts2Edge(newVert, old2NewIdx[oppositeVert]);
         }
         else if (onSplit && pDim(pid) == 2) { //particle on a new face
-          pChild(pid) = 3;
+          auto oppositeEdge = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
+          auto oppositeVerts = get_indices<EDGE>(oppositeEdge);
+          auto edge1 = verts2Edge(newVert, old2NewIdx[oppositeVerts[0]]);
+          auto edge2 = verts2Edge(newVert, old2NewIdx[oppositeVerts[1]]);
+          pChild(pid) = edges2Face(edge1, edge2);
         }
         else if (pDim(pid) == 0) { //ptcl stayed on same vert
           pChild(pid) = old2NewIdx[pChild(pid)];
@@ -245,6 +249,7 @@ namespace Omega_h {
       else printf("WARNING: element skipped during particle adaptation\n");
     });
   }
+
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
       Adj keys2doms, Int prod_dim, LOs prods2new_ents, 
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -299,6 +304,7 @@ namespace Omega_h {
       else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);
     });
   }
+
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
       LOs keys2edges, LOs keys2prods, LOs prods2new_ents,
       LOs same_ents2old_ents, LOs same_ents2new_ents) {
@@ -350,9 +356,8 @@ namespace Omega_h {
       else printf("WARNING: particle %d skipped during particle adaptation swap\n", pid);
     });
   };
-  virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {
-    printf("==SwapCopyVertsFound==\n");
-  };
+
+  virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {};
 };
 
 }//namespace

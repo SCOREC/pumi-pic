@@ -129,6 +129,7 @@ mpi_test(pseudoXGCm_120kElms_4 4
   ${TEST_DATA_DIR}/xgc/120k
   10000 141 10 0.5 0)
 
-if(ENABLE_PCMS)
-  mpi_test(particle_adapt 1 ./particle_adapt)
-endif()
+mpi_test(particle_adapt 1 
+  ./particle_adapt 
+  ${TEST_DATA_DIR}/small_cylinder/cylinder.msh 
+  ${TEST_DATA_DIR}/small_cylinder/cylinder.step)

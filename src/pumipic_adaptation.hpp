@@ -5,6 +5,7 @@
 #include "Omega_h_align.hpp"
 #include "Omega_h_scalar.hpp"
 #include "Omega_h_element.hpp"
+#include "Omega_h_shape.hpp"
 #include <MemberTypeLibraries.h>
 
 using particle_structs::MemberTypes;

@@ -8,8 +8,12 @@
 #include <Omega_h_adapt.hpp>
 #include <Omega_h_for.hpp>
 #include "team_policy.hpp"
-#include <pcms/point_search.h>
 #include "pumipic_adaptation.hpp"
+
+#ifdef PP_ENABLE_PCMS
+#include <pcms/point_search.h>
+#endif
+// #include <Omega_h_egads.hpp>
 
 typedef ps::SellCSigma<Type,ExeSpace> SCS;
 typedef ps::DPS<Type,ExeSpace> DPS;
@@ -61,8 +65,6 @@ void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length
     pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
     auto opts = OH::AdaptOpts(&pAdapt.mesh);
     opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim>>(pAdapt);
-    // opts.should_coarsen_slivers = false; //TODO: Fix bug with this enabled
-    // opts.should_swap = false;
     adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }
@@ -169,6 +171,7 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
   return ps::getLastValue(failed);
 }
 
+#ifdef PP_ENABLE_PCMS
 template<int dim>
 int compareWithSearch(OH::ParticleAdapt<dim>& pAdapt) {
   if (dim == 3) return 0;
@@ -196,6 +199,7 @@ int compareWithSearch(OH::ParticleAdapt<dim>& pAdapt) {
   ps::parallel_for(ptcls, printResults);
   return 0;
 }
+#endif
 
 template<int dim>
 int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
@@ -218,9 +222,11 @@ int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
 template<int dim>
 int runAdaptTests(OH::ParticleAdapt<dim>& pAdapt) {
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
-  fails += compareWithSearch<dim>(pAdapt);
   fails += isParticleInLowest<dim>(pAdapt);
   fails += compareWithPosition<dim>(pAdapt);
+  #ifdef PP_ENABLE_PCMS
+  fails += compareWithSearch<dim>(pAdapt);
+  #endif
   return fails;
 }
 
@@ -277,6 +283,12 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
   return fails;
 }
 
+// OH::Mesh createCylinderMesh(OH::Library& lib, OH::AdaptOpts& opts, char* argv[]) {
+  // auto mesh = OH::gmsh::read(argv[1], lib.world());
+  // opts.egads_model = OH::egads_load(argv[2]);
+  // return mesh;
+// }
+
 int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
@@ -303,5 +315,9 @@ int main(int argc, char* argv[]) {
   // Coarsen, Refinement and Swap Tests:
   fails += testVerts<2>(large2DMesh(), {2, .4});
   fails += testVerts<3>(large3DMesh(), {2, .4});
+
+  // OH::AdaptOpts opts3D(3);
+  // fails += testVerts<3>(createCylinderMesh(lib, opts3D, argv), opts3D, {.5});
+  // OH::egads_free(opts3D.egads_model);
   return fails;
 }

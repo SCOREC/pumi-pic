@@ -275,9 +275,6 @@ namespace pumipic {
   template <class DataTypes, class Space>
   template <class Space2>
   void CSR<DataTypes, Space>::copyParticleData(Mirror<Space2>* src) {
-    auto first_data_view = static_cast<MTV<0>*>(src->ptcl_data[0]);
-    int s = first_data_view->size() / BaseType<DataType<0> >::size;
-    ptcl_data = createMemberViews<DataTypes, Space>(s);
     CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
   }
 

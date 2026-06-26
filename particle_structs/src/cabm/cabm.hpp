@@ -377,7 +377,6 @@ namespace pumipic {
   template <class DataTypes, class MemSpace>
   template <class MSpace>
   void CabM<DataTypes, MemSpace>::copyParticleData(Mirror<MSpace>* src) {
-    aosoa_ = new typename CabM<DataTypes, MSpace>::AoSoA_t(std::string(src->aosoa_->label()).append("_mirror"), src->aosoa_->size());
     Cabana::deep_copy(*aosoa_, *(src->aosoa_));
   }
 

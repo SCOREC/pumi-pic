@@ -15,13 +15,17 @@
 #endif
 // #include <Omega_h_egads.hpp>
 
+namespace OH = Omega_h;
 using particle_structs::MemberTypes;
+enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
 typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 typedef ps::SellCSigma<Type,ExeSpace> SCS;
 typedef ps::DPS<Type,ExeSpace> DPS;
-namespace OH = Omega_h;
+
+template<int dim>
+using PADAPT = OH::ParticleAdapt<dim, PS, POS, PARENT, CHILD, DIM>;
 
 PS* createPtclStructure(OH::Mesh& mesh, int nelems, int ppe) {
   PS::kkLidView ptclsPerElem("ptcls_per_elem", nelems);
@@ -60,7 +64,7 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
-void adaptMesh(OH::ParticleAdapt<dim, PS>& pAdapt, const std::vector<double>& length) {
+void adaptMesh(PADAPT<dim>& pAdapt, const std::vector<double>& length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   for (int i=0; i<length.size(); i++) {
     auto metrics = OH::get_implied_isos(&pAdapt.mesh);
@@ -68,7 +72,7 @@ void adaptMesh(OH::ParticleAdapt<dim, PS>& pAdapt, const std::vector<double>& le
     metrics = OH::multiply_each_by(metrics, scalar);
     pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
     auto opts = OH::AdaptOpts(&pAdapt.mesh);
-    opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim, PS>>(pAdapt);
+    opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
     adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }
@@ -77,7 +81,7 @@ void adaptMesh(OH::ParticleAdapt<dim, PS>& pAdapt, const std::vector<double>& le
 }
 
 template<int dim>
-int migratePtclsAfterAdapt(OH::ParticleAdapt<dim, PS>& pAdapt) {
+int migratePtclsAfterAdapt(PADAPT<dim>& pAdapt) {
   OH::Mesh& mesh = pAdapt.mesh;
   PS*& ptcls = pAdapt.ptcls;
   resize(ptcls, mesh.nelems());
@@ -126,7 +130,7 @@ double dist2Plane(OH::Matrix<dim, 3> tri, OH::Vector<dim> pos) {
 }
 
 template<int dim>
-int compareWithPosition(OH::ParticleAdapt<dim, PS>& pAdapt) {
+int compareWithPosition(PADAPT<dim>& pAdapt) {
   pAdapt.update(pAdapt.mesh);
   auto vert2coords = pAdapt.mesh.coords();
   auto edge2verts = pAdapt.mesh.ask_verts_of(OH::EDGE);
@@ -206,7 +210,7 @@ int compareWithSearch(OH::ParticleAdapt<dim, PS>& pAdapt) {
 #endif
 
 template<int dim>
-int isParticleInLowest(OH::ParticleAdapt<dim, PS>& pAdapt) {
+int isParticleInLowest(PADAPT<dim>& pAdapt) {
   pAdapt.update(pAdapt.mesh);
   PS*& ptcls = pAdapt.ptcls;
   auto ptclID = ptcls->get<PID>();
@@ -224,7 +228,7 @@ int isParticleInLowest(OH::ParticleAdapt<dim, PS>& pAdapt) {
 }
 
 template<int dim>
-int runAdaptTests(OH::ParticleAdapt<dim, PS>& pAdapt) {
+int runAdaptTests(PADAPT<dim>& pAdapt) {
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
   fails += isParticleInLowest<dim>(pAdapt);
   fails += compareWithPosition<dim>(pAdapt);
@@ -239,7 +243,7 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
 {
   printf("\n== Test: Migrate ptcl from vertices ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
-  OH::ParticleAdapt<dim, PS> pAdapt(ptcls, mesh);
+  PADAPT<dim> pAdapt(ptcls, mesh);
   auto nodes2coords = mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -262,7 +266,7 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
-  OH::ParticleAdapt<mesh_dim, PS> pAdapt(ptcls, mesh);
+  PADAPT<mesh_dim> pAdapt(ptcls, mesh);
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nents(test_dim));
   auto test_ent2verts = mesh.get_adj(test_dim, OH::VERT).ab2b;
   auto nodes2coords = mesh.coords();
@@ -273,7 +277,7 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
       auto vtxCoords = OH::gather_vectors<test_dim+1, mesh_dim>(nodes2coords, elmVerts);
       auto center = average(vtxCoords);
       int v = Kokkos::atomic_fetch_inc(&vtxPerElm[e]); //cycle through vertices
-      auto pos = vtxCoords[v] + ((center - vtxCoords[v]) * lengthCenter[v]); // point near vertex
+      auto pos = vtxCoords[0] + ((center - vtxCoords[0]) * lengthCenter[v]); // point near vertex
       for (int i=0; i<mesh_dim; i++) pAdapt.pPos(pid, i) = pos[i];
       pAdapt.setPtcl(pid, test_dim, parent, e);
     }

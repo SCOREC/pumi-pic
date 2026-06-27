@@ -8,10 +8,8 @@
 #include "Omega_h_shape.hpp"
 #include <MemberTypeLibraries.h>
 
-enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
-
 namespace Omega_h {
-  template<int mesh_dim, typename PS>
+  template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
   struct ParticleAdapt : public UserTransfer {
 
   struct ModifiedElem {

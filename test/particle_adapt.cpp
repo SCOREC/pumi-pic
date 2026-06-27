@@ -15,6 +15,10 @@
 #endif
 // #include <Omega_h_egads.hpp>
 
+using particle_structs::MemberTypes;
+typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
+typedef Kokkos::DefaultExecutionSpace ExeSpace;
+typedef ps::ParticleStructure<Type,ExeSpace> PS;
 typedef ps::SellCSigma<Type,ExeSpace> SCS;
 typedef ps::DPS<Type,ExeSpace> DPS;
 namespace OH = Omega_h;
@@ -56,7 +60,7 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
-void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length) {
+void adaptMesh(OH::ParticleAdapt<dim, PS>& pAdapt, const std::vector<double>& length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   for (int i=0; i<length.size(); i++) {
     auto metrics = OH::get_implied_isos(&pAdapt.mesh);
@@ -64,7 +68,7 @@ void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length
     metrics = OH::multiply_each_by(metrics, scalar);
     pAdapt.mesh.add_tag(OH::VERT, "metric", 1, metrics);
     auto opts = OH::AdaptOpts(&pAdapt.mesh);
-    opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim>>(pAdapt);
+    opts.xfer_opts.user_xfer = std::make_shared<OH::ParticleAdapt<dim, PS>>(pAdapt);
     adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
   }
@@ -73,7 +77,7 @@ void adaptMesh(OH::ParticleAdapt<dim>& pAdapt, const std::vector<double>& length
 }
 
 template<int dim>
-int migratePtclsAfterAdapt(OH::ParticleAdapt<dim>& pAdapt) {
+int migratePtclsAfterAdapt(OH::ParticleAdapt<dim, PS>& pAdapt) {
   OH::Mesh& mesh = pAdapt.mesh;
   PS*& ptcls = pAdapt.ptcls;
   resize(ptcls, mesh.nelems());
@@ -122,7 +126,7 @@ double dist2Plane(OH::Matrix<dim, 3> tri, OH::Vector<dim> pos) {
 }
 
 template<int dim>
-int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
+int compareWithPosition(OH::ParticleAdapt<dim, PS>& pAdapt) {
   pAdapt.update(pAdapt.mesh);
   auto vert2coords = pAdapt.mesh.coords();
   auto edge2verts = pAdapt.mesh.ask_verts_of(OH::EDGE);
@@ -173,7 +177,7 @@ int compareWithPosition(OH::ParticleAdapt<dim>& pAdapt) {
 
 #ifdef PP_ENABLE_PCMS
 template<int dim>
-int compareWithSearch(OH::ParticleAdapt<dim>& pAdapt) {
+int compareWithSearch(OH::ParticleAdapt<dim, PS>& pAdapt) {
   if (dim == 3) return 0;
   PS*& ptcls = pAdapt.ptcls;
   auto ptclPos = ptcls->get<POS>();
@@ -202,7 +206,7 @@ int compareWithSearch(OH::ParticleAdapt<dim>& pAdapt) {
 #endif
 
 template<int dim>
-int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
+int isParticleInLowest(OH::ParticleAdapt<dim, PS>& pAdapt) {
   pAdapt.update(pAdapt.mesh);
   PS*& ptcls = pAdapt.ptcls;
   auto ptclID = ptcls->get<PID>();
@@ -220,7 +224,7 @@ int isParticleInLowest(OH::ParticleAdapt<dim>& pAdapt) {
 }
 
 template<int dim>
-int runAdaptTests(OH::ParticleAdapt<dim>& pAdapt) {
+int runAdaptTests(OH::ParticleAdapt<dim, PS>& pAdapt) {
   int fails = migratePtclsAfterAdapt<dim>(pAdapt);
   fails += isParticleInLowest<dim>(pAdapt);
   fails += compareWithPosition<dim>(pAdapt);
@@ -235,7 +239,7 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
 {
   printf("\n== Test: Migrate ptcl from vertices ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
-  OH::ParticleAdapt<dim> pAdapt(ptcls, mesh);
+  OH::ParticleAdapt<dim, PS> pAdapt(ptcls, mesh);
   auto nodes2coords = mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
@@ -258,7 +262,7 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
-  OH::ParticleAdapt<mesh_dim> pAdapt(ptcls, mesh);
+  OH::ParticleAdapt<mesh_dim, PS> pAdapt(ptcls, mesh);
   PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nents(test_dim));
   auto test_ent2verts = mesh.get_adj(test_dim, OH::VERT).ab2b;
   auto nodes2coords = mesh.coords();

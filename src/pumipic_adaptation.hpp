@@ -8,14 +8,10 @@
 #include "Omega_h_shape.hpp"
 #include <MemberTypeLibraries.h>
 
-using particle_structs::MemberTypes;
 enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
-typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
-typedef Kokkos::DefaultExecutionSpace ExeSpace;
-typedef ps::ParticleStructure<Type,ExeSpace> PS;
 
 namespace Omega_h {
-  template<int mesh_dim>
+  template<int mesh_dim, typename PS>
   struct ParticleAdapt : public UserTransfer {
 
   struct ModifiedElem {
@@ -31,20 +27,20 @@ namespace Omega_h {
   Mesh& mesh;
   Adj upward[mesh_dim];
   Adj downward[mesh_dim];
-  PS::Slice<POS> pPos;
-  PS::Slice<PARENT> pParent;
-  PS::Slice<CHILD> pChild;
-  PS::Slice<DIM> pDim;
+  typename PS::template Slice<POS> pPos;
+  typename PS::template Slice<PARENT> pParent;
+  typename PS::template Slice<CHILD> pChild;
+  typename PS::template Slice<DIM> pDim;
 
   ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     update(meshIn);
   }
 
   void update(Mesh& meshIn) {
-    pPos = ptcls->get<POS>();
-    pParent = ptcls->get<PARENT>();
-    pChild = ptcls->get<CHILD>();
-    pDim = ptcls->get<DIM>();
+    pPos = ptcls->template get<POS>();
+    pParent = ptcls->template get<PARENT>();
+    pChild = ptcls->template get<CHILD>();
+    pDim = ptcls->template get<DIM>();
     for (int i=0; i<mesh_dim; i++) {
       upward[i] = meshIn.ask_up(i, mesh_dim);
       downward[i] = meshIn.ask_down(mesh_dim, i);
@@ -128,7 +124,7 @@ namespace Omega_h {
 
   template <Int dim>
   constexpr Kokkos::Array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
-    Kokkos::Array<Int, dim+1> output;
+    Kokkos::Array<Int, dim+1> output = {};
     for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
     return output;
   }

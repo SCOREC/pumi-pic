@@ -143,13 +143,6 @@ namespace Omega_h {
     setPtcl(pid, pDim(pid), lowestParent, newChild);
   }
 
-  //TODO: Temporary remove
-  template <Int n>
-  void how_barycentric_inside(Vector<n> xi, Real& min, Real& max) const {
-    min = reduce(xi, minimum<Real>());
-    max = reduce(xi, maximum<Real>());
-  }
-
   Kokkos::View<ModifiedElem*> gatherModified(LOs keys2entity, Int dim) {
     auto entity2elem = mesh.ask_up(dim, mesh_dim);
     Kokkos::View<ModifiedElem*> modified("modified_elems", mesh.nelems());
@@ -163,6 +156,40 @@ namespace Omega_h {
       }
     });
     return modified;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  bool assign2Elem(const LO pid, const LO elem, Reals vert2coords) const {
+    auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+    auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+    if (!is_barycentric_inside(baryCoords, EPSILON)) return false;
+    pParent(pid) = elem;
+    pDim(pid) = mesh_dim;
+
+    for (Int dim = 0; dim < mesh_dim; dim++)
+    for (Int ent = 0; ent < simplex_degree(mesh_dim, dim); ent++) {
+      Real baryCoordsSum = 0.0;
+      for (Int vert = 0; vert < simplex_degree(dim, VERT); vert++) {
+        auto vertIdx = simplex_down_template(mesh_dim, dim, ent, vert);
+        if (are_close(baryCoords[vertIdx], 0)) {baryCoordsSum = -100.0; break;}
+        else baryCoordsSum += baryCoords[vertIdx];
+      }
+      if (!are_close(baryCoordsSum, 1.0)) continue;
+      pChild(pid) = ent;
+      pDim(pid) = dim;
+      update2LowestParent(pid);
+      return true;
+    }
+    return true;
+  }
+
+  void populateFields() {
+    auto vert2coords = mesh.coords();
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
+      auto elem = pParent(pid);
+      if (!assign2Elem(pid, elem, vert2coords)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
+    });
   }
 
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
@@ -265,28 +292,7 @@ namespace Omega_h {
         auto elem_end = keys2prods[key+1];
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
-          auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(newElem));
-          auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-          auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-          if (!is_barycentric_inside(baryCoords, EPSILON)) continue;
-          pParent(pid) = newElem;
-          pDim(pid) = mesh_dim;
-
-          for (Int dim = 0; dim < mesh_dim; dim++)
-          for (Int ent = 0; ent < simplex_degree(mesh_dim, dim); ent++) {
-            Real baryCoordsSum = 0.0;
-            for (Int vert = 0; vert < simplex_degree(dim, VERT); vert++) {
-              auto vertIdx = simplex_down_template(mesh_dim, dim, ent, vert);
-              if (are_close(baryCoords[vertIdx], 0)) {baryCoordsSum = -100.0; break;}
-              else baryCoordsSum += baryCoords[vertIdx];
-            }
-            if (!are_close(baryCoordsSum, 1.0)) continue;
-            pChild(pid) = ent;
-            pDim(pid) = dim;
-            update2LowestParent(pid);
-            return;
-          }
-          return;
+          if (assign2Elem(pid, newElem, vert2coords)) return;
         }
         printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO Customize
       }

@@ -251,10 +251,12 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
       auto pos = OH::get_vector<dim>(nodes2coords, OH::LO(e));
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
-      pAdapt.setPtcl(pid, 0, parent, e);
+      pAdapt.pParent(pid) = parent;
+      // pAdapt.setPtcl(pid, 0, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);
+  pAdapt.populateFields();
   adaptMesh<dim>(pAdapt, averageLength);
   int fails = runAdaptTests(pAdapt);
   delete ptcls;

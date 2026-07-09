@@ -13,7 +13,10 @@
 #ifdef PP_ENABLE_PCMS
 #include <pcms/point_search.h>
 #endif
-// #include <Omega_h_egads.hpp>
+
+#ifdef OMEGA_H_USE_EGADS
+#include <Omega_h_egads.hpp>
+#endif
 
 namespace OH = Omega_h;
 using particle_structs::MemberTypes;
@@ -238,6 +241,35 @@ int runAdaptTests(PADAPT<dim>& pAdapt) {
   return fails;
 }
 
+#if defined(OMEGA_H_USE_EGADS)
+void compute_implied_metric(Omega_h::Mesh* mesh) {
+  auto metrics = Omega_h::get_implied_metrics(mesh);
+  metrics = Omega_h::limit_metric_gradation(mesh, metrics, 1.0);
+  mesh->add_tag(Omega_h::VERT, "metric", Omega_h::symm_ncomps(mesh->dim()), metrics);
+}
+
+void compute_target_metric(Omega_h::Mesh* mesh, double length) {
+  auto metric = Omega_h::diagonal(Omega_h::metric_eigenvalues_from_lengths( Omega_h::vector_3(length, length, length)));
+  auto metrics = Omega_h::repeat_symm(mesh->nverts(), metric);
+  mesh->add_tag(Omega_h::VERT, "target_metric", Omega_h::symm_ncomps(mesh->dim()), metrics);
+}
+
+template<int dim>
+void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, const std::vector<double>& length) {
+  OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
+  for (int i=0; i<length.size(); i++) {
+    opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
+    compute_implied_metric(&pAdapt.mesh);
+    compute_target_metric(&pAdapt.mesh, length[i]);
+    while (OH::approach_metric(&pAdapt.mesh, opts))
+      OH::adapt(&pAdapt.mesh, opts);
+    pAdapt.mesh.remove_tag(OH::VERT, "metric");
+  }
+  OH::vtk::write_vtu("box_after_adapt.vtu", &pAdapt.mesh);
+  OH::vtk::write_vtu("box_edges_after_adapt.vtu", &pAdapt.mesh, 1);
+}
+#endif
+
 template<int dim>
 int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
 {
@@ -293,12 +325,6 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
   return fails;
 }
 
-// OH::Mesh createCylinderMesh(OH::Library& lib, OH::AdaptOpts& opts, char* argv[]) {
-  // auto mesh = OH::gmsh::read(argv[1], lib.world());
-  // opts.egads_model = OH::egads_load(argv[2]);
-  // return mesh;
-// }
-
 int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
@@ -326,8 +352,15 @@ int main(int argc, char* argv[]) {
   fails += testVerts<2>(large2DMesh(), {2, .4});
   fails += testVerts<3>(large3DMesh(), {2, .4});
 
+  // #if defined(OMEGA_H_USE_EGADS) && defined(OMEGA_H_USE_LIBMESHB)
   // OH::AdaptOpts opts3D(3);
-  // fails += testVerts<3>(createCylinderMesh(lib, opts3D, argv), opts3D, {.5});
-  // OH::egads_free(opts3D.egads_model);
+  // Omega_h::Mesh mesh(&lib);
+  // OH::meshb::read(&mesh, argv[2]);
+  // opts3D.egads_model = OH::egads_load(argv[1]);
+  // Omega_h::egads_reclassify(&mesh, opts3D.egads_model);
+  // fails += testDimension<1,3>(mesh, opts3D, {.25});
+  // if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
+  // #endif
+
   return fails;
 }

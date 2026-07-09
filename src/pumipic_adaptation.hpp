@@ -159,7 +159,7 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  bool assign2Elem(const LO pid, const LO elem, Reals vert2coords) const {
+  bool assign2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
     auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
@@ -272,6 +272,33 @@ namespace Omega_h {
     });
   }
 
+  KOKKOS_INLINE_FUNCTION
+  bool snap2Elem(LO pid, LO elem, const Reals& vert2coords) const {
+  #ifdef OMEGA_H_USE_EGADS
+    pParent(pid) = elem;
+    auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+    //TODO: modify how to snap particles
+    for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[0][i];
+    return assign2Elem(pid, elem, vert2coords);
+  #else
+    return false;
+  #endif
+  }
+
+  virtual void snap(Mesh& mesh, const Omega_h::Reals& old_coords, const Omega_h::Reals& warp) {
+    update(mesh);
+    auto vert2coords = mesh.coords();
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      auto lastElem = pParent(pid);
+      auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(lastElem));
+      auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+      auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+      if (is_barycentric_inside(baryCoords, EPSILON)) return;
+      if (!snap2Elem(pid, lastElem, vert2coords)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
+    });
+  }
+
   void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
 
@@ -294,7 +321,8 @@ namespace Omega_h {
           auto newElem = prods2new_ents[idx];
           if (assign2Elem(pid, newElem, vert2coords)) return;
         }
-        printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO Customize
+        if (!snap2Elem(pid, prods2new_ents[elem_begin], vert2coords))
+          printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO: Customize coarsen/swap
       }
       else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);
     });

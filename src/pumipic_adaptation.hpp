@@ -158,12 +158,22 @@ namespace Omega_h {
     return modified;
   }
 
+  template <Int n>
+  Real barycentric_distance(Vector<n> xi, Real fuzz=0) const {
+    Real min = reduce(xi, minimum<Real>());
+    Real max = reduce(xi, maximum<Real>());
+    if (min > 0.0-fuzz) min = 0;
+    if (max < 1.0+fuzz) max = 0;
+    return std::max(std::abs(min), std::abs(max)); 
+  }
+
   KOKKOS_INLINE_FUNCTION
-  bool assign2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
+  Real assign2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
     auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    if (!is_barycentric_inside(baryCoords, EPSILON)) return false;
+    auto dist = barycentric_distance(baryCoords, EPSILON);
+    if (!are_close(dist, 0)) return dist;
     pParent(pid) = elem;
     pDim(pid) = mesh_dim;
 
@@ -179,16 +189,16 @@ namespace Omega_h {
       pChild(pid) = ent;
       pDim(pid) = dim;
       update2LowestParent(pid);
-      return true;
+      return 0;
     }
-    return true;
+    return 0;
   }
 
   void populateFields() {
     auto vert2coords = mesh.coords();
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
       auto elem = pParent(pid);
-      if (!assign2Elem(pid, elem, vert2coords)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
+      if (!are_close(assign2Elem(pid, elem, vert2coords), 0)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
     });
   }
 
@@ -274,13 +284,15 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   bool snap2Elem(LO pid, LO elem, const Reals& vert2coords) const {
+    //add should snap option
   #ifdef OMEGA_H_USE_EGADS
     pParent(pid) = elem;
+    pDim(pid) = mesh_dim;
     auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     //TODO: modify how to snap particles
     for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[0][i];
-    return assign2Elem(pid, elem, vert2coords);
+    return are_close(assign2Elem(pid, elem, vert2coords), 0);
   #else
     return false;
   #endif
@@ -294,8 +306,27 @@ namespace Omega_h {
       auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(lastElem));
       auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
       auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-      if (is_barycentric_inside(baryCoords, EPSILON)) return;
-      if (!snap2Elem(pid, lastElem, vert2coords)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
+      auto pos = getPos(pid);
+      if (pDim(pid) == 0)
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
+      else if (pDim(pid) == 1) {
+        auto edge = get_indices<EDGE>(pChild(pid));
+        auto AB = coords[edge[1]] - coords[edge[0]];
+        auto len = AB * AB;
+        auto t = ((pos - coords[edge[0]]) * AB) / len;
+        pos = coords[edge[0]] + t * AB;
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+      }
+      else if (pDim(pid) == 2) {
+        auto face = get_indices<FACE>(pChild(pid));
+        auto N = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
+        double t = ((pos - coords[face[0]]) * N) / (N * N);
+        pos = pos - t * N;
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+      }
+      else if (!is_barycentric_inside(baryCoords, EPSILON)){
+        if (!snap2Elem(pid, lastElem, vert2coords)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
+      }
     });
   }
 
@@ -317,11 +348,15 @@ namespace Omega_h {
         auto key = modified_elem[oldElem].key;
         auto elem_begin = keys2prods[key];
         auto elem_end = keys2prods[key+1];
+        Real closest = 10000;
+        LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
-          if (assign2Elem(pid, newElem, vert2coords)) return;
+          auto dist = assign2Elem(pid, newElem, vert2coords);
+          if (dist < closest) {closest = dist; closestIdx = idx;}
+          if (are_close(dist, 0)) return;
         }
-        if (!snap2Elem(pid, prods2new_ents[elem_begin], vert2coords))
+        if (!snap2Elem(pid, prods2new_ents[closestIdx], vert2coords))
           printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO: Customize coarsen/swap
       }
       else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);

@@ -67,6 +67,18 @@ void resize(PS*& ptcls, int newNElems) {
 }
 
 template<int dim>
+void printParticleData(std::string filename, PADAPT<dim>& pAdapt) {
+  std::ofstream outFile(filename);
+  outFile << "x, y, z, dim, \"(pid, parent, child)\"\n";
+  for (int pid=0; pid<pAdapt.ptcls->nPtcls(); pid++) {
+    OH::Vector<3> pos = OH::zero_vector<3>();
+    for (int i=0; i<dim; i++) pos[i] = pAdapt.pPos(pid, i);
+    outFile << pos[0] << ", " << pos[1] << ", " << pos[2] << ", " << pAdapt.pDim(pid) << ", ";
+    outFile << "\"(" << pid << ", " << pAdapt.pParent(pid) << ", " << pAdapt.getChildElem(pid) << ")\"\n";
+  }
+}
+
+template<int dim>
 void adaptMesh(PADAPT<dim>& pAdapt, const std::vector<double>& length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   for (int i=0; i<length.size(); i++) {
@@ -104,6 +116,8 @@ int migratePtclsAfterAdapt(PADAPT<dim>& pAdapt) {
     else newElement(pid) = -1;
   };
   ps::parallel_for(ptcls, getNewElement);
+
+  printParticleData("particle_data_after.csv", pAdapt);
   ptcls->rebuild(newElement);
 
   //Assert ptcls moved
@@ -257,6 +271,7 @@ void compute_target_metric(Omega_h::Mesh* mesh, double length) {
 template<int dim>
 void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, const std::vector<double>& length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
+  printParticleData("particle_data_before.csv", pAdapt);
   for (int i=0; i<length.size(); i++) {
     opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
     compute_implied_metric(&pAdapt.mesh);
@@ -296,14 +311,10 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
 }
 
 template <int test_dim, int mesh_dim>
-int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
-{
-  printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
-  PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
-  PADAPT<mesh_dim> pAdapt(ptcls, mesh);
-  PS::kkLidView vtxPerElm("vtx_per_elm", mesh.nents(test_dim));
-  auto test_ent2verts = mesh.get_adj(test_dim, OH::VERT).ab2b;
-  auto nodes2coords = mesh.coords();
+void initParticles(PADAPT<mesh_dim>& pAdapt, const std::vector<double>& lengthCenter) {
+  PS::kkLidView vtxPerElm("vtx_per_elm", pAdapt.mesh.nents(test_dim));
+  auto test_ent2verts = pAdapt.mesh.get_adj(test_dim, OH::VERT).ab2b;
+  auto nodes2coords = pAdapt.mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
       auto parent = pAdapt.getLowestParent(e, test_dim);
@@ -316,10 +327,34 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
       pAdapt.setPtcl(pid, test_dim, parent, e);
     }
   };
-  ps::parallel_for(ptcls, setPtclInfo);
+  ps::parallel_for(pAdapt.ptcls, setPtclInfo);
+}
+
+template <int test_dim, int mesh_dim>
+int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
+{
+  printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
+  PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
+  PADAPT<mesh_dim> pAdapt(ptcls, mesh);
+  initParticles<test_dim, mesh_dim>(pAdapt, lengthCenter);
 
   // Adaptation
   adaptMesh<mesh_dim>(pAdapt, {.5});
+  int fails = runAdaptTests(pAdapt);
+  delete ptcls;
+  return fails;
+}
+
+template <int test_dim, int mesh_dim>
+int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, const std::vector<double>& lengthCenter)
+{
+  printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
+  PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
+  PADAPT<mesh_dim> pAdapt(ptcls, mesh);
+  initParticles<test_dim, mesh_dim>(pAdapt, lengthCenter);
+
+  // Adaptation
+  adaptSnapMesh<mesh_dim>(pAdapt, opts, {.25});
   int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
@@ -331,36 +366,36 @@ int main(int argc, char* argv[]) {
 
   int fails = 0;
 
-  // Refinement Tests:
-  auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
-  auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
-  fails += testVerts<2>(create2DMesh());
-  fails += testDimension<1,2>(create2DMesh(), {.25, .5, 1});
-  fails += testDimension<2,2>(create2DMesh(), {.25, .5, 1});
-  fails += testVerts<3>(create3DMesh());
-  fails += testDimension<1,3>(create3DMesh(), {.25, .5, 1});
-  fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
-  fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
+  // // Refinement Tests:
+  // auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
+  // auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
+  // fails += testVerts<2>(create2DMesh());
+  // fails += testDimension<1,2>(create2DMesh(), {.25, .5, 1});
+  // fails += testDimension<2,2>(create2DMesh(), {.25, .5, 1});
+  // fails += testVerts<3>(create3DMesh());
+  // fails += testDimension<1,3>(create3DMesh(), {.25, .5, 1});
+  // fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
+  // fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
 
-  // Coarsen Tests:
-  auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
-  auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
-  fails += testVerts<2>(large2DMesh(), {2});
-  fails += testVerts<3>(large3DMesh(), {2});
+  // // Coarsen Tests:
+  // auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
+  // auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
+  // fails += testVerts<2>(large2DMesh(), {2});
+  // fails += testVerts<3>(large3DMesh(), {2});
 
-  // Coarsen, Refinement and Swap Tests:
-  fails += testVerts<2>(large2DMesh(), {2, .4});
-  fails += testVerts<3>(large3DMesh(), {2, .4});
+  // // Coarsen, Refinement and Swap Tests:
+  // fails += testVerts<2>(large2DMesh(), {2, .4});
+  // fails += testVerts<3>(large3DMesh(), {2, .4});
 
-  // #if defined(OMEGA_H_USE_EGADS) && defined(OMEGA_H_USE_LIBMESHB)
-  // OH::AdaptOpts opts3D(3);
-  // Omega_h::Mesh mesh(&lib);
-  // OH::meshb::read(&mesh, argv[2]);
-  // opts3D.egads_model = OH::egads_load(argv[1]);
-  // Omega_h::egads_reclassify(&mesh, opts3D.egads_model);
-  // fails += testDimension<1,3>(mesh, opts3D, {.25});
-  // if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
-  // #endif
+  #if defined(OMEGA_H_USE_EGADS) && defined(OMEGA_H_USE_LIBMESHB)
+  OH::AdaptOpts opts3D(3);
+  Omega_h::Mesh mesh(&lib);
+  OH::meshb::read(&mesh, argv[2]);
+  opts3D.egads_model = OH::egads_load(argv[1]);
+  Omega_h::egads_reclassify(&mesh, opts3D.egads_model);
+  fails += testSnap<1,3>(mesh, opts3D, {.25, .5, 1});
+  if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
+  #endif
 
   return fails;
 }

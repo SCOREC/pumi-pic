@@ -95,7 +95,7 @@ namespace pumipic {
       Parts parts;
       parts.insert(comm_rank);
       for (int j = 0; j < nbuffers; ++j) {
-        int index = j * nbuffers + i;
+        int index = j * nelms + i;
         if (safe_core_per_buffer[index])
           parts.insert(buffer_ranks[j]);
       }

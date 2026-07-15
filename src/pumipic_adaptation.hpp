@@ -29,6 +29,7 @@ namespace Omega_h {
   typename PS::template Slice<PARENT> pParent;
   typename PS::template Slice<CHILD> pChild;
   typename PS::template Slice<DIM> pDim;
+  Read<I8> onSurface;
 
   ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     update(meshIn);
@@ -39,6 +40,7 @@ namespace Omega_h {
     pParent = ptcls->template get<PARENT>();
     pChild = ptcls->template get<CHILD>();
     pDim = ptcls->template get<DIM>();
+    onSurface = Omega_h::mark_exposed_sides(&meshIn);
     for (int i=0; i<mesh_dim; i++) {
       upward[i] = meshIn.ask_up(i, mesh_dim);
       downward[i] = meshIn.ask_down(mesh_dim, i);
@@ -283,15 +285,52 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  bool snap2Elem(LO pid, LO elem, const Reals& vert2coords) const {
+  bool snap2Lower(const LO pid, const Matrix<mesh_dim,mesh_dim+1>& coords) const {
+    auto pos = getPos(pid);
+    if (pDim(pid) == 0){
+      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
+    }
+    else if (pDim(pid) == 1) {
+      auto edge = get_indices<EDGE>(pChild(pid));
+      auto dir = coords[edge[1]] - coords[edge[0]];
+      auto len = dir * dir;
+      auto offset = ((pos - coords[edge[0]]) * dir) / len;
+      pos = coords[edge[0]] + offset * dir;
+      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+    }
+    else if (pDim(pid) == 2) {
+      auto face = get_indices<FACE>(pChild(pid));
+      auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
+      double offset = ((pos - coords[face[0]]) * plane) / (plane * plane);
+      pos = pos - offset * plane;
+      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+    }
+    else return false;
+    return true;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  bool snap2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
     //add should snap option
   #ifdef OMEGA_H_USE_EGADS
     pParent(pid) = elem;
-    pDim(pid) = mesh_dim;
+    pDim(pid) = 2;
     auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
-    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-    //TODO: modify how to snap particles
-    for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[0][i];
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts); 
+    Real closest = 100000;
+    LO closestIdx = 0;
+    auto degree = simplex_degree(mesh_dim, FACE);
+    for (int i=0; i<degree; i++) {
+      auto id = downward[2].ab2b[elem*degree + i];
+      if (onSurface[id] == 0) continue;
+      auto face = get_indices<FACE>(i);
+      auto faceCoords = Matrix<mesh_dim, 3>{coords[face[0]], coords[face[1]], coords[face[2]]};
+      auto baryCoords = barycentric_from_global<mesh_dim,2>(getPos(pid), faceCoords);
+      auto dist = barycentric_distance(baryCoords);
+      if (dist < closest) {closest = dist; closestIdx = i;}
+    }
+    pChild(pid) = closestIdx;
+    snap2Lower(pid, coords);
     return are_close(assign2Elem(pid, elem, vert2coords), 0);
   #else
     return false;
@@ -306,24 +345,7 @@ namespace Omega_h {
       auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(lastElem));
       auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
       auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-      auto pos = getPos(pid);
-      if (pDim(pid) == 0)
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
-      else if (pDim(pid) == 1) {
-        auto edge = get_indices<EDGE>(pChild(pid));
-        auto AB = coords[edge[1]] - coords[edge[0]];
-        auto len = AB * AB;
-        auto t = ((pos - coords[edge[0]]) * AB) / len;
-        pos = coords[edge[0]] + t * AB;
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
-      }
-      else if (pDim(pid) == 2) {
-        auto face = get_indices<FACE>(pChild(pid));
-        auto N = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
-        double t = ((pos - coords[face[0]]) * N) / (N * N);
-        pos = pos - t * N;
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
-      }
+      if (snap2Lower(pid, coords)) return;
       else if (!is_barycentric_inside(baryCoords, EPSILON)){
         if (!snap2Elem(pid, lastElem, vert2coords)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
       }
@@ -343,6 +365,12 @@ namespace Omega_h {
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);
+        #ifdef OMEGA_H_USE_EGADS
+        auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, pParent(pid));
+        auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+        if (!snap2Lower(pid, coords))  // TODO: only run if snap enabled
+          snap2Elem(pid, pParent(pid), vert2coords);
+        #endif
       }
       else if (modified_elem[oldElem].key != -1) {
         auto key = modified_elem[oldElem].key;

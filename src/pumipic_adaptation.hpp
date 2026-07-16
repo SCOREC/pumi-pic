@@ -289,7 +289,7 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   bool snap2Lower(const LO pid, const Matrix<mesh_dim,mesh_dim+1>& coords) const {
-    if (!should_snap) return true;
+    if (!should_snap) return false;
     auto pos = getPos(pid);
     if (pDim(pid) == 0){
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
@@ -317,7 +317,7 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   bool snap2Elem(const LO pid, const LO elem) const {
-    if (!should_snap) return true;
+    if (!should_snap) return false;
   #ifdef OMEGA_H_USE_EGADS
     pParent(pid) = elem;
     pDim(pid) = 2;
@@ -353,13 +353,13 @@ namespace Omega_h {
       auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
       if (snap2Lower(pid, coords)) return;
       else if (!is_barycentric_inside(baryCoords, EPSILON)){
-        if (!snap2Elem(pid, lastElem)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
+        if (!snap2Elem(pid, lastElem)) printf("WARNING: snap at particle %d to elem %d failed\n", pid, lastElem);
       }
     });
   }
 
   void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
-      LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
+      LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem, std::string name) {
 
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
     update(new_mesh);
@@ -390,9 +390,9 @@ namespace Omega_h {
           if (are_close(dist, 0)) return;
         }
         if (!snap2Elem(pid, prods2new_ents[closestIdx]))
-          printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO: Customize coarsen/swap
+          printf("WARNING: no %s element found for particle %d\n", name.c_str(), pid);
       }
-      else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);
+      else printf("WARNING: particle %d skipped during particle adaptation %s\n", pid, name.c_str());
     });
   }
 
@@ -402,7 +402,7 @@ namespace Omega_h {
 
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2verts, VERT);
-    updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "coarsen");
   }
 
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
@@ -411,7 +411,7 @@ namespace Omega_h {
 
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2edges, EDGE);
-    updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "swap");
   }
 
   virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {};

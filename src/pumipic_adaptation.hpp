@@ -23,6 +23,7 @@ namespace Omega_h {
 
   PS*& ptcls;
   Mesh& mesh;
+  Reals vert2coords;
   Adj upward[mesh_dim];
   Adj downward[mesh_dim];
   typename PS::template Slice<POS> pPos;
@@ -30,8 +31,10 @@ namespace Omega_h {
   typename PS::template Slice<CHILD> pChild;
   typename PS::template Slice<DIM> pDim;
   Read<I8> onSurface;
+  bool should_snap;
 
-  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
+  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn, bool shouldSnap=false) : ptcls(ptclsIn), mesh(meshIn) {
+    should_snap = shouldSnap;
     update(meshIn);
   }
 
@@ -40,6 +43,7 @@ namespace Omega_h {
     pParent = ptcls->template get<PARENT>();
     pChild = ptcls->template get<CHILD>();
     pDim = ptcls->template get<DIM>();
+    vert2coords = meshIn.coords();
     onSurface = Omega_h::mark_exposed_sides(&meshIn);
     for (int i=0; i<mesh_dim; i++) {
       upward[i] = meshIn.ask_up(i, mesh_dim);
@@ -170,7 +174,7 @@ namespace Omega_h {
   }
 
   KOKKOS_INLINE_FUNCTION
-  Real assign2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
+  Real assign2Elem(const LO pid, const LO elem) const {
     auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
@@ -197,10 +201,9 @@ namespace Omega_h {
   }
 
   void populateFields() {
-    auto vert2coords = mesh.coords();
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
       auto elem = pParent(pid);
-      if (!are_close(assign2Elem(pid, elem, vert2coords), 0)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
+      if (!are_close(assign2Elem(pid, elem), 0)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
     });
   }
 
@@ -286,6 +289,7 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   bool snap2Lower(const LO pid, const Matrix<mesh_dim,mesh_dim+1>& coords) const {
+    if (!should_snap) return true;
     auto pos = getPos(pid);
     if (pDim(pid) == 0){
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
@@ -298,6 +302,7 @@ namespace Omega_h {
       pos = coords[edge[0]] + offset * dir;
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
     }
+    #if mesh_dim == 3
     else if (pDim(pid) == 2) {
       auto face = get_indices<FACE>(pChild(pid));
       auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
@@ -305,13 +310,14 @@ namespace Omega_h {
       pos = pos - offset * plane;
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
     }
+    #endif
     else return false;
     return true;
   }
 
   KOKKOS_INLINE_FUNCTION
-  bool snap2Elem(const LO pid, const LO elem, const Reals& vert2coords) const {
-    //add should snap option
+  bool snap2Elem(const LO pid, const LO elem) const {
+    if (!should_snap) return true;
   #ifdef OMEGA_H_USE_EGADS
     pParent(pid) = elem;
     pDim(pid) = 2;
@@ -331,15 +337,15 @@ namespace Omega_h {
     }
     pChild(pid) = closestIdx;
     snap2Lower(pid, coords);
-    return are_close(assign2Elem(pid, elem, vert2coords), 0);
+    return are_close(assign2Elem(pid, elem), 0);
   #else
     return false;
   #endif
   }
 
   virtual void snap(Mesh& mesh, const Omega_h::Reals& old_coords, const Omega_h::Reals& warp) {
+    if (!should_snap) return;
     update(mesh);
-    auto vert2coords = mesh.coords();
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto lastElem = pParent(pid);
       auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(lastElem));
@@ -347,7 +353,7 @@ namespace Omega_h {
       auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
       if (snap2Lower(pid, coords)) return;
       else if (!is_barycentric_inside(baryCoords, EPSILON)){
-        if (!snap2Elem(pid, lastElem, vert2coords)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
+        if (!snap2Elem(pid, lastElem)) printf("WARNING: snap at particle %d to elem %d failed", pid, lastElem);
       }
     });
   }
@@ -356,7 +362,6 @@ namespace Omega_h {
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
 
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
-    auto vert2coords = new_mesh.coords();
     update(new_mesh);
 
     //Update modified elements
@@ -368,8 +373,8 @@ namespace Omega_h {
         #ifdef OMEGA_H_USE_EGADS
         auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, pParent(pid));
         auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-        if (!snap2Lower(pid, coords))  // TODO: only run if snap enabled
-          snap2Elem(pid, pParent(pid), vert2coords);
+        if (!snap2Lower(pid, coords))
+          snap2Elem(pid, pParent(pid));
         #endif
       }
       else if (modified_elem[oldElem].key != -1) {
@@ -380,11 +385,11 @@ namespace Omega_h {
         LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
-          auto dist = assign2Elem(pid, newElem, vert2coords);
+          auto dist = assign2Elem(pid, newElem);
           if (dist < closest) {closest = dist; closestIdx = idx;}
           if (are_close(dist, 0)) return;
         }
-        if (!snap2Elem(pid, prods2new_ents[closestIdx], vert2coords))
+        if (!snap2Elem(pid, prods2new_ents[closestIdx]))
           printf("WARNING: no coarsen element found for particle %d\n", pid); //TODO: Customize coarsen/swap
       }
       else printf("WARNING: particle %d skipped during particle adaptation coarsening\n", pid);

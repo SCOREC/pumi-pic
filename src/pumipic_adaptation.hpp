@@ -190,7 +190,7 @@ namespace Omega_h {
 
   KOKKOS_INLINE_FUNCTION
   Real assign2Elem(const LO pid, const LO elem) const {
-    auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
     auto dist = barycentric_distance(baryCoords, EPSILON);
@@ -229,7 +229,7 @@ namespace Omega_h {
     if (prod_dim != mesh_dim) return;
     auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     auto modified = gatherModified(keys2edges, EDGE);
-    auto old_cell2verts = old_mesh.ask_down(mesh_dim, 0).ab2b;
+    auto old_cell2verts = old_mesh.ask_down(mesh_dim, VERT).ab2b;
     auto old_vert2coords = old_mesh.coords();
     update(new_mesh);
 
@@ -261,30 +261,30 @@ namespace Omega_h {
         }
 
         if (onSplit) pDim(pid) = pDim(pid) - 1;
-        if (onSplit && pDim(pid) == 0) { //ptcl on the new vert
+        if (onSplit && pDim(pid) == VERT) { //ptcl on the new vert
           pChild(pid) = newVert;
         }
-        else if (onSplit && pDim(pid) == 1) { //ptcl on a new edge
+        else if (onSplit && pDim(pid) == EDGE) { //ptcl on a new edge
           auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
           pChild(pid) = verts2Edge(newVert, old2NewIdx[oppositeVert]);
         }
-        else if (onSplit && pDim(pid) == 2) { //particle on a new face
+        else if (onSplit && pDim(pid) == FACE) { //particle on a new face
           auto oppositeEdge = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
           auto oppositeVerts = get_indices<EDGE>(oppositeEdge);
           auto edge1 = verts2Edge(newVert, old2NewIdx[oppositeVerts[0]]);
           auto edge2 = verts2Edge(newVert, old2NewIdx[oppositeVerts[1]]);
           pChild(pid) = edges2Face(edge1, edge2);
         }
-        else if (pDim(pid) == 0) { //ptcl stayed on same vert
+        else if (pDim(pid) == VERT) { //ptcl stayed on same vert
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
-        else if (pDim(pid) == 1) { //ptcl stayed on same edge
+        else if (pDim(pid) == EDGE) { //ptcl stayed on same edge
           auto edgeVerts = get_indices<EDGE>(pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
             verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
         }
-        else if (pDim(pid) == 2 && pDim(pid) < mesh_dim) { //particle stayed on face
+        else if (pDim(pid) == FACE && pDim(pid) < mesh_dim) { //particle stayed on face
           if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) { //old face stayed the same
             auto faceVerts = get_indices<FACE>(pChild(pid));
             auto edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);

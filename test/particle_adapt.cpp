@@ -156,15 +156,15 @@ int compareWithPosition(PADAPT<dim>& pAdapt) {
   auto getNewElement = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if (mask <= 0) return;
     auto pPos = pAdapt.getPos(pid);
-    if (pAdapt.pDim(pid) == 0) {
-      auto verts = OH::gather_verts<dim+1>(pAdapt.downward[0].ab2b, OH::LO(pAdapt.pParent(pid)));
+    if (pAdapt.pDim(pid) == OH::VERT) {
+      auto verts = OH::gather_verts<dim+1>(pAdapt.downward[OH::VERT].ab2b, OH::LO(pAdapt.pParent(pid)));
       auto coords = OH::gather_vectors<dim+1,dim>(vert2coords, verts);
       if (!OH::are_close(coords[pAdapt.pChild(pid)], pPos)) {
         printf("[ERROR] Particle %d not at correct vertex\n", pid);
         failed(0) = 1;
       }
     }
-    else if (pAdapt.pDim(pid) == 1) {
+    else if (pAdapt.pDim(pid) == OH::EDGE) {
       auto child = pAdapt.getChildElem(pid);
       auto eVerts = OH::gather_verts<2>(edge2verts, child);
       auto eCoords = OH::gather_vectors<2, dim>(vert2coords, eVerts);
@@ -174,7 +174,7 @@ int compareWithPosition(PADAPT<dim>& pAdapt) {
         failed(0) = 1;
       }
     }
-    else if (pAdapt.pDim(pid) == 2) {
+    else if (pAdapt.pDim(pid) == OH::FACE) {
       auto child = pAdapt.getChildElem(pid);
       auto eVerts = OH::gather_verts<3>(face2verts, child);
       auto eCoords = OH::gather_vectors<3, dim>(vert2coords, eVerts);
@@ -330,12 +330,12 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
   auto nodes2coords = mesh.coords();
   auto setPtclInfo = PS_LAMBDA(const int& e, const int& pid, const int& mask) {
     if(mask > 0) {
-      auto parent = pAdapt.getLowestParent(e, 0);
+      auto parent = pAdapt.getLowestParent(e, OH::VERT);
       auto pos = OH::get_vector<dim>(nodes2coords, OH::LO(e));
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
       pAdapt.pParent(pid) = parent;
-      // pAdapt.setPtcl(pid, 0, parent, e);
+      // pAdapt.setPtcl(pid, OH::VERT, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);

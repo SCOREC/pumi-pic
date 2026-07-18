@@ -292,6 +292,7 @@ template<int dim>
 void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, const std::vector<double>& length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   printParticleData("particle_data_before.csv", pAdapt);
+  pAdapt.setOpts(&opts);
   for (int i=0; i<length.size(); i++) {
     opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
     compute_implied_metric(&pAdapt.mesh);

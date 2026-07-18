@@ -23,6 +23,7 @@ namespace Omega_h {
 
   PS*& ptcls;
   Mesh& mesh;
+  AdaptOpts* opts;
   Reals vert2coords;
   Adj upward[mesh_dim];
   Adj downward[mesh_dim];
@@ -49,6 +50,20 @@ namespace Omega_h {
       upward[i] = meshIn.ask_up(i, mesh_dim);
       downward[i] = meshIn.ask_down(mesh_dim, i);
     }
+  }
+
+  void setOpts(AdaptOpts* opts2) {
+    opts = opts2;
+  }
+
+  //TODO: remove after PR
+  void stopExecution() const {
+    opts->should_refine = false;
+    opts->should_coarsen = false;
+    opts->should_swap = false;
+    opts->should_coarsen_slivers = false;
+    opts->egads_model = nullptr;
+    mesh.remove_tag(VERT, "target_metric");
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -164,13 +179,13 @@ namespace Omega_h {
     return modified;
   }
 
+  //TODO: replace with more accurate distance measurement
   template <Int n>
   Real barycentric_distance(Vector<n> xi, Real fuzz=0) const {
     Real min = reduce(xi, minimum<Real>());
     Real max = reduce(xi, maximum<Real>());
-    if (min > 0.0-fuzz) min = 0;
-    if (max < 1.0+fuzz) max = 0;
-    return std::max(std::abs(min), std::abs(max)); 
+    if (min > 0.0-fuzz && max < 1.0+fuzz) return 0;
+    return std::abs(min);
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -221,8 +236,10 @@ namespace Omega_h {
     //Update modified elements
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
       auto oldElem = pParent(pid);
-      if (old2New[oldElem] != -1) //update unchanged element id
+      if (old2New[oldElem] != -1) {//update unchanged element id
         pParent(pid) = old2New[oldElem];
+        update2LowestParent(pid);
+      }
       else if (modified[oldElem].offset != -1) { //find new split element
         auto newVert = mesh_dim;
         auto rotation = code_rotation(modified[oldElem].code);
@@ -291,10 +308,10 @@ namespace Omega_h {
   bool snap2Lower(const LO pid, const Matrix<mesh_dim,mesh_dim+1>& coords) const {
     if (!should_snap) return false;
     auto pos = getPos(pid);
-    if (pDim(pid) == 0){
+    if (pDim(pid) == VERT){
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
     }
-    else if (pDim(pid) == 1) {
+    else if (pDim(pid) == EDGE) {
       auto edge = get_indices<EDGE>(pChild(pid));
       auto dir = coords[edge[1]] - coords[edge[0]];
       auto len = dir * dir;
@@ -302,15 +319,15 @@ namespace Omega_h {
       pos = coords[edge[0]] + offset * dir;
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
     }
-    #if mesh_dim == 3
-    else if (pDim(pid) == 2) {
-      auto face = get_indices<FACE>(pChild(pid));
-      auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
-      double offset = ((pos - coords[face[0]]) * plane) / (plane * plane);
-      pos = pos - offset * plane;
-      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+    else if (pDim(pid) == FACE) {
+      if constexpr (mesh_dim > 2) {
+        auto face = get_indices<FACE>(pChild(pid));
+        auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
+        double offset = ((pos - coords[face[0]]) * plane) / (plane * plane);
+        pos = pos - offset * plane;
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
+      }
     }
-    #endif
     else return false;
     return true;
   }
@@ -320,20 +337,18 @@ namespace Omega_h {
     if (!should_snap) return false;
   #ifdef OMEGA_H_USE_EGADS
     pParent(pid) = elem;
-    pDim(pid) = 2;
-    auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(elem));
-    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts); 
-    Real closest = 100000;
+    pDim(pid) = FACE;
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+    auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+    Real closest = std::numeric_limits<Real>::max();
     LO closestIdx = 0;
     auto degree = simplex_degree(mesh_dim, FACE);
     for (int i=0; i<degree; i++) {
-      auto id = downward[2].ab2b[elem*degree + i];
+      auto id = downward[FACE].ab2b[elem*degree + i];
       if (onSurface[id] == 0) continue;
-      auto face = get_indices<FACE>(i);
-      auto faceCoords = Matrix<mesh_dim, 3>{coords[face[0]], coords[face[1]], coords[face[2]]};
-      auto baryCoords = barycentric_from_global<mesh_dim,2>(getPos(pid), faceCoords);
-      auto dist = barycentric_distance(baryCoords);
-      if (dist < closest) {closest = dist; closestIdx = i;}
+      auto oppVert = simplex_opposite_template(mesh_dim, FACE, i);
+      if (baryCoords[oppVert] < closest) {closest = baryCoords[oppVert]; closestIdx = i;}
     }
     pChild(pid) = closestIdx;
     snap2Lower(pid, coords);

@@ -222,10 +222,8 @@ namespace Omega_h {
     });
   }
 
-  virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges,
-      LOs keys2midverts, Int prod_dim, LOs keys2prods, LOs prods2new_ents,
-      LOs same_ents2old_ents, LOs same_ents2new_ents) {
-
+  virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges, LOs keys2midverts, Int prod_dim, 
+      LOs keys2prods, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
     auto modified = gatherModified(keys2edges, EDGE);
@@ -363,7 +361,7 @@ namespace Omega_h {
     update(mesh);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto lastElem = pParent(pid);
-      auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, LO(lastElem));
+      auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(lastElem));
       auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
       auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
       if (snap2Lower(pid, coords)) return;
@@ -375,18 +373,15 @@ namespace Omega_h {
 
   void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem, std::string name) {
-
-    auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
     update(new_mesh);
-
-    //Update modified elements
+    auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);
         #ifdef OMEGA_H_USE_EGADS
-        auto verts = gather_verts<mesh_dim+1>(downward[0].ab2b, pParent(pid));
+        auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, pParent(pid));
         auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
         if (!snap2Lower(pid, coords))
           snap2Elem(pid, pParent(pid));
@@ -396,13 +391,13 @@ namespace Omega_h {
         auto key = modified_elem[oldElem].key;
         auto elem_begin = keys2prods[key];
         auto elem_end = keys2prods[key+1];
-        Real closest = 10000;
+        Real closest = std::numeric_limits<Real>::max();;
         LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
           auto dist = assign2Elem(pid, newElem);
-          if (dist < closest) {closest = dist; closestIdx = idx;}
           if (are_close(dist, 0)) return;
+          if (dist < closest) {closest = dist; closestIdx = idx;}
         }
         if (!snap2Elem(pid, prods2new_ents[closestIdx]))
           printf("WARNING: no %s element found for particle %d\n", name.c_str(), pid);
@@ -411,19 +406,15 @@ namespace Omega_h {
     });
   }
 
-  virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts,
-      Adj keys2doms, Int prod_dim, LOs prods2new_ents, 
-      LOs same_ents2old_ents, LOs same_ents2new_ents) {
-
+  virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts, Adj keys2doms, 
+      Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2verts, VERT);
     updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "coarsen");
   }
 
-  virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim,
-      LOs keys2edges, LOs keys2prods, LOs prods2new_ents,
-      LOs same_ents2old_ents, LOs same_ents2new_ents) {
-
+  virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim, LOs keys2edges, 
+      LOs keys2prods, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2edges, EDGE);
     updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "swap");

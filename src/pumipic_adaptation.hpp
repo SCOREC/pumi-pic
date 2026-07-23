@@ -117,30 +117,6 @@ namespace Omega_h {
     return -1;
   }
 
-  KOKKOS_INLINE_FUNCTION
-  Int edges2Face(Int edge1, Int edge2) const {
-    for (int i=0; i<2; ++i) {
-      auto face1 = simplex_up_template(mesh_dim, EDGE, edge1, i);
-      for (int j=0; j<2; ++j) {
-        auto face2 = simplex_up_template(mesh_dim, EDGE, edge2, j);
-        if (face1.up == face2.up) return face1.up;
-      }
-    }
-    return -1;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  Int verts2Edge(Int vert1, Int vert2) const {
-    for (int i=0; i<3; ++i) {
-      auto edge1 = simplex_up_template(mesh_dim, VERT, vert1, i);
-      for (int j=0; j<3; ++j) {
-        auto edge2 = simplex_up_template(mesh_dim, VERT, vert2, j);
-        if (edge1.up == edge2.up) return edge1.up;
-      }
-    }
-    return -1;
-  }
-
   template <Int dim>
   constexpr Kokkos::Array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
     Kokkos::Array<Int, dim+1> output = {};
@@ -264,14 +240,14 @@ namespace Omega_h {
         }
         else if (onSplit && pDim(pid) == EDGE) { //ptcl on a new edge
           auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
-          pChild(pid) = verts2Edge(newVert, old2NewIdx[oppositeVert]);
+          pChild(pid) = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVert]);
         }
         else if (onSplit && pDim(pid) == FACE) { //particle on a new face
           auto oppositeEdge = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
           auto oppositeVerts = get_indices<EDGE>(oppositeEdge);
-          auto edge1 = verts2Edge(newVert, old2NewIdx[oppositeVerts[0]]);
-          auto edge2 = verts2Edge(newVert, old2NewIdx[oppositeVerts[1]]);
-          pChild(pid) = edges2Face(edge1, edge2);
+          auto edge1 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVerts[0]]);
+          auto edge2 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVerts[1]]);
+          pChild(pid) = simplex_face_from_edges(edge1, edge2);
         }
         else if (pDim(pid) == VERT) { //ptcl stayed on same vert
           pChild(pid) = old2NewIdx[pChild(pid)];
@@ -279,21 +255,21 @@ namespace Omega_h {
         else if (pDim(pid) == EDGE) { //ptcl stayed on same edge
           auto edgeVerts = get_indices<EDGE>(pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
-            verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
-            verts2Edge(old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
+            simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
+            simplex_edge_from_verts(mesh_dim, old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
         }
         else if (pDim(pid) == FACE && pDim(pid) < mesh_dim) { //particle stayed on face
           if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) { //old face stayed the same
             auto faceVerts = get_indices<FACE>(pChild(pid));
-            auto edge1 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
-            auto edge2 = verts2Edge(old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
-            pChild(pid) = edges2Face(edge1, edge2);
+            auto edge1 = simplex_edge_from_verts(mesh_dim, old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
+            auto edge2 = simplex_edge_from_verts(mesh_dim, old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
+            pChild(pid) = simplex_face_from_edges(edge1, edge2);
           }
           else { //old face was split
             auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
-            auto edge1 = verts2Edge(newVert, old2NewIdx[spltVerts[1-target]]);
-            auto edge2 = verts2Edge(newVert, old2NewIdx[oppositeVert]);
-            pChild(pid) = edges2Face(edge1, edge2);
+            auto edge1 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[spltVerts[1-target]]);
+            auto edge2 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVert]);
+            pChild(pid) = simplex_face_from_edges(edge1, edge2);
           }
         }
         update2LowestParent(pid);

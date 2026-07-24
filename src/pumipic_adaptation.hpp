@@ -100,30 +100,6 @@ namespace Omega_h {
     return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
-  KOKKOS_INLINE_FUNCTION
-  Int flip(Int index) const {
-    if (mesh_dim < 3) return index;
-    if (index == 1) return 2;
-    if (index == 2) return 1;
-    return index;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  Int faceVertOppositeEdge(const Int face, const Kokkos::Array<Int, 2> edgeVerts) const {
-    for (int i = 0; i < 3; i++){
-      auto v = (mesh_dim == 2) ? i : simplex_down_template(mesh_dim, FACE, face, i);
-      if (v != edgeVerts[0] && v != edgeVerts[1]) return v;
-    }
-    return -1;
-  }
-
-  template <Int dim>
-  constexpr Kokkos::Array<Int, dim+1> get_indices(Int index, Int rotation = 0) const {
-    Kokkos::Array<Int, dim+1> output = {};
-    for (int i=0; i<dim+1; i++) output[i] = simplex_down_template(mesh_dim, dim, index, i ^ rotation);
-    return output;
-  }
-
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -218,7 +194,7 @@ namespace Omega_h {
         auto newVert = mesh_dim;
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
-        auto spltVerts = get_indices<EDGE>(spltEdgeIdx, rotation);
+        auto spltVerts = simplex_gather_down<EDGE>(mesh_dim, spltEdgeIdx, rotation);
         auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
@@ -231,7 +207,7 @@ namespace Omega_h {
         Int old2NewIdx[mesh_dim+1] = {0}; //one elem kept blank
         for (Int newIdx = 0; newIdx < mesh_dim; ++newIdx) {
           auto oldIdx = simplex_down_template(mesh_dim, mesh_dim - 1, keptSide, newIdx);
-          old2NewIdx[oldIdx] = flip(newIdx);
+          old2NewIdx[oldIdx] = flip_new_vert(mesh_dim, newIdx);
         }
 
         if (onSplit) pDim(pid) = pDim(pid) - 1;
@@ -239,12 +215,12 @@ namespace Omega_h {
           pChild(pid) = newVert;
         }
         else if (onSplit && pDim(pid) == EDGE) { //ptcl on a new edge
-          auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
+          auto oppositeVert = simplex_vertex_opposite_edge(mesh_dim, pChild(pid), spltEdgeIdx);
           pChild(pid) = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVert]);
         }
         else if (onSplit && pDim(pid) == FACE) { //particle on a new face
           auto oppositeEdge = simplex_opposite_template(mesh_dim, EDGE, spltEdgeIdx);
-          auto oppositeVerts = get_indices<EDGE>(oppositeEdge);
+          auto oppositeVerts = simplex_gather_down<EDGE>(mesh_dim, oppositeEdge);
           auto edge1 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVerts[0]]);
           auto edge2 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVerts[1]]);
           pChild(pid) = simplex_face_from_edges(edge1, edge2);
@@ -253,20 +229,20 @@ namespace Omega_h {
           pChild(pid) = old2NewIdx[pChild(pid)];
         }
         else if (pDim(pid) == EDGE) { //ptcl stayed on same edge
-          auto edgeVerts = get_indices<EDGE>(pChild(pid));
+          auto edgeVerts = simplex_gather_down<EDGE>(mesh_dim, pChild(pid));
           pChild(pid) = (pChild(pid) == spltEdgeIdx) ? 
             simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[spltVerts[1-target]]) : //old edge was split
             simplex_edge_from_verts(mesh_dim, old2NewIdx[edgeVerts[0]], old2NewIdx[edgeVerts[1]]); //old edge stayed the same
         }
         else if (pDim(pid) == FACE && pDim(pid) < mesh_dim) { //particle stayed on face
           if (are_close(baryCoords[spltVerts[0]], 0) || are_close(baryCoords[spltVerts[1]], 0)) { //old face stayed the same
-            auto faceVerts = get_indices<FACE>(pChild(pid));
+            auto faceVerts = simplex_gather_down<FACE>(mesh_dim, pChild(pid));
             auto edge1 = simplex_edge_from_verts(mesh_dim, old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[1]]);
             auto edge2 = simplex_edge_from_verts(mesh_dim, old2NewIdx[faceVerts[0]], old2NewIdx[faceVerts[2]]);
             pChild(pid) = simplex_face_from_edges(edge1, edge2);
           }
           else { //old face was split
-            auto oppositeVert = faceVertOppositeEdge(pChild(pid), spltVerts);
+            auto oppositeVert = simplex_vertex_opposite_edge(mesh_dim, pChild(pid), spltEdgeIdx);
             auto edge1 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[spltVerts[1-target]]);
             auto edge2 = simplex_edge_from_verts(mesh_dim, newVert, old2NewIdx[oppositeVert]);
             pChild(pid) = simplex_face_from_edges(edge1, edge2);
@@ -286,7 +262,7 @@ namespace Omega_h {
       for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
     }
     else if (pDim(pid) == EDGE) {
-      auto edge = get_indices<EDGE>(pChild(pid));
+      auto edge = simplex_gather_down<EDGE>(mesh_dim, pChild(pid));
       auto dir = coords[edge[1]] - coords[edge[0]];
       auto len = dir * dir;
       auto offset = ((pos - coords[edge[0]]) * dir) / len;
@@ -295,7 +271,7 @@ namespace Omega_h {
     }
     else if (pDim(pid) == FACE) {
       if constexpr (mesh_dim > 2) {
-        auto face = get_indices<FACE>(pChild(pid));
+        auto face = simplex_gather_down<FACE>(mesh_dim, pChild(pid));
         auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
         double offset = ((pos - coords[face[0]]) * plane) / (plane * plane);
         pos = pos - offset * plane;

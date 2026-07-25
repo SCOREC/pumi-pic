@@ -75,8 +75,10 @@ namespace Omega_h {
     opts->should_coarsen = false;
     opts->should_swap = false;
     opts->should_coarsen_slivers = false;
-    opts->egads_model = nullptr;
     mesh.remove_tag(VERT, "target_metric");
+    #ifdef OMEGA_H_USE_EGADS
+    opts->egads_model = nullptr;
+    #endif
   }
 
   KOKKOS_INLINE_FUNCTION

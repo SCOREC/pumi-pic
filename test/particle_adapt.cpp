@@ -20,7 +20,7 @@
 
 namespace OH = Omega_h;
 using particle_structs::MemberTypes;
-enum MemberIndex{POS, PARENT, CHILD, DIM, PID};
+enum MemberIndex{POS, PARENT, CHILD, PDIM, PID};
 typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
@@ -28,7 +28,7 @@ typedef ps::SellCSigma<Type,ExeSpace> SCS;
 typedef ps::DPS<Type,ExeSpace> DPS;
 
 template<int dim>
-using PADAPT = OH::ParticleAdapt<dim, PS, POS, PARENT, CHILD, DIM>;
+using PADAPT = OH::ParticleAdapt<dim, PS, POS, PARENT, CHILD, PDIM>;
 
 PS* createPtclStructure(OH::Mesh& mesh, int nelems, int ppe) {
   PS::kkLidView ptclsPerElem("ptcls_per_elem", nelems);

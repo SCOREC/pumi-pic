@@ -13,17 +13,13 @@ namespace pp = pumipic;
 
 namespace Omega_h {
 
-  namespace {
-    constexpr OMEGA_H_INLINE Int flip_new_vert(Int dim, Int index) {
-      if (dim < 3) return index;
-      if (index == 1) return 2;
-      if (index == 2) return 1;
-      return index;
-    }
+namespace {
+  constexpr OMEGA_H_INLINE Int flip_new_vert(Int dim, Int index) {
+    if (dim < 3) return index;
+    if (index == 1) return 2;
+    if (index == 2) return 1;
+    return index;
   }
-
-  template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
-  struct ParticleAdapt : public UserTransfer {
 
   struct ModifiedElem {
     LO key=-1;
@@ -33,6 +29,10 @@ namespace Omega_h {
     ModifiedElem() : key(-1), offset(-1), code(-1) {}
     ModifiedElem(LO k, LO o, LO c) : key(k), offset(o), code(c) {}
   };
+}
+
+template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
+struct ParticleAdapt : public UserTransfer {
 
   PS*& ptcls;
   Mesh& mesh;

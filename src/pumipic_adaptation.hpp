@@ -6,6 +6,7 @@
 #include "Omega_h_scalar.hpp"
 #include "Omega_h_element.hpp"
 #include "Omega_h_shape.hpp"
+#include "Omega_h_adapt.hpp"
 #include "pumipic_utils.hpp"
 #include <MemberTypeLibraries.h>
 

@@ -46,6 +46,12 @@ mpi_test(comm_array_pisces 4
 mpi_test(comm_array_2d_box 4
   ./comm_array ${TEST_DATA_DIR}/2d_box/2d_box.msh testing_2d_box_4.ptn)
 
+mpi_test(comm_array_pisces_0layers 4
+  ./comm_array ${TEST_DATA_DIR}/pisces/gitr.msh testing_pisces_4.ptn 0)
+
+mpi_test(comm_array_2d_box_0layers 4
+  ./comm_array ${TEST_DATA_DIR}/2d_box/2d_box.msh testing_2d_box_4.ptn 0)
+
 mpi_test(file_rw_cube_4 4
   ./file_rw
   ${TEST_DATA_DIR}/cube.msh

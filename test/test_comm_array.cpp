@@ -14,9 +14,9 @@ int main(int argc, char** argv) {
   pumipic::Library pic_lib(&argc, &argv);
   Omega_h::Library& lib = pic_lib.omega_h_lib();
   int rank = lib.world()->rank();;
-  if (argc != 3) {
+  if (argc != 3 && argc != 4) {
     if (!rank)
-      fprintf(stderr, "Usage: %s <mesh> <partition filename>\n", argv[0]);
+      fprintf(stderr, "Usage: %s <mesh> <partition filename> [buffer_layers]\n", argv[0]);
     MPI_Finalize();
     return EXIT_FAILURE;
   }
@@ -45,26 +45,38 @@ int main(int argc, char** argv) {
   //Owner of each element
   Omega_h::Write<Omega_h::LO> owner(host_owners);
 
+  //REPRO: buffer depth under test (upstream default is 1) and a real exit code
+  const int buffer_layers = (argc == 4) ? atoi(argv[3]) : 1;
+  int failures = 0;
+  if (!rank)
+    printf("REPRO buffer_layers=%d\n", buffer_layers);
+
   for (int i = 0; i <= mesh.dim(); ++i) {
-    if (!fullBufferTest(mesh, owner, i))
+    if (!fullBufferTest(mesh, owner, i)) {
       printf("fullBufferTest on dimension %d failed on rank %d\n", i, rank);
+      ++failures;
+    }
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
   
   //********* Construct the PIC parts *********//
-  pumipic::Mesh picparts(mesh, owner, 1, 0);
+  pumipic::Mesh picparts(mesh, owner, buffer_layers, 0);
 
   for (int i = 0; i <= picparts.dim(); ++i) {
-    if (!minOwnership(picparts, i))
+    if (!minOwnership(picparts, i)) {
       printf("minOwnership on dimension %d failed on rank %d\n", i, rank);
+      ++failures;
+    }
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   for (int i = 0; i <= 0/*picparts.dim()*/; ++i) {
-    if (!sumEntities(picparts, i))
+    if (!sumEntities(picparts, i)) {
       printf("sumEntities on dimension %d failed on rank %d\n", i, rank);
+      ++failures;
+    }
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -86,6 +98,7 @@ int main(int argc, char** argv) {
   Omega_h::HostWrite<Omega_h::LO> fail_host(fail);
   if (fail_host[0]) {
     fprintf(stderr, "Max reduce failed on %d\n", rank);
+    ++failures;
   }
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -112,9 +125,11 @@ int main(int argc, char** argv) {
   
   if (!success) {
     fprintf(stderr, "Multielement comm operation failed on %d\n", lib.world()->rank());
+    ++failures;
   }
 
-  return 0;
+  printf("REPRO rank %d failures=%d\n", rank, failures);
+  return failures != 0;
 }
 
 bool minOwnership(pumipic::Mesh& picparts, int dim) {

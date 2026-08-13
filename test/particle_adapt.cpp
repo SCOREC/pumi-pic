@@ -68,6 +68,7 @@ void resize(PS*& ptcls, int newNElems) {
 
 template<int dim>
 void printParticleData(std::string filename, PADAPT<dim>& pAdapt) {
+  #ifndef PP_USE_GPU
   std::ofstream outFile(filename);
   outFile << "x, y, z, dim, \"(pid, parent, child)\"\n";
   for (int pid=0; pid<pAdapt.ptcls->nPtcls(); pid++) {
@@ -76,6 +77,7 @@ void printParticleData(std::string filename, PADAPT<dim>& pAdapt) {
     outFile << pos[0] << ", " << pos[1] << ", " << pos[2] << ", " << pAdapt.pDim(pid) << ", ";
     outFile << "\"(" << pid << ", " << pAdapt.pParent(pid) << ", " << pAdapt.getChildElem(pid) << ")\"\n";
   }
+  #endif
 }
 
 template<int dim, int size>

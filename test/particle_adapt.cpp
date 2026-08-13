@@ -78,8 +78,8 @@ void printParticleData(std::string filename, PADAPT<dim>& pAdapt) {
   }
 }
 
-template<int dim>
-void adaptMesh(PADAPT<dim>& pAdapt, const std::vector<double>& length) {
+template<int dim, int size>
+void adaptMesh(PADAPT<dim>& pAdapt, OH::Few<double, size> length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   for (int i=0; i<length.size(); i++) {
     auto metrics = OH::get_implied_isos(&pAdapt.mesh);
@@ -138,7 +138,7 @@ int migratePtclsAfterAdapt(PADAPT<dim>& pAdapt) {
 }
 
 template<int dim>
-double dist2Plane(OH::Matrix<dim, 3> tri, OH::Vector<dim> pos) {
+OMEGA_H_DEVICE double dist2Plane(OH::Matrix<dim, 3> tri, OH::Vector<dim> pos) {
   if constexpr (dim == 3) {
     auto normal = OH::get_triangle_normal(tri[0], tri[1], tri[2]);
     auto dist = (pos - tri[0]) * (normal) / OH::norm(normal);
@@ -255,8 +255,8 @@ int runAdaptTests(PADAPT<dim>& pAdapt) {
   return fails;
 }
 
-template <int test_dim, int mesh_dim>
-void initParticles(PADAPT<mesh_dim>& pAdapt, const std::vector<double>& lengthCenter) {
+template <int test_dim, int mesh_dim, int size>
+void initParticles(PADAPT<mesh_dim>& pAdapt, OH::Few<double, size> lengthCenter) {
   PS::kkLidView vtxPerElm("vtx_per_elm", pAdapt.mesh.nents(test_dim));
   auto test_ent2verts = pAdapt.mesh.get_adj(test_dim, OH::VERT).ab2b;
   auto nodes2coords = pAdapt.mesh.coords();
@@ -288,8 +288,8 @@ void compute_target_metric(Omega_h::Mesh* mesh, double length) {
   mesh->add_tag(Omega_h::VERT, "target_metric", Omega_h::symm_ncomps(mesh->dim()), metrics);
 }
 
-template<int dim>
-void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, const std::vector<double>& length) {
+template<int dim, int size>
+void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, OH::Few<double, size> length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   printParticleData("particle_data_before.csv", pAdapt);
   pAdapt.setOpts(&opts);
@@ -305,8 +305,8 @@ void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, const std::vector<d
   OH::vtk::write_vtu("box_edges_after_adapt.vtu", &pAdapt.mesh, 1);
 }
 
-template <int test_dim, int mesh_dim>
-int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, const std::vector<double>& lengthCenter)
+template <int test_dim, int mesh_dim, int size>
+int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, OH::Few<double, size> lengthCenter)
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
@@ -321,8 +321,8 @@ int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, const std::vector<double>& lengt
 }
 #endif
 
-template<int dim>
-int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
+template<int dim, int size>
+int testVerts(OH::Mesh mesh, OH::Few<double, size> averageLength)
 {
   printf("\n== Test: Migrate ptcl from vertices ==\n\n");
   PS* ptcls = createPtclStructure(mesh, mesh.nverts(), 1);
@@ -346,8 +346,8 @@ int testVerts(OH::Mesh mesh, const std::vector<double>& averageLength = {.5})
   return fails;
 }
 
-template <int test_dim, int mesh_dim>
-int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
+template <int test_dim, int mesh_dim, int size>
+int testDimension(OH::Mesh mesh, OH::Few<double, size> lengthCenter)
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
@@ -355,7 +355,7 @@ int testDimension(OH::Mesh mesh, const std::vector<double>& lengthCenter)
   initParticles<test_dim, mesh_dim>(pAdapt, lengthCenter);
 
   // Adaptation
-  adaptMesh<mesh_dim>(pAdapt, {.5});
+  adaptMesh<mesh_dim>(pAdapt, OH::Few<double, 1>{.5});
   int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
@@ -370,23 +370,23 @@ int main(int argc, char* argv[]) {
   // Refinement Tests:
   auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
   auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
-  fails += testVerts<2>(create2DMesh());
-  fails += testDimension<1,2>(create2DMesh(), {.25, .5, 1});
-  fails += testDimension<2,2>(create2DMesh(), {.25, .5, 1});
-  fails += testVerts<3>(create3DMesh());
-  fails += testDimension<1,3>(create3DMesh(), {.25, .5, 1});
-  fails += testDimension<2,3>(create3DMesh(), {.25, .5, 1});
-  fails += testDimension<3,3>(create3DMesh(), {.1, .25, .5, 1});
+  fails += testVerts<2>(create2DMesh(), OH::Few<double, 1>{.5});
+  fails += testDimension<1,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  fails += testDimension<2,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  fails += testVerts<3>(create3DMesh(), OH::Few<double, 1>{.5});
+  fails += testDimension<1,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  fails += testDimension<2,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  fails += testDimension<3,3>(create3DMesh(), OH::Few<double, 4>{.1, .25, .5, 1});
 
   // Coarsen Tests:
   auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
   auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
-  fails += testVerts<2>(large2DMesh(), {2});
-  fails += testVerts<3>(large3DMesh(), {2});
+  fails += testVerts<2>(large2DMesh(), OH::Few<double, 1>{2});
+  fails += testVerts<3>(large3DMesh(), OH::Few<double, 1>{2});
 
   // Coarsen, Refinement and Swap Tests:
-  fails += testVerts<2>(large2DMesh(), {2, .4});
-  fails += testVerts<3>(large3DMesh(), {2, .4});
+  fails += testVerts<2>(large2DMesh(), OH::Few<double, 2>{2, .4});
+  fails += testVerts<3>(large3DMesh(), OH::Few<double, 2>{2, .4});
 
   #if defined(OMEGA_H_USE_EGADS) && defined(OMEGA_H_USE_LIBMESHB)
   // OH::AdaptOpts opts3D(3);

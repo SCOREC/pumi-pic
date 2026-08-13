@@ -26,8 +26,9 @@ namespace {
     LO key=-1;
     LO offset=-1;
     LO code=-1;
-
+    KOKKOS_INLINE_FUNCTION
     ModifiedElem() : key(-1), offset(-1), code(-1) {}
+    KOKKOS_INLINE_FUNCTION
     ModifiedElem(LO k, LO o, LO c) : key(k), offset(o), code(c) {}
   };
 }
@@ -125,6 +126,7 @@ struct ParticleAdapt : public UserTransfer {
     return old2New;
   }
 
+  KOKKOS_INLINE_FUNCTION
   void update2LowestParent(const LO pid) const {
     if (pDim(pid) == mesh_dim) return;
     auto newChild = getChildElem(pid);
@@ -149,7 +151,7 @@ struct ParticleAdapt : public UserTransfer {
 
   //TODO: replace with more accurate distance measurement
   template <Int n>
-  Real barycentric_distance(Vector<n> xi, Real fuzz=0) const {
+  OMEGA_H_DEVICE Real barycentric_distance(Vector<n> xi, Real fuzz=0) const {
     Real min = reduce(xi, minimum<Real>());
     Real max = reduce(xi, maximum<Real>());
     if (min > 0.0-fuzz && max < 1.0+fuzz) return 0;
@@ -307,7 +309,7 @@ struct ParticleAdapt : public UserTransfer {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    Real closest = std::numeric_limits<Real>::max();
+    Real closest = 1000000;
     LO closestIdx = 0;
     auto degree = simplex_degree(mesh_dim, FACE);
     for (int i=0; i<degree; i++) {
@@ -359,7 +361,7 @@ struct ParticleAdapt : public UserTransfer {
         auto key = modified_elem[oldElem].key;
         auto elem_begin = keys2prods[key];
         auto elem_end = keys2prods[key+1];
-        Real closest = std::numeric_limits<Real>::max();;
+        Real closest = 1000000;
         LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];

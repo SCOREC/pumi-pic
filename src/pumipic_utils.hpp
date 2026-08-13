@@ -774,7 +774,7 @@ constexpr OMEGA_H_INLINE o::Int edge_from_verts(o::Int elem_dim, o::Int vert0, o
 }
 
 template <o::Int bdry_dim>
-constexpr o::Few<o::Int, bdry_dim+1> simplex_gather_down(o::Int elem_dim, o::Int index, o::Int rotation = 0) {
+constexpr OMEGA_H_DEVICE o::Few<o::Int, bdry_dim+1> simplex_gather_down(o::Int elem_dim, o::Int index, o::Int rotation = 0) {
   o::Few<o::Int, bdry_dim+1> output = {};
   for (int i=0; i<bdry_dim+1; i++) output[i] = o::simplex_down_template(elem_dim, bdry_dim, index, i ^ rotation);
   return output;

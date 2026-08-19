@@ -201,9 +201,9 @@ namespace pumipic {
         const lid_t numPtcls = end-start;
         Kokkos::parallel_for(Kokkos::TeamThreadRange(thread, numPtcls), [=] (lid_t& j) {
           const lid_t particle_id = start+j;
-          bool mask = true;
+          lid_t mask = 1;
           if (particle_id > num_ptcls_cpy)
-            mask = false;
+            mask = 0;
           (*fn_d)(elm, particle_id, mask);
         });
     });

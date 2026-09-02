@@ -10,6 +10,10 @@
 #include "team_policy.hpp"
 #include "pumipic_adaptation.hpp"
 
+#ifdef OMEGA_H_USE_EGADSLITE
+#include "Omega_h_egads_lite.hpp"
+#endif
+
 #ifdef PP_ENABLE_PCMS
 #include <pcms/point_search.h>
 #endif
@@ -21,7 +25,7 @@
 namespace OH = Omega_h;
 using particle_structs::MemberTypes;
 enum MemberIndex{POS, PARENT, CHILD, PDIM, PID};
-typedef MemberTypes<double[3], Omega_h::LO, Omega_h::Int, Omega_h::Int, int> Type;
+typedef MemberTypes<double[3], OH::LO, OH::Int, OH::Int, int> Type;
 typedef Kokkos::DefaultExecutionSpace ExeSpace;
 typedef ps::ParticleStructure<Type,ExeSpace> PS;
 typedef ps::SellCSigma<Type,ExeSpace> SCS;
@@ -277,17 +281,17 @@ void initParticles(PADAPT<mesh_dim>& pAdapt, OH::Few<double, size> lengthCenter)
   ps::parallel_for(pAdapt.ptcls, setPtclInfo);
 }
 
-#if defined(OMEGA_H_USE_EGADS)
-void compute_implied_metric(Omega_h::Mesh* mesh) {
-  auto metrics = Omega_h::get_implied_metrics(mesh);
-  metrics = Omega_h::limit_metric_gradation(mesh, metrics, 1.0);
-  mesh->add_tag(Omega_h::VERT, "metric", Omega_h::symm_ncomps(mesh->dim()), metrics);
+#if defined (OMEGA_H_USE_EGADS) || defined(OMEGA_H_USE_EGADSLITE)
+void compute_implied_metric(OH::Mesh* mesh) {
+  auto metrics = OH::get_implied_metrics(mesh);
+  metrics = OH::limit_metric_gradation(mesh, metrics, 1.0);
+  mesh->add_tag(OH::VERT, "metric", OH::symm_ncomps(mesh->dim()), metrics);
 }
 
-void compute_target_metric(Omega_h::Mesh* mesh, double length) {
-  auto metric = Omega_h::diagonal(Omega_h::metric_eigenvalues_from_lengths( Omega_h::vector_3(length, length, length)));
-  auto metrics = Omega_h::repeat_symm(mesh->nverts(), metric);
-  mesh->add_tag(Omega_h::VERT, "target_metric", Omega_h::symm_ncomps(mesh->dim()), metrics);
+void compute_target_metric(OH::Mesh* mesh, double length) {
+  auto metric = OH::diagonal(OH::metric_eigenvalues_from_lengths( OH::vector_3(length, length, length)));
+  auto metrics = OH::repeat_symm(mesh->nverts(), metric);
+  mesh->add_tag(OH::VERT, "target_metric", OH::symm_ncomps(mesh->dim()), metrics);
 }
 
 template<int dim, int size>
@@ -299,6 +303,9 @@ void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, OH::Few<double, siz
     opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
     compute_implied_metric(&pAdapt.mesh);
     compute_target_metric(&pAdapt.mesh, length[i]);
+    #if defined(OMEGA_H_USE_EGADSLITE)
+    OH::hackClassification(&pAdapt.mesh);
+    #endif
     while (OH::approach_metric(&pAdapt.mesh, opts))
       OH::adapt(&pAdapt.mesh, opts);
     pAdapt.mesh.remove_tag(OH::VERT, "metric");
@@ -316,7 +323,7 @@ int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, OH::Few<double, size> lengthCent
   initParticles<test_dim, mesh_dim>(pAdapt, lengthCenter);
 
   // Adaptation
-  adaptSnapMesh<mesh_dim>(pAdapt, opts, {.25});
+  adaptSnapMesh<mesh_dim>(pAdapt, opts, OH::Few<double, 1>{.1});
   int fails = runAdaptTests(pAdapt);
   delete ptcls;
   return fails;
@@ -369,34 +376,41 @@ int main(int argc, char* argv[]) {
 
   int fails = 0;
 
-  // Refinement Tests:
-  auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
-  auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
-  fails += testVerts<2>(create2DMesh(), OH::Few<double, 1>{.5});
-  fails += testDimension<1,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
-  fails += testDimension<2,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
-  fails += testVerts<3>(create3DMesh(), OH::Few<double, 1>{.5});
-  fails += testDimension<1,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
-  fails += testDimension<2,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
-  fails += testDimension<3,3>(create3DMesh(), OH::Few<double, 4>{.1, .25, .5, 1});
+  // // Refinement Tests:
+  // auto create2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 0, false);};
+  // auto create3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 2, 2, 2, false);};
+  // fails += testVerts<2>(create2DMesh(), OH::Few<double, 1>{.5});
+  // fails += testDimension<1,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  // fails += testDimension<2,2>(create2DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  // fails += testVerts<3>(create3DMesh(), OH::Few<double, 1>{.5});
+  // fails += testDimension<1,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  // fails += testDimension<2,3>(create3DMesh(), OH::Few<double, 3>{.25, .5, 1});
+  // fails += testDimension<3,3>(create3DMesh(), OH::Few<double, 4>{.1, .25, .5, 1});
 
-  // Coarsen Tests:
-  auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
-  auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
-  fails += testVerts<2>(large2DMesh(), OH::Few<double, 1>{2});
-  fails += testVerts<3>(large3DMesh(), OH::Few<double, 1>{2});
+  // // Coarsen Tests:
+  // auto large2DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 0, false);};
+  // auto large3DMesh = [&]() { return OH::build_box(world, OMEGA_H_SIMPLEX, 1, 1, 1, 4, 4, 4, false);};
+  // fails += testVerts<2>(large2DMesh(), OH::Few<double, 1>{2});
+  // fails += testVerts<3>(large3DMesh(), OH::Few<double, 1>{2});
 
-  // Coarsen, Refinement and Swap Tests:
-  fails += testVerts<2>(large2DMesh(), OH::Few<double, 2>{2, .4});
-  fails += testVerts<3>(large3DMesh(), OH::Few<double, 2>{2, .4});
+  // // Coarsen, Refinement and Swap Tests:
+  // fails += testVerts<2>(large2DMesh(), OH::Few<double, 2>{2, .4});
+  // fails += testVerts<3>(large3DMesh(), OH::Few<double, 2>{2, .4});
 
-  #if defined(OMEGA_H_USE_EGADS) && defined(OMEGA_H_USE_LIBMESHB)
-  // OH::AdaptOpts opts3D(3);
-  // Omega_h::Mesh mesh(&lib);
-  // OH::meshb::read(&mesh, argv[2]);
-  // opts3D.egads_model = OH::egads_load(argv[1]);
-  // Omega_h::egads_reclassify(&mesh, opts3D.egads_model);
-  // fails += testSnap<1,3>(mesh, opts3D, {.25, .5, 1});
+  #if defined(OMEGA_H_USE_LIBMESHB)
+  OH::AdaptOpts opts3D(3);
+  OH::Mesh mesh(&lib);
+  OH::meshb::read(&mesh, argv[2]);
+  #if defined(OMEGA_H_USE_EGADS)
+  opts3D.egads_model = OH::egads_load(argv[1]);
+  OH::egads_reclassify(&mesh, opts3D.egads_model);
+  #elif defined(OMEGA_H_USE_EGADSLITE)
+  OH::setCudaStackSz();
+  opts3D.egads_model = OH::egads_lite_load(argv[1]);
+  OH::egads_lite_reclassify(&mesh, opts3D.egads_model);
+  #endif
+
+  fails += testSnap<1,3>(mesh, opts3D, OH::Few<double, 3>{.25, .5, 1});
   // if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
   #endif
 

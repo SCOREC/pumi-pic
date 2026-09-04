@@ -252,6 +252,7 @@ void initParticles(PADAPT<mesh_dim>& pAdapt, OH::Few<double, size> lengthCenter)
       auto pos = vtxCoords[0] + ((center - vtxCoords[0]) * lengthCenter[v]); // point near vertex
       for (int i=0; i<mesh_dim; i++) pAdapt.pPos(pid, i) = pos[i];
       pAdapt.setPtcl(pid, test_dim, parent, e);
+      // printf("%f, %f, %f, %d, \"(%d, %d, %d)\"\n", pos[0], pos[1], pos[2], test_dim, pid, parent, e);
     }
   };
   ps::parallel_for(pAdapt.ptcls, setPtclInfo);

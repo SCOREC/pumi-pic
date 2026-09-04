@@ -153,13 +153,23 @@ struct ParticleAdapt : public UserTransfer {
     return modified;
   }
 
-  //TODO: replace with more accurate distance measurement
   template <Int n>
-  OMEGA_H_DEVICE Real barycentric_distance(Vector<n> xi, Real fuzz=0) const {
-    Real min = reduce(xi, minimum<Real>());
-    Real max = reduce(xi, maximum<Real>());
-    if (min > 0.0-fuzz && max < 1.0+fuzz) return 0;
-    return std::abs(min);
+  OMEGA_H_DEVICE Vector<n> clamp_barycentric(Vector<n> baryCoords) const {
+    double barySum = 0;
+    for (Int i=0; i<mesh_dim+1; i++) 
+      (baryCoords[i] < 0) ? baryCoords[i] = 0 : barySum += baryCoords[i];
+    for (Int i=0; i<mesh_dim+1; i++)
+      baryCoords[i] = baryCoords[i] / barySum; //Make coords add up to one
+    return baryCoords;
+  }
+
+  template <Int sdim, Int edim>
+  OMEGA_H_INLINE Vector<sdim> global_from_barycentric(Vector<edim + 1> const& barycentric_coords,
+      Few<Vector<sdim>, edim + 1> const& node_coords) const {
+    const auto basis = simplex_basis<sdim, edim>(node_coords);
+    Vector<edim> lambda;
+    for (Int i = 0; i < edim; ++i) lambda[i] = barycentric_coords[i + 1];
+    return node_coords[0] + basis * lambda;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -167,8 +177,9 @@ struct ParticleAdapt : public UserTransfer {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    auto dist = barycentric_distance(baryCoords, EPSILON);
-    if (!are_close(dist, 0)) return dist;
+    baryCoords = clamp_barycentric(baryCoords);
+    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    if (!are_close(newPosition, getPos(pid))) return norm(newPosition - getPos(pid));
     pParent(pid) = elem;
     pDim(pid) = mesh_dim;
 
@@ -187,6 +198,22 @@ struct ParticleAdapt : public UserTransfer {
       return 0;
     }
     return 0;
+  }
+
+  OMEGA_H_INLINE
+  void snap2Surface(const LO pid, const LO elem) const {
+    #ifdef PP_ENABLE_SNAP
+    pParent(pid) = elem;
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+    auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+    auto prevCoords = baryCoords;
+    baryCoords = clamp_barycentric(baryCoords);
+    //TODO: only change position if it was pushed inside or outside the mesh
+    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+    if (!are_close(assign2Elem(pid, elem), 0)) printf("[ERROR]: Snap failed before %f, %f, %f, %f after %f, %f, %f, %f\n", prevCoords[0], prevCoords[1], prevCoords[2], prevCoords[3], baryCoords[0], baryCoords[1], baryCoords[2], baryCoords[3]);
+    #endif
   }
 
   void populateFields() {
@@ -276,72 +303,18 @@ struct ParticleAdapt : public UserTransfer {
     });
   }
 
-  KOKKOS_INLINE_FUNCTION
-  bool snap2Lower(const LO pid, const Matrix<mesh_dim,mesh_dim+1>& coords) const {
-    if (!should_snap) return false;
-    auto pos = getPos(pid);
-    if (pDim(pid) == VERT){
-      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = coords[pChild(pid)][i];
-    }
-    else if (pDim(pid) == EDGE) {
-      auto edge = pp::simplex_gather_down<EDGE>(mesh_dim, pChild(pid));
-      auto dir = coords[edge[1]] - coords[edge[0]];
-      auto len = dir * dir;
-      auto offset = ((pos - coords[edge[0]]) * dir) / len;
-      pos = coords[edge[0]] + offset * dir;
-      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
-    }
-    else if (pDim(pid) == FACE) {
-      if constexpr (mesh_dim > 2) {
-        auto face = pp::simplex_gather_down<FACE>(mesh_dim, pChild(pid));
-        auto plane = cross(coords[face[1]] - coords[face[0]], coords[face[2]] - coords[face[0]]);
-        double offset = ((pos - coords[face[0]]) * plane) / (plane * plane);
-        pos = pos - offset * plane;
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = pos[i];
-      }
-    }
-    else return false;
-    return true;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  bool snap2Elem(const LO pid, const LO elem) const {
-    if (!should_snap) return false;
-  #ifdef PP_ENABLE_SNAP
-    pParent(pid) = elem;
-    pDim(pid) = FACE;
-    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
-    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-    auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    Real closest = 1000000;
-    LO closestIdx = 0;
-    auto degree = simplex_degree(mesh_dim, FACE);
-    for (int i=0; i<degree; i++) {
-      auto id = downward[FACE].ab2b[elem*degree + i];
-      if (onSurface[id] == 0) continue;
-      auto oppVert = simplex_opposite_template(mesh_dim, FACE, i);
-      if (baryCoords[oppVert] < closest) {closest = baryCoords[oppVert]; closestIdx = i;}
-    }
-    pChild(pid) = closestIdx;
-    snap2Lower(pid, coords);
-    return are_close(assign2Elem(pid, elem), 0);
-  #else
-    return false;
-  #endif
-  }
-
-  virtual void snap(Mesh& mesh, const Omega_h::Reals& old_coords, const Omega_h::Reals& warp) {
+  virtual void snap(Mesh& mesh, const Omega_h::Reals& old_vert2coords, const Omega_h::Reals& warp) {
     if (!should_snap) return;
     update(mesh);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto lastElem = pParent(pid);
       auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(lastElem));
-      auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-      auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-      if (snap2Lower(pid, coords)) return;
-      else if (!is_barycentric_inside(baryCoords, EPSILON)){
-        if (!snap2Elem(pid, lastElem)) printf("WARNING: snap at particle %d to elem %d failed\n", pid, lastElem);
-      }
+      auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, verts);
+      auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
+      auto newCoords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+      auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, newCoords);
+      //TODO: only change position if it was pushed inside or outside the mesh
+      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
     });
   }
 
@@ -354,12 +327,7 @@ struct ParticleAdapt : public UserTransfer {
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);
-        #ifdef PP_ENABLE_SNAP
-        auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, pParent(pid));
-        auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-        if (!snap2Lower(pid, coords))
-          snap2Elem(pid, pParent(pid));
-        #endif
+        snap2Surface(pid, pParent(pid));
       }
       else if (modified_elem[oldElem].key != -1) {
         auto key = modified_elem[oldElem].key;
@@ -373,8 +341,7 @@ struct ParticleAdapt : public UserTransfer {
           if (are_close(dist, 0)) return;
           if (dist < closest) {closest = dist; closestIdx = idx;}
         }
-        if (!snap2Elem(pid, prods2new_ents[closestIdx]))
-          printf("WARNING: no %s element found for particle %d\n", name.c_str(), pid);
+        snap2Surface(pid, prods2new_ents[closestIdx]);
       }
       else printf("WARNING: particle %d skipped during particle adaptation %s\n", pid, name.c_str());
     });

@@ -155,7 +155,7 @@ struct ParticleAdapt : public UserTransfer {
 
   template <Int n>
   OMEGA_H_DEVICE Vector<n> clamp_barycentric(Vector<n> baryCoords) const {
-    double barySum = 0;
+    Real barySum = 0;
     for (Int i=0; i<mesh_dim+1; i++) 
       (baryCoords[i] < 0) ? baryCoords[i] = 0 : barySum += baryCoords[i];
     for (Int i=0; i<mesh_dim+1; i++)
@@ -173,13 +173,11 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   KOKKOS_INLINE_FUNCTION
-  Real assign2Elem(const LO pid, const LO elem) const {
+  void assign2Elem(const LO pid, const LO elem) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    baryCoords = clamp_barycentric(baryCoords);
-    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
-    if (!are_close(newPosition, getPos(pid))) return norm(newPosition - getPos(pid));
+    if (!is_barycentric_inside(baryCoords, EPSILON)) printf("[WARNING] : Particle ended up outside element\n");
     pParent(pid) = elem;
     pDim(pid) = mesh_dim;
 
@@ -192,12 +190,10 @@ struct ParticleAdapt : public UserTransfer {
         else baryCoordsSum += baryCoords[vertIdx];
       }
       if (!are_close(baryCoordsSum, 1.0)) continue;
-      pChild(pid) = ent;
       pDim(pid) = dim;
+      pChild(pid) = ent;
       update2LowestParent(pid);
-      return 0;
     }
-    return 0;
   }
 
   OMEGA_H_INLINE
@@ -207,19 +203,17 @@ struct ParticleAdapt : public UserTransfer {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    auto prevCoords = baryCoords;
     baryCoords = clamp_barycentric(baryCoords);
     //TODO: only change position if it was pushed inside or outside the mesh
     auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
-    if (!are_close(assign2Elem(pid, elem), 0)) printf("[ERROR]: Snap failed before %f, %f, %f, %f after %f, %f, %f, %f\n", prevCoords[0], prevCoords[1], prevCoords[2], prevCoords[3], baryCoords[0], baryCoords[1], baryCoords[2], baryCoords[3]);
+    assign2Elem(pid, elem);
     #endif
   }
 
   void populateFields() {
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
-      auto elem = pParent(pid);
-      if (!are_close(assign2Elem(pid, elem), 0)) printf("WARNING: PID %d not in elem %d\n", pid, elem);
+      assign2Elem(pid, pParent(pid));
     });
   }
 
@@ -299,7 +293,7 @@ struct ParticleAdapt : public UserTransfer {
         }
         update2LowestParent(pid);
       }
-      else printf("WARNING: element skipped during particle adaptation\n");
+      else printf("[WARNING] : element skipped during particle adaptation\n");
     });
   }
 
@@ -337,13 +331,17 @@ struct ParticleAdapt : public UserTransfer {
         LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
-          auto dist = assign2Elem(pid, newElem);
-          if (are_close(dist, 0)) return;
+          auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, newElem);
+          auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+          auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+          baryCoords = clamp_barycentric(baryCoords);
+          auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+          auto dist = norm(newPosition - getPos(pid));
           if (dist < closest) {closest = dist; closestIdx = idx;}
         }
         snap2Surface(pid, prods2new_ents[closestIdx]);
       }
-      else printf("WARNING: particle %d skipped during particle adaptation %s\n", pid, name.c_str());
+      else printf("[WARNING] : particle %d skipped during particle adaptation %s\n", pid, name.c_str());
     });
   }
 

@@ -130,6 +130,9 @@ mpi_test(pseudoXGCm_120kElms_4 4
   10000 141 10 0.5 0)
 
 mpi_test(particle_adapt 1 
-  ./particle_adapt 
+  ./particle_adapt)
+
+mpi_test(particle_adapt_snap 1 
+  ./particle_adapt_snap 
   ${TEST_DATA_DIR}/small_cylinder/cylinder.msh 
   ${TEST_DATA_DIR}/small_cylinder/cylinder.step)

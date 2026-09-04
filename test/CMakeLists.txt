@@ -28,6 +28,7 @@ make_test(pseudoXGCm pseudoXGCm.cpp)
 make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
 make_test(loadSerialMesh loadSerialMesh.cpp)
 make_test(particle_adapt particle_adapt.cpp)
+make_test(particle_adapt_snap particle_adapt_snap.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

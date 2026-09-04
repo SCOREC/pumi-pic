@@ -12,6 +12,10 @@
 
 namespace pp = pumipic;
 
+#if defined(OMEGA_H_USE_EGADS) || defined (OMEGA_H_USE_EGADSLITE)
+#define PP_ENABLE_SNAP
+#endif
+
 namespace Omega_h {
 
 namespace {
@@ -78,7 +82,7 @@ struct ParticleAdapt : public UserTransfer {
     opts->should_swap = false;
     opts->should_coarsen_slivers = false;
     mesh.remove_tag(VERT, "target_metric");
-    #ifdef OMEGA_H_USE_EGADS
+    #ifdef PP_ENABLE_SNAP
     opts->egads_model = nullptr;
     #endif
   }
@@ -303,7 +307,7 @@ struct ParticleAdapt : public UserTransfer {
   KOKKOS_INLINE_FUNCTION
   bool snap2Elem(const LO pid, const LO elem) const {
     if (!should_snap) return false;
-  #ifdef OMEGA_H_USE_EGADS
+  #ifdef PP_ENABLE_SNAP
     pParent(pid) = elem;
     pDim(pid) = FACE;
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
@@ -350,7 +354,7 @@ struct ParticleAdapt : public UserTransfer {
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);
-        #ifdef OMEGA_H_USE_EGADS
+        #ifdef PP_ENABLE_SNAP
         auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, pParent(pid));
         auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
         if (!snap2Lower(pid, coords))

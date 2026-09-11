@@ -199,15 +199,14 @@ struct ParticleAdapt : public UserTransfer {
   OMEGA_H_INLINE
   void snap2Surface(const LO pid, const LO elem) const {
     #ifdef PP_ENABLE_SNAP
-    pParent(pid) = elem;
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    baryCoords = clamp_barycentric(baryCoords);
-    //TODO: only change position if it was pushed inside or outside the mesh
-    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
-    for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
-    assign2Elem(pid, elem);
+    if (pDim(pid) < mesh_dim || !is_barycentric_inside(baryCoords, EPSILON)) {
+      baryCoords = clamp_barycentric(baryCoords);
+      auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+      for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+    }
     #endif
   }
 
@@ -304,11 +303,15 @@ struct ParticleAdapt : public UserTransfer {
       auto lastElem = pParent(pid);
       auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(lastElem));
       auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, verts);
-      auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
       auto newCoords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-      auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, newCoords);
-      //TODO: only change position if it was pushed inside or outside the mesh
-      for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+      auto oldBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
+      auto newBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), newCoords);
+      bool insideBeforeSnap = is_barycentric_inside(oldBaryCoords, EPSILON);
+      bool insideAfterSnap = is_barycentric_inside(newBaryCoords, EPSILON);
+      if (!insideAfterSnap || insideBeforeSnap != insideAfterSnap) {
+        auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(oldBaryCoords, newCoords);
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+      }
     });
   }
 
@@ -320,8 +323,9 @@ struct ParticleAdapt : public UserTransfer {
       auto oldElem = pParent(pid);
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
-        update2LowestParent(pid);
+        update2LowestParent(pid); //TODO: test if necessary
         snap2Surface(pid, pParent(pid));
+        assign2Elem(pid, pParent(pid));
       }
       else if (modified_elem[oldElem].key != -1) {
         auto key = modified_elem[oldElem].key;
@@ -331,7 +335,7 @@ struct ParticleAdapt : public UserTransfer {
         LO closestIdx = 0;
         for (auto idx = elem_begin; idx < elem_end; ++idx) {
           auto newElem = prods2new_ents[idx];
-          auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, newElem);
+          auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, newElem); //TODO: Move to barycentric distance function
           auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
           auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
           baryCoords = clamp_barycentric(baryCoords);
@@ -340,6 +344,7 @@ struct ParticleAdapt : public UserTransfer {
           if (dist < closest) {closest = dist; closestIdx = idx;}
         }
         snap2Surface(pid, prods2new_ents[closestIdx]);
+        assign2Elem(pid, prods2new_ents[closestIdx]);
       }
       else printf("[WARNING] : particle %d skipped during particle adaptation %s\n", pid, name.c_str());
     });

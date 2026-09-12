@@ -42,7 +42,6 @@ struct ParticleAdapt : public UserTransfer {
 
   PS*& ptcls;
   Mesh& mesh;
-  AdaptOpts* opts;
   Reals vert2coords;
   Adj upward[mesh_dim];
   Adj downward[mesh_dim];
@@ -52,10 +51,8 @@ struct ParticleAdapt : public UserTransfer {
   typename PS::template Slice<PARENT> pParent;
   typename PS::template Slice<CHILD> pChild;
   typename PS::template Slice<DIM> pDim;
-  bool should_snap;
 
-  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn, bool shouldSnap=false) : ptcls(ptclsIn), mesh(meshIn) {
-    should_snap = shouldSnap;
+  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
     update(meshIn);
   }
 
@@ -69,24 +66,8 @@ struct ParticleAdapt : public UserTransfer {
       upward[i] = meshIn.ask_up(i, mesh_dim);
       downward[i] = meshIn.ask_down(mesh_dim, i);
       class_dim[i] = meshIn.get_array<Omega_h::I8>(i, "class_dim");
-      class_id[i] = meshIn.get_array<Omega_h::ClassId>(i, "class_id");
+      class_id[i] = meshIn.get_array<Omega_h::ClassId>(i, "class_id"); //TODO: delete without causing crash. I believe occuring due to overflow
     }
-  }
-
-  void setOpts(AdaptOpts* opts2) {
-    opts = opts2;
-  }
-
-  //TODO: remove after PR
-  void stopExecution() const {
-    opts->should_refine = false;
-    opts->should_coarsen = false;
-    opts->should_swap = false;
-    opts->should_coarsen_slivers = false;
-    mesh.remove_tag(VERT, "target_metric");
-    #ifdef PP_ENABLE_SNAP
-    opts->egads_model = nullptr;
-    #endif
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -124,13 +105,13 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   KOKKOS_INLINE_FUNCTION
-  LO getChildElem(const Adj down[mesh_dim], LO pid) const {
+  LO getChildElem(const Adj down[mesh_dim], LO pid) const { //TODO: combine with previous function
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
-  Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+  static Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
@@ -172,13 +153,23 @@ struct ParticleAdapt : public UserTransfer {
     return baryCoords;
   }
 
-  template <Int sdim, Int edim>
+  template <Int sdim, Int edim> //TODO: Move to pumi-pic helper class
   OMEGA_H_INLINE Vector<sdim> global_from_barycentric(Vector<edim + 1> const& barycentric_coords,
       Few<Vector<sdim>, edim + 1> const& node_coords) const {
     const auto basis = simplex_basis<sdim, edim>(node_coords);
     Vector<edim> lambda;
     for (Int i = 0; i < edim; ++i) lambda[i] = barycentric_coords[i + 1];
     return node_coords[0] + basis * lambda;
+  }
+
+  OMEGA_H_DEVICE 
+  Real barycentric_distance(const LO pid, const LO elem) const {
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
+    auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+    auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
+    baryCoords = clamp_barycentric(baryCoords);
+    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    return norm(newPosition - getPos(pid));
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -314,7 +305,6 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   virtual void snap(Mesh& mesh, const Omega_h::Reals& old_vert2coords, const Omega_h::Reals& warp) {
-    if (!should_snap) return;
     update(mesh);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto elem = pParent(pid);
@@ -333,12 +323,12 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
-      LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem, std::string name) {
+      LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
     update(new_mesh);
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
     Adj old_downward[mesh_dim];
     Read<I8> old_class_dim[mesh_dim];
-    for (int i=0; i<mesh_dim; i++) {
+    for (int i=0; i<mesh_dim; i++) { //TODO: Reuse code that generates this in update() function
       old_downward[i] = old_mesh.ask_down(mesh_dim, i);
       old_class_dim[i] = old_mesh.get_array<Omega_h::I8>(i, "class_dim");
     }
@@ -348,30 +338,22 @@ struct ParticleAdapt : public UserTransfer {
       auto oldClassDim = old_class_dim[pDim(pid)][oldChild];
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
-        update2LowestParent(pid); //TODO: test if necessary
+        update2LowestParent(pid);
         snap2Surface(oldClassDim, pid, pParent(pid));
         assign2Elem(pid, pParent(pid));
       }
       else if (modified_elem[oldElem].key != -1) {
-        auto key = modified_elem[oldElem].key;
-        auto elem_begin = keys2prods[key];
-        auto elem_end = keys2prods[key+1];
-        Real closest = 1000000;
         LO closestIdx = 0;
-        for (auto idx = elem_begin; idx < elem_end; ++idx) {
-          auto newElem = prods2new_ents[idx];
-          auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, newElem); //TODO: Move to barycentric distance function
-          auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-          auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-          baryCoords = clamp_barycentric(baryCoords);
-          auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
-          auto dist = norm(newPosition - getPos(pid));
+        Real closest = 1000000;
+        auto key = modified_elem[oldElem].key;
+        for (auto idx = keys2prods[key]; idx < keys2prods[key+1]; ++idx) {
+          auto dist = barycentric_distance(pid, prods2new_ents[idx]);
           if (dist < closest) {closest = dist; closestIdx = idx;}
         }
         snap2Surface(oldClassDim, pid, prods2new_ents[closestIdx]);
         assign2Elem(pid, prods2new_ents[closestIdx]);
       }
-      else printf("[WARNING] : particle %d skipped during particle adaptation %s\n", pid, name.c_str());
+      else printf("[WARNING] : particle %d skipped during particle adaptation of swap/coarsen\n", pid);
     });
   }
 
@@ -379,14 +361,14 @@ struct ParticleAdapt : public UserTransfer {
       Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2verts, VERT);
-    updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "coarsen");
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim, LOs keys2edges, 
       LOs keys2prods, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto modified_elem = gatherModified(keys2edges, EDGE);
-    updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem, "swap");
+    updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 
   virtual void swap_copy_verts(Mesh& old_mesh, Mesh& new_mesh) {};

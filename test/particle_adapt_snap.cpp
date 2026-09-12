@@ -81,7 +81,6 @@ template<int dim, int size>
 void adaptSnapMesh(PADAPT<dim>& pAdapt, OH::AdaptOpts& opts, OH::Few<double, size> length) {
   OH::vtk::write_vtu("box_before_adapt.vtu", &pAdapt.mesh);
   printParticleData("particle_data_before.csv", pAdapt);
-  pAdapt.setOpts(&opts);
   for (int i=0; i<length.size(); i++) {
     opts.xfer_opts.user_xfer = std::make_shared<PADAPT<dim>>(pAdapt);
     compute_implied_metric(&pAdapt.mesh);
@@ -102,7 +101,7 @@ int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, OH::Few<double, size> lengthCent
 {
   printf("\n== Test: Migrate ptcl from dimension %d ==\n\n", test_dim);
   PS* ptcls = createPtclStructure(mesh, mesh.nents(test_dim), lengthCenter.size());
-  PADAPT<mesh_dim> pAdapt(ptcls, mesh, true);
+  PADAPT<mesh_dim> pAdapt(ptcls, mesh);
   initParticles<test_dim, mesh_dim>(pAdapt, lengthCenter);
 
   // Adaptation

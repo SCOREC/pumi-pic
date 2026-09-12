@@ -1,12 +1,11 @@
 #include "particle_adapt.hpp"
 
-#ifdef OMEGA_H_USE_EGADSLITE
-#include "Omega_h_egads_lite.hpp"
-#endif
-
 #ifdef OMEGA_H_USE_EGADS
 #include <Omega_h_egads.hpp>
 #endif
+
+#ifdef OMEGA_H_USE_EGADSLITE
+#include "Omega_h_egads_lite.hpp"
 
 void checkCudaError(int line) {
 #ifdef __NVCC__
@@ -64,6 +63,8 @@ void setCudaStackSz() {
   printf("stack limit %d\n", stackLimit);
 }
 
+#endif
+
 void compute_implied_metric(OH::Mesh* mesh) {
   auto metrics = OH::get_implied_metrics(mesh);
   metrics = OH::limit_metric_gradation(mesh, metrics, 1.0);
@@ -114,7 +115,9 @@ int testSnap(OH::Mesh mesh, OH::AdaptOpts opts, OH::Few<double, size> lengthCent
 int main(int argc, char* argv[]) {
   auto lib = OH::Library(&argc, &argv);
   auto world = lib.world();
+  #if defined(OMEGA_H_USE_EGADSLITE)
   setCudaStackSz();
+  #endif
 
   int fails = 0;
 
@@ -134,7 +137,13 @@ int main(int argc, char* argv[]) {
   #endif
 
   fails += testSnap<1,3>(mesh, opts3D, OH::Few<double, 3>{.25, .5, 1});
-  // if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
+
+  #if defined(OMEGA_H_USE_EGADS)
+  if (opts3D.egads_model) OH::egads_free(opts3D.egads_model);
+  #elif defined(OMEGA_H_USE_EGADSLITE)
+  if (opts3D.egads_model) OH::egads_lite_free(opts3D.egads_model);
+  #endif
+
   #endif
 
   return fails;

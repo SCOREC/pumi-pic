@@ -123,6 +123,13 @@ struct ParticleAdapt : public UserTransfer {
     return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
+  KOKKOS_INLINE_FUNCTION
+  LO getChildElem(const Adj down[mesh_dim], LO pid) const {
+    if (pDim(pid) == mesh_dim) return pParent(pid);
+    auto degree = simplex_degree(mesh_dim, pDim(pid));
+    return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
+  }
+
   Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -199,23 +206,24 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   OMEGA_H_INLINE
-  void snap2Surface(const Read<I8> old_class_dim[mesh_dim], const Read<ClassId> old_class_id[mesh_dim], 
-        const LO pid, const LO elem) const {
+  void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
     #ifdef PP_ENABLE_SNAP
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    if (pDim(pid) < mesh_dim && is_barycentric_inside(baryCoords)) { //TODO: check classification
+    if (old_class_dim == mesh_dim && is_barycentric_inside(baryCoords)) return;
+    //TODO: Right now this is an approximation because we don't have access to Omega_h paramteric coordinates.
+    //The ideal solution would be to snap the particle to the surface of the model using parametric
+    //coordinates and then use barycentric coordinates to move the particle to the surface of the mesh.
+    if (pDim(pid) < mesh_dim && is_barycentric_inside(baryCoords)) {
       Int closest = 0;
       for (Int i=1; i<mesh_dim+1; i++)
         if (baryCoords[i] < baryCoords[closest]) closest = i;
       baryCoords[closest] = 0;
     }
-    else if (pDim(pid) < mesh_dim || !is_barycentric_inside(baryCoords, EPSILON)) {
-      baryCoords = clamp_barycentric(baryCoords);
-      auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
-      for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
-    }
+    baryCoords = clamp_barycentric(baryCoords);
+    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
     #endif
   }
 
@@ -328,18 +336,20 @@ struct ParticleAdapt : public UserTransfer {
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem, std::string name) {
     update(new_mesh);
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
+    Adj old_downward[mesh_dim];
     Read<I8> old_class_dim[mesh_dim];
-    Read<ClassId> old_class_id[mesh_dim];
     for (int i=0; i<mesh_dim; i++) {
+      old_downward[i] = old_mesh.ask_down(mesh_dim, i);
       old_class_dim[i] = old_mesh.get_array<Omega_h::I8>(i, "class_dim");
-      old_class_id[i] = old_mesh.get_array<Omega_h::ClassId>(i, "class_id");
     }
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
+      auto oldChild = getChildElem(old_downward, pid);
+      auto oldClassDim = old_class_dim[pDim(pid)][oldChild];
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid); //TODO: test if necessary
-        snap2Surface(old_class_dim, old_class_id, pid, pParent(pid));
+        snap2Surface(oldClassDim, pid, pParent(pid));
         assign2Elem(pid, pParent(pid));
       }
       else if (modified_elem[oldElem].key != -1) {
@@ -358,7 +368,7 @@ struct ParticleAdapt : public UserTransfer {
           auto dist = norm(newPosition - getPos(pid));
           if (dist < closest) {closest = dist; closestIdx = idx;}
         }
-        snap2Surface(old_class_dim, old_class_id, pid, prods2new_ents[closestIdx]);
+        snap2Surface(oldClassDim, pid, prods2new_ents[closestIdx]);
         assign2Elem(pid, prods2new_ents[closestIdx]);
       }
       else printf("[WARNING] : particle %d skipped during particle adaptation %s\n", pid, name.c_str());

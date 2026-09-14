@@ -59,7 +59,7 @@ public:
 
         bool success = pumipic::trace_particle_through_mesh(oh_mesh_, ptcls_, particle_orig, particle_dest,
                                                             particle_ids, elem_ids_, next_elem_ids_,
-                                                            true, inter_faces_, inter_points_, last_exits_, 1000, true,
+                                                            true, inter_faces_, inter_points_, last_exits_, 0, true,
                                                             func_, elmAreas_, ptcl_done_,
                                                             tolerance_);
 

@@ -35,6 +35,25 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     ModifiedElem(LO k, LO o, LO c) : key(k), offset(o), code(c) {}
   };
+
+  template<int mesh_dim>
+  struct MeshData {
+    Reals vert2coords;
+    Adj upward[mesh_dim];
+    Adj downward[mesh_dim];
+    Read<I8> class_dim[mesh_dim];
+    Read<ClassId> class_id[mesh_dim];
+
+    MeshData(Mesh& mesh) {
+      vert2coords = mesh.coords();
+      for (int i=0; i<mesh_dim; i++) {
+        upward[i] = mesh.ask_up(i, mesh_dim);
+        downward[i] = mesh.ask_down(mesh_dim, i);
+        class_dim[i] = mesh.get_array<Omega_h::I8>(i, "class_dim");
+        class_id[i] = mesh.get_array<Omega_h::ClassId>(i, "class_id"); //TODO: delete without causing crash. I believe occuring due to overflow
+      }
+    }
+  };
 }
 
 template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
@@ -70,15 +89,13 @@ struct ParticleAdapt : public UserTransfer {
     }
   }
 
-  KOKKOS_INLINE_FUNCTION
-  Vector<mesh_dim> getPos(LO pid) const {
+  OMEGA_H_DEVICE Vector<mesh_dim> getPos(LO pid) const {
     Vector<mesh_dim> pos;
     for (int i = 0; i<mesh_dim; i++) pos[i] = pPos(pid,i);
     return pos;
   }
 
-  KOKKOS_INLINE_FUNCTION
-  void setPtcl(LO pid, Int dim, LO parent, LO child) const {
+  OMEGA_H_DEVICE void setPtcl(LO pid, Int dim, LO parent, LO child) const {
     auto degree = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
     if (dim != mesh_dim)
@@ -90,22 +107,19 @@ struct ParticleAdapt : public UserTransfer {
     pChild(pid) = childIdx;
   }
 
-  KOKKOS_INLINE_FUNCTION
-  LO getLowestParent(LO child, Int dim) const {
+  OMEGA_H_DEVICE LO getLowestParent(LO child, Int dim) const {
     if (dim == mesh_dim) return child;
     auto lowestParentIdx = upward[dim].a2ab[child];
     return upward[dim].ab2b[lowestParentIdx];
   }
 
-  KOKKOS_INLINE_FUNCTION
-  LO getChildElem(LO pid) const {
+  OMEGA_H_DEVICE LO getChildElem(LO pid) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
-  KOKKOS_INLINE_FUNCTION
-  LO getChildElem(const Adj down[mesh_dim], LO pid) const { //TODO: combine with previous function
+  OMEGA_H_DEVICE LO getChildElem(const Adj down[mesh_dim], LO pid) const { //TODO: combine with previous function
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
@@ -120,7 +134,7 @@ struct ParticleAdapt : public UserTransfer {
     return old2New;
   }
 
-  KOKKOS_INLINE_FUNCTION
+  OMEGA_H_DEVICE
   void update2LowestParent(const LO pid) const {
     if (pDim(pid) == mesh_dim) return;
     auto newChild = getChildElem(pid);
@@ -154,7 +168,7 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   template <Int sdim, Int edim> //TODO: Move to pumi-pic helper class
-  OMEGA_H_INLINE Vector<sdim> global_from_barycentric(Vector<edim + 1> const& barycentric_coords,
+  OMEGA_H_DEVICE Vector<sdim> global_from_barycentric(Vector<edim + 1> const& barycentric_coords,
       Few<Vector<sdim>, edim + 1> const& node_coords) const {
     const auto basis = simplex_basis<sdim, edim>(node_coords);
     Vector<edim> lambda;
@@ -162,8 +176,7 @@ struct ParticleAdapt : public UserTransfer {
     return node_coords[0] + basis * lambda;
   }
 
-  OMEGA_H_DEVICE 
-  Real barycentric_distance(const LO pid, const LO elem) const {
+  OMEGA_H_DEVICE Real barycentric_distance(const LO pid, const LO elem) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
@@ -172,8 +185,7 @@ struct ParticleAdapt : public UserTransfer {
     return norm(newPosition - getPos(pid));
   }
 
-  KOKKOS_INLINE_FUNCTION
-  void assign2Elem(const LO pid, const LO elem) const {
+  OMEGA_H_DEVICE void assign2Elem(const LO pid, const LO elem) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
@@ -196,8 +208,7 @@ struct ParticleAdapt : public UserTransfer {
     }
   }
 
-  OMEGA_H_INLINE
-  void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
+  OMEGA_H_DEVICE void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
     #ifdef PP_ENABLE_SNAP
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
@@ -326,16 +337,11 @@ struct ParticleAdapt : public UserTransfer {
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
     update(new_mesh);
     auto old2New = getUnchanged(old_mesh, mesh_dim, same_ents2old_ents, same_ents2new_ents);
-    Adj old_downward[mesh_dim];
-    Read<I8> old_class_dim[mesh_dim];
-    for (int i=0; i<mesh_dim; i++) { //TODO: Reuse code that generates this in update() function
-      old_downward[i] = old_mesh.ask_down(mesh_dim, i);
-      old_class_dim[i] = old_mesh.get_array<Omega_h::I8>(i, "class_dim");
-    }
+    MeshData old_data = MeshData<mesh_dim>(old_mesh);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
-      auto oldChild = getChildElem(old_downward, pid);
-      auto oldClassDim = old_class_dim[pDim(pid)][oldChild];
+      auto oldChild = getChildElem(old_data.downward, pid);
+      auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
       if (old2New[oldElem] != -1) { //update unchanged element id
         pParent(pid) = old2New[oldElem];
         update2LowestParent(pid);

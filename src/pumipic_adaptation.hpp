@@ -96,11 +96,11 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   OMEGA_H_DEVICE void setPtcl(const LO pid, const Int dim, const LO parent, const LO child) const {
-    auto degree = simplex_degree(mesh_dim, dim);
+    auto nEnts = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
     if (dim != mesh_dim)
-      for (auto i = 0; i < degree; i++)
-        if (downward[dim].ab2b[parent*degree + i] == child) childIdx = i;
+      for (auto i = 0; i < nEnts; i++)
+        if (downward[dim].ab2b[parent*nEnts + i] == child) childIdx = i;
 
     pDim(pid) = dim;
     pParent(pid) = parent;
@@ -113,17 +113,15 @@ struct ParticleAdapt : public UserTransfer {
     return upward[dim].ab2b[lowestParentIdx];
   }
 
-  OMEGA_H_DEVICE LO getChildElem(const LO pid) const {
+  OMEGA_H_DEVICE LO getChildElem(const LO pid, const Adj down[mesh_dim]) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
-    auto degree = simplex_degree(mesh_dim, pDim(pid));
-    return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
+    auto nEnts = simplex_degree(mesh_dim, pDim(pid));
+    return down[pDim(pid)].ab2b[pParent(pid)*nEnts + pChild(pid)];
   }
 
-  OMEGA_H_DEVICE LO getChildElem(const Adj down[mesh_dim], const LO pid) const { //TODO: combine with previous function
-    if (pDim(pid) == mesh_dim) return pParent(pid);
-    auto degree = simplex_degree(mesh_dim, pDim(pid));
-    return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
-  }
+  OMEGA_H_DEVICE LO getChildElem(const LO pid) const {
+  return getChildElem(pid, downward);
+}
 
   OMEGA_H_DEVICE void update2LowestParent(const LO pid) const {
     if (pDim(pid) == mesh_dim) return;
@@ -165,7 +163,7 @@ struct ParticleAdapt : public UserTransfer {
   }
 
   OMEGA_H_DEVICE void assign2Elem(const LO pid, const LO elem) const {
-    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
     OMEGA_H_CHECK(is_barycentric_inside(baryCoords, EPSILON));
@@ -195,7 +193,7 @@ struct ParticleAdapt : public UserTransfer {
 
   OMEGA_H_DEVICE void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
     #ifdef PP_ENABLE_SNAP
-    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
+    auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
     if (old_class_dim == mesh_dim && is_barycentric_inside(baryCoords)) return;
@@ -235,7 +233,7 @@ struct ParticleAdapt : public UserTransfer {
         auto rotation = code_rotation(modified[oldElem].code);
         auto spltEdgeIdx = code_which_down(modified[oldElem].code);
         auto spltVerts = ps::simplex_gather_down<EDGE>(mesh_dim, spltEdgeIdx, rotation);
-        auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, LO(oldElem));
+        auto oldVerts = gather_verts<mesh_dim+1>(old_cell2verts, oldElem);
         auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, oldVerts);
         auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
         bool onSplit = are_close(baryCoords[spltVerts[0]], baryCoords[spltVerts[1]]) && !are_close(baryCoords[spltVerts[0]], 0);
@@ -314,7 +312,7 @@ struct ParticleAdapt : public UserTransfer {
       }
       else Kokkos::abort("[ERROR] : particle skipped during particle adaptation of swap/coarsen\n");
 
-      auto oldChild = getChildElem(old_data.downward, pid);
+      auto oldChild = getChildElem(pid, old_data.downward);
       auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
       snap2Surface(oldClassDim, pid, newElem);
       assign2Elem(pid, newElem);

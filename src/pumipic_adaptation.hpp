@@ -125,6 +125,13 @@ struct ParticleAdapt : public UserTransfer {
     return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
+  OMEGA_H_DEVICE void update2LowestParent(const LO pid) const {
+    if (pDim(pid) == mesh_dim) return;
+    auto newChild = getChildElem(pid);
+    auto lowestParent = getLowestParent(newChild, pDim(pid));
+    setPtcl(pid, pDim(pid), lowestParent, newChild);
+  }
+
   static Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
@@ -132,14 +139,6 @@ struct ParticleAdapt : public UserTransfer {
       old2New[oldElem] = same_ents2new_ents[i];
     });
     return old2New;
-  }
-
-  OMEGA_H_DEVICE
-  void update2LowestParent(const LO pid) const {
-    if (pDim(pid) == mesh_dim) return;
-    auto newChild = getChildElem(pid);
-    auto lowestParent = getLowestParent(newChild, pDim(pid));
-    setPtcl(pid, pDim(pid), lowestParent, newChild);
   }
 
   Kokkos::View<ModifiedElem*> gatherModified(LOs keys2entity, Int dim) {
@@ -157,31 +156,12 @@ struct ParticleAdapt : public UserTransfer {
     return modified;
   }
 
-  template <Int n>
-  OMEGA_H_DEVICE Vector<n> clamp_barycentric(Vector<n> baryCoords) const {
-    Real barySum = 0;
-    for (Int i=0; i<mesh_dim+1; i++) 
-      (baryCoords[i] < 0) ? baryCoords[i] = 0 : barySum += baryCoords[i];
-    for (Int i=0; i<mesh_dim+1; i++)
-      baryCoords[i] = baryCoords[i] / barySum; //Make coords add up to one
-    return baryCoords;
-  }
-
-  template <Int sdim, Int edim> //TODO: Move to pumi-pic helper class
-  OMEGA_H_DEVICE Vector<sdim> global_from_barycentric(Vector<edim + 1> const& barycentric_coords,
-      Few<Vector<sdim>, edim + 1> const& node_coords) const {
-    const auto basis = simplex_basis<sdim, edim>(node_coords);
-    Vector<edim> lambda;
-    for (Int i = 0; i < edim; ++i) lambda[i] = barycentric_coords[i + 1];
-    return node_coords[0] + basis * lambda;
-  }
-
   OMEGA_H_DEVICE Real barycentric_distance(const LO pid, const LO elem) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    baryCoords = clamp_barycentric(baryCoords);
-    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+    auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     return norm(newPosition - getPos(pid));
   }
 
@@ -208,6 +188,12 @@ struct ParticleAdapt : public UserTransfer {
     }
   }
 
+  void populateFields() {
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
+      assign2Elem(pid, pParent(pid));
+    });
+  }
+
   OMEGA_H_DEVICE void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
     #ifdef PP_ENABLE_SNAP
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
@@ -223,16 +209,10 @@ struct ParticleAdapt : public UserTransfer {
         if (baryCoords[i] < baryCoords[closest]) closest = i;
       baryCoords[closest] = 0;
     }
-    baryCoords = clamp_barycentric(baryCoords);
-    auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
+    baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+    auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
     #endif
-  }
-
-  void populateFields() {
-    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const LO pid) {
-      assign2Elem(pid, pParent(pid));
-    });
   }
 
   virtual void refine(Mesh& old_mesh, Mesh& new_mesh, LOs keys2edges, LOs keys2midverts, Int prod_dim, 
@@ -315,24 +295,6 @@ struct ParticleAdapt : public UserTransfer {
     });
   }
 
-  virtual void snap(Mesh& mesh, const Omega_h::Reals& old_vert2coords, const Omega_h::Reals& warp) {
-    update(mesh);
-    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
-      auto elem = pParent(pid);
-      auto child = getChildElem(pid);
-      auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
-      auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, verts);
-      auto newCoords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-      auto oldBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
-      auto newBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), newCoords);
-      bool insideAfterSnap = is_barycentric_inside(newBaryCoords, EPSILON);
-      if (!insideAfterSnap || class_dim[pDim(pid)][child] < mesh_dim) {
-        auto newPosition = global_from_barycentric<mesh_dim,mesh_dim>(oldBaryCoords, newCoords);
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
-      }
-    });
-  }
-
   void updatePtclsCavitySearch(Mesh& old_mesh, Mesh& new_mesh, LOs keys2prods, LOs prods2new_ents,  
       LOs same_ents2old_ents, LOs same_ents2new_ents, Kokkos::View<ModifiedElem*> modified_elem) {
     update(new_mesh);
@@ -360,6 +322,24 @@ struct ParticleAdapt : public UserTransfer {
         assign2Elem(pid, prods2new_ents[closestIdx]);
       }
       else Kokkos::abort("[ERROR] : particle skipped during particle adaptation of swap/coarsen\n");
+    });
+  }
+
+  virtual void snap(Mesh& mesh, const Omega_h::Reals& old_vert2coords, const Omega_h::Reals& warp) {
+    update(mesh);
+    Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
+      auto elem = pParent(pid);
+      auto child = getChildElem(pid);
+      auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
+      auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, verts);
+      auto newCoords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
+      auto oldBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
+      auto newBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), newCoords);
+      bool insideAfterSnap = is_barycentric_inside(newBaryCoords, EPSILON);
+      if (!insideAfterSnap || class_dim[pDim(pid)][child] < mesh_dim) {
+        auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(oldBaryCoords, newCoords);
+        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+      }
     });
   }
 

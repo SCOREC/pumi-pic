@@ -780,5 +780,24 @@ constexpr OMEGA_H_DEVICE o::Few<o::Int, bdry_dim+1> simplex_gather_down(o::Int e
   return output;
 }
 
+template <o::Int mesh_dim, o::Int n>
+constexpr OMEGA_H_DEVICE o::Vector<n> clamp_barycentric(o::Vector<n> baryCoords) {
+  o::Real barySum = 0;
+  for (o::Int i=0; i<mesh_dim+1; i++) 
+    (baryCoords[i] < 0) ? baryCoords[i] = 0 : barySum += baryCoords[i];
+  for (o::Int i=0; i<mesh_dim+1; i++)
+    baryCoords[i] = baryCoords[i] / barySum; //Make coords add up to one
+  return baryCoords;
+}
+
+template <o::Int sdim, o::Int edim>
+constexpr OMEGA_H_DEVICE o::Vector<sdim> global_from_barycentric(o::Vector<edim + 1> const& barycentric_coords,
+    o::Few<o::Vector<sdim>, edim + 1> const& node_coords) {
+  const auto basis = o::simplex_basis<sdim, edim>(node_coords);
+  o::Vector<edim> lambda;
+  for (o::Int i = 0; i < edim; ++i) lambda[i] = barycentric_coords[i + 1];
+  return node_coords[0] + basis * lambda;
+}
+
 } //namespace
 #endif

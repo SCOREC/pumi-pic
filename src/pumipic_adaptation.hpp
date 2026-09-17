@@ -19,7 +19,7 @@ namespace pp = pumipic;
 namespace Omega_h {
 
 namespace {
-  constexpr OMEGA_H_INLINE Int flip_new_vert(Int dim, Int index) {
+  constexpr OMEGA_H_INLINE Int flip_new_vert(const Int dim, const Int index) {
     if (dim < 3) return index;
     if (index == 1) return 2;
     if (index == 2) return 1;
@@ -89,13 +89,13 @@ struct ParticleAdapt : public UserTransfer {
     }
   }
 
-  OMEGA_H_DEVICE Vector<mesh_dim> getPos(LO pid) const {
+  OMEGA_H_DEVICE Vector<mesh_dim> getPos(const LO pid) const {
     Vector<mesh_dim> pos;
     for (int i = 0; i<mesh_dim; i++) pos[i] = pPos(pid,i);
     return pos;
   }
 
-  OMEGA_H_DEVICE void setPtcl(LO pid, Int dim, LO parent, LO child) const {
+  OMEGA_H_DEVICE void setPtcl(const LO pid, const Int dim, const LO parent, const LO child) const {
     auto degree = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
     if (dim != mesh_dim)
@@ -107,19 +107,19 @@ struct ParticleAdapt : public UserTransfer {
     pChild(pid) = childIdx;
   }
 
-  OMEGA_H_DEVICE LO getLowestParent(LO child, Int dim) const {
+  OMEGA_H_DEVICE LO getLowestParent(const LO child, const Int dim) const {
     if (dim == mesh_dim) return child;
     auto lowestParentIdx = upward[dim].a2ab[child];
     return upward[dim].ab2b[lowestParentIdx];
   }
 
-  OMEGA_H_DEVICE LO getChildElem(LO pid) const {
+  OMEGA_H_DEVICE LO getChildElem(const LO pid) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return downward[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
   }
 
-  OMEGA_H_DEVICE LO getChildElem(const Adj down[mesh_dim], LO pid) const { //TODO: combine with previous function
+  OMEGA_H_DEVICE LO getChildElem(const Adj down[mesh_dim], const LO pid) const { //TODO: combine with previous function
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto degree = simplex_degree(mesh_dim, pDim(pid));
     return down[pDim(pid)].ab2b[pParent(pid)*degree + pChild(pid)];
@@ -132,7 +132,7 @@ struct ParticleAdapt : public UserTransfer {
     setPtcl(pid, pDim(pid), lowestParent, newChild);
   }
 
-  static Write<LO> getUnchanged(Mesh& old_mesh, Int dim, LOs same_ents2old_ents, LOs same_ents2new_ents) {
+  static Write<LO> getUnchanged(Mesh& old_mesh, const Int dim, const LOs same_ents2old_ents, const LOs same_ents2new_ents) {
     Write<LO> old2New(old_mesh.nents(dim), -1);
     parallel_for(same_ents2old_ents.size(), OMEGA_H_LAMBDA(LO i) {
       LO oldElem = same_ents2old_ents[i];
@@ -141,7 +141,7 @@ struct ParticleAdapt : public UserTransfer {
     return old2New;
   }
 
-  static Kokkos::View<ModifiedElem*> gatherModified(Mesh& mesh, LOs keys2entity, Int dim) {
+  static Kokkos::View<ModifiedElem*> gatherModified(Mesh& mesh, const LOs keys2entity, const Int dim) {
     auto entity2elem = mesh.ask_up(dim, mesh_dim);
     Kokkos::View<ModifiedElem*> modified("modified_elems", mesh.nelems());
     parallel_for(keys2entity.size(), OMEGA_H_LAMBDA(LO key) {

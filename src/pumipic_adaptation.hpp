@@ -50,7 +50,7 @@ namespace {
         upward[i] = mesh.ask_up(i, mesh_dim);
         downward[i] = mesh.ask_down(mesh_dim, i);
         class_dim[i] = mesh.get_array<Omega_h::I8>(i, "class_dim");
-        class_id[i] = mesh.get_array<Omega_h::ClassId>(i, "class_id"); //TODO: delete without causing crash. I believe occuring due to overflow
+        class_id[i] = mesh.get_array<Omega_h::ClassId>(i, "class_id");
       }
     }
   };
@@ -85,7 +85,7 @@ struct ParticleAdapt : public UserTransfer {
       upward[i] = meshIn.ask_up(i, mesh_dim);
       downward[i] = meshIn.ask_down(mesh_dim, i);
       class_dim[i] = meshIn.get_array<Omega_h::I8>(i, "class_dim");
-      class_id[i] = meshIn.get_array<Omega_h::ClassId>(i, "class_id"); //TODO: delete without causing crash. I believe occuring due to overflow
+      class_id[i] = meshIn.get_array<Omega_h::ClassId>(i, "class_id");
     }
   }
 
@@ -189,7 +189,7 @@ struct ParticleAdapt : public UserTransfer {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, LO(elem));
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    if (!is_barycentric_inside(baryCoords, EPSILON)) printf("[WARNING] : Particle ended up outside element\n");
+    OMEGA_H_CHECK(is_barycentric_inside(baryCoords, EPSILON));
     pParent(pid) = elem;
     pDim(pid) = mesh_dim;
 
@@ -311,7 +311,7 @@ struct ParticleAdapt : public UserTransfer {
         }
         update2LowestParent(pid);
       }
-      else printf("[WARNING] : element skipped during particle adaptation\n");
+      else Kokkos::abort("[ERROR] : element skipped during particle adaptation\n");
     });
   }
 
@@ -359,7 +359,7 @@ struct ParticleAdapt : public UserTransfer {
         snap2Surface(oldClassDim, pid, prods2new_ents[closestIdx]);
         assign2Elem(pid, prods2new_ents[closestIdx]);
       }
-      else printf("[WARNING] : particle %d skipped during particle adaptation of swap/coarsen\n", pid);
+      else Kokkos::abort("[ERROR] : particle skipped during particle adaptation of swap/coarsen\n");
     });
   }
 

@@ -141,14 +141,13 @@ struct ParticleAdapt : public UserTransfer {
     return old2New;
   }
 
-  Kokkos::View<ModifiedElem*> gatherModified(LOs keys2entity, Int dim) {
+  static Kokkos::View<ModifiedElem*> gatherModified(Mesh& mesh, LOs keys2entity, Int dim) {
     auto entity2elem = mesh.ask_up(dim, mesh_dim);
     Kokkos::View<ModifiedElem*> modified("modified_elems", mesh.nelems());
-    parallel_for(keys2entity.size(), KOKKOS_CLASS_LAMBDA(LO key) {
+    parallel_for(keys2entity.size(), OMEGA_H_LAMBDA(LO key) {
       LO ent = keys2entity[key];
       auto elem_begin = entity2elem.a2ab[ent];
-      auto elem_end = entity2elem.a2ab[ent + 1];
-      for (auto idx = elem_begin; idx < elem_end; ++idx) {
+      for (auto idx = elem_begin; idx < entity2elem.a2ab[ent + 1]; ++idx) {
         auto elem = entity2elem.ab2b[idx];
         modified[elem] = ModifiedElem(key, idx-elem_begin, entity2elem.codes[idx]);
       }
@@ -184,8 +183,8 @@ struct ParticleAdapt : public UserTransfer {
       if (!are_close(baryCoordsSum, 1.0)) continue;
       pDim(pid) = dim;
       pChild(pid) = ent;
-      update2LowestParent(pid);
     }
+    update2LowestParent(pid);
   }
 
   void populateFields() {
@@ -219,7 +218,7 @@ struct ParticleAdapt : public UserTransfer {
       LOs keys2prods, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
     auto old2New = getUnchanged(old_mesh, prod_dim, same_ents2old_ents, same_ents2new_ents);
-    auto modified = gatherModified(keys2edges, EDGE);
+    auto modified = gatherModified(old_mesh, keys2edges, EDGE);
     auto old_cell2verts = old_mesh.ask_down(mesh_dim, VERT).ab2b;
     auto old_vert2coords = old_mesh.coords();
     update(new_mesh);
@@ -302,26 +301,23 @@ struct ParticleAdapt : public UserTransfer {
     MeshData old_data = MeshData<mesh_dim>(old_mesh);
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
-      auto oldChild = getChildElem(old_data.downward, pid);
-      auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
-      if (old2New[oldElem] != -1) { //update unchanged element id
-        pParent(pid) = old2New[oldElem];
-        update2LowestParent(pid);
-        snap2Surface(oldClassDim, pid, pParent(pid));
-        assign2Elem(pid, pParent(pid));
-      }
+      auto newElem = oldElem;
+      if (old2New[oldElem] != -1)
+        newElem = old2New[oldElem];
       else if (modified_elem[oldElem].key != -1) {
-        LO closestIdx = 0;
-        Real closest = 1000000;
+        Real closest = 9999999;
         auto key = modified_elem[oldElem].key;
         for (auto idx = keys2prods[key]; idx < keys2prods[key+1]; ++idx) {
           auto dist = barycentric_distance(pid, prods2new_ents[idx]);
-          if (dist < closest) {closest = dist; closestIdx = idx;}
+          if (dist < closest) {closest = dist; newElem = prods2new_ents[idx];}
         }
-        snap2Surface(oldClassDim, pid, prods2new_ents[closestIdx]);
-        assign2Elem(pid, prods2new_ents[closestIdx]);
       }
       else Kokkos::abort("[ERROR] : particle skipped during particle adaptation of swap/coarsen\n");
+
+      auto oldChild = getChildElem(old_data.downward, pid);
+      auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
+      snap2Surface(oldClassDim, pid, newElem);
+      assign2Elem(pid, newElem);
     });
   }
 
@@ -346,14 +342,14 @@ struct ParticleAdapt : public UserTransfer {
   virtual void coarsen(Mesh& old_mesh, Mesh& new_mesh, LOs keys2verts, Adj keys2doms, 
       Int prod_dim, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
-    auto modified_elem = gatherModified(keys2verts, VERT);
+    auto modified_elem = gatherModified(old_mesh, keys2verts, VERT);
     updatePtclsCavitySearch(old_mesh, new_mesh, keys2doms.a2ab, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 
   virtual void swap(Mesh& old_mesh, Mesh& new_mesh, Int prod_dim, LOs keys2edges, 
       LOs keys2prods, LOs prods2new_ents, LOs same_ents2old_ents, LOs same_ents2new_ents) {
     if (prod_dim != mesh_dim) return;
-    auto modified_elem = gatherModified(keys2edges, EDGE);
+    auto modified_elem = gatherModified(old_mesh, keys2edges, EDGE);
     updatePtclsCavitySearch(old_mesh, new_mesh, keys2prods, prods2new_ents, same_ents2old_ents, same_ents2new_ents, modified_elem);
   }
 

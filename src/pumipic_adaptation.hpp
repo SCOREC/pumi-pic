@@ -41,14 +41,21 @@ namespace {
     Reals vert2coords;
     Adj upward[mesh_dim];
     Adj downward[mesh_dim];
-    Read<I8> class_dim[mesh_dim];
-    Read<ClassId> class_id[mesh_dim];
+    Read<I8> class_dim[mesh_dim+1];
+    Read<ClassId> class_id[mesh_dim+1];
 
+    MeshData() {}
     MeshData(Mesh& mesh) {
+      update(mesh);
+    }
+
+    void update(Mesh& mesh) {
       vert2coords = mesh.coords();
-      for (int i=0; i<mesh_dim; i++) {
+      for (int i=0; i < mesh_dim; i++) {
         upward[i] = mesh.ask_up(i, mesh_dim);
         downward[i] = mesh.ask_down(mesh_dim, i);
+      }
+      for (int i=0; i <= mesh_dim; i++) {
         class_dim[i] = mesh.get_array<Omega_h::I8>(i, "class_dim");
         class_id[i] = mesh.get_array<Omega_h::ClassId>(i, "class_id");
       }
@@ -57,15 +64,17 @@ namespace {
 }
 
 template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
-struct ParticleAdapt : public UserTransfer {
+struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
 
   PS*& ptcls;
   Mesh& mesh;
-  Reals vert2coords;
-  Adj upward[mesh_dim];
-  Adj downward[mesh_dim];
-  Read<I8> class_dim[mesh_dim];
-  Read<ClassId> class_id[mesh_dim];
+
+  using MeshData<mesh_dim>::upward;
+  using MeshData<mesh_dim>::downward;
+  using MeshData<mesh_dim>::class_id;
+  using MeshData<mesh_dim>::class_dim;
+  using MeshData<mesh_dim>::vert2coords;
+
   typename PS::template Slice<POS> pPos;
   typename PS::template Slice<PARENT> pParent;
   typename PS::template Slice<CHILD> pChild;
@@ -80,13 +89,7 @@ struct ParticleAdapt : public UserTransfer {
     pParent = ptcls->template get<PARENT>();
     pChild = ptcls->template get<CHILD>();
     pDim = ptcls->template get<DIM>();
-    vert2coords = meshIn.coords();
-    for (int i=0; i<mesh_dim; i++) {
-      upward[i] = meshIn.ask_up(i, mesh_dim);
-      downward[i] = meshIn.ask_down(mesh_dim, i);
-      class_dim[i] = meshIn.get_array<Omega_h::I8>(i, "class_dim");
-      class_id[i] = meshIn.get_array<Omega_h::ClassId>(i, "class_id");
-    }
+    MeshData<mesh_dim>::update(meshIn);
   }
 
   OMEGA_H_DEVICE Vector<mesh_dim> getPos(const LO pid) const {

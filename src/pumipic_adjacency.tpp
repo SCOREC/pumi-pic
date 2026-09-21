@@ -69,15 +69,29 @@ namespace pumipic {
   return 1; //success
 }
 
-  //Check that every particle is within the initial parent element
+  //Check that every particle is within the initial parent element. A particle
+  //that fails the check is usually sitting on a shared face with a barycentric
+  //coordinate that rounds slightly negative. A particle on a face can head into
+  //either of the two elements adjacent to it, so in 3D the element on the side
+  //of the destination is picked instead of blindly relocating or deleting it.
+  //Particles far from any face of the recorded element, or heading out of the
+  //domain over a boundary face, are deleted.
   template <class ParticleType, typename Segment3d, typename SegmentInt>
   o::LO check_initial_parents(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
-                              Segment3d x_ps_orig, SegmentInt pids,
+                              Segment3d x_ps_orig, Segment3d x_ps_tgt, SegmentInt pids,
                               o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
                               o::Reals elmArea, const o::Real& tol, bool debug = false) {
     const auto dim = mesh.dim();
     const auto elm2verts = mesh.ask_elem_verts();
     const auto coords = mesh.coords();
+    const auto elm2faces = mesh.ask_down(dim, dim-1);
+    const auto elmDown = elm2faces.ab2b;
+    const auto faces2elms = mesh.ask_up(dim-1, dim);
+    const auto faces2elms_vals = faces2elms.ab2b;
+    const auto faces2elms_offsets = faces2elms.a2ab;
+    const auto verts2elems = mesh.ask_up(0, dim);
+    const auto verts2elems_vals = verts2elems.ab2b;
+    const auto verts2elems_offsets = verts2elems.a2ab;
     int rank;
     MPI_Comm_rank(mesh.comm()->get_impl(), &rank);
     Omega_h::Write<o::LO> numNotInElem(1, 0, "search_numNotInElem");
@@ -114,24 +128,86 @@ namespace pumipic {
       auto checkParent = PS_LAMBDA(const int e, const int pid, const int mask) {
         if( mask > 0 && !ptcl_done[pid] ) {
           auto searchElm = elem_ids[pid];
-          auto ptcl = pids(pid);
           OMEGA_H_CHECK(searchElm >= 0);
           auto elmVerts = o::gather_verts<4>(elm2verts, searchElm);
           const auto elmCoords = o::gather_vectors<4,3>(coords, elmVerts);
           auto ptclOrigin = makeVector3(pid, x_ps_orig);
+          auto ptclDest = makeVector3(pid, x_ps_tgt);
           Omega_h::Vector<4> bcc;
           barycentric_tet(elmArea[searchElm], elmCoords, ptclOrigin, bcc);
           if(!all_positive(bcc, tol)) {
-            if (debug) {
-              printInfo("%d Particle not in element! ptcl %d: %d elem %d => %d "
-                     "orig %.15f %.15f %.15f bcc %.15f %.15f %.15f %.15f\n",
-                     rank, pid, ptcl, e, searchElm,
-                     ptclOrigin[0], ptclOrigin[1], ptclOrigin[2],
-                     bcc[0], bcc[1], bcc[2], bcc[3]);
+            const o::LO min_bcc_idx = min_index(bcc, 4);
+            //Only recover particles that are essentially on the face with the
+            //most negative bcc (round-off); a large violation means the
+            //recorded element is genuinely wrong and the particle is deleted
+            if (bcc[min_bcc_idx] > -1e-2) { // ~0.17% of the element height
+              //A particle on a face can head into either of the two elements
+              //adjacent to it, so pick the one the destination lies in
+              const auto faces = o::gather_down<4>(elmDown, searchElm);
+              const o::LO face = faces[min_bcc_idx];
+              const auto first = faces2elms_offsets[face];
+              const auto last = faces2elms_offsets[face + 1];
+              o::LO otherElm = -1;
+              for (o::LO ai = first; ai < last; ++ai)
+                if (faces2elms_vals[ai] != searchElm)
+                  otherElm = faces2elms_vals[ai];
+              //signed distance of the destination from the face plane in the
+              //same winding as barycentric_tet (negative = beyond the face)
+              Omega_h::Few<Omega_h::Vector<DIM>, 3> abc;
+              get_face_from_face_index_of_tet(elmCoords, min_bcc_idx, abc);
+              const auto vab = abc[1] - abc[0];
+              const auto vac = abc[2] - abc[0];
+              const o::Real destSide = o::inner_product(ptclDest - abc[0],
+                                                        o::cross(vac, vab));
+              const o::Real originSide = bcc[min_bcc_idx] * elmArea[searchElm];
+              if (destSide < 0) {
+                if (otherElm != -1) {
+                  //heading into the adjacent element
+                  elem_ids[pid] = otherElm;
+                } else if (destSide < originSide) {
+                  //heading out of the domain over the boundary face
+                  Kokkos::atomic_add(&(numNotInElem[0]), 1);
+                  elem_ids[pid] = -1;
+                  ptcl_done[pid] = 1;
+                }
+                //else: zero-length move or heading back in over the boundary
+                //face; keep the recorded element
+              }
+              //else: heading into the recorded element; keep it
+            } else {
+              //The recorded element is genuinely wrong: a near-edge crossing
+              //in an earlier trace sent the particle to a wrong element where
+              //no exit face was found. Before giving up on the particle, look
+              //for the element containing the origin among the elements
+              //sharing a vertex with the recorded element (the true element
+              //is an edge neighbour of the element the trace stopped in).
+              o::LO foundElm = -1;
+              for (int vi = 0; vi < 4 && foundElm == -1; ++vi) {
+                const o::LO v = elmVerts[vi];
+                const auto first = verts2elems_offsets[v];
+                const auto last = verts2elems_offsets[v + 1];
+                for (o::LO ai = first; ai < last; ++ai) {
+                  const o::LO cand = verts2elems_vals[ai];
+                  if (cand == searchElm)
+                    continue;
+                  const auto candVerts = o::gather_verts<4>(elm2verts, cand);
+                  const auto candCoords =
+                      o::gather_vectors<4,3>(coords, candVerts);
+                  Omega_h::Vector<4> candBcc;
+                  if (barycentric_tet(elmArea[cand], candCoords, ptclOrigin,
+                                      candBcc) &&
+                      all_positive(candBcc, tol))
+                    foundElm = cand;
+                }
+              }
+              if (foundElm != -1) {
+                elem_ids[pid] = foundElm;
+              } else {
+                Kokkos::atomic_add(&(numNotInElem[0]), 1);
+                elem_ids[pid] = -1;
+                ptcl_done[pid] = 1;
+              }
             }
-            Kokkos::atomic_add(&(numNotInElem[0]), 1);
-            elem_ids[pid] = -1;
-            ptcl_done[pid] = 1;
           }
         } //if active
       };
@@ -140,7 +216,8 @@ namespace pumipic {
     Omega_h::HostWrite<o::LO> numNotInElem_h(numNotInElem);
     if (numNotInElem_h[0] > 0) {
       printError( "[WARNING] Rank %d: %d particles are not located in their "
-              "starting elements. Deleting them...\n", rank, numNotInElem_h[0]);
+              "starting elements and could not be recovered. Deleting them...\n",
+              rank, numNotInElem_h[0]);
     }
     return numNotInElem_h[0];
   }
@@ -326,8 +403,7 @@ namespace pumipic {
             auto xpts = o::zero_vector<3>();
             const o::LO prevExit = lastExit[ptcl];
             lastExit[ptcl] = -1;
-            //o::Real quality = -1;
-            //o::LO bestFace = -1;
+            o::Real bestInteriority = -1e30;
             for(int fi=0; fi<4; ++fi) {
               const auto face_id = face_ids[fi];
               if (face_id == prevExit)
@@ -341,8 +417,22 @@ namespace pumipic {
               const bool success = line_segment_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
                                                            closeness, intersection_parametric_coord);
               if (success) {
-                lastExit[ptcl] = face_id;
-                xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
+                //A ray passing within tolerance of an element edge (or vertex)
+                //makes several faces report an intersection. The true exit
+                //face is the one whose triangle contains the crossing point in
+                //its interior, so pick the face with the most interior
+                //crossing instead of the last successful face.
+                Omega_h::Vector<3> faceBcc;
+                o::Real interiority = -1.0;
+                if (find_barycentric_tri_simple(face, xpts, faceBcc)) {
+                  interiority = Kokkos::min(Kokkos::min(faceBcc[0], faceBcc[1]),
+                                            faceBcc[2]);
+                }
+                if (interiority > bestInteriority) {
+                  bestInteriority = interiority;
+                  lastExit[ptcl] = face_id;
+                  xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
+                }
               }
             }
 
@@ -562,7 +652,13 @@ namespace pumipic {
    }
 
     //Ensure all particles are within their starting element
-    check_initial_parents(mesh, ptcls, x_ps_orig, pids, elem_ids, ptcl_done, elmArea, tol, debug);
+    check_initial_parents(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, ptcl_done, elmArea, tol, debug);
+
+    //The prevExit skip in find_exit_face must only skip faces crossed within
+    //this trace; a new segment may legitimately go back through the face the
+    //previous segment exited (or now sits on), so start each trace fresh
+    auto resetLastExit = OMEGA_H_LAMBDA(o::LO i) { lastExit[i] = -1; };
+    o::parallel_for(lastExit.size(), resetLastExit, "reset_last_exit");
 
     bool found = false;
     int loops = 0;

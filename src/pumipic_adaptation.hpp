@@ -118,13 +118,13 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
 
   OMEGA_H_DEVICE LO getChildElem(const LO pid, const Adj down[mesh_dim]) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
-    auto nEnts = simplex_degree(mesh_dim, pDim(pid));
-    return down[pDim(pid)].ab2b[pParent(pid)*nEnts + pChild(pid)];
+    auto nChild = simplex_degree(mesh_dim, pDim(pid));
+    return down[pDim(pid)].ab2b[pParent(pid)*nChild + pChild(pid)];
   }
 
   OMEGA_H_DEVICE LO getChildElem(const LO pid) const {
-  return getChildElem(pid, downward);
-}
+    return getChildElem(pid, downward);
+  }
 
   OMEGA_H_DEVICE void update2LowestParent(const LO pid) const {
     if (pDim(pid) == mesh_dim) return;

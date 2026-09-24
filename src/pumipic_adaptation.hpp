@@ -199,11 +199,11 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    if (old_class_dim == mesh_dim && is_barycentric_inside(baryCoords)) return;
+    if (old_class_dim == mesh_dim && is_barycentric_inside(baryCoords, EPSILON)) return;
     //TODO: Right now this is an approximation because we don't have access to Omega_h paramteric coordinates.
     //The ideal solution would be to snap the particle to the surface of the model using parametric
     //coordinates and then use barycentric coordinates to move the particle to the surface of the mesh.
-    if (pDim(pid) < mesh_dim && is_barycentric_inside(baryCoords)) {
+    if (is_barycentric_inside(baryCoords, EPSILON)) {
       Int closest = 0;
       for (Int i=1; i<mesh_dim+1; i++)
         if (baryCoords[i] < baryCoords[closest]) closest = i;

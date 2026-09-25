@@ -1,4 +1,3 @@
-
 #ifndef SELL_C_SIGMA_H_
 #define SELL_C_SIGMA_H_
 #include <vector>

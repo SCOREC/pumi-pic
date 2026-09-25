@@ -26,10 +26,6 @@ namespace pumipic {
     using typename ParticleStructure<DataTypes, MemSpace>::kkGidHostMirror;
     using typename ParticleStructure<DataTypes, MemSpace>::MTVs;
 
-    template <std::size_t N>
-    using MTV = typename ParticleStructure<DataTypes, MemSpace>::template MTV<N>;
-    template <std::size_t N> 
-    using DataType = typename MemberTypeAtIndex<N, DataTypes>::type;
     typedef Kokkos::TeamPolicy<execution_space> PolicyType;
     typedef Kokkos::UnorderedMap<gid_t, lid_t, device_type> GID_Mapping;
 

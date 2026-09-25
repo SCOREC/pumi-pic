@@ -36,7 +36,6 @@ PS* createPtclStructure(OH::Mesh& mesh, int nelems, int ppe) {
   });
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(nelems,32);
-  // return new SCS(policy, 1, 32, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
   return new DPS(policy, nelems, nelems*ppe, ptclsPerElem, elemGIDs);
 }
 
@@ -56,7 +55,6 @@ void resize(PS*& ptcls, int newNElems) {
   });
 
   Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(newNElems,32);
-  // PS* newPtcls = new SCS(policy, 1, 32, newNElems, nPtcls, ptclsPerElem, elemGIDs);
   PS* newPtcls = new DPS(policy, newNElems, nPtcls, ptclsPerElem, elemGIDs);
   copyParticleData(newPtcls, ptcls);
   delete ptcls;

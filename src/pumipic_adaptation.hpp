@@ -9,6 +9,7 @@
 #include "Omega_h_adapt.hpp"
 #include "pumipic_utils.hpp"
 #include <MemberTypeLibraries.h>
+#include <Kokkos_Vector.hpp> //TODO:  temp remove
 
 namespace pp = pumipic;
 
@@ -156,11 +157,60 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return modified;
   }
 
-  OMEGA_H_DEVICE Real barycentric_distance(const LO pid, const LO elem) const {
+  template <int n>
+  OMEGA_H_DEVICE Vector<n> move2Entity(const Vector<n> in_baryCoords, Int dim, Int entIdx) const {
+    Vector<n> baryCoords = in_baryCoords;
+    bool on_ent[mesh_dim + 1] = {false};
+    for (Int v = 0; v < simplex_degree(dim, VERT); ++v)
+      on_ent[simplex_down_template(mesh_dim, dim, entIdx, v)] = true;
+
+    Real barySum = 0;
+    for (Int i = 0; i < mesh_dim + 1; ++i) 
+      if (!on_ent[i] || baryCoords[i] < 0) baryCoords[i] = 0;
+      else barySum += baryCoords[i];
+
+    if (are_close(barySum, 0))
+      for (Int i = 0; i < mesh_dim + 1; ++i)
+        if (on_ent[i]) baryCoords[i] = 1;
+
+    return pp::clamp_barycentric<mesh_dim>(baryCoords);
+  }
+
+  template <int n>
+  OMEGA_H_DEVICE bool move2ClosestModelTarget(Vector<n> &baryCoords, LO elem, I8 old_class_dim, ClassId target) const {
+    Int dimClosest = 0;
+    Int idxClosest = 0;
+    Real closest = ArithTraits<Real>::max();
+
+    for (Int dim = mesh_dim - 1; dim >= 0; --dim) {
+      auto nEnts = simplex_degree(mesh_dim, dim);
+      for (Int entIdx = 0; entIdx < nEnts; ++entIdx) {
+        auto entID = downward[dim].ab2b[elem * nEnts + entIdx];
+        if (class_id[dim][entID] != target) continue;
+        auto newBaryCoords = move2Entity(baryCoords, dim, entIdx);
+        auto dist = norm(newBaryCoords - baryCoords);
+        if (dist >= closest) continue;
+        closest = dist;
+        dimClosest = dim;
+        idxClosest = entIdx;
+      }
+    }
+
+    if (closest == ArithTraits<Real>::max()) return false;
+    baryCoords = move2Entity(baryCoords, dimClosest, idxClosest);
+    return true;
+  }
+
+  OMEGA_H_DEVICE Real barycentric_distance(const LO pid, const LO elem, const I8 old_class_dim, const ClassId target) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
-    baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+
+    if (old_class_dim < mesh_dim && !move2ClosestModelTarget(baryCoords, elem, old_class_dim, target)) 
+      return ArithTraits<Real>::max();
+    else baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+
+    OMEGA_H_CHECK(is_barycentric_inside(baryCoords, EPSILON));
     auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     return norm(newPosition - getPos(pid));
   }
@@ -194,22 +244,15 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     });
   }
 
-  OMEGA_H_DEVICE void snap2Surface(const I8 old_class_dim, const LO pid, const LO elem) const {
+  OMEGA_H_DEVICE void snap2Surface(const LO pid, const LO elem, const I8 old_class_dim, const ClassId old_class_id) const {
     #ifdef PP_ENABLE_SNAP
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
     auto baryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), coords);
     if (old_class_dim == mesh_dim && is_barycentric_inside(baryCoords, EPSILON)) return;
-    //TODO: Right now this is an approximation because we don't have access to Omega_h paramteric coordinates.
-    //The ideal solution would be to snap the particle to the surface of the model using parametric
-    //coordinates and then use barycentric coordinates to move the particle to the surface of the mesh.
-    if (is_barycentric_inside(baryCoords, EPSILON)) {
-      Int closest = 0;
-      for (Int i=1; i<mesh_dim+1; i++)
-        if (baryCoords[i] < baryCoords[closest]) closest = i;
-      baryCoords[closest] = 0;
-    }
-    baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+    if (old_class_dim < mesh_dim) move2ClosestModelTarget(baryCoords, elem, old_class_dim, old_class_id);
+    else baryCoords = pp::clamp_barycentric<mesh_dim>(baryCoords);
+    OMEGA_H_CHECK(is_barycentric_inside(baryCoords, EPSILON));
     auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
     #endif
@@ -303,21 +346,24 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto oldElem = pParent(pid);
       auto newElem = oldElem;
+      auto oldChild = getChildElem(pid, old_data.downward);
+      auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
+      auto oldClassID = old_data.class_id[pDim(pid)][oldChild];
+
       if (old2New[oldElem] != -1)
         newElem = old2New[oldElem];
       else if (modified_elem[oldElem].key != -1) {
-        Real closest = 9999999;
+        Real closest = ArithTraits<Real>::max();
         auto key = modified_elem[oldElem].key;
         for (auto idx = keys2prods[key]; idx < keys2prods[key+1]; ++idx) {
-          auto dist = barycentric_distance(pid, prods2new_ents[idx]);
+          auto dist = barycentric_distance(pid, prods2new_ents[idx], oldClassDim, oldClassID);
           if (dist < closest) {closest = dist; newElem = prods2new_ents[idx];}
         }
+        OMEGA_H_CHECK(closest != ArithTraits<Real>::max());
       }
       else Kokkos::abort("[ERROR] : particle skipped during particle adaptation of swap/coarsen\n");
 
-      auto oldChild = getChildElem(pid, old_data.downward);
-      auto oldClassDim = old_data.class_dim[pDim(pid)][oldChild];
-      snap2Surface(oldClassDim, pid, newElem);
+      snap2Surface(pid, newElem, oldClassDim, oldClassID);
       assign2Elem(pid, newElem);
     });
   }

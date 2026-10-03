@@ -370,19 +370,22 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
 
   virtual void snap(Mesh& mesh, const Omega_h::Reals& old_vert2coords, const Omega_h::Reals& warp) {
     update(mesh);
+    auto adjElems = mesh.ask_dual();
     Kokkos::parallel_for(ptcls->nPtcls(), KOKKOS_CLASS_LAMBDA(const int pid) {
       auto elem = pParent(pid);
       auto child = getChildElem(pid);
-      auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
-      auto oldCoords = gather_vectors<mesh_dim+1,mesh_dim>(old_vert2coords, verts);
-      auto newCoords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
-      auto oldBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), oldCoords);
-      auto newBaryCoords = barycentric_from_global<mesh_dim,mesh_dim>(getPos(pid), newCoords);
-      bool insideAfterSnap = is_barycentric_inside(newBaryCoords, EPSILON);
-      if (!insideAfterSnap || class_dim[pDim(pid)][child] < mesh_dim) {
-        auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(oldBaryCoords, newCoords);
-        for (int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+      auto classID = class_id[pDim(pid)][child];
+      auto classDim = class_dim[pDim(pid)][child];
+      Real closest = barycentric_distance(pid, elem, classDim, classID);
+      LO closestElem = elem;
+      for (int adj = adjElems.a2ab[elem]; adj < adjElems.a2ab[elem+1]; adj++) {
+        auto dist = barycentric_distance(pid, adjElems.ab2b[adj], classDim, classID);
+        if (dist >= closest) continue;
+        dist = closest;
+        closestElem = adjElems.ab2b[adj];
       }
+      snap2Surface(pid, closestElem, classDim, classID);
+      assign2Elem(pid, closestElem);
     });
   }
 

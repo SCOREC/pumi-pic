@@ -1,119 +1,199 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 2.17)
 
+set(CTEST_DO_SUBMIT ON)
+set(CTEST_TEST_TYPE Nightly)
+set(CTEST_BUILD_CONFIGURATION RelWithDebInfo)
 
-SET(CTEST_DO_SUBMIT ON)
-SET(CTEST_TEST_TYPE Nightly)
-
-set(CTEST_SITE             "cranium.scorec.rpi.edu" )
-set(CTEST_DASHBOARD_ROOT   "/lore/castia5/nightlyBuilds/pumipic")
-set(CTEST_CMAKE_GENERATOR  "Unix Makefiles" )
-set(CTEST_BUILD_CONFIGURATION  RelWithDebInfo)
-
-set(CTEST_PROJECT_NAME "pumipic")
-set(CTEST_SOURCE_NAME repos)
+set(CTEST_NIGHTLY_START_TIME "03:00:00 EDT")
+set(CTEST_DROP_METHOD "http")
+set(CTEST_DROP_SITE "my.cdash.org")
+set(CTEST_SITE "asics.scorec.rpi.edu" )
+set(CTEST_DROP_LOCATION "/submit.php?project=SCOREC")
+set(CTEST_DROP_SITE_CDASH TRUE)
 set(CTEST_BUILD_NAME  "linux-gcc-${CTEST_BUILD_CONFIGURATION}")
-set(CTEST_BINARY_NAME build_${CTEST_PROJECT_NAME})
+
+set(CTEST_DASHBOARD_ROOT "/users/d_zxg06726/nightlyBuilds/pumipic_build/" )
+set(CTEST_CMAKE_GENERATOR "Unix Makefiles")
+set(CTEST_BUILD_FLAGS -j4)
+
+set(CTEST_PROJECT_NAME "SCOREC")
+set(CTEST_SOURCE_NAME src)
+set(CTEST_BINARY_NAME build)
+
+set(REPO_URL_BASE "https://github.com/SCOREC/pumi-pic")
+set(BRANCH "master")
+set(MERGE_AUTHOR "Nightly Bot <donotemail@scorec.rpi.edu>")
 
 set(CTEST_SOURCE_DIRECTORY "${CTEST_DASHBOARD_ROOT}/${CTEST_SOURCE_NAME}")
 set(CTEST_BINARY_DIRECTORY "${CTEST_DASHBOARD_ROOT}/${CTEST_BINARY_NAME}")
 
+# set(GROUP_NAME "PUMIPic")
+set_property(GLOBAL PROPERTY SubProject "pumi-pic")
+set_property(GLOBAL PROPERTY Label "pumi-pic")
+
+set(CTEST_CUSTOM_WARNING_EXCEPTION ${CTEST_CUSTOM_WARNING_EXCEPTION} "tmpnam")
+
 if(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}")
   file(MAKE_DIRECTORY "${CTEST_SOURCE_DIRECTORY}")
 endif()
-if(NOT EXISTS "${CTEST_BINARY_DIRECTORY}")
-  file(MAKE_DIRECTORY "${CTEST_BINARY_DIRECTORY}")
+if(EXISTS "${CTEST_BINARY_DIRECTORY}")
+  file(REMOVE_RECURSE "${CTEST_BINARY_DIRECTORY}")
 endif()
-
-configure_file(${CTEST_SCRIPT_DIRECTORY}/CTestConfig.cmake
-               ${CTEST_SOURCE_DIRECTORY}/CTestConfig.cmake COPYONLY)
-
-set(CTEST_NIGHTLY_START_TIME "00:00:00 EST")
-set(CTEST_BUILD_FLAGS -j8)
-
-set(CTEST_DROP_METHOD "http")
-set(CTEST_DROP_SITE "my.cdash.org")
-set(CTEST_DROP_LOCATION "/submit.php?project=pumi-pic")
-set(CTEST_DROP_SITE_CDASH TRUE)
+file(MAKE_DIRECTORY "${CTEST_BINARY_DIRECTORY}")
 
 find_program(CTEST_GIT_COMMAND NAMES git)
 set(CTEST_UPDATE_COMMAND "${CTEST_GIT_COMMAND}")
 
-ctest_start(${CTEST_TEST_TYPE})
+function(git_exec CMD ACTION)
+  string(REPLACE " " ";" CMD2 "${CMD}")
+  message("Running \"git ${CMD}\"")
+  execute_process(COMMAND "${CTEST_GIT_COMMAND}" ${CMD2}
+    WORKING_DIRECTORY "${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}"
+    RESULT_VARIABLE RETVAR)
+  if(RETVAR)
+    message(FATAL_ERROR "${ACTION} failed (code ${RETVAR})!")
+  else()
+    message("${ACTION} succeeded")
+  endif()
+endfunction(git_exec)
 
+function(create_branch BRANCH_NAME TRACKING_NAME)
+  git_exec("branch --track ${BRANCH_NAME} ${TRACKING_NAME}"
+           "Creating branch ${BRANCH_NAME}")
+endfunction(create_branch)
+
+function(checkout_branch BRANCH_NAME)
+  git_exec("checkout ${BRANCH_NAME}"
+           "Checking out branch ${BRANCH_NAME}")
+endfunction(checkout_branch)
+
+function(setup_repo)
+  if(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}")
+    message("Running \"git clone ${REPO_URL_BASE}.git ${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}\"")
+    execute_process(COMMAND "${CTEST_GIT_COMMAND}" clone ${REPO_URL_BASE}.git
+        "${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}"
+        RESULT_VARIABLE CLONE_RET)
+    if(CLONE_RET)
+      message(FATAL_ERROR "Cloning ${REPO_URL_BASE}.git failed (code ${RETVAR})!")
+    else()
+      message("Cloning ${REPO_URL_BASE}.git succeeded")
+    endif()
+    # make local tracking versions of master branch
+    if(NOT "${BRANCH}" STREQUAL "master")
+      create_branch(${BRANCH} origin/${BRANCH})
+    endif()
+  endif()
+endfunction(setup_repo)
+
+function(check_current_branch BRANCH_NAME CONFIG_OPTS ERRVAR)
+  file(MAKE_DIRECTORY "${CTEST_BINARY_DIRECTORY}/${BRANCH_NAME}")
+
+  execute_process(COMMAND df -h /tmp OUTPUT_VARIABLE outVar)
+  message(STATUS "df result {\n${outVar}}")
+  execute_process(COMMAND pwd OUTPUT_VARIABLE outVar)
+  message(STATUS "pwd result output {\n${outVar}}")
+
+  ctest_configure(
+      BUILD "${CTEST_BINARY_DIRECTORY}/${BRANCH_NAME}"
+      SOURCE "${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}"
+      OPTIONS "${CONFIG_OPTS}"
+      RETURN_VALUE CONFIG_RET)
+  if(CONFIG_RET)
+    message(WARNING "${BRANCH_NAME} config failed (code ${CONFIG_RET})!")
+  else()
+    message("${BRANCH_NAME} config passed")
+  endif()
+
+  execute_process(COMMAND df -h /tmp OUTPUT_VARIABLE outVar)
+  message(STATUS "df result {\n${outVar}}")
+  execute_process(COMMAND pwd OUTPUT_VARIABLE outVar)
+  message(STATUS "pwd result output {\n${outVar}}")
+
+  ctest_build(
+      BUILD "${CTEST_BINARY_DIRECTORY}/${BRANCH_NAME}"
+      NUMBER_ERRORS NUM_BUILD_ERRORS
+      NUMBER_WARNINGS NUM_BUILD_WARNINGS
+      RETURN_VALUE BUILD_RET)
+  if(NUM_BUILD_WARNINGS OR
+      NUM_BUILD_ERRORS OR BUILD_RET)
+    message(WARNING "
+  ${BRANCH_NAME} build failed!
+  ${NUM_BUILD_WARNINGS} warnings
+  ${NUM_BUILD_ERRORS} errors
+  code ${BUILD_RET}")
+  else()
+    message("${BRANCH_NAME} build passed")
+  endif()
+
+  ctest_test(
+      BUILD "${CTEST_BINARY_DIRECTORY}/${BRANCH_NAME}"
+      RETURN_VALUE TEST_RET)
+  if(TEST_RET)
+    message(WARNING "${BRANCH_NAME} testing failed (code ${TEST_RET})!")
+  else()
+    message("${BRANCH_NAME} testing passed")
+  endif()
+
+  if(CONFIG_RET OR
+     NUM_BUILD_WARNINGS OR
+     NUM_BUILD_ERRORS OR BUILD_RET OR
+     TEST_RET)
+    message(WARNING "some ${BRANCH_NAME} checks failed!")
+    set(${ERRVAR} True PARENT_SCOPE)
+  else()
+    message("all ${BRANCH_NAME} checks passed")
+    set(${ERRVAR} False PARENT_SCOPE)
+  endif()
+
+  if(CTEST_DO_SUBMIT)
+    ctest_submit(PARTS Update Configure Build Test
+        RETRY_COUNT 4
+        RETRY_DELAY 30
+        RETURN_VALUE SUBMIT_ERROR)
+    if(SUBMIT_ERROR)
+      message(WARNING "Could not submit ${BRANCH_NAME} results to CDash (code ${SUBMIT_ERROR})!")
+    else()
+      message("Submitted ${BRANCH_NAME} results to CDash")
+    endif()
+  endif()
+endfunction(check_current_branch)
+
+function(check_tracking_branch BRANCH_NAME CONFIG_OPTS ERRVAR)
+  checkout_branch("${BRANCH_NAME}")
+  ctest_update(SOURCE "${CTEST_SOURCE_DIRECTORY}/${CTEST_PROJECT_NAME}"
+      RETURN_VALUE NUM_UPDATES)
+  if("${NUM_UPDATES}" EQUAL "-1")
+    message(FATAL_ERROR "Could not update ${BRANCH_NAME} branch!")
+  endif()
+  message("Updated ${NUM_UPDATES} files")
+  check_current_branch(${BRANCH_NAME} "${CONFIG_OPTS}" ERRVAL2)
+  set(${ERRVAR} ${ERRVAL2} PARENT_SCOPE)
+endfunction(check_tracking_branch)
+
+# ctest_start(${CTEST_TEST_TYPE} GROUP ${GROUP_NAME})
+ctest_start(${CTEST_TEST_TYPE})
 
 if(CTEST_DO_SUBMIT)
   ctest_submit(FILES "${CTEST_SCRIPT_DIRECTORY}/Project.xml"
-    RETURN_VALUE HAD_ERROR)
+      RETURN_VALUE HAD_ERROR)
   if(HAD_ERROR)
-    message(FATAL_ERROR "Cannot submit pumi-pic Project.xml!")
+    message(WARNING "Cannot submit SCOREC Project.xml!")
   endif()
 endif()
 
-
-macro(submit_part subproject_name part)
-  if(CTEST_DO_SUBMIT)
-    ctest_submit(PARTS ${part} RETURN_VALUE HAD_ERROR)
-    if(HAD_ERROR)
-      message(FATAL_ERROR "Cannot submit ${subproject_name} ${part} results!")
-    endif()
-  endif()
-endmacro()
-
-macro(build_subproject subproject_name config_opts)
-  set_property(GLOBAL PROPERTY SubProject ${subproject_name})
-  set_property(GLOBAL PROPERTY Label ${subproject_name})
-
-  setup_repo(${subproject_name} "git@github.com:SCOREC/pumi-pic.git")
-
-  if(NOT EXISTS "${CTEST_BINARY_DIRECTORY}/${subproject_name}")
-    file(MAKE_DIRECTORY ${CTEST_BINARY_DIRECTORY}/${subproject_name})
-  endif()
-
-  ctest_configure(
-    BUILD "${CTEST_BINARY_DIRECTORY}/${subproject_name}" 
-    SOURCE "${CTEST_SOURCE_DIRECTORY}/${subproject_name}"
-    OPTIONS "${config_opts}"
-    RETURN_VALUE HAD_ERROR)
-
-  submit_part(${subproject_name} Configure)
-
-  ctest_build(BUILD "${CTEST_BINARY_DIRECTORY}/${subproject_name}"
-              RETURN_VALUE HAD_ERROR)
-
-  submit_part(${subproject_name} Build)
-endmacro()
-
-macro(test_subproject subproject_name)
-  ctest_test(BUILD "${CTEST_BINARY_DIRECTORY}/${subproject_name}")
-  submit_part(${subproject_name} Test)
-endmacro()
-
-macro(setup_repo repo_name repo_url)
-  if(NOT EXISTS "${CTEST_SOURCE_DIRECTORY}/${repo_name}")
-    EXECUTE_PROCESS(COMMAND "${CTEST_GIT_COMMAND}" 
-                    clone ${repo_url} ${CTEST_SOURCE_DIRECTORY}/${repo_name}
-                    RESULT_VARIABLE HAD_ERROR)
-    if(HAD_ERROR)
-      message(FATAL_ERROR "Cannot checkout ${repo_name} repository!")
-    endif()
-  endif()
-
-  ctest_update(SOURCE "${CTEST_SOURCE_DIRECTORY}/${repo_name}" RETURN_VALUE count)
-  message("Found ${count} changed files")
-  submit_part(${repo_name} "Update")
-endmacro(setup_repo)
-
-set(OMEGAH_MASTER_INSTALL
-  "${CTEST_DASHBOARD_ROOT}/build-omegah-cranium-cuda114/install")
-SET(CONFIGURE_MASTER_OMEGAH_MASTER
+SET(CONFIGURE_OPTIONS
   "-DCMAKE_CXX_COMPILER=mpicxx"
   "-DIS_TESTING=ON"
   "-DPS_IS_TESTING=ON"
-  "-DOmega_h_PREFIX=${OMEGAH_MASTER_INSTALL}"
-  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/repos/pumipic/pumipic-data")
+  "-DENABLE_CABANA=ON"
+  "-DCabana_PREFIX=${CTEST_DASHBOARD_ROOT}/build-Cabana/install/"
+  "-DOmega_h_DIR=${CTEST_DASHBOARD_ROOT}/build-omega_h/install/lib64/cmake/Omega_h/"
+  "-DEnGPar_DIR=${CTEST_DASHBOARD_ROOT}/build-EnGPar/install/lib/cmake/EnGPar"
+  "-DTEST_DATA_DIR=${CTEST_DASHBOARD_ROOT}/pumipic-data"
+  "-DKokkos_PREFIX=${CTEST_DASHBOARD_ROOT}/build-kokkos/install"
+  "-DCMAKE_CXX_EXTENSIONS=OFF"
+)
 
-message(STATUS "configure options ${CONFIGURE_MASTER_OMEGAH_MASTER}")
-build_subproject(pumipic-master-omegahMaster "${CONFIGURE_MASTER_OMEGAH_MASTER}")
-test_subproject(pumipic-master-omegahMaster)
+setup_repo()
 
-message("DONE")
+check_tracking_branch("${BRANCH}" "${CONFIGURE_OPTIONS}" CHECK_ERR)

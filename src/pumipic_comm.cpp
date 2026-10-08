@@ -332,9 +332,12 @@ namespace pumipic {
           }
         }
         else {
-          const int size = offset_bounded_per_dim[edim][finished_neighbor+1] -
-            offset_bounded_per_dim[edim][finished_neighbor];
-          const int start = offset_bounded_per_dim[edim][finished_neighbor];
+          //The bounded offsets are indexed by the rank the message came from,
+          //which is not the index MPI_Waitany returns.
+          const int src_rank = status.MPI_SOURCE;
+          const int size = offset_bounded_per_dim[edim][src_rank+1] -
+            offset_bounded_per_dim[edim][src_rank];
+          const int start = offset_bounded_per_dim[edim][src_rank];
           if (op == SUM_OP) {
             auto reduce_op = OMEGA_H_LAMBDA(Omega_h::LO i) {
               int index = bounded_ent_ids_local[start+i];

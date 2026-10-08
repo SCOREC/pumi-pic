@@ -32,7 +32,7 @@ int testVerts(OH::Mesh mesh, OH::Few<double, size> averageLength)
       for (int i=0; i<dim; i++)
         pAdapt.pPos(pid, i) = pos[i];
       pAdapt.pParent(pid) = parent;
-      // pAdapt.setPtcl(pid, OH::VERT, parent, e);
+      // pAdapt.setPtclClass(pid, OH::VERT, parent, e);
     }
   };
   ps::parallel_for(ptcls, setPtclInfo);

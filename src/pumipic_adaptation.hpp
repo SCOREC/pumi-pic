@@ -64,11 +64,20 @@ namespace {
   };
 }
 
-template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM>
+// Default callback that is meant to be modified by user
+struct NoOpCallback {
+  OMEGA_H_DEVICE
+  void particle_reclassified(const LO pid) const {}
+  OMEGA_H_DEVICE
+  void particle_snapped(const LO pid) const {}
+};
+
+template<int mesh_dim, typename PS, int POS, int PARENT, int CHILD, int DIM, typename Callback = NoOpCallback>
 struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
 
   PS*& ptcls;
   Mesh& mesh;
+  Callback callback;
 
   using MeshData<mesh_dim>::upward;
   using MeshData<mesh_dim>::downward;
@@ -81,7 +90,8 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
   typename PS::template Slice<CHILD> pChild;
   typename PS::template Slice<DIM> pDim;
 
-  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn) : ptcls(ptclsIn), mesh(meshIn) {
+  ParticleAdapt(PS*& ptclsIn, Mesh& meshIn, Callback cb = Callback{}) 
+  : ptcls(ptclsIn), mesh(meshIn), callback(cb) {
     update(meshIn);
   }
 
@@ -99,7 +109,7 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return pos;
   }
 
-  OMEGA_H_DEVICE void setPtcl(const LO pid, const Int dim, const LO parent, const LO child) const {
+  OMEGA_H_DEVICE void setPtclClass(const LO pid, const Int dim, const LO parent, const LO child) const {
     auto nEnts = simplex_degree(mesh_dim, dim);
     int childIdx = -1;
     if (dim != mesh_dim)
@@ -109,14 +119,17 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     pDim(pid) = dim;
     pParent(pid) = parent;
     pChild(pid) = childIdx;
+    callback.particle_reclassified(pid);
   }
 
+  // Returns the lowest id upward adjacent element
   OMEGA_H_DEVICE LO getLowestParent(const LO child, const Int dim) const {
     if (dim == mesh_dim) return child;
     auto lowestParentIdx = upward[dim].a2ab[child];
     return upward[dim].ab2b[lowestParentIdx];
   }
 
+  // Returns the lowest dimension element pid is classified under
   OMEGA_H_DEVICE LO getChildElem(const LO pid, const Adj down[mesh_dim]) const {
     if (pDim(pid) == mesh_dim) return pParent(pid);
     auto nChild = simplex_degree(mesh_dim, pDim(pid));
@@ -127,11 +140,12 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return getChildElem(pid, downward);
   }
 
+  // updates particle classification to lowest id of upward adjacent elements
   OMEGA_H_DEVICE void update2LowestParent(const LO pid) const {
     if (pDim(pid) == mesh_dim) return;
     auto newChild = getChildElem(pid);
     auto lowestParent = getLowestParent(newChild, pDim(pid));
-    setPtcl(pid, pDim(pid), lowestParent, newChild);
+    setPtclClass(pid, pDim(pid), lowestParent, newChild);
   }
 
   static Write<LO> getUnchanged(Mesh& old_mesh, const Int dim, const LOs same_ents2old_ents, const LOs same_ents2new_ents) {
@@ -157,6 +171,7 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return modified;
   }
 
+  // Returns a copy of in_baryCoords that has been modified the boundary of an entity
   template <int n>
   OMEGA_H_DEVICE Vector<n> move2Entity(const Vector<n> in_baryCoords, Int dim, Int entIdx) const {
     Vector<n> baryCoords = in_baryCoords;
@@ -176,6 +191,7 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return pp::clamp_barycentric<mesh_dim>(baryCoords);
   }
 
+  // Modifies baryCoords to be on the boundary of the closest adjacent element classified at target class id
   template <int n>
   OMEGA_H_DEVICE bool move2ClosestModelTarget(Vector<n> &baryCoords, LO elem, I8 old_class_dim, ClassId target) const {
     Int dimClosest = 0;
@@ -201,6 +217,7 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     return true;
   }
 
+  // Returns distance to closest adjacent element classified at target class id
   OMEGA_H_DEVICE Real barycentric_distance(const LO pid, const LO elem, const I8 old_class_dim, const ClassId target) const {
     auto verts = gather_verts<mesh_dim+1>(downward[VERT].ab2b, elem);
     auto coords = gather_vectors<mesh_dim+1,mesh_dim>(vert2coords, verts);
@@ -255,6 +272,7 @@ struct ParticleAdapt : public UserTransfer, public MeshData<mesh_dim> {
     OMEGA_H_CHECK(is_barycentric_inside(baryCoords, EPSILON));
     auto newPosition = pp::global_from_barycentric<mesh_dim,mesh_dim>(baryCoords, coords);
     for (Int i=0; i<mesh_dim; i++) pPos(pid, i) = newPosition[i];
+    callback.particle_snapped(pid);
     #endif
   }
 

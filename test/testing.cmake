@@ -140,5 +140,5 @@ mpi_test(particle_adapt 1
 
 mpi_test(particle_adapt_snap 1 
   ./particle_adapt_snap 
-  ${TEST_DATA_DIR}/small_cylinder/cylinder.msh 
-  ${TEST_DATA_DIR}/small_cylinder/cylinder.step)
+  ${TEST_DATA_DIR}/cone_cone/cone-cone.lite 
+  ${TEST_DATA_DIR}/cone_cone/cone_cone.meshb)

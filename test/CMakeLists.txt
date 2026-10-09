@@ -1,6 +1,10 @@
 function(make_test exename srcname)
   add_executable(${exename} ${srcname})
   target_link_libraries(${exename} pumipic Omega_h::omega_h)
+
+  if(ENABLE_PCMS)
+    target_link_libraries(${exename} pcms::core)
+  endif()
 endfunction(make_test)
 
 make_test(print_partition print_partition.cpp)
@@ -23,6 +27,8 @@ make_test(search2d search2d.cpp)
 make_test(pseudoXGCm pseudoXGCm.cpp)
 make_test(pseudoXGCm_scatter pseudoXGCm_scatter.cpp)
 make_test(loadSerialMesh loadSerialMesh.cpp)
+make_test(particle_adapt particle_adapt.cpp)
+make_test(particle_adapt_snap particle_adapt_snap.cpp)
 include(testing.cmake)
 
 bob_end_subdir()

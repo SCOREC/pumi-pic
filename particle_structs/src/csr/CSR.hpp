@@ -45,6 +45,9 @@ namespace pumipic {
     ~CSR();
 
     template <class MSpace>
+    void copyParticleData(Mirror<MSpace>* src);
+
+    template <class MSpace>
     Mirror<MSpace>* copy();
 
     //Functions from ParticleStructure
@@ -263,6 +266,12 @@ namespace pumipic {
     }
     ss << "\n";
     std::cout << ss.str();
+  }
+
+  template <class DataTypes, class Space>
+  template <class Space2>
+  void CSR<DataTypes, Space>::copyParticleData(Mirror<Space2>* src) {
+    CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
   }
 
   template<class DataTypes, typename MemSpace>

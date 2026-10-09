@@ -73,6 +73,9 @@ template <std::size_t N> using Slice = Segment<DataType<N>, device_type>;
   ~SellCSigma();
 
   template <class MSpace>
+  void copyParticleData(Mirror<MSpace>* src);
+
+  template <class MSpace>
   Mirror<MSpace>* copy();
 
   //Functions from ParticleStructure
@@ -331,6 +334,12 @@ template <typename Space>
 typename std::enable_if<!std::is_same<Kokkos::Serial, typename Space::execution_space>::value, int>::type
   maxChunk(int C_max) {
     return C_max;
+}
+
+template <class DataTypes, class Space>
+template <class Space2>
+void SellCSigma<DataTypes, Space>::copyParticleData(Mirror<Space2>* src) {
+  CopyMemSpaceToMemSpace<Space, Space2, DataTypes>(ptcl_data, src->ptcl_data);
 }
 
 template<class DataTypes, typename MemSpace>

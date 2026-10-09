@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 
-project(pumipic VERSION 2.1.6 LANGUAGES CXX)
+project(pumipic VERSION 2.2.0 LANGUAGES CXX)
 
 include(cmake/bob.cmake)
 
@@ -59,6 +59,16 @@ message(STATUS "Found EnGPar")
 set(pumipic_USE_EnGPar_DEFAULT ON)
 set(EnGPar_PREFIX ${EnGPar_PREFIX})
 bob_public_dep(EnGPar)
+
+option(ENABLE_PCMS "Build with PCMS" OFF)
+if(ENABLE_PCMS)
+  set(pumipic_USE_pcms_DEFAULT ON)
+  bob_public_dep(pcms)
+  add_definitions(-DPP_ENABLE_PCMS)
+  if(pcms_VERSION VERSION_LESS 0.2.0)
+    message(FATAL_ERROR "PCMS version >= 0.2.0 required.")
+  endif()
+endif()
 
 option(ENABLE_CABANA "Build with Cabana" OFF)
 if(ENABLE_CABANA)

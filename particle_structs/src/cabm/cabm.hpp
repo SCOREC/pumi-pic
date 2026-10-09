@@ -49,6 +49,9 @@ namespace pumipic {
     ~CabM();
 
     template <class MSpace>
+    void copyParticleData(Mirror<MSpace>* src);
+
+    template <class MSpace>
     Mirror<MSpace>* copy();
 
     //Functions from ParticleStructure
@@ -369,6 +372,12 @@ namespace pumipic {
     }
     ss << "\n";
     std::cout << ss.str();
+  }
+
+  template <class DataTypes, class MemSpace>
+  template <class MSpace>
+  void CabM<DataTypes, MemSpace>::copyParticleData(Mirror<MSpace>* src) {
+    Cabana::deep_copy(*aosoa_, *(src->aosoa_));
   }
 
   template<class DataTypes, typename MemSpace>

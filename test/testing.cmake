@@ -134,3 +134,11 @@ mpi_test(pseudoXGCm_120kElms_4 4
   ./pseudoXGCm
   ${TEST_DATA_DIR}/xgc/120k
   10000 141 10 0.5 0)
+
+mpi_test(particle_adapt 1 
+  ./particle_adapt)
+
+mpi_test(particle_adapt_snap 1 
+  ./particle_adapt_snap 
+  ${TEST_DATA_DIR}/cone_cone/cone-cone.lite 
+  ${TEST_DATA_DIR}/cone_cone/cone_cone.meshb)

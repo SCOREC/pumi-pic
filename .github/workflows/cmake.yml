@@ -129,22 +129,6 @@ jobs:
         cache: true
         options: '-DCMAKE_CXX_COMPILER=mpicxx'
 
-    - name: build kokkos-fortran-interop
-      uses: ./.github/actions/install-repo
-      with:
-        repo-name: 'kokkos-fortran-interop'
-        repo-path: 'kokkos/kokkos-fortran-interop'
-        repo-ref: 'abae737ce1159c4d7a9165c5629e6f5e6ae91d87'
-        cache: true
-        options: '-DCMAKE_BUILD_TYPE=Release
-                  -DCMAKE_CXX_COMPILER=`which mpicxx`
-                  -DCMAKE_C_COMPILER=`which mpicc`
-                  -DCMAKE_Fortran_COMPILER=`which mpifort`
-                  -DBUILD_TESTING=OFF
-                  -DFLCL_BUILD_TESTS=OFF
-                  -DFLCL_BUILD_EXAMPLE=OFF
-                  -DKokkos_DIR=${{ runner.temp }}/build-kokkos/install/lib/cmake/Kokkos'
-
     - name: build ADIOS2
       uses: ./.github/actions/install-repo
       with:
@@ -195,7 +179,6 @@ jobs:
                   -DOmega_h_DIR=${{ runner.temp }}/build-omega_h/install/lib/cmake/Omega_h
                   -Dmeshfields_DIR=${{ runner.temp }}/build-meshFields/install/lib/cmake/meshfields
                   -Dredev_DIR=${{ runner.temp }}/build-redev/install/lib/cmake/redev
-                  -Dflcl_DIR=${{ runner.temp }}/build-kokkos-fortran-interop/install/lib/cmake/flcl
                   -DMPIEXEC_EXECUTABLE=`which mpirun`
                   -DADIOS2_DIR=${{ runner.temp }}/build-ADIOS2/install/lib/cmake/adios2
                   -Dperfstubs_DIR=${{ runner.temp }}/build-perfstubs/install/lib/cmake

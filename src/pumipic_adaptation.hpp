@@ -9,7 +9,6 @@
 #include "Omega_h_adapt.hpp"
 #include "pumipic_utils.hpp"
 #include <MemberTypeLibraries.h>
-#include <Kokkos_Vector.hpp> //TODO:  temp remove
 
 namespace pp = pumipic;
 

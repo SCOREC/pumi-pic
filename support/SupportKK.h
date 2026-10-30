@@ -160,48 +160,9 @@ namespace pumipic {
     static View subview(View view, int start, int size) {
       View new_view("subview", size);
       Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        new_view(i) = view(start + i);
+        copyViewToView(new_view, i, view, start + i);
       });
       return new_view;
-    }
-  };
-  template <typename T, size_t N> struct Subview<T[N]> {
-    template <typename View>
-    static View subview(View view, int start, int size) {
-      View new_view("subview", size);
-      Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        for (int j = 0; j < N; ++j)
-          new_view(i,j) = view(start + i,j);
-      });
-      return new_view;
-    }
-  };
-  template <typename T, size_t N, size_t M>
-  struct Subview<T[N][M]> {
-    template <typename View>
-    static View subview(View view, int start, int size) {
-      View new_view("subview", size);
-      Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        for (int j = 0; j < N; ++j)
-          for (int k = 0; k < M; ++k)
-            new_view(i,j,k) = view(start + i,j,k);
-      });
-      return new_view;
-    }
-  };
-  template <typename T, size_t N, size_t M, size_t P>
-  struct Subview<T[N][M][P]> {
-    template <typename View>
-    static View subview(View view, int start, int size) {
-      View new_view("subview", size);
-      Kokkos::parallel_for(size, KOKKOS_LAMBDA(const int& i) {
-        for (int j = 0; j < N; ++j)
-          for (int k = 0; k < M; ++k)
-            for (int l = 0; l < P; ++l)
-              new_view(i,j,k,l) = view(start + i,j,k,l);
-      });
-      return new_view;
-
     }
   };
 

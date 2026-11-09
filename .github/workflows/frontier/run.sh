@@ -4,6 +4,7 @@ name=pumi-pic
 
 cd /lustre/orion/cli193/scratch/yus9/globus-compute/$name-test
 
+module load PrgEnv-amd
 module load rocm
 module load craype-accel-amd-gfx90a
 module load cray-mpich

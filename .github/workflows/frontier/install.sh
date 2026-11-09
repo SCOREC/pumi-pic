@@ -4,6 +4,7 @@ branch=$1
 
 cd /lustre/orion/cli193/scratch/yus9/globus-compute/pumi-pic-test
 
+module load PrgEnv-amd
 module load rocm
 module load craype-accel-amd-gfx90a
 module load cray-mpich

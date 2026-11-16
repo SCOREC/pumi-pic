@@ -1,0 +1,6 @@
+/build/
+/build-linux-*
+/spack-build-*/
+/spack-install-*/
+/spack/spack.lock
+/spack/.spack-env/

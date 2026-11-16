@@ -1,0 +1,33 @@
+# Build this checkout with the SCOREC package recipes and build cache.
+# See README.md in this directory for setup and incremental builds.
+spack:
+  specs:
+  - pumi-pic@develop +cabana ~cuda build_type=Debug ^kokkos+serial+openmp~cuda
+
+  develop:
+    pumi-pic:
+      spec: pumi-pic@=develop
+      path: ..
+
+  repos:
+    scorec:
+      git: https://github.com/SCOREC/scorec-spack-packages.git
+      branch: main
+    builtin:
+      git: https://github.com/spack/spack-packages.git
+      branch: releases/v2026.10
+
+  mirrors:
+    scorec:
+      url: oci://ghcr.io/scorec/scorec-spack-buildcache
+      signed: false
+
+  packages:
+    all:
+      providers:
+        mpi: [mpich]
+
+  concretizer:
+    unify: true
+
+  view: true

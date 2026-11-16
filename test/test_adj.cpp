@@ -563,18 +563,31 @@ void push_ptcls(PS* ptcls, o::Real distance) {
 
 //Tests the particle is within its parent element and then sets the particle coordinates to the target position
 bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, const o::Real tol) {
-  //Use pumipic routine in search to check element
+  // Validate independently: recovery in the tracer must not repair an
+  // incorrect result before the test gets a chance to detect it.
   auto cur = ptcls->get<0>();
   auto tgt = ptcls->get<1>();
-  auto pids = ptcls->get<2>();
-  o::Reals elmArea = measure_elements_real(&mesh);
-  o::Write<o::LO> ptcl_done(ptcls->capacity(), 0, "ptcl_done");
-  auto setDone = PS_LAMBDA(const o::LO, const o::LO ptcl, const bool mask) {
-    ptcl_done[ptcl] = (!mask | (elem_ids[ptcl] == -1));
+  const auto vertices = mesh.ask_elem_verts();
+  const auto coords = mesh.coords();
+  const int dim = mesh.dim();
+  o::Write<o::LO> failures(1, 0);
+  auto check_parent = PS_LAMBDA(const int, const int pid, const bool mask) {
+    if (!mask || elem_ids[pid] == -1) return;
+    bool inside;
+    if (dim == 2) {
+      auto verts = o::gather_verts<3>(vertices, elem_ids[pid]);
+      auto bcc = o::barycentric_from_global<2, 2>(p::makeVector2(pid, tgt),
+          o::gather_vectors<3, 2>(coords, verts));
+      inside = p::all_positive(bcc, tol);
+    } else {
+      auto verts = o::gather_verts<4>(vertices, elem_ids[pid]);
+      auto bcc = o::barycentric_from_global<3, 3>(p::makeVector3(pid, tgt),
+          o::gather_vectors<4, 3>(coords, verts));
+      inside = p::all_positive(bcc, tol);
+    }
+    if (!inside) Kokkos::atomic_add(&failures[0], 1);
   };
-  p::parallel_for(ptcls, setDone, "setDone");
-
-  o::LO failures = p::check_initial_parents(mesh, ptcls, tgt, tgt, pids, elem_ids, ptcl_done, elmArea, tol, true);
+  p::parallel_for(ptcls, check_parent, "validate_search_parent");
 
   //Reset coordinates
   auto resetCoordinates = PS_LAMBDA(const o::LO elm, const o::LO ptcl, bool) {
@@ -583,7 +596,7 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
     }
   };
   p::parallel_for(ptcls, resetCoordinates, "resetCoordinates");
-  return failures;
+  return o::HostRead<o::LO>(failures)[0] != 0;
 }
 
 //Checks particles that did not intersect the wall are within the mesh still
@@ -825,6 +838,35 @@ void delete_intersections(PS* ptcls, o::Write<o::LO> elem_ids, o::Write<o::LO> x
 
 }
 
+// Reflection needs the element adjoining the boundary so the next segment can
+// start there. The default removal handler instead returns parent -1 on exit.
+// Use the general tracer's callback to stop at the boundary without removal.
+bool search_to_boundary(o::Mesh& mesh, PS* particles, o::Write<o::LO>& elements,
+                        o::Write<o::LO>& faces, o::Write<o::Real>& points) {
+  auto origin = particles->get<0>();
+  auto target = particles->get<1>();
+  auto ids = particles->get<2>();
+  o::Write<o::LO> next, exits, done;
+  auto measures = measure_elements_real(&mesh);
+  auto stop = [](auto&, auto* ptcls, auto& parents, auto& next_elements,
+                 auto& boundary_faces, auto& last_exits, auto&, auto& finished,
+                 auto, auto) {
+    auto advance = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (!mask || finished[pid]) return;
+      const bool at_destination = last_exits[pid] == -1;
+      const bool at_boundary = !at_destination && next_elements[pid] == -1;
+      if (at_boundary) boundary_faces[pid] = last_exits[pid];
+      if (at_destination || at_boundary)
+        finished[pid] = 1;
+      else
+        parents[pid] = next_elements[pid];
+    };
+    p::parallel_for(ptcls, advance, "stop_at_boundary");
+  };
+  return p::trace_particle_through_mesh(mesh, particles, origin, target, ids,
+      elements, next, true, faces, points, exits, 0, true, stop, measures, done);
+}
+
 bool test_intersection_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
   bool fail = false;
   o::Real distance = get_push_distance(mesh);
@@ -842,8 +884,7 @@ bool test_intersection_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
   o::Write<o::LO> elem_ids;
   o::Write<o::LO> xFaces;
   o::Write<o::Real> xPoints;
-  fail |= !p::search_mesh(mesh, ptcls, cur, tgt, pids, elem_ids, 
-                          true, xFaces, xPoints, 0, true);
+  fail |= !search_to_boundary(mesh, ptcls, elem_ids, xFaces, xPoints);
 
   //Test wall intersections
   fprintf(stderr, "  Testing wall intersections\n");
@@ -865,8 +906,7 @@ bool test_intersection_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
 
   //Search again
   fprintf(stderr, "  Find second new parent elements\n");
-  fail |= !p::search_mesh(mesh, ptcls, cur, tgt, pids, elem_ids, 
-                          true, xFaces, xPoints, 0, true);
+  fail |= !search_to_boundary(mesh, ptcls, elem_ids, xFaces, xPoints);
 
   //Test wall intersections
   fprintf(stderr, "  Testing wall intersections\n");

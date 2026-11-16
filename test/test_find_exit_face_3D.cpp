@@ -95,7 +95,7 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   PS *ptcls = new p::DPS<Particle>(policy, ne, 2, ptcls_per_elem, element_gids);
   printf("DPS Particle structure created successfully\n");
 #else
-  PS *ptcls = PS *ptcls = new SellCSigma<Particle>(
+  PS *ptcls = new SellCSigma<Particle>(
       policy, 10, 10, ne, 2, ptcls_per_elem, element_gids);
   printf("SellCSigma Particle structure created successfully\n");
 #endif
@@ -165,6 +165,19 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   o::Write<o::LO> lastExit(psCapacity, -1, "search_last_exit");
   o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
   o::Write<o::LO> elem_ids(psCapacity, tet_id, "elem_ids for find_exit_face");
+
+  if (useBcc) {
+    // Endpoint location can walk a different route than the physical segment.
+    // Verify its result, rather than requiring a particular first crossed face.
+    bool found = p::search_mesh(*p_mesh, ptcls, particle_init_position,
+        particle_final_position, pid_d, elem_ids, false, xface_id, inter_points, 100);
+    auto check_destination = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (mask) OMEGA_H_CHECK(elem_ids[pid] == -1);
+    };
+    p::parallel_for(ptcls, check_destination, "check_bcc_destination");
+    delete ptcls;
+    return found;
+  }
 
   p::find_exit_face(*p_mesh, ptcls, particle_init_position,
                     particle_final_position, elem_ids, ptcl_done, elmArea,

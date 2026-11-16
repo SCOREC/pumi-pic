@@ -186,6 +186,36 @@ int main(int argc, char* argv[]){
     }
 
 
+    // Exercise the compatibility APIs on stationary, interior, and leaking
+    // trajectories and compare their full outputs with the common entry point.
+    Kokkos::View<o::Real*[3], ExeSpace> origin_view("origin_view", ptcls->capacity());
+    auto copy_origin = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (mask)
+        for (int d = 0; d < 3; ++d) origin_view(pid, d) = particle_orig(pid, d);
+    };
+    p::parallel_for(ptcls, copy_origin, "copy_origin_view");
+    for (int api = 0; api < 2; ++api) {
+      o::Write<o::LO> legacy_elements, legacy_faces;
+      o::Write<o::Real> legacy_points;
+      bool legacy_success;
+      if (api == 0)
+        legacy_success = p::search_mesh_3d(mesh, ptcls, origin_view, particle_dest,
+            particle_id, legacy_elements, legacy_points, legacy_faces, 100);
+      else
+        legacy_success = p::search_mesh<Particle, decltype(particle_orig), decltype(particle_id)>(
+            mesh, ptcls, particle_orig, particle_dest,
+            particle_id, legacy_elements, legacy_points, legacy_faces, 100);
+      OMEGA_H_CHECK(legacy_success);
+      auto compare = PS_LAMBDA(const int, const int pid, const bool mask) {
+        if (!mask) return;
+        OMEGA_H_CHECK(legacy_elements[pid] == elem_ids[pid]);
+        OMEGA_H_CHECK(legacy_faces[pid] == interFaces[pid]);
+        for (int d = 0; d < 3; ++d)
+          OMEGA_H_CHECK(p::almost_equal(legacy_points[3*pid+d], interPoints[3*pid+d], 1e-10));
+      };
+      p::parallel_for(ptcls, compare, "compare_legacy_search");
+    }
+
     // ----------------------------------- Check Results -----------------------------------//
     // check sizes
     OMEGA_H_CHECK_PRINTF(elem_ids.size() == ptcls->capacity(), "elem_ids size %d != ptcls capacity %d\n",

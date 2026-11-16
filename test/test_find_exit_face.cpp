@@ -1,8 +1,8 @@
 /*
     * Test for find_exit_face() function in pumipic_adjacency.tpp
     * This test is for 2D mesh
-    * It shows that when the exis face is computed using `useBcc` flag on, it
-    fails to find the correct exit face
+    * Segment tracing checks actual crossings. With --bcc, destination-only
+    * location checks final containment rather than the first crossed edge.
 
     * The test mesh is a square as below with the following edges:
 
@@ -28,7 +28,6 @@ e0  |                 *   4(0,0)        |  e5
     * x(2.5, -3.0) -> o(0.0, 3.0)
     * y(-2.5, -3.0) -> o(0.0, 3.0)
 
-    TODO It fails for the x->o ray and returns edge 2 instead of 7
 */
 
 #include "pumipic_adjacency.hpp"
@@ -158,7 +157,7 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   PS *ptcls = new p::DPS<Particle>(policy, ne, 2, ptcls_per_elem, element_gids);
   printf("DPS Particle structure created successfully\n");
 #else
-  PS *ptcls = PS *ptcls = new SellCSigma<Particle>(
+  PS *ptcls = new SellCSigma<Particle>(
       policy, 10, 10, ne, 2, ptcls_per_elem, element_gids);
   printf("SellCSigma Particle structure created successfully\n");
 #endif
@@ -230,6 +229,49 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
   o::Write<o::LO> elem_ids(psCapacity, 1, "elem_ids for find_exit_face");
 
+  if (useBcc) {
+    // Endpoint location can walk a different route than the physical segment.
+    // Verify its result, rather than requiring a particular first crossed face.
+    bool found = p::search_mesh(*p_mesh, ptcls, particle_init_position,
+        particle_final_position, pid_d, elem_ids, false, xface_id, inter_points, 100);
+    auto check_destination = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (mask) OMEGA_H_CHECK(elem_ids[pid] == 2);
+    };
+    p::parallel_for(ptcls, check_destination, "check_bcc_destination");
+    // The single-point helper runs inside a kernel and shares the BCC step.
+    const auto coords = mesh.coords();
+    const auto verts = mesh.ask_elem_verts();
+    const auto down = mesh.ask_down(2, 1);
+    const auto up = mesh.ask_up(1, 2);
+    const auto exposed = o::mark_exposed_sides(&mesh);
+    auto check_point = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (!mask) return;
+      o::LO loops;
+      const auto parent = p::search_mesh_2d_pt(exposed, verts, coords, down, up,
+          elmArea, p::makeVector2(pid, particle_init_position),
+          p::makeVector2(pid, particle_final_position), pid, 1, loops);
+      OMEGA_H_CHECK(parent == 2);
+    };
+    p::parallel_for(ptcls, check_point, "check_device_point_search");
+
+    // Keep the legacy -1 and -nelems sentinels, including an outside particle.
+    o::Write<o::LO> legacy_ids(psCapacity, -1);
+    // Capture the scalar, not the host mesh, in device kernels.
+    const auto outside = -mesh.nelems();
+    auto seed_outside = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (mask && pid == 1) legacy_ids[pid] = outside;
+    };
+    p::parallel_for(ptcls, seed_outside, "seed_legacy_outside");
+    found = p::search_mesh_2d(*p_mesh, ptcls, particle_init_position,
+        particle_final_position, pid_d, legacy_ids, 100) && found;
+    auto check_legacy = PS_LAMBDA(const int, const int pid, const bool mask) {
+      if (mask) OMEGA_H_CHECK(legacy_ids[pid] == (pid == 1 ? -1 : 2));
+    };
+    p::parallel_for(ptcls, check_legacy, "check_legacy_sentinels");
+    delete ptcls;
+    return found;
+  }
+
   p::find_exit_face(*p_mesh, ptcls, particle_init_position,
                     particle_final_position, elem_ids, ptcl_done, elmArea,
                     useBcc, lastExit, inter_points, tol);
@@ -290,9 +332,9 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
     // check intersection points
     printf("INFO: Intersection points: x->o: %f %f, y->o: %f %f\n", xpoints_d_h[0],
            xpoints_d_h[1], xpoints_d_h[2], xpoints_d_h[3]);
-    // expected final intersection points: x->o: 0.882353 0.882353, y->o: -0.882353 0.882353
-    o::Vector<2> expected_final_xpoint_xo{0.882353, 0.882353};
-    o::Vector<2> expected_final_xpoint_yo{-0.882353, 0.882353};
+    // Both segments finish inside the top triangle, at their destination.
+    o::Vector<2> expected_final_xpoint_xo{0.0, 3.0};
+    o::Vector<2> expected_final_xpoint_yo{0.0, 3.0};
     bool passed_xpoint_xo = is_close(xpoints_d_h[0], expected_final_xpoint_xo[0], 1e-4) &&
                             is_close(xpoints_d_h[1], expected_final_xpoint_xo[1], 1e-4);
     bool passed_xpoint_yo = is_close(xpoints_d_h[2], expected_final_xpoint_yo[0], 1e-4) &&

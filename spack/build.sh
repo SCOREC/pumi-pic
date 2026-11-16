@@ -10,6 +10,11 @@ if [[ ! -f "$test_data_dir/cube6tet.msh" ]]; then
   exit 1
 fi
 
+# Some file-I/O tests regenerate their input fixtures. Give each build a copy.
+mkdir -p "$build_dir/test-data"
+tar --exclude=.git -C "$test_data_dir" -cf - . | tar -xf - -C "$build_dir/test-data"
+test_data_dir="$build_dir/test-data"
+
 # Use the concrete environment's compilers and dependencies for every step.
 spack -e "$source_dir/spack" build-env pumi-pic -- bash -c '
   set -euo pipefail

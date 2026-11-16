@@ -17,6 +17,8 @@ bash spack/build.sh
 The package recipe builds the library. `build.sh` additionally enables the library
 and particle-structure tests in `build/debug`, using the same concrete dependency
 environment. Repeat that command after editing the source.
+The helper copies fixtures into the build directory because some existing tests
+rewrite mesh files; the test-data submodule stays clean.
 
 Run tests inside the build environment so MPI and shared libraries are available:
 

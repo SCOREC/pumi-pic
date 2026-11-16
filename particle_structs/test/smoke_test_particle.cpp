@@ -29,6 +29,9 @@ int main(int argc, char* argv[]) {
     ps::hostToDevice(ppe, ppe_h);
     ps::hostToDevice(element_gids, element_gids_h);
     ps::hostToDevice(particle_elements, particle_elements_h);
+    // Storage slots can change during construction, rebuild, and migration.
+    // Carry the input identity in particle data instead of treating a slot as ID.
+    ps::hostToDevice(ps::getMemberView<Types, 0>(particle_info), particle_elements_h);
     Kokkos::TeamPolicy<ExeSpace> policy = pumipic::TeamPolicyAuto(num_elems,32);
     kkLidView failures("fails", 1);
 
@@ -59,8 +62,9 @@ int main(int argc, char* argv[]) {
 
 void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failures) {
   //Init
+  auto ids = structure->get<0>();
   auto checkInit = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    if (mask && e != p){
+    if (mask && e != ids(p)){
       printf("Structure not initalized at Particle: %d, Elm: %d\n", p, e);
       failures(0) = 1;
     }
@@ -93,11 +97,27 @@ void testStructure(PS* structure, int comm_rank, int comm_size, kkLidView failur
   ps::parallel_for(structure, setNewProcess, "setNewProcess");
   structure->migrate(new_element, new_process);
 
+  // Incoming particles retain the parent selected by their source rank.
+  // With one rank, migration is a round trip and the parent remains zero.
+  const int expected_parent = (comm_rank + comm_size - 1) % comm_size;
+  ids = structure->get<0>();
+  kkLidView seen("migrated_particle_ids", 5);
   auto checkMigrate = PS_LAMBDA(const lid_t& e, const lid_t& p, const bool& mask) {
-    if (mask && e == comm_rank){
+    if (!mask) return;
+    if (e != expected_parent || ids(p) < 0 || ids(p) >= 5){
       printf("Structure failed to migrate ranks at Ptcl: %d, Elm: %d\n", p, e);
       failures(0) = 1;
+    } else {
+      Kokkos::atomic_inc(&seen(ids(p)));
     }
   };
   ps::parallel_for(structure, checkMigrate, "checkMigrate");
+  auto host_seen = ps::deviceToHost(seen);
+  for (int id = 0; id < 5; ++id) {
+    if (host_seen(id) != 1) {
+      printf("Expected particle ID %d exactly once after migration, found %d\n",
+             id, host_seen(id));
+      Kokkos::deep_copy(failures, 1);
+    }
+  }
 }

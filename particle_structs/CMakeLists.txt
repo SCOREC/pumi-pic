@@ -24,6 +24,7 @@ endif()
 add_executable(smoke_test_particle test/smoke_test_particle.cpp)
 target_link_libraries(smoke_test_particle particleStructs)
 mpi_test(smoke_test_particle 4 ./smoke_test_particle)
+mpi_test(smoke_test_particle_1 1 ./smoke_test_particle)
 
 if (PS_IS_TESTING)
    add_subdirectory(test)

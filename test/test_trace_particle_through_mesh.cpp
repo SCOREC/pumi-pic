@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
     PS *ptcls = new p::DPS<Particle>(policy, ne, num_ptcls, ptcls_per_elem, element_gids);
     printf("DPS Particle structure created successfully\n");
 #else
-    PS *ptcls = PS *ptcls = new SellCSigma<Particle>(
+    PS *ptcls = new SellCSigma<Particle>(
       policy, 10, 10, ne, 2, ptcls_per_elem, element_gids);
   printf("SellCSigma Particle structure created successfully\n");
 #endif
@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
     o::Real tol = pumipic::compute_tolerance_from_area(elmArea);
 
     // *********************************************** Run The Search *********************************************//
-    empty_function<Particle,typeof(particle_final_position)> emptyFunction;
+    empty_function<Particle,decltype(particle_final_position)> emptyFunction;
 
     printf("*** Searching ... ***\n");
     // After a single search operation, auxiliary arrays will be filled and they will be tested

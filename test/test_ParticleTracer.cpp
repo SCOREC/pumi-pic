@@ -100,7 +100,7 @@ int main(int argc, char* argv[]){
     PS *ptcls = new p::DPS<Particle>(policy, ne, num_ptcls, ptcls_per_elem, element_gids);
     printf("DPS Particle structure created successfully\n");
 #else
-    PS *ptcls = PS *ptcls = new SellCSigma<Particle>(
+    PS *ptcls = new SellCSigma<Particle>(
       policy, 10, 10, ne, 2, ptcls_per_elem, element_gids);
   printf("SellCSigma Particle structure created successfully\n");
 #endif
@@ -173,7 +173,7 @@ int main(int argc, char* argv[]){
     pumipic::parallel_for(ptcls, set_particle_path, "set_particle_path");
 
     // -------------------------------------- Particle Movement Set up Done --------------------------------------//
-    pumipic::RemoveParticleOnGeometricModelExit<Particle, typeof(particle_orig)> native_handler(mesh, true);
+    pumipic::RemoveParticleOnGeometricModelExit<Particle, decltype(particle_orig)> native_handler(mesh, true);
     auto particle_tracer = ParticleTracer(picparts, ptcls, native_handler);
 
     bool tracer_success = particle_tracer.search();

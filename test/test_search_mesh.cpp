@@ -99,7 +99,7 @@ int main(int argc, char* argv[]){
     PS *ptcls = new p::DPS<Particle>(policy, ne, num_ptcls, ptcls_per_elem, element_gids);
     printf("DPS Particle structure created successfully\n");
 #else
-    PS *ptcls = PS *ptcls = new SellCSigma<Particle>(
+    PS *ptcls = new SellCSigma<Particle>(
       policy, 10, 10, ne, 2, ptcls_per_elem, element_gids);
   printf("SellCSigma Particle structure created successfully\n");
 #endif

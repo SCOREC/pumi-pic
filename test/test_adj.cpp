@@ -574,7 +574,7 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
   };
   p::parallel_for(ptcls, setDone, "setDone");
 
-  o::LO failures = p::check_initial_parents(mesh, ptcls, tgt, pids, elem_ids, ptcl_done, elmArea, true, tol);
+  o::LO failures = p::check_initial_parents(mesh, ptcls, tgt, tgt, pids, elem_ids, ptcl_done, elmArea, tol, true);
 
   //Reset coordinates
   auto resetCoordinates = PS_LAMBDA(const o::LO elm, const o::LO ptcl, bool) {

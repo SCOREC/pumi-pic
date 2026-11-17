@@ -9,9 +9,9 @@ mpi_test(test_adj_2d 1 ./test_adj ${TEST_DATA_DIR}/plate/tri8.osh)
 mpi_test(test_adj_3d 1 ./test_adj ${TEST_DATA_DIR}/cube/7k.osh)
 
 mpi_test(test_find_exit_face 1 ./test_find_exit_face ${TEST_DATA_DIR}/square2d4elem.msh)
-mpi_test(test_find_exit_face_bcc 1 ./test_find_exit_face ${TEST_DATA_DIR}/square2d4elem.msh --bcc)
+mpi_test(test_search_no_intersections_2d 1 ./test_find_exit_face ${TEST_DATA_DIR}/square2d4elem.msh --no-intersections)
 mpi_test(test_find_exit_face_3D 1 ./test_find_exit_face_3D ${TEST_DATA_DIR}/cube6tet.msh)
-mpi_test(test_find_exit_face_3D_bcc 1 ./test_find_exit_face_3D ${TEST_DATA_DIR}/cube6tet.msh --bcc)
+mpi_test(test_search_no_intersections_3d 1 ./test_find_exit_face_3D ${TEST_DATA_DIR}/cube6tet.msh --no-intersections)
 mpi_test(test_line_edge_2d 1 ./test_line_edge_2d ${TEST_DATA_DIR}/square2d4elem.msh)
 mpi_test(test_triangle_intersections 1 ./test_triangle_intersections ${TEST_DATA_DIR}/cube6tet.msh)
 mpi_test(test_search_mesh_gmsh 1 ./test_search_mesh_gmsh ${TEST_DATA_DIR}/cube6tet.msh)
@@ -19,8 +19,8 @@ mpi_test(test_particle_search 1 ./test_particle_search ${TEST_DATA_DIR}/cube6tet
 
 set_tests_properties(
   test_trace_particle_through_mesh test_search_mesh test_ParticleTracer
-  test_adj_2d test_adj_3d test_find_exit_face test_find_exit_face_bcc
-  test_find_exit_face_3D test_find_exit_face_3D_bcc test_line_edge_2d
+  test_adj_2d test_adj_3d test_find_exit_face test_search_no_intersections_2d
+  test_find_exit_face_3D test_search_no_intersections_3d test_line_edge_2d
   test_triangle_intersections test_search_mesh_gmsh test_particle_search
   PROPERTIES LABELS "search" TIMEOUT 120)
 

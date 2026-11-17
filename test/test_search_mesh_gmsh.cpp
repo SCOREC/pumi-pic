@@ -79,7 +79,7 @@ bool is_inside3D(o::Mesh &mesh, o::LO elem_id, const o::Vector<3> point) {
   return bool(host_inside[0]);
 }
 
-bool test_search_mesh(const std::string mesh_fname, p::Library *lib, bool useBcc) {
+bool test_search_mesh(const std::string mesh_fname, p::Library *lib) {
   printf("Test: 3D intersection...\n");
   o::Library &olib = lib->omega_h_lib();
   // load mesh
@@ -197,7 +197,7 @@ bool test_search_mesh(const std::string mesh_fname, p::Library *lib, bool useBcc
   auto x_ps_tgt = ptcls->get<1>();
   auto pids = ptcls->get<2>();
 
-  bool found = p::search_mesh(*p_mesh, ptcls, x_ps_d, x_ps_tgt, pids, elem_ids, !useBcc,
+  bool found = p::search_mesh(*p_mesh, ptcls, x_ps_d, x_ps_tgt, pids, elem_ids, true,
                  boundary_faces, inter_points, 100, true);
 
   auto elem_ids_host = o::HostRead<o::LO>(elem_ids);
@@ -222,5 +222,5 @@ int main(int argc, char **argv) {
     printf("Usage: %s <gmesh>\n", argv[0]);
     return 1;
   }
-  return test_search_mesh(argv[1], &lib, false) ? 0 : 1;
+  return test_search_mesh(argv[1], &lib) ? 0 : 1;
 }

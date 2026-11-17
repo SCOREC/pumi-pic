@@ -18,7 +18,7 @@ using Exec = Kokkos::DefaultExecutionSpace;
 int main(int argc, char** argv) {
   o::Library library(&argc, &argv);
   if (argc < 5 || argc > 6) {
-    std::fprintf(stderr, "Usage: %s <2|3> <particles> <repetitions> <bcc|segment> [nonconvex]\n", argv[0]);
+    std::fprintf(stderr, "Usage: %s <2|3> <particles> <repetitions> <no-output|segment> [nonconvex]\n", argv[0]);
     return 1;
   }
   const int dim = std::stoi(argv[1]);
@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
   const bool segment = mode == "segment";
   const bool nonconvex = argc == 6 && std::string(argv[5]) == "nonconvex";
   if ((dim != 2 && dim != 3) || count <= 0 || repetitions <= 0 ||
-      (mode != "bcc" && !segment) || (nonconvex && dim != 2)) return 1;
+      (mode != "no-output" && !segment) || (nonconvex && dim != 2)) return 1;
   OMEGA_H_CHECK(library.world()->size() == 1);
 
   o::Mesh mesh(&library);
@@ -129,6 +129,21 @@ int main(int argc, char** argv) {
     if (!inside) Kokkos::atomic_add(&invalid[0], 1);
   };
   p::parallel_for(particles.get(), validate, "validate_search_benchmark");
+  if (nonconvex) {
+    const auto exposed = o::mark_exposed_sides(&mesh);
+    const auto down = mesh.ask_down(2, 1);
+    const auto up = mesh.ask_up(1, 2);
+    const auto areas = measure_elements_real(&mesh);
+    auto check_point = PS_LAMBDA(int initial_parent, int pid, bool mask) {
+      if (!mask) return;
+      o::LO loops;
+      const auto located = p::search_mesh_2d_pt(exposed, vertices, coords, down,
+          up, areas, p::makeVector2(pid, origin), p::makeVector2(pid, target),
+          pid, initial_parent, loops, 200);
+      if (located < 0 || located != parents[pid]) Kokkos::atomic_add(&invalid[0], 1);
+    };
+    p::parallel_for(particles.get(), check_point, "validate_nonconvex_device_search");
+  }
   const int errors = o::HostRead<o::LO>(invalid)[0];
   OMEGA_H_CHECK(o::HostRead<o::LO>(active)[0] == count);
   std::sort(times.begin(), times.end());

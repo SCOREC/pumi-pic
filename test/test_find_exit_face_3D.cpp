@@ -53,7 +53,7 @@ bool is_inside3D(o::Mesh &mesh, o::LO elem_id, const o::Vector<3> point) {
   return bool(host_inside[0]);
 }
 
-bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool useBcc) {
+bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool without_intersections) {
   printf("Test: 3D intersection...\n");
   o::Library &olib = lib->omega_h_lib();
   // load mesh
@@ -166,22 +166,20 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
   o::Write<o::LO> elem_ids(psCapacity, tet_id, "elem_ids for find_exit_face");
 
-  if (useBcc) {
-    // Endpoint location can walk a different route than the physical segment.
-    // Verify its result, rather than requiring a particular first crossed face.
+  if (without_intersections) {
+    // Disabling output recording must preserve physical segment traversal.
     bool found = p::search_mesh(*p_mesh, ptcls, particle_init_position,
         particle_final_position, pid_d, elem_ids, false, xface_id, inter_points, 100);
     auto check_destination = PS_LAMBDA(const int, const int pid, const bool mask) {
       if (mask) OMEGA_H_CHECK(elem_ids[pid] == -1);
     };
-    p::parallel_for(ptcls, check_destination, "check_bcc_destination");
+    p::parallel_for(ptcls, check_destination, "check_destination_without_outputs");
     delete ptcls;
     return found;
   }
 
   p::find_exit_face(*p_mesh, ptcls, particle_init_position,
-                    particle_final_position, elem_ids, ptcl_done, elmArea,
-                    useBcc, lastExit, inter_points, tol);
+                    particle_final_position, elem_ids, ptcl_done, lastExit, inter_points, tol);
 
   const o::Few<o::LO, 2> expected_faces {56, 55};
   auto lastExit_h = o::HostRead<o::LO>(lastExit);
@@ -214,7 +212,7 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
     printf("y->o intersected the correct face\n");
   }
 
-  if (!useBcc) {
+  if (!without_intersections) {
     o::Vector<3> expected_xpoint_xo{0.000000, -0.091667, 0.000000};
     o::Vector<3> expected_xpoint_yo{0.000000, -0.000000, -0.253846};
 
@@ -235,7 +233,7 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
              inter_points_h[4], inter_points_h[5]);
       passed_yo = false;
     }
-  } // if (!useBcc)
+  } // if (!without_intersections)
 
   if (!passed_xo) {
     printf("ERROR: Expected exit face for x->o : 56, got %d\n", lastExit_h[0]);
@@ -253,9 +251,9 @@ bool test_3D_intersection(const std::string mesh_fname, p::Library *lib, bool us
 int main(int argc, char **argv) {
   p::Library lib(&argc, &argv);
   if (argc != 2 && argc != 3) {
-    printf("Usage: %s <gmesh> [--bcc]\n", argv[0]);
+    printf("Usage: %s <gmesh> [--no-intersections]\n", argv[0]);
     return 1;
   }
-  const bool use_bcc = argc == 3 && std::string(argv[2]) == "--bcc";
-  return test_3D_intersection(argv[1], &lib, use_bcc) ? 0 : 1;
+  const bool without_intersections = argc == 3 && std::string(argv[2]) == "--no-intersections";
+  return test_3D_intersection(argv[1], &lib, without_intersections) ? 0 : 1;
 }

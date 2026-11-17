@@ -1,8 +1,8 @@
 /*
     * Test for find_exit_face() function in pumipic_adjacency.tpp
     * This test is for 2D mesh
-    * Segment tracing checks actual crossings. With --bcc, destination-only
-    * location checks final containment rather than the first crossed edge.
+    * Segment tracing checks actual crossings. With --no-intersections, the same
+    * search runs without returning intersection arrays.
 
     * The test mesh is a square as below with the following edges:
 
@@ -113,7 +113,7 @@ void print_2D_mesh_edges(o::Mesh &mesh) {
   o::parallel_for(mesh.nedges(), print_edge_nodes);
 }
 
-bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool useBcc) {
+bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool without_intersections) {
   printf("Test: 2D intersection...\n");
   o::Library &olib = lib->omega_h_lib();
   // load mesh
@@ -229,16 +229,15 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   o::Write<o::LO> ptcl_done(psCapacity, 0, "search_ptcl_done");
   o::Write<o::LO> elem_ids(psCapacity, 1, "elem_ids for find_exit_face");
 
-  if (useBcc) {
-    // Endpoint location can walk a different route than the physical segment.
-    // Verify its result, rather than requiring a particular first crossed face.
+  if (without_intersections) {
+    // Disabling output recording must preserve physical segment traversal.
     bool found = p::search_mesh(*p_mesh, ptcls, particle_init_position,
         particle_final_position, pid_d, elem_ids, false, xface_id, inter_points, 100);
     auto check_destination = PS_LAMBDA(const int, const int pid, const bool mask) {
       if (mask) OMEGA_H_CHECK(elem_ids[pid] == 2);
     };
-    p::parallel_for(ptcls, check_destination, "check_bcc_destination");
-    // The single-point helper runs inside a kernel and shares the BCC step.
+    p::parallel_for(ptcls, check_destination, "check_destination_without_outputs");
+    // The single-point helper runs inside a kernel and shares segment intersection.
     const auto coords = mesh.coords();
     const auto verts = mesh.ask_elem_verts();
     const auto down = mesh.ask_down(2, 1);
@@ -273,8 +272,7 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
   }
 
   p::find_exit_face(*p_mesh, ptcls, particle_init_position,
-                    particle_final_position, elem_ids, ptcl_done, elmArea,
-                    useBcc, lastExit, inter_points, tol);
+                    particle_final_position, elem_ids, ptcl_done, lastExit, inter_points, tol);
 
   auto lastExit_h = o::HostRead<o::LO>(lastExit);
   auto inter_points_h = o::HostRead<o::Real>(inter_points);
@@ -291,7 +289,7 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
     printf("y->o intersected the correct face\n");
   }
 
-  if (!useBcc) {
+  if (!without_intersections) {
     o::Vector<2> expected_xpoint_xo{2.142857, -2.142857};
     o::Vector<2> expected_xpoint_yo{-2.142857, -2.142857};
 
@@ -369,9 +367,9 @@ bool test_2D_intersection(const std::string mesh_fname, p::Library *lib, bool us
 int main(int argc, char **argv) {
   p::Library lib(&argc, &argv);
   if (argc != 2 && argc != 3) {
-    printf("Usage: %s <gmesh> [--bcc]\n", argv[0]);
+    printf("Usage: %s <gmesh> [--no-intersections]\n", argv[0]);
     return 1;
   }
-  const bool use_bcc = argc == 3 && std::string(argv[2]) == "--bcc";
-  return test_2D_intersection(argv[1], &lib, use_bcc) ? 0 : 1;
+  const bool without_intersections = argc == 3 && std::string(argv[2]) == "--no-intersections";
+  return test_2D_intersection(argv[1], &lib, without_intersections) ? 0 : 1;
 }

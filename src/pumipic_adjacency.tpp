@@ -301,23 +301,38 @@ namespace pumipic {
     return det >= tol && s >= -tol && s <= det+tol && t >= -tol && t <= det+tol;
   }
 
-  template <int Dim>
-  OMEGA_H_DEVICE o::LO find_bcc_side(o::Real measure,
-      const o::Matrix<Dim, Dim + 1>& vertices,
-      const o::Vector<Dim>& destination, o::Real tol) {
-    o::Vector<Dim + 1> bcc;
-    if constexpr (Dim == 2)
-      barycentric_tri(measure, vertices, destination, bcc);
-    else
-      barycentric_tet(measure, vertices, destination, bcc);
-    return all_positive(bcc, tol) ? -1 : min_index(bcc, Dim + 1);
+  // Select an edge actually crossed by the segment, rather than a direction
+  // inferred from the destination. Shared by the batch and device point APIs.
+  OMEGA_H_DEVICE o::LO find_segment_exit_edge(
+      const o::Matrix<2, 3>& triangle, const o::Vector<2>& origin,
+      const o::Vector<2>& target, o::LO previous_side, o::Real tol,
+      o::Vector<2>& point) {
+    const auto ab = triangle[1] - triangle[0];
+    const auto ac = triangle[2] - triangle[0];
+    const bool flip = ab[0] * ac[1] - ab[1] * ac[0] < 0;
+    o::LO selected = -1;
+    point = target;
+    if (o::inner_product(target - origin, target - origin) == 0) return -1;
+    for (int side = 0; side < 3; ++side) {
+      if (side == previous_side) continue;
+      const auto a = o::simplex_down_template(2, 1, side, 0);
+      const auto b = o::simplex_down_template(2, 1, side, 1);
+      o::Few<o::Vector<2>, 2> edge;
+      edge[0] = triangle[a];
+      edge[1] = triangle[b];
+      o::Vector<2> candidate;
+      if (!line_edge_2d(edge, origin, target, candidate, tol, flip)) continue;
+      selected = side;
+      point = candidate;
+    }
+    return selected;
   }
 
   template <class ParticleType, typename Origin, typename Target>
   void find_exit_face(o::Mesh mesh, ParticleStructure<ParticleType>* ptcls,
                       Origin x_ps_orig, Target x_ps_tgt,
                       o::Write<o::LO> elem_ids, o::Write<o::LO> ptcl_done,
-                      o::Reals elmArea, bool useBcc, o::Write<o::LO> lastExit,
+                      o::Write<o::LO> lastExit,
                       o::Write<o::Real> xPoints, const o::Real& tol) {
     const auto dim = mesh.dim();
     const auto elm2verts = mesh.ask_elem_verts();
@@ -325,118 +340,85 @@ namespace pumipic {
     const auto elm2faces = mesh.ask_down(dim, dim-1);
     const auto elmDown = elm2faces.ab2b;
 
-    if (useBcc) {
-      auto walk = PS_LAMBDA(const int, const int pid, const bool mask) {
-        if (!mask || ptcl_done[pid]) return;
-        const auto elem = elem_ids[pid];
-        OMEGA_H_CHECK(elem >= 0);
-        o::LO side;
-        if (dim == 2) {
-          const auto verts = o::gather_verts<3>(elm2verts, elem);
-          side = find_bcc_side<2>(elmArea[elem],
-              o::gather_vectors<3, 2>(coords, verts), makeVector2(pid, x_ps_tgt), tol);
-        } else {
-          const auto verts = o::gather_verts<4>(elm2verts, elem);
-          side = find_bcc_side<3>(elmArea[elem],
-              o::gather_vectors<4, 3>(coords, verts), makeVector3(pid, x_ps_tgt), tol);
+    const auto bridgeVerts =  mesh.ask_verts_of(dim-1);
+    //Use line face intersection to determine exit face
+    if (dim == 2) {
+      auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
+        if (mask > 0 && !ptcl_done[ptcl]) {
+          const auto searchElm = elem_ids[ptcl];
+          OMEGA_H_CHECK(searchElm >= 0);
+          const auto faceVerts = o::gather_verts<3>(elm2verts, searchElm);
+          const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
+          const auto dest = makeVector2(ptcl, x_ps_tgt);
+          const auto orig = makeVector2(ptcl, x_ps_orig);
+          const auto edge_ids = o::gather_down<3>(elmDown, searchElm);
+          o::LO previous_side = -1;
+          for (int side = 0; side < 3; ++side)
+            if (edge_ids[side] == lastExit[ptcl]) previous_side = side;
+          o::Vector<2> point;
+          const auto side = find_segment_exit_edge(faceCoords, orig, dest,
+                                                    previous_side, tol, point);
+          lastExit[ptcl] = side == -1 ? -1 : edge_ids[side];
+          xPoints[2*ptcl] = point[0];
+          xPoints[2*ptcl+1] = point[1];
         }
-        ptcl_done[pid] = (side == -1);
-        lastExit[pid] = side == -1 ? -1 : elmDown[elem * (dim + 1) + side];
       };
-      parallel_for(ptcls, walk, "search_findExitFace_bcc");
+      parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_2d");
     }
-    else {
-      const auto bridgeVerts =  mesh.ask_verts_of(dim-1);
-      //Use line face intersection to determine exit face
-      if (dim == 2) {
-        auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
-          if (mask > 0 && !ptcl_done[ptcl]) {
-            const auto searchElm = elem_ids[ptcl];
-            OMEGA_H_CHECK(searchElm >= 0);
-            const auto faceVerts = o::gather_verts<3>(elm2verts, searchElm);
-            const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-            const auto dest = makeVector2(ptcl, x_ps_tgt);
-            const auto orig = makeVector2(ptcl, x_ps_orig);
-            const auto edge_ids = o::gather_down<3>(elmDown, searchElm);
-            auto xpts = o::zero_vector<2>();
-            const o::LO prevExit = lastExit[ptcl];
-            lastExit[ptcl] = -1;
-            for(int ei=0; ei<3; ++ei) {
-              const auto edge_id = edge_ids[ei];
-              if (edge_id == prevExit)
-                continue;
-              const auto ev2v = o::gather_verts<2>(bridgeVerts, edge_id);
-              const auto edge = o::gather_vectors<2, 2>(coords, ev2v);
-              const o::LO flip = isFaceFlipped(ei, ev2v, faceVerts) ^ (elmArea[searchElm] < 0);
-              const bool success = line_edge_2d(edge, orig, dest, xpts, tol, flip);
-              if (success) {
-                lastExit[ptcl] = edge_id;
-                xPoints[2*ptcl] = xpts[0]; xPoints[2*ptcl+1] = xpts[1];
+    else if (dim == 3) {
+      auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
+        if (mask > 0 && !ptcl_done[ptcl]) {
+          const auto searchElm = elem_ids[ptcl];
+          OMEGA_H_CHECK(searchElm >= 0);
+          const auto tetv2v = o::gather_verts<4>(elm2verts, searchElm);
+            const auto tetCoords = o::gather_vectors<4,3>(coords, tetv2v);
+          const auto dest = makeVector3(ptcl, x_ps_tgt);
+          const auto orig = makeVector3(ptcl, x_ps_orig);
+          const auto face_ids = o::gather_down<4>(elmDown, searchElm);
+          auto xpts = o::zero_vector<3>();
+          const o::LO prevExit = lastExit[ptcl];
+          lastExit[ptcl] = -1;
+          o::Real bestInteriority = -1e30;
+          for(int fi=0; fi<4; ++fi) {
+            const auto face_id = face_ids[fi];
+            if (face_id == prevExit)
+              continue;
+            const auto fv2v = o::gather_verts<3>(bridgeVerts, face_id);
+            const auto face = o::gather_vectors<3,3>(coords, fv2v);
+            const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
+            o::Real dproj;
+            o::Real closeness;
+            o::Real intersection_parametric_coord;
+            const bool success = line_segment_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
+                                                         closeness, intersection_parametric_coord);
+            if (success) {
+              //A ray passing within tolerance of an element edge (or vertex)
+              //makes several faces report an intersection. The true exit
+              //face is the one whose triangle contains the crossing point in
+              //its interior, so pick the face with the most interior
+              //crossing instead of the last successful face.
+              Omega_h::Vector<3> faceBcc;
+              o::Real interiority = -1.0;
+              if (find_barycentric_tri_simple(face, xpts, faceBcc)) {
+                interiority = Kokkos::min(Kokkos::min(faceBcc[0], faceBcc[1]),
+                                          faceBcc[2]);
               }
-            }
-            if (lastExit[ptcl] == -1) {
-              xPoints[2*ptcl] = dest[0];
-              xPoints[2*ptcl+1] = dest[1];
+              if (interiority > bestInteriority) {
+                bestInteriority = interiority;
+                lastExit[ptcl] = face_id;
+                xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
+              }
             }
           }
-        };
-        parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_2d");
-      }
-      else if (dim == 3) {
-        auto findExitFace = PS_LAMBDA(const lid_t, const lid_t ptcl, const bool mask) {
-          if (mask > 0 && !ptcl_done[ptcl]) {
-            const auto searchElm = elem_ids[ptcl];
-            OMEGA_H_CHECK(searchElm >= 0);
-            const auto tetv2v = o::gather_verts<4>(elm2verts, searchElm);
-              const auto tetCoords = o::gather_vectors<4,3>(coords, tetv2v);
-            const auto dest = makeVector3(ptcl, x_ps_tgt);
-            const auto orig = makeVector3(ptcl, x_ps_orig);
-            const auto face_ids = o::gather_down<4>(elmDown, searchElm);
-            auto xpts = o::zero_vector<3>();
-            const o::LO prevExit = lastExit[ptcl];
-            lastExit[ptcl] = -1;
-            o::Real bestInteriority = -1e30;
-            for(int fi=0; fi<4; ++fi) {
-              const auto face_id = face_ids[fi];
-              if (face_id == prevExit)
-                continue;
-              const auto fv2v = o::gather_verts<3>(bridgeVerts, face_id);
-              const auto face = o::gather_vectors<3,3>(coords, fv2v);
-              const o::LO flip = isFaceFlipped(fi, fv2v, tetv2v);
-              o::Real dproj;
-              o::Real closeness;
-              o::Real intersection_parametric_coord;
-              const bool success = line_segment_intersects_triangle(face, orig, dest, xpts, tol, flip, dproj,
-                                                           closeness, intersection_parametric_coord);
-              if (success) {
-                //A ray passing within tolerance of an element edge (or vertex)
-                //makes several faces report an intersection. The true exit
-                //face is the one whose triangle contains the crossing point in
-                //its interior, so pick the face with the most interior
-                //crossing instead of the last successful face.
-                Omega_h::Vector<3> faceBcc;
-                o::Real interiority = -1.0;
-                if (find_barycentric_tri_simple(face, xpts, faceBcc)) {
-                  interiority = Kokkos::min(Kokkos::min(faceBcc[0], faceBcc[1]),
-                                            faceBcc[2]);
-                }
-                if (interiority > bestInteriority) {
-                  bestInteriority = interiority;
-                  lastExit[ptcl] = face_id;
-                  xPoints[3*ptcl] = xpts[0]; xPoints[3*ptcl + 1] = xpts[1]; xPoints[3*ptcl + 2] = xpts[2];
-                }
-              }
-            }
 
-            if (lastExit[ptcl] == -1){ // reached destination
-                xPoints[3*ptcl] = x_ps_tgt(ptcl,0);
-                xPoints[3*ptcl+1] = x_ps_tgt(ptcl,1);
-                xPoints[3*ptcl+2] = x_ps_tgt(ptcl,2);
-            }
+          if (lastExit[ptcl] == -1){ // reached destination
+              xPoints[3*ptcl] = x_ps_tgt(ptcl,0);
+              xPoints[3*ptcl+1] = x_ps_tgt(ptcl,1);
+              xPoints[3*ptcl+2] = x_ps_tgt(ptcl,2);
           }
-        };
-        parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
-      }
+        }
+      };
+      parallel_for(ptcls, findExitFace, "search_findExitFace_intersect_3d");
     }
   }
 
@@ -497,7 +479,7 @@ namespace pumipic {
   * the exit face ids for the particles that leave the domain, and the last intersection point for 
   * the particles.
   *
-  * Intersection mode follows line segments; BCC mode locates destinations without promising the geometric path.
+  * Every search follows a line segment. requireIntersection only controls returned intersection arrays.
   *
   *
   * @tparam ParticleType Particle type
@@ -556,7 +538,6 @@ namespace pumipic {
     if (lastExit.size() == 0){
         lastExit = Omega_h::Write<Omega_h::LO>(psCapacity, -1, "search_last_exit");
     }
-    bool useBcc = !requireIntersection;
 
     o::Real tol = 0;
     if (!given_tol.has_value() || given_tol.value() <= 0) {
@@ -602,10 +583,11 @@ namespace pumipic {
       }
    }
 
-    //Ensure all particles are within their starting element
-    // Destination-only walking accepts any valid element as its initial guess.
-    if (!useBcc)
-      check_initial_parents(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, ptcl_done, elmArea, tol, debug);
+    auto crossing_points = requireIntersection ? inter_points :
+        o::Write<o::Real>(dim * psCapacity, 0, "search_crossing_points");
+
+    // Every motion search follows the physical segment from its starting parent.
+    check_initial_parents(mesh, ptcls, x_ps_orig, x_ps_tgt, pids, elem_ids, ptcl_done, elmArea, tol, debug);
     auto initialize_next = OMEGA_H_LAMBDA(o::LO i) { next_element[i] = elem_ids[i]; };
     o::parallel_for(psCapacity, initialize_next, "search_initialize_next");
 
@@ -621,11 +603,11 @@ namespace pumipic {
     //Iteratively find the next element until parent element is reached for each particle
     while (!found) {
       //Find intersection face
-      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, elmArea, useBcc, lastExit, inter_points, tol);
+      find_exit_face(mesh, ptcls, x_ps_orig, x_ps_tgt, elem_ids, ptcl_done, lastExit, crossing_points, tol);
       // find next element
       find_next_element(mesh, ptcls, elem_ids, next_element, ptcl_done, lastExit);
       //Check if intersection face is exposed
-      func(mesh, ptcls, elem_ids, next_element, inter_faces, lastExit, inter_points, ptcl_done, x_ps_orig, x_ps_tgt);
+      func(mesh, ptcls, elem_ids, next_element, inter_faces, lastExit, crossing_points, ptcl_done, x_ps_orig, x_ps_tgt);
 
       //Check if all particles are found
       found = true;

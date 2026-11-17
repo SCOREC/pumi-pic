@@ -571,7 +571,7 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
   const auto coords = mesh.coords();
   const int dim = mesh.dim();
   o::Write<o::LO> failures(1, 0);
-  auto check_parent = PS_LAMBDA(const int, const int pid, const bool mask) {
+  auto check_parent = PS_LAMBDA(const int initial_parent, const int pid, const bool mask) {
     if (!mask || elem_ids[pid] == -1) return;
     bool inside;
     if (dim == 2) {
@@ -588,8 +588,10 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
     if (!inside) {
       const auto previous = Kokkos::atomic_fetch_add(&failures[0], 1);
       if (previous < 4)
-        printf("[ERROR] Destination outside reported parent: particle %d element %d target %.16g %.16g %.16g\n",
-               pid, elem_ids[pid], tgt(pid,0), tgt(pid,1), tgt(pid,2));
+        printf("[ERROR] Destination outside reported parent: particle %d initial_parent %d reported_parent %d "
+               "origin %.17g %.17g %.17g target %.17g %.17g %.17g\n",
+               pid, initial_parent, elem_ids[pid], cur(pid,0), cur(pid,1), cur(pid,2),
+               tgt(pid,0), tgt(pid,1), tgt(pid,2));
     }
   };
   p::parallel_for(ptcls, check_parent, "validate_search_parent");
@@ -763,7 +765,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
   return fail;
 }
 
-bool testBCCSearch(o::Mesh mesh, PS* ptcls, const o::Real tol) {
+bool testParentSearch(o::Mesh mesh, PS* ptcls, const o::Real tol) {
   bool fail = false;
   o::Real distance = get_push_distance(mesh);
   
@@ -800,22 +802,22 @@ bool testBCCSearch(o::Mesh mesh, PS* ptcls, const o::Real tol) {
   return fail;
 }
 
-bool test_internal_BCC_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
-  fprintf(stderr, "\nBeginning BCC Search test with internal particle positions\n");
+bool test_internal_parent_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
+  fprintf(stderr, "\nBeginning segment search without intersection output test with internal particle positions\n");
   //Initialize particle information
   init_internal(mesh, ptcls);
 
   //Run test
-  return testBCCSearch(mesh, ptcls, tol);
+  return testParentSearch(mesh, ptcls, tol);
 }
 
-bool test_edge_BCC_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
-  fprintf(stderr, "\nBeginning BCC Search test with edge particle positions\n");
+bool test_edge_parent_search(o::Mesh mesh, PS* ptcls, const o::Real tol) {
+  fprintf(stderr, "\nBeginning segment search without intersection output test with edge particle positions\n");
   //Initialize particle information
   init_edges(mesh, ptcls);
 
   //Run test
-  return testBCCSearch(mesh, ptcls, tol);
+  return testParentSearch(mesh, ptcls, tol);
 }
 
 void reflect_intersections(PS* ptcls, o::Write<o::LO> xFaces, o::Write<o::Real> xPoints) {
@@ -962,9 +964,9 @@ int test_search(o::Mesh mesh, p::lid_t np, const o::Real tol) {
 
   //Run tests
   int fails = 0;
-  fails += test_internal_BCC_search(mesh, ptcls, tol);
+  fails += test_internal_parent_search(mesh, ptcls, tol);
   fails += test_internal_intersection_search(mesh, ptcls, tol);
-  fails += test_edge_BCC_search(mesh, ptcls, tol);
+  fails += test_edge_parent_search(mesh, ptcls, tol);
   fails += test_edge_intersection_search(mesh, ptcls, tol);
 
   delete ptcls;

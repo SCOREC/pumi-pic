@@ -29,7 +29,7 @@ namespace pumipic {
     @param[in] pids The particle ids
     @param[out] elem_ids The new parent elements found by search. The passed in values will be used as the current parent element if provided
     @param[in] looplimit The max number of search loops to provide. Defaults to 0 - no limit on loops
-    @param[in] requireIntersection If true, intersection with model boundaries will be calculated
+    @param[in] requireIntersection If true, return boundary faces and crossing points. Every search follows the particle segment.
     @param[out] inter_points Will be filled with the intersection points of particle paths with model boundaries
     @param[out] inter_faces Will be filled with the mesh faces on a model boundary the particle path intersected with
     @param[in] debug Turn on to output debug information
@@ -311,12 +311,11 @@ OMEGA_H_DEVICE bool isPointWithinElemTet(const o::LOs& mesh2verts,
   return isPointWithinElemTet(mesh2verts, coords, pos, elem, bcc, tol);
 }
 
-// Return a face to walk toward the destination, or -1 when it is contained.
-// A barycentric walk does not promise the first face crossed by a trajectory.
-template <int Dim>
-OMEGA_H_DEVICE o::LO find_bcc_side(o::Real measure,
-    const o::Matrix<Dim, Dim + 1>& vertices, const o::Vector<Dim>& destination,
-    o::Real tol);
+// Return the local edge actually crossed by a segment, or -1 at destination.
+OMEGA_H_DEVICE o::LO find_segment_exit_edge(
+    const o::Matrix<2, 3>& triangle, const o::Vector<2>& origin,
+    const o::Vector<2>& target, o::LO previous_side, o::Real tol,
+    o::Vector<2>& point);
 
 // Compatibility entry points retain their argument order, but use the common
 // tracer rather than maintaining independent 3D traversal loops.
@@ -610,9 +609,10 @@ bool search_mesh_2d(o::Mesh& mesh, ParticleStruct* particles,
       if (!mask || elements[pid] < 0) return;
       const auto elem = elements[pid];
       const auto verts = o::gather_verts<3>(vertices, elem);
-      if (find_bcc_side<2>(areas[elem], o::gather_vectors<3, 2>(coords, verts),
-                           makeVector2(pid, target), EPSILON) != -1)
-        elements[pid] = -1;
+      o::Vector<3> barycentric;
+      barycentric_tri(areas, o::gather_vectors<3, 2>(coords, verts),
+                       makeVector2(pid, target), barycentric, elem);
+      if (!all_positive(barycentric)) elements[pid] = -1;
     };
     parallel_for(particles, discard_unlocated, "search_2d_discard_unlocated");
   }
@@ -648,18 +648,19 @@ OMEGA_H_DEVICE o::LO search_mesh_2d_pt(const o::Read<o::I8> side_is_exposed,
   const o::LOs faceEdges = faces2edges.ab2b;
   o::LO elem_id = initial_elem;
   while (!found) {
-    //active particle that is still moving to its target position
-    if (!ptcl_done) {
-      const o::LO searchElm = elem_id;
-      OMEGA_H_CHECK(searchElm >= 0);
-      const auto edges = o::gather_down<3>(faceEdges, searchElm);
-      const auto faceVerts = o::gather_verts<3>(faces2verts, searchElm);
-      const auto faceCoords = o::gather_vectors<3,2>(coords, faceVerts);
-      const auto idx = find_bcc_side<2>(triArea[searchElm], faceCoords,
-                                         ptclDest, EPSILON);
-      ptcl_done = (idx == -1);
-      lastEdge = ptcl_done ? -1 : edges[idx];
-    }
+    const auto searchElm = elem_id;
+    OMEGA_H_CHECK(searchElm >= 0);
+    const auto edges = o::gather_down<3>(faceEdges, searchElm);
+    const auto verts = o::gather_verts<3>(faces2verts, searchElm);
+    const auto triangle = o::gather_vectors<3, 2>(coords, verts);
+    o::LO previous_side = -1;
+    for (int side = 0; side < 3; ++side)
+      if (edges[side] == lastEdge) previous_side = side;
+    o::Vector<2> point;
+    const auto side = find_segment_exit_edge(triangle, ptclOrigin, ptclDest,
+                                              previous_side, EPSILON, point);
+    ptcl_done = side == -1;
+    lastEdge = ptcl_done ? -1 : edges[side];
 
     if (!ptcl_done) {
       assert(lastEdge != -1);

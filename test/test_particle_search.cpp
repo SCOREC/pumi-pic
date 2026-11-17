@@ -153,7 +153,7 @@ struct VacuumBoundaryHandler {
   }
 };
 
-bool test_particle_search(const std::string mesh_fname, p::Library *lib, bool useBcc) {
+bool test_particle_search(const std::string mesh_fname, p::Library *lib) {
   printf("Test: 3D intersection...\n");
   o::Library &olib = lib->omega_h_lib();
   // load mesh
@@ -304,5 +304,5 @@ int main(int argc, char **argv) {
     printf("Usage: %s <gmesh>\n", argv[0]);
     return 1;
   }
-  return test_particle_search(argv[1], &lib, false) ? 0 : 1;
+  return test_particle_search(argv[1], &lib) ? 0 : 1;
 }

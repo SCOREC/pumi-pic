@@ -16,12 +16,13 @@ mpi_test(test_line_edge_2d 1 ./test_line_edge_2d ${TEST_DATA_DIR}/square2d4elem.
 mpi_test(test_triangle_intersections 1 ./test_triangle_intersections ${TEST_DATA_DIR}/cube6tet.msh)
 mpi_test(test_search_mesh_gmsh 1 ./test_search_mesh_gmsh ${TEST_DATA_DIR}/cube6tet.msh)
 mpi_test(test_particle_search 1 ./test_particle_search ${TEST_DATA_DIR}/cube6tet.msh)
+mpi_test(test_segment_near_edge 1 ./test_segment_near_edge ${TEST_DATA_DIR}/cube/7k.osh)
 
 set_tests_properties(
   test_trace_particle_through_mesh test_search_mesh test_ParticleTracer
   test_adj_2d test_adj_3d test_find_exit_face test_search_no_intersections_2d
   test_find_exit_face_3D test_search_no_intersections_3d test_line_edge_2d
-  test_triangle_intersections test_search_mesh_gmsh test_particle_search
+  test_triangle_intersections test_search_mesh_gmsh test_particle_search test_segment_near_edge
   PROPERTIES LABELS "search" TIMEOUT 120)
 
 mpi_test(moller_trumbore_test 1

@@ -1,0 +1,33 @@
+# Build this checkout with the SCOREC package recipes and build cache.
+# CUDA profile for the local RTX 2060 SUPER (sm_75).
+spack:
+  specs:
+  - pumi-pic@develop +cabana +cuda cuda_arch=75 build_type=Release ^kokkos+serial~openmp+cuda cuda_arch=75
+
+  develop:
+    pumi-pic:
+      spec: pumi-pic@=develop
+      path: ../..
+
+  repos:
+    scorec:
+      git: https://github.com/SCOREC/scorec-spack-packages.git
+      branch: main
+    builtin:
+      git: https://github.com/spack/spack-packages.git
+      branch: releases/v2026.10
+
+  mirrors:
+    scorec:
+      url: oci://ghcr.io/scorec/scorec-spack-buildcache
+      signed: false
+
+  packages:
+    all:
+      providers:
+        mpi: [mpich]
+
+  concretizer:
+    unify: true
+
+  view: true

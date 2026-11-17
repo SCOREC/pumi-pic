@@ -141,6 +141,18 @@ bool is_inside3D(o::Mesh &mesh, o::LO elem_id, const o::Vector<3> point) {
   return bool(host_inside[0]);
 }
 
+// Namespace-scope callable types can enclose CUDA extended lambdas.
+struct VacuumBoundaryHandler {
+  template <typename Segment>
+  void operator()(o::Mesh& mesh, PS* particles, o::Write<o::LO>& elements,
+                  o::Write<o::LO>& next, o::Write<o::LO>& faces,
+                  o::Write<o::LO>& exits, o::Write<o::Real>& points,
+                  o::Write<o::LO>& done, Segment origin, Segment destination) const {
+    handle_particle_at_elem_boundary(mesh, particles, elements, next, faces,
+                                    exits, points, done, origin, destination);
+  }
+};
+
 bool test_particle_search(const std::string mesh_fname, p::Library *lib, bool useBcc) {
   printf("Test: 3D intersection...\n");
   o::Library &olib = lib->omega_h_lib();
@@ -261,12 +273,7 @@ bool test_particle_search(const std::string mesh_fname, p::Library *lib, bool us
 
   o::Write<o::LO> next_elements;
   o::Write<o::LO> inter_faces;
-  auto handler = [](auto& mesh, auto* particles, auto& elements, auto& next,
-                    auto& faces, auto& exits, auto& points, auto& done,
-                    auto origin, auto destination) {
-    handle_particle_at_elem_boundary(mesh, particles, elements, next, faces,
-                                    exits, points, done, origin, destination);
-  };
+  VacuumBoundaryHandler handler;
   auto elm_area = measure_elements_real(p_mesh);
   bool found = p::trace_particle_through_mesh(*p_mesh, ptcls, x_ps_d, x_ps_tgt, pids,
                  elem_ids, next_elements, true, inter_faces, inter_points, lastExit,

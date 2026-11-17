@@ -585,7 +585,12 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
           o::gather_vectors<4, 3>(coords, verts));
       inside = p::all_positive(bcc, tol);
     }
-    if (!inside) Kokkos::atomic_add(&failures[0], 1);
+    if (!inside) {
+      const auto previous = Kokkos::atomic_fetch_add(&failures[0], 1);
+      if (previous < 4)
+        printf("[ERROR] Destination outside reported parent: particle %d element %d target %.16g %.16g %.16g\n",
+               pid, elem_ids[pid], tgt(pid,0), tgt(pid,1), tgt(pid,2));
+    }
   };
   p::parallel_for(ptcls, check_parent, "validate_search_parent");
 
@@ -596,7 +601,9 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
     }
   };
   p::parallel_for(ptcls, resetCoordinates, "resetCoordinates");
-  return o::HostRead<o::LO>(failures)[0] != 0;
+  const auto invalid = o::HostRead<o::LO>(failures)[0];
+  if (invalid) std::fprintf(stderr, "Independent containment check failed for %d particles\n", invalid);
+  return invalid != 0;
 }
 
 //Checks particles that did not intersect the wall are within the mesh still
@@ -838,19 +845,12 @@ void delete_intersections(PS* ptcls, o::Write<o::LO> elem_ids, o::Write<o::LO> x
 
 }
 
-// Reflection needs the element adjoining the boundary so the next segment can
-// start there. The default removal handler instead returns parent -1 on exit.
-// Use the general tracer's callback to stop at the boundary without removal.
-bool search_to_boundary(o::Mesh& mesh, PS* particles, o::Write<o::LO>& elements,
-                        o::Write<o::LO>& faces, o::Write<o::Real>& points) {
-  auto origin = particles->get<0>();
-  auto target = particles->get<1>();
-  auto ids = particles->get<2>();
-  o::Write<o::LO> next, exits, done;
-  auto measures = measure_elements_real(&mesh);
-  auto stop = [](auto&, auto* ptcls, auto& parents, auto& next_elements,
-                 auto& boundary_faces, auto& last_exits, auto&, auto& finished,
-                 auto, auto) {
+struct StopAtBoundary {
+  template <typename Origin, typename Target>
+  void operator()(o::Mesh&, PS* particles, o::Write<o::LO>& parents,
+                  o::Write<o::LO>& next_elements, o::Write<o::LO>& boundary_faces,
+                  o::Write<o::LO>& last_exits, o::Write<o::Real>&,
+                  o::Write<o::LO>& finished, Origin, Target) const {
     auto advance = PS_LAMBDA(const int, const int pid, const bool mask) {
       if (!mask || finished[pid]) return;
       const bool at_destination = last_exits[pid] == -1;
@@ -861,8 +861,21 @@ bool search_to_boundary(o::Mesh& mesh, PS* particles, o::Write<o::LO>& elements,
       else
         parents[pid] = next_elements[pid];
     };
-    p::parallel_for(ptcls, advance, "stop_at_boundary");
-  };
+    p::parallel_for(particles, advance, "stop_at_boundary");
+  }
+};
+
+// Reflection needs the element adjoining the boundary so the next segment can
+// start there. The default removal handler instead returns parent -1 on exit.
+// Use the general tracer's callback to stop at the boundary without removal.
+bool search_to_boundary(o::Mesh& mesh, PS* particles, o::Write<o::LO>& elements,
+                        o::Write<o::LO>& faces, o::Write<o::Real>& points) {
+  auto origin = particles->get<0>();
+  auto target = particles->get<1>();
+  auto ids = particles->get<2>();
+  o::Write<o::LO> next, exits, done;
+  auto measures = measure_elements_real(&mesh);
+  StopAtBoundary stop;
   return p::trace_particle_through_mesh(mesh, particles, origin, target, ids,
       elements, next, true, faces, points, exits, 0, true, stop, measures, done);
 }

@@ -4,3 +4,5 @@
 /spack-install-*/
 /spack/spack.lock
 /spack/.spack-env/
+/spack/cuda/spack.lock
+/spack/cuda/.spack-env/

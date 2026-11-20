@@ -72,7 +72,7 @@ bool padEvenly(Input& input) {
          (lid_t)(scs->nPtcls() * (1.0 + input.shuffle_padding)));
   scs->printMetrics();
   auto vals = scs->get<0>();
-  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const bool& mask) {
+  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const lid_t& mask) {
     vals(ptcl) = mask;
   };
   ps::parallel_for(scs, lamb, "pad_evenly");
@@ -87,7 +87,7 @@ bool padProportionally(Input& input) {
          scs->capacity(), (lid_t)(scs->nPtcls() * (1.0 + input.shuffle_padding)));
   scs->printMetrics();
   auto vals = scs->get<0>();
-  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const bool& mask) {
+  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const lid_t& mask) {
     vals(ptcl) = mask;
   };
   ps::parallel_for(scs, lamb, "pad_proportionally");
@@ -102,7 +102,7 @@ bool padInversely(Input& input) {
          scs->capacity(), (lid_t)(scs->nPtcls() * (1.0 + input.shuffle_padding)));
   scs->printMetrics();
   auto vals = scs->get<0>();
-  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const bool& mask) {
+  auto lamb = PS_LAMBDA(const lid_t& elem, const lid_t& ptcl, const lid_t& mask) {
     vals(ptcl) = mask;
   };
   ps::parallel_for(scs, lamb, "pad_inversely");

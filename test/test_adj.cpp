@@ -551,7 +551,7 @@ void push_ptcls(PS* ptcls, o::Real distance) {
   auto cur = ptcls->get<0>();
   auto tgt = ptcls->get<1>();
   auto angle = ptcls->get<3>();
-  auto push = PS_LAMBDA(const p::lid_t elm, const p::lid_t ptcl, const bool mask) {
+  auto push = PS_LAMBDA(const p::lid_t elm, const p::lid_t ptcl, const p::lid_t mask) {
     if (mask) {
       for (int i = 0; i < 3; ++i) {
         tgt(ptcl, i) = tgt(ptcl,i) + distance * angle(ptcl, i);
@@ -569,7 +569,7 @@ bool test_parent_elements(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, con
   auto pids = ptcls->get<2>();
   o::Reals elmArea = measure_elements_real(&mesh);
   o::Write<o::LO> ptcl_done(ptcls->capacity(), 0, "ptcl_done");
-  auto setDone = PS_LAMBDA(const o::LO, const o::LO ptcl, const bool mask) {
+  auto setDone = PS_LAMBDA(const o::LO, const o::LO ptcl, const o::LO mask) {
     ptcl_done[ptcl] = (!mask | (elem_ids[ptcl] == -1));
   };
   p::parallel_for(ptcls, setDone, "setDone");
@@ -593,7 +593,7 @@ bool check_inside_bbox(o::Mesh mesh, PS* ptcls, o::Write<o::LO> xFaces, const o:
   auto box = o::get_bounding_box<DIM>(&mesh);
   auto x_ps_tgt = ptcls->get<1>();
   o::Write<o::LO> failures(1,0);
-  auto checkInteriors = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto checkInteriors = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     const o::LO face = xFaces[ptcl];
     const o::Vector<3> ptcl_pos = makeVector3(ptcl, x_ps_tgt);
     if (mask && face == -1) {
@@ -632,7 +632,7 @@ bool check_intersections_3d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids,
   o::Write<o::LO> failures(1,0);
   const auto face_verts =  mesh.ask_verts_of(2);
   const auto coords = mesh.coords();
-  auto checkIntersections3d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto checkIntersections3d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     const o::LO face = intersection_faces[ptcl];
     if (mask && face != -1) {
       //check intersection point is in the intersection face
@@ -661,7 +661,7 @@ bool check_intersections_2d(o::Mesh mesh, PS* ptcls, o::Write<o::LO> intersectio
   o::Write<o::LO> failures(1,0);
   const auto edge_verts =  mesh.ask_verts_of(1);
   const auto coords = mesh.coords();
-  auto checkIntersections2d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto checkIntersections2d = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     const o::LO edge = intersection_faces[ptcl];
     if (mask && edge != -1) {
       //check intersection point is in the intersection face
@@ -701,7 +701,7 @@ bool test_wall_intersections(o::Mesh mesh, PS* ptcls, o::Write<o::LO> elem_ids, 
   //Test intersection points against motion and intersection face on parent element
   auto x_ps_orig = ptcls->get<0>();
   auto x_ps_tgt = ptcls->get<1>();
-  auto checkIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto checkIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     const o::LO face = intersection_faces[ptcl];
     const o::LO searchElm = elem_ids[ptcl];
     if (mask && face != -1) {
@@ -802,7 +802,7 @@ void reflect_intersections(PS* ptcls, o::Write<o::LO> xFaces, o::Write<o::Real> 
   auto tgt = ptcls->get<1>();
   auto dir = ptcls->get<3>();
   int dim = xPoints.size() / ptcls->capacity();
-  auto reflectParticles = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto reflectParticles = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     o::LO face = xFaces[ptcl];
     if (mask && face != -1) {
       for (int i = 0; i < dim; ++i) {
@@ -815,7 +815,7 @@ void reflect_intersections(PS* ptcls, o::Write<o::LO> xFaces, o::Write<o::Real> 
 }
 
 void delete_intersections(PS* ptcls, o::Write<o::LO> elem_ids, o::Write<o::LO> xFaces) {
-  auto deleteIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const bool mask) {
+  auto deleteIntersections = PS_LAMBDA(const o::LO elm, const o::LO ptcl, const o::LO mask) {
     o::LO face = xFaces[ptcl];
     if (mask && face != -1) {
       elem_ids[ptcl] = -1;

@@ -33,16 +33,16 @@ namespace pumipic {
   template <typename MSpace, typename DataTypes, typename MemSpace>
   void copyParticleData(ParticleStructure<DataTypes, MemSpace>* target, ParticleStructure<DataTypes, MSpace>* source) {
     SellCSigma<DataTypes, MemSpace>* scs = dynamic_cast<SellCSigma<DataTypes, MemSpace>*>(target);
-    if (scs) return scs->template copyParticleData(dynamic_cast<SellCSigma<DataTypes, MSpace>*>(source));
+    if (scs) return scs->template copyParticleData<MemSpace>(dynamic_cast<SellCSigma<DataTypes, MSpace>*>(source));
 
     CSR<DataTypes, MemSpace>* csr = dynamic_cast<CSR<DataTypes, MemSpace>*>(target);
-    if (csr) return csr->template copyParticleData(dynamic_cast<CSR<DataTypes, MSpace>*>(source));
+    if (csr) return csr->template copyParticleData<MemSpace>(dynamic_cast<CSR<DataTypes, MSpace>*>(source));
 
     CabM<DataTypes, MemSpace>* cabm = dynamic_cast<CabM<DataTypes, MemSpace>*>(target);
-    if (cabm) return cabm->template copyParticleData(dynamic_cast<CabM<DataTypes, MSpace>*>(source));
+    if (cabm) return cabm->template copyParticleData<MemSpace>(dynamic_cast<CabM<DataTypes, MSpace>*>(source));
 
     DPS<DataTypes, MemSpace>* dps = dynamic_cast<DPS<DataTypes, MemSpace>*>(target);
-    if (dps) return dps->template copyParticleData(dynamic_cast<DPS<DataTypes, MSpace>*>(source));
+    if (dps) return dps->template copyParticleData<MemSpace>(dynamic_cast<DPS<DataTypes, MSpace>*>(source));
 
     printError("Structure does not support copy\n");
     throw 1;

@@ -51,7 +51,7 @@ namespace pumipic {
       typename std::remove_all_extents<DataType<M>>::type;
 
 #ifdef PP_ENABLE_CAB
-    using PS_DT=PS_DTBool<Types>;
+    using PS_DT=PS_DTInt<Types>;
     using soa_type = Cabana::SoA<PS_DT, vector_length>;
     template <std::size_t N> using Slice =
       Segment<DataType<N>, memory_space, Cabana::DefaultAccessMemory, vector_length,

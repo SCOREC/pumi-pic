@@ -142,7 +142,7 @@ private:
     Omega_h::Write<agi::wgt_t> weights(sbar_ids.size() + 1, 0);
     Omega_h::LOs elem_sbars = getSbarIDs(picparts);
     auto sbar_to_vert_local = sbar_to_vert;
-    auto accumulateWeight = PS_LAMBDA(const int elm, const int ptcl, const bool mask) {
+    auto accumulateWeight = PS_LAMBDA(const int elm, const int ptcl, const int mask) {
       if (mask) {
         const int new_rank = new_procs(ptcl);
         if (new_rank == comm_rank) {
@@ -241,7 +241,7 @@ private:
     auto sbar_to_index = plan.sbar_to_index;
     auto part_ids = plan.part_ids;
     auto owners = picparts.entOwners(picparts->dim());
-    auto selectNonCoreParticles = PS_LAMBDA(const int elm, int ptcl, const bool mask) {
+    auto selectNonCoreParticles = PS_LAMBDA(const int elm, int ptcl, const int mask) {
       const Omega_h::LO new_e = new_elems(ptcl);
       const Omega_h::LO new_p = new_parts(ptcl);
       if (mask && new_p == comm_rank && new_e != -1) {
@@ -264,7 +264,7 @@ private:
       }
     };
     parallel_for(ptcls, selectNonCoreParticles, "selectNonCoreParticles");
-    auto selectParticles = PS_LAMBDA(const int elm, const int ptcl, const bool mask) {
+    auto selectParticles = PS_LAMBDA(const int elm, const int ptcl, const int mask) {
       const Omega_h::LO new_e = new_elems(ptcl);
       const Omega_h::LO new_p = new_parts(ptcl);
       if (mask && new_p == comm_rank && new_e != -1) {
